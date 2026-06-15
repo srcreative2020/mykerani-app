@@ -1,0 +1,6 @@
+{
+  "name": "MyKerani",
+  "description": "An enterprise-grade AI Financial Assistant featuring locked multi-tenant architecture, workspace isolation, and secure audit trailing.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
