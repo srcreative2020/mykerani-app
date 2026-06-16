@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { useFinancials } from "../context/FinancialRecordsContext";
 import { useAudit } from "../context/AuditContext";
+import { type DashboardSummary } from "../lib/financialService";
 import { type UserSessionProfile, type Tenant, type Workspace, type TenantCategory } from "../types";
 import {
   Home,
@@ -56,6 +57,8 @@ interface MyKeraniAppTabsProps {
   isMockUser: boolean;
   toggleBypassAuth: (val: boolean) => void;
   getCategoryBadgeColor: (category?: TenantCategory) => string;
+  dashboardSummary: DashboardSummary | null;
+  summaryLoading: boolean;
 }
 
 export const MyKeraniAppTabs: React.FC<MyKeraniAppTabsProps> = ({
@@ -81,7 +84,9 @@ export const MyKeraniAppTabs: React.FC<MyKeraniAppTabsProps> = ({
   verifyLoading,
   isMockUser,
   toggleBypassAuth,
-  getCategoryBadgeColor
+  getCategoryBadgeColor,
+  dashboardSummary,
+  summaryLoading,
 }) => {
   const [activeNavTab, setActiveNavTab] = useState<"mykerani" | "insights" | "documents" | "more">("mykerani");
 
@@ -387,7 +392,7 @@ export const MyKeraniAppTabs: React.FC<MyKeraniAppTabsProps> = ({
                   </div>
                   <span className="text-[10px] font-sans bg-indigo-50 border border-indigo-150 text-indigo-950 px-2 py-0.5 rounded font-bold uppercase font-sans">Manual Log</span>
                 </div>
-                <FinancialRecordsConsole />
+                <FinancialRecordsConsole supabaseSummary={dashboardSummary} summaryLoading={summaryLoading} />
               </div>
             )}
 

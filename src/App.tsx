@@ -723,6 +723,8 @@ function MainDashboardContent() {
             isMockUser={isMockUser}
             toggleBypassAuth={toggleBypassAuth}
             getCategoryBadgeColor={getCategoryBadgeColor}
+            dashboardSummary={dashboardSummary}
+            summaryLoading={summaryLoading}
           />
         )}
 

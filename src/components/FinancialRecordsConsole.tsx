@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { type DashboardSummary } from "../lib/financialService";
 import { useFinancials } from "../context/FinancialRecordsContext";
 import { useWorkspace } from "../context/WorkspaceContext";
 import { useAuth } from "../context/AuthContext";
@@ -44,7 +45,15 @@ import { NotificationCenterConsole } from "./NotificationCenterConsole";
 import { usePermission } from "../context/PermissionContext";
 import { Sparkles, Archive } from "lucide-react";
 
-export const FinancialRecordsConsole: React.FC = () => {
+interface FinancialRecordsConsoleProps {
+  supabaseSummary?: DashboardSummary | null;
+  summaryLoading?: boolean;
+}
+
+export const FinancialRecordsConsole: React.FC<FinancialRecordsConsoleProps> = ({
+  supabaseSummary,
+  summaryLoading = false,
+}) => {
   const { activeWorkspace } = useWorkspace();
   const {
     financialEvents,
@@ -243,13 +252,17 @@ export const FinancialRecordsConsole: React.FC = () => {
   const [debtDesc, setDebtDesc] = useState("");
 
   // Quick summary analytics
-  const totalInflowMyr = financialEvents
+  const inMemoryInflow = financialEvents
     .filter(e => e.type === "INCOME" && e.isCompleted)
     .reduce((sum, e) => sum + e.amountMyr, 0);
 
-  const totalOutflowMyr = financialEvents
+  const inMemoryOutflow = financialEvents
     .filter(e => (e.type === "EXPENSE" || e.type === "DEBT") && e.isCompleted)
     .reduce((sum, e) => sum + e.amountMyr, 0);
+
+  const totalInflowMyr = (!summaryLoading && supabaseSummary) ? supabaseSummary.totalIncome : inMemoryInflow;
+  const totalOutflowMyr = (!summaryLoading && supabaseSummary) ? supabaseSummary.totalExpense : inMemoryOutflow;
+  const netBalanceMyr = (!summaryLoading && supabaseSummary) ? supabaseSummary.netBalance : (inMemoryInflow - inMemoryOutflow);
 
   const outstandingReceivablesMyr = financialEvents
     .filter(e => e.type === "RECEIVABLE" && !e.isCompleted)
@@ -448,6 +461,13 @@ export const FinancialRecordsConsole: React.FC = () => {
               </span>
               <span className="font-mono font-bold text-rose-600">
                 - RM {totalOutflowMyr.toLocaleString("en-MY", { minimumFractionDigits: 2 })}
+              </span>
+            </div>
+            <div className="flex items-center justify-between text-xs font-sans border-t border-slate-100 pt-2 mt-1">
+              <span className="text-slate-600 font-semibold">Net Balance:</span>
+              <span className={`font-mono font-bold ${netBalanceMyr >= 0 ? "text-emerald-700" : "text-rose-700"}`}>
+                {netBalanceMyr >= 0 ? "+" : ""} RM {netBalanceMyr.toLocaleString("en-MY", { minimumFractionDigits: 2 })}
+                {summaryLoading && <span className="text-slate-400 font-normal ml-1">(loading…)</span>}
               </span>
             </div>
           </div>
