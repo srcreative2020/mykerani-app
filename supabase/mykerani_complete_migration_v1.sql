@@ -647,7 +647,7 @@ CREATE OR REPLACE FUNCTION public.get_user_role()
 RETURNS VARCHAR AS $$
   SELECT COALESCE(
     (current_setting('request.jwt.claims', true)::jsonb -> 'user_metadata' ->> 'role'),
-    'TENANT_ADMIN'
+    'COMPANY_STAFF'
   )::varchar;
 $$ LANGUAGE sql STABLE SECURITY DEFINER;
 
@@ -880,7 +880,7 @@ CREATE POLICY workspaces_update_policy ON workspaces FOR UPDATE TO authenticated
 
 CREATE POLICY workspaces_delete_policy ON workspaces FOR DELETE TO authenticated
     USING (
-        (tenant_id = public.get_tenant_id() AND public.get_user_role() IN ('TENANT_ADMIN', 'OWNER'))
+        (tenant_id = public.get_tenant_id() AND public.get_user_role() IN ('COMPANY_OWNER', 'COMPANY_ADMIN'))
         OR public.get_user_role() = 'HQ_ADMIN'
     );
 
@@ -1041,21 +1041,21 @@ CREATE POLICY "select_role_assignments_policy" ON public.user_role_assignments F
     USING (tenant_id = public.get_tenant_id() OR public.get_user_role() IN ('HQ_ADMIN', 'HQ_SUPPORT', 'HQ_AUDITOR'));
 CREATE POLICY "insert_role_assignments_policy" ON public.user_role_assignments FOR INSERT TO authenticated
     WITH CHECK (
-        (tenant_id = public.get_tenant_id() AND public.get_user_role() IN ('TENANT_OWNER', 'TENANT_ADMIN'))
+        (tenant_id = public.get_tenant_id() AND public.get_user_role() IN ('COMPANY_OWNER', 'COMPANY_ADMIN'))
         OR public.get_user_role() IN ('HQ_ADMIN', 'HQ_SUPPORT')
     );
 CREATE POLICY "update_role_assignments_policy" ON public.user_role_assignments FOR UPDATE TO authenticated
     USING (
-        (tenant_id = public.get_tenant_id() AND public.get_user_role() IN ('TENANT_OWNER', 'TENANT_ADMIN'))
+        (tenant_id = public.get_tenant_id() AND public.get_user_role() IN ('COMPANY_OWNER', 'COMPANY_ADMIN'))
         OR public.get_user_role() = 'HQ_ADMIN'
     )
     WITH CHECK (
-        (tenant_id = public.get_tenant_id() AND public.get_user_role() IN ('TENANT_OWNER', 'TENANT_ADMIN'))
+        (tenant_id = public.get_tenant_id() AND public.get_user_role() IN ('COMPANY_OWNER', 'COMPANY_ADMIN'))
         OR public.get_user_role() = 'HQ_ADMIN'
     );
 CREATE POLICY "delete_role_assignments_policy" ON public.user_role_assignments FOR DELETE TO authenticated
     USING (
-        (tenant_id = public.get_tenant_id() AND public.get_user_role() IN ('TENANT_OWNER', 'TENANT_ADMIN'))
+        (tenant_id = public.get_tenant_id() AND public.get_user_role() IN ('COMPANY_OWNER', 'COMPANY_ADMIN'))
         OR public.get_user_role() = 'HQ_ADMIN'
     );
 
@@ -1077,21 +1077,21 @@ CREATE POLICY workspace_storage_providers_select_policy ON public.workspace_stor
     USING (tenant_id = public.get_tenant_id() OR public.get_user_role() IN ('HQ_ADMIN', 'HQ_SUPPORT', 'HQ_AUDITOR'));
 CREATE POLICY workspace_storage_providers_insert_policy ON public.workspace_storage_providers FOR INSERT TO authenticated
     WITH CHECK (
-        (tenant_id = public.get_tenant_id() AND public.get_user_role() IN ('HQ_ADMIN', 'TENANT_OWNER', 'TENANT_ADMIN'))
+        (tenant_id = public.get_tenant_id() AND public.get_user_role() IN ('HQ_ADMIN', 'COMPANY_OWNER', 'COMPANY_ADMIN'))
         OR public.get_user_role() = 'HQ_ADMIN'
     );
 CREATE POLICY workspace_storage_providers_update_policy ON public.workspace_storage_providers FOR UPDATE TO authenticated
     USING (
-        (tenant_id = public.get_tenant_id() AND public.get_user_role() IN ('HQ_ADMIN', 'TENANT_OWNER', 'TENANT_ADMIN'))
+        (tenant_id = public.get_tenant_id() AND public.get_user_role() IN ('HQ_ADMIN', 'COMPANY_OWNER', 'COMPANY_ADMIN'))
         OR public.get_user_role() = 'HQ_ADMIN'
     )
     WITH CHECK (
-        (tenant_id = public.get_tenant_id() AND public.get_user_role() IN ('HQ_ADMIN', 'TENANT_OWNER', 'TENANT_ADMIN'))
+        (tenant_id = public.get_tenant_id() AND public.get_user_role() IN ('HQ_ADMIN', 'COMPANY_OWNER', 'COMPANY_ADMIN'))
         OR public.get_user_role() = 'HQ_ADMIN'
     );
 CREATE POLICY workspace_storage_providers_delete_policy ON public.workspace_storage_providers FOR DELETE TO authenticated
     USING (
-        (tenant_id = public.get_tenant_id() AND public.get_user_role() IN ('HQ_ADMIN', 'TENANT_OWNER', 'TENANT_ADMIN'))
+        (tenant_id = public.get_tenant_id() AND public.get_user_role() IN ('HQ_ADMIN', 'COMPANY_OWNER', 'COMPANY_ADMIN'))
         OR public.get_user_role() = 'HQ_ADMIN'
     );
 
@@ -1103,21 +1103,21 @@ CREATE POLICY workspace_notif_pref_select_policy ON public.workspace_notificatio
     USING (tenant_id = public.get_tenant_id() OR public.get_user_role() IN ('HQ_ADMIN', 'HQ_SUPPORT', 'HQ_AUDITOR'));
 CREATE POLICY workspace_notif_pref_insert_policy ON public.workspace_notification_preferences FOR INSERT TO authenticated
     WITH CHECK (
-        (tenant_id = public.get_tenant_id() AND public.get_user_role() IN ('HQ_ADMIN', 'TENANT_OWNER', 'TENANT_ADMIN'))
+        (tenant_id = public.get_tenant_id() AND public.get_user_role() IN ('HQ_ADMIN', 'COMPANY_OWNER', 'COMPANY_ADMIN'))
         OR public.get_user_role() = 'HQ_ADMIN'
     );
 CREATE POLICY workspace_notif_pref_update_policy ON public.workspace_notification_preferences FOR UPDATE TO authenticated
     USING (
-        (tenant_id = public.get_tenant_id() AND public.get_user_role() IN ('HQ_ADMIN', 'TENANT_OWNER', 'TENANT_ADMIN'))
+        (tenant_id = public.get_tenant_id() AND public.get_user_role() IN ('HQ_ADMIN', 'COMPANY_OWNER', 'COMPANY_ADMIN'))
         OR public.get_user_role() = 'HQ_ADMIN'
     )
     WITH CHECK (
-        (tenant_id = public.get_tenant_id() AND public.get_user_role() IN ('HQ_ADMIN', 'TENANT_OWNER', 'TENANT_ADMIN'))
+        (tenant_id = public.get_tenant_id() AND public.get_user_role() IN ('HQ_ADMIN', 'COMPANY_OWNER', 'COMPANY_ADMIN'))
         OR public.get_user_role() = 'HQ_ADMIN'
     );
 CREATE POLICY workspace_notif_pref_delete_policy ON public.workspace_notification_preferences FOR DELETE TO authenticated
     USING (
-        (tenant_id = public.get_tenant_id() AND public.get_user_role() IN ('HQ_ADMIN', 'TENANT_OWNER', 'TENANT_ADMIN'))
+        (tenant_id = public.get_tenant_id() AND public.get_user_role() IN ('HQ_ADMIN', 'COMPANY_OWNER', 'COMPANY_ADMIN'))
         OR public.get_user_role() = 'HQ_ADMIN'
     );
 
@@ -1134,7 +1134,7 @@ CREATE POLICY workspace_notif_update_policy ON public.workspace_notifications FO
     WITH CHECK (tenant_id = public.get_tenant_id() OR public.get_user_role() IN ('HQ_ADMIN', 'HQ_SUPPORT'));
 CREATE POLICY workspace_notif_delete_policy ON public.workspace_notifications FOR DELETE TO authenticated
     USING (
-        (tenant_id = public.get_tenant_id() AND public.get_user_role() IN ('HQ_ADMIN', 'TENANT_OWNER', 'TENANT_ADMIN'))
+        (tenant_id = public.get_tenant_id() AND public.get_user_role() IN ('HQ_ADMIN', 'COMPANY_OWNER', 'COMPANY_ADMIN'))
         OR public.get_user_role() = 'HQ_ADMIN'
     );
 
@@ -1145,51 +1145,51 @@ CREATE POLICY workspace_notif_delete_policy ON public.workspace_notifications FO
 
 INSERT INTO public.permission_matrices (role, permissions) VALUES
 ('HQ_ADMIN', '{
-  "Financial Records": {"read": true, "create": true, "update": true, "delete": true},
-  "Financial Commitments": {"read": true, "create": true, "update": true, "delete": true},
-  "Financial Forecast": {"read": true, "create": true, "update": true, "delete": true},
-  "Financial Evidence Package": {"read": true, "create": true, "update": true, "delete": true}
+  "Financial Records":          {"read": true,  "create": true,  "update": true,  "delete": true},
+  "Financial Commitments":      {"read": true,  "create": true,  "update": true,  "delete": true},
+  "Financial Forecast":         {"read": true,  "create": true,  "update": true,  "delete": true},
+  "Financial Evidence Package": {"read": true,  "create": true,  "update": true,  "delete": true},
+  "User Management":            {"read": true,  "create": true,  "update": true,  "delete": true},
+  "Workspace Settings":         {"read": true,  "create": true,  "update": true,  "delete": true}
 }'),
 ('HQ_SUPPORT', '{
-  "Financial Records": {"read": true, "create": true, "update": true, "delete": false},
-  "Financial Commitments": {"read": true, "create": true, "update": true, "delete": false},
-  "Financial Forecast": {"read": true, "create": true, "update": true, "delete": false},
-  "Financial Evidence Package": {"read": true, "create": true, "update": true, "delete": false}
+  "Financial Records":          {"read": true,  "create": false, "update": false, "delete": false},
+  "Financial Commitments":      {"read": true,  "create": false, "update": false, "delete": false},
+  "Financial Forecast":         {"read": true,  "create": false, "update": false, "delete": false},
+  "Financial Evidence Package": {"read": true,  "create": false, "update": false, "delete": false},
+  "User Management":            {"read": true,  "create": false, "update": false, "delete": false},
+  "Workspace Settings":         {"read": true,  "create": false, "update": false, "delete": false}
 }'),
 ('HQ_AUDITOR', '{
-  "Financial Records": {"read": true, "create": false, "update": false, "delete": false},
-  "Financial Commitments": {"read": true, "create": false, "update": false, "delete": false},
-  "Financial Forecast": {"read": true, "create": false, "update": false, "delete": false},
-  "Financial Evidence Package": {"read": true, "create": false, "update": false, "delete": false}
+  "Financial Records":          {"read": true,  "create": false, "update": false, "delete": false},
+  "Financial Commitments":      {"read": true,  "create": false, "update": false, "delete": false},
+  "Financial Forecast":         {"read": true,  "create": false, "update": false, "delete": false},
+  "Financial Evidence Package": {"read": true,  "create": false, "update": false, "delete": false},
+  "User Management":            {"read": true,  "create": false, "update": false, "delete": false},
+  "Workspace Settings":         {"read": true,  "create": false, "update": false, "delete": false}
 }'),
-('TENANT_OWNER', '{
-  "Financial Records": {"read": true, "create": true, "update": true, "delete": true},
-  "Financial Commitments": {"read": true, "create": true, "update": true, "delete": true},
-  "Financial Forecast": {"read": true, "create": true, "update": true, "delete": true},
-  "Financial Evidence Package": {"read": true, "create": true, "update": true, "delete": true}
+('COMPANY_OWNER', '{
+  "Financial Records":          {"read": true,  "create": true,  "update": true,  "delete": true},
+  "Financial Commitments":      {"read": true,  "create": true,  "update": true,  "delete": true},
+  "Financial Forecast":         {"read": true,  "create": true,  "update": true,  "delete": true},
+  "Financial Evidence Package": {"read": true,  "create": true,  "update": true,  "delete": true},
+  "User Management":            {"read": true,  "create": true,  "update": true,  "delete": true},
+  "Workspace Settings":         {"read": true,  "create": true,  "update": true,  "delete": true}
 }'),
-('TENANT_ADMIN', '{
-  "Financial Records": {"read": true, "create": true, "update": true, "delete": true},
-  "Financial Commitments": {"read": true, "create": true, "update": true, "delete": true},
-  "Financial Forecast": {"read": true, "create": true, "update": true, "delete": true},
-  "Financial Evidence Package": {"read": true, "create": true, "update": true, "delete": true}
+('COMPANY_ADMIN', '{
+  "Financial Records":          {"read": true,  "create": true,  "update": true,  "delete": false},
+  "Financial Commitments":      {"read": true,  "create": true,  "update": true,  "delete": false},
+  "Financial Forecast":         {"read": true,  "create": true,  "update": true,  "delete": false},
+  "Financial Evidence Package": {"read": true,  "create": true,  "update": true,  "delete": false},
+  "User Management":            {"read": true,  "create": true,  "update": true,  "delete": false},
+  "Workspace Settings":         {"read": true,  "create": false, "update": true,  "delete": false}
 }'),
-('MANAGER', '{
-  "Financial Records": {"read": true, "create": true, "update": true, "delete": true},
-  "Financial Commitments": {"read": true, "create": true, "update": true, "delete": true},
-  "Financial Forecast": {"read": true, "create": false, "update": false, "delete": false},
-  "Financial Evidence Package": {"read": true, "create": true, "update": true, "delete": true}
-}'),
-('STAFF', '{
-  "Financial Records": {"read": true, "create": true, "update": true, "delete": false},
-  "Financial Commitments": {"read": true, "create": false, "update": false, "delete": false},
-  "Financial Forecast": {"read": false, "create": false, "update": false, "delete": false},
-  "Financial Evidence Package": {"read": true, "create": true, "update": true, "delete": false}
-}'),
-('VIEWER', '{
-  "Financial Records": {"read": true, "create": false, "update": false, "delete": false},
-  "Financial Commitments": {"read": true, "create": false, "update": false, "delete": false},
-  "Financial Forecast": {"read": true, "create": false, "update": false, "delete": false},
-  "Financial Evidence Package": {"read": true, "create": false, "update": false, "delete": false}
+('COMPANY_STAFF', '{
+  "Financial Records":          {"read": true,  "create": true,  "update": true,  "delete": false},
+  "Financial Commitments":      {"read": true,  "create": false, "update": false, "delete": false},
+  "Financial Forecast":         {"read": false, "create": false, "update": false, "delete": false},
+  "Financial Evidence Package": {"read": true,  "create": true,  "update": false, "delete": false},
+  "User Management":            {"read": false, "create": false, "update": false, "delete": false},
+  "Workspace Settings":         {"read": false, "create": false, "update": false, "delete": false}
 }')
 ON CONFLICT (role) DO UPDATE SET permissions = EXCLUDED.permissions;
