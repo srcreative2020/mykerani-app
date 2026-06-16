@@ -1185,7 +1185,7 @@ INSERT INTO public.permission_matrices (role, permissions) VALUES
   "Workspace Settings":         {"read": true,  "create": false, "update": true,  "delete": false}
 }'),
 ('COMPANY_STAFF', '{
-  "Financial Records":          {"read": true,  "create": true,  "update": true,  "delete": false},
+  "Financial Records":          {"read": true,  "create": true,  "update": false, "delete": false},
   "Financial Commitments":      {"read": true,  "create": false, "update": false, "delete": false},
   "Financial Forecast":         {"read": false, "create": false, "update": false, "delete": false},
   "Financial Evidence Package": {"read": true,  "create": true,  "update": false, "delete": false},
