@@ -3,12 +3,13 @@ import { AuthProvider, useAuth } from "./context/AuthContext";
 import { TenantProvider, useTenant } from "./context/TenantContext";
 import { WorkspaceProvider, useWorkspace } from "./context/WorkspaceContext";
 import { PermissionProvider } from "./context/PermissionContext";
-import { AuditProvider } from "./context/AuditContext";
+import { AuditProvider, useAudit } from "./context/AuditContext";
 import { StorageProvider } from "./context/StorageContext";
 import { NotificationProvider } from "./context/NotificationContext";
 import { Guard } from "./components/Guard";
 import { HQConsoleShell } from "./components/HQConsoleShell";
-import { FinancialRecordsProvider } from "./context/FinancialRecordsContext";
+import { MyKeraniAppTabs } from "./components/MyKeraniAppTabs";
+import { FinancialRecordsProvider, useFinancials } from "./context/FinancialRecordsContext";
 import { FinancialRecordsConsole } from "./components/FinancialRecordsConsole";
 import { testSupabaseConnection, type SupabaseDiagnostics } from "./lib/supabase";
 import { type TenantCategory } from "./types";
@@ -49,10 +50,19 @@ import {
   Receipt,
   FileSpreadsheet,
   ShieldCheck,
+  Home,
+  Lightbulb,
+  Folder,
+  Settings,
 } from "lucide-react";
+
+import { AIFinancialAssistant } from "./components/AIFinancialAssistant";
+import { FinancialReportsAnalytics } from "./components/FinancialReportsAnalytics";
+import { FinancialEvidencePackageManager } from "./components/FinancialEvidencePackage";
 
 function MainDashboardContent() {
   const { user, signOut, isMockUser, toggleBypassAuth } = useAuth();
+  const [activeNavTab, setActiveNavTab] = useState<"mykerani" | "insights" | "documents" | "more">("mykerani");
   const { tenants, activeTenant, selectTenant, createTenant, error: tenantError } = useTenant();
   const {
     workspaces,
@@ -275,6 +285,94 @@ function MainDashboardContent() {
   };
 
   const preparedHeaders = getWorkspaceHeaders();
+
+  // --- MYKERANI V1.0 - OCR & File Upload Interactive Simulation ---
+  const [showSimulateUploadModal, setShowSimulateUploadModal] = useState(false);
+  const [simulateDocType, setSimulateDocType] = useState<"RECEIPT" | "INVOICE" | "STATEMENT" | null>(null);
+  const [simulating, setSimulating] = useState(false);
+  const [simulationSuccess, setSimulationSuccess] = useState<string | null>(null);
+
+  const mockUploadOptions = {
+    RECEIPT: [
+      { name: "Resit Minyak Petronas (Petrol Fuel)", vendor: "Petronas Dagangan Bhd", amount: 150.0, category: "Transport & Travel", type: "EXPENSE" },
+      { name: "GrabFood Team Lunch Receipt", vendor: "GrabCar Sdn Bhd", amount: 42.50, category: "Meals & Entertainment", type: "EXPENSE" },
+    ],
+    INVOICE: [
+      { name: "Invois Bulanan Maxis Broadband (Fibre)", vendor: "Maxis Broadband Sdn Bhd", amount: 199.0, category: "Utilities & Communications", type: "EXPENSE" },
+      { name: "Bil Elektrik Tenaga Nasional Berhad", vendor: "Tenaga Nasional Berhad", amount: 430.0, category: "Utilities & Communications", type: "EXPENSE" },
+    ],
+    STATEMENT: [
+      { name: "Maybank SME Current Account Statement (April 2026)", vendor: "Malayan Banking Berhad", amount: 84500.0, category: "Asset Bank Reconcile", type: "STATEMENT" },
+      { name: "CIMB SME Current Account Statement (April 2026)", vendor: "CIMB Bank Berhad", amount: 32100.0, category: "Asset Bank Reconcile", type: "STATEMENT" },
+    ],
+  };
+
+  const { addFinancialEvidencePackage, addFinancialEvent } = useFinancials();
+  const { writeAuditLog } = useAudit();
+
+  const handleRunSimulation = async (docType: "RECEIPT" | "INVOICE" | "STATEMENT", name: string, amount: number, vendor: string, cat: string, recType: string) => {
+    if (!activeWorkspace) return;
+    setSimulating(true);
+    setSimulationSuccess(null);
+    
+    try {
+      // 1. Add to Evidence Package list
+      const mockUrl = `/sample-storage/evidence-${Math.floor(Math.random() * 90000 + 10000)}.pdf`;
+      const freshPkg = addFinancialEvidencePackage({
+        workspaceId: activeWorkspace.id,
+        documentType: docType === "RECEIPT" ? "RECEIPT" : docType === "INVOICE" ? "INVOICE" : "STATEMENT",
+        uploadDate: new Date().toISOString().split("T")[0],
+        fileName: `${name.replace(/\s+/g, '_').toLowerCase()}.pdf`,
+        fileUrl: mockUrl,
+        relatedRecordType: recType === "STATEMENT" ? undefined : recType,
+        notes: `Simulated OCR processing on ${vendor} document. Mapped category: ${cat}.`
+      });
+
+      // 2. Also automatically add to standard Financial Ledger Event if it's a receipt or invoice!
+      let relatedEvId = "";
+      if (docType !== "STATEMENT") {
+        const freshEv = addFinancialEvent({
+          workspaceId: activeWorkspace.id,
+          type: recType as any,
+          categoryName: cat,
+          categoryCode: "6000",
+          amountMyr: amount,
+          partyName: vendor,
+          date: new Date().toISOString().split("T")[0],
+          referenceNumber: `TXN-OCR-${Math.floor(Math.random() * 90000 + 10000)}`,
+          description: `Auto-recorded via MyKerani OCR flow. Supporting file: ${freshPkg.fileName}`
+        });
+        relatedEvId = freshEv.id;
+        freshPkg.relatedRecordId = relatedEvId;
+      }
+
+      // 3. Write real audit logs
+      await writeAuditLog({
+        workspaceId: activeWorkspace?.id,
+        module: "Financial Evidence Package",
+        action: "CREATE",
+        oldValue: null,
+        newValue: {
+          fileName: freshPkg.fileName,
+          extractedVendor: vendor,
+          extractedAmount: amount,
+          extractedCategory: cat,
+          ocrConfidence: 0.98,
+          simulationResult: "SUCCESS_VERIFIED"
+        }
+      });
+
+      setSimulationSuccess(`Berjaya memuat naik "${freshPkg.fileName}"! Parameter RM ${amount.toFixed(2)} dimasukkan.`);
+    } catch (e) {
+      console.error("Simulation failed:", e);
+    } finally {
+      setSimulating(false);
+      setTimeout(() => {
+        setShowSimulateUploadModal(false);
+        setSimulationSuccess(null);
+      }, 2000);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800 font-sans flex flex-col justify-between" id="dashboard_root">
@@ -582,7 +680,8 @@ function MainDashboardContent() {
             <Check className="w-4 h-4" />
             <span>{createSuccessMsg || createWSSuccessMsg}</span>
           </div>
-        )}        {activeTenant?.category === "HQ" ? (
+        )}
+        {activeTenant?.category === "HQ" ? (
           <HQConsoleShell
             tenants={tenants}
             workspaces={workspaces}
@@ -590,124 +689,35 @@ function MainDashboardContent() {
             activeWorkspace={activeWorkspace}
           />
         ) : (
-          <>
-            {/* WORKSPACE SELECTION DECK & ISOLATION VISUALIZER */}
-            <div className="bg-white border border-slate-200 rounded-2xl p-6 md:p-8 shadow-sm space-y-6" id="workspace_isolation_viz">
-              <div>
-                <div className="flex items-center space-x-2 text-indigo-600 font-mono text-xs uppercase tracking-wider mb-1">
-                  <FolderLock className="w-4 h-4" />
-                  <span>Workspace Isolation Compartment (Task 5 Core)</span>
-                </div>
-                <h3 className="font-display font-medium text-2xl text-slate-950 tracking-tight">
-                  Switch Financial Records Compilers
-                </h3>
-                <p className="text-sm text-slate-600 leading-relaxed font-sans mt-1">
-                  To verify isolation, choose a preconfigured mock workspace or create custom ones. Each active workspace isolation token acts as a cryptographic hash key.
-                </p>
-              </div>
-
-              {/* Quick Selection Deck for Personal, Company A, Company B, Company C */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4" id="workspace_deck">
-                {workspaces.map((ws) => {
-                  const isCurrent = activeWorkspace?.id === ws.id;
-                  return (
-                    <button
-                      key={ws.id}
-                      onClick={() => selectWorkspace(ws.id)}
-                      className={`p-4 rounded-xl border text-left flex flex-col justify-between h-32 transition duration-200 cursor-pointer ${
-                        isCurrent
-                          ? "bg-indigo-900 border-indigo-950 text-white shadow-md ring-2 ring-indigo-500/10"
-                          : "bg-slate-50 border-slate-200 hover:bg-slate-100 hover:border-slate-350 text-slate-850"
-                      }`}
-                      id={`ws_card_${ws.slug}`}
-                    >
-                      <div className="flex justify-between items-start w-full">
-                        <div className={`p-1.5 rounded-lg ${isCurrent ? "bg-indigo-850 text-indigo-200" : "bg-white text-slate-400 border border-slate-200"}`}>
-                          <LayoutGrid className="w-4 h-4" />
-                        </div>
-                        {isCurrent && (
-                          <span className="bg-emerald-500 text-white rounded-full p-0.5 text-xs">
-                            <Check className="w-3 h-3" />
-                          </span>
-                        )}
-                      </div>
-
-                      <div>
-                        <p className={`text-[10px] font-mono uppercase tracking-tight ${isCurrent ? "text-indigo-300" : "text-slate-400 font-semibold"}`}>
-                          MAPPED SLUG: {ws.slug}
-                        </p>
-                        <h4 className="font-semibold text-sm leading-snug mt-1 truncate w-full">
-                          {ws.name}
-                        </h4>
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-
-              {/* Telemetry Display for Headers and Context (Prepare X-Workspace-Id foundation) */}
-              <div className="bg-slate-50 border border-slate-200 rounded-xl p-5 space-y-4" id="telemetry_headers_panel">
-                <div className="flex items-center justify-between flex-wrap gap-2">
-                  <span className="text-xs font-semibold font-mono text-slate-500 flex items-center">
-                    <FileCode className="w-4 h-4 mr-1.5 text-slate-400" />
-                    PREPARED HTTP CONTEXT HEADERS (RLS INTEGRITY)
-                  </span>
-                  <span className="text-[10px] font-mono bg-indigo-50 border border-indigo-100 text-indigo-700 px-2.5 py-0.5 rounded-full font-bold">
-                    X-Workspace-Id Foundation Ready
-                  </span>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {/* Workspace ID payload block */}
-                  <div className="bg-slate-900 p-4 rounded-xl text-xs font-mono text-slate-100 relative overflow-hidden group">
-                    <div className="absolute right-3 top-3 opacity-10 group-hover:opacity-20 transition">
-                      <KeyRound className="w-16 h-16 text-white" />
-                    </div>
-                    <p className="text-amber-400 font-bold text-[10px] uppercase mb-1 tracking-wider">HEADER: X-Workspace-Id</p>
-                    <div className="bg-black/40 p-2.5 rounded border border-slate-800 text-slate-300 font-bold break-all">
-                      {preparedHeaders["X-Workspace-Id"] || "NULL (Please select workspace)"}
-                    </div>
-                    <p className="text-[10px] text-slate-400 mt-2 leading-tight">
-                      Enforced dynamically inside Postgres RLS policy scopes to bind financial records database selects.
-                    </p>
-                  </div>
-
-                  {/* Tenant ID payload block */}
-                  <div className="bg-slate-900 p-4 rounded-xl text-xs font-mono text-slate-100 relative overflow-hidden group">
-                    <div className="absolute right-3 top-3 opacity-10 group-hover:opacity-20 transition">
-                      <Globe className="w-16 h-16 text-white" />
-                    </div>
-                    <p className="text-amber-400 font-bold text-[10px] uppercase mb-1 tracking-wider">HEADER: X-Tenant-Id</p>
-                    <div className="bg-black/40 p-2.5 rounded border border-slate-800 text-slate-300 font-bold break-all">
-                      {preparedHeaders["X-Tenant-Id"] || "NULL (Please select tenant)"}
-                    </div>
-                    <p className="text-[10px] text-slate-400 mt-2 leading-tight">
-                      Acts as the overarching organizational envelopment key for corporate security handshakes.
-                    </p>
-                  </div>
-                </div>
-
-                {/* Simulated request response proof */}
-                <div className="border-t border-slate-200/50 pt-4 text-xs text-slate-600 flex flex-col md:flex-row md:items-center justify-between gap-2">
-                  <p className="font-sans">
-                    Active context state for financial records persistence targets relative path: <code className="font-mono bg-slate-150 px-1.5 py-0.5 rounded font-bold text-slate-800">/api/v1/tenant/{activeTenant?.id}/workspace/{activeWorkspace?.id}</code>
-                  </p>
-                  <span className="inline-flex items-center text-emerald-600 font-semibold font-mono">
-                    <CheckCircle2 className="w-3.5 h-3.5 mr-1" /> ISOLATION VERIFIED
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            {/* Financial Records Foundation Modules */}
-            {activeWorkspace && (
-              <FinancialRecordsConsole />
-            )}
-          </>
+          <MyKeraniAppTabs
+            user={user}
+            activeTenant={activeTenant}
+            activeWorkspace={activeWorkspace}
+            tenants={tenants}
+            workspaces={workspaces}
+            selectWorkspace={selectWorkspace}
+            diagnostics={diagnostics}
+            runDiagnosticCheck={runDiagnosticCheck}
+            testing={testing}
+            dbPassword={dbPassword}
+            setDbPassword={setDbPassword}
+            serverStatus={serverStatus}
+            fetchDbStatus={fetchDbStatus}
+            statusLoading={statusLoading}
+            initializedLogs={initializedLogs}
+            initializing={initializing}
+            handleInitializeDb={handleInitializeDb}
+            verificationResult={verificationResult}
+            handleVerifyDb={handleVerifyDb}
+            verifyLoading={verifyLoading}
+            isMockUser={isMockUser}
+            toggleBypassAuth={toggleBypassAuth}
+            getCategoryBadgeColor={getCategoryBadgeColor}
+          />
         )}
 
-        {/* Supabase Connection & Database Migrations Center */}
-        <div className="bg-white border border-slate-200 rounded-2xl shadow-sm p-8 space-y-6" id="diagnostic_card">
+        {/* Developer Diagnostics Hidden */}
+        <div className="hidden" id="diagnostic_card">
           <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-4 border-b border-slate-100">
             <div>
               <div className="flex items-center space-x-2 text-indigo-600 font-mono text-[10px] uppercase font-bold tracking-wider mb-1">
@@ -1192,12 +1202,12 @@ function MainDashboardContent() {
       </main>
 
       {/* Modern High-Density Footer */}
-      <footer className="border-t border-slate-200 px-6 py-4 flex items-center justify-between bg-white text-slate-500 text-xs font-mono" id="app_footer_nav">
+      <footer className="border-t border-slate-200 px-6 py-4 flex items-center justify-between bg-white text-slate-500 text-xs font-sans" id="app_footer_nav">
         <div>
-          MYKERANI SECURITY FRAMEWORK • ACTIVE
+          © {new Date().getFullYear()} MyKerani™ • Pembantu Kewangan Pintar
         </div>
         <div>
-          CURRENCY ACCREDITATION: MYR ENFORCED
+          Mata Wang Syarikat: Ringgit Malaysia (MYR)
         </div>
       </footer>
     </div>

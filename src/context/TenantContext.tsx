@@ -14,9 +14,9 @@ const TenantContext = createContext<TenantContextType | undefined>(undefined);
 
 // Core default sandbox tenants including the permanent sales/presentation tenant
 const DEFAULT_MOCK_TENANTS: Tenant[] = [
-  { id: PERMANENT_DEMO_TENANT_ID, name: "MYKERANI Presentation & Demo Hub", category: "DEMO" },
-  { id: "tenant-hq-0001", name: "MYKERANI HQ Administrative Control", category: "HQ" },
-  { id: "tenant-demo-8bit", name: "LemonTree Bakery (Demo Account)", category: "DEMO" },
+  { id: PERMANENT_DEMO_TENANT_ID, name: "MYKERANI Urus Niaga Utama", category: "DEMO" },
+  { id: "tenant-hq-0001", name: "MYKERANI Kawalan Pentadbiran Utama", category: "HQ" },
+  { id: "tenant-demo-8bit", name: "LemonTree Bakery (Akaun Utama)", category: "DEMO" },
   { id: "tenant-user-1234", name: "Apex Engineering & Consulting MY", category: "USER" },
 ];
 
@@ -119,7 +119,7 @@ export const TenantProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             if (!mappedTenants.some(t => t.id === PERMANENT_DEMO_TENANT_ID)) {
               mappedTenants.unshift({
                 id: PERMANENT_DEMO_TENANT_ID,
-                name: "MYKERANI Presentation & Demo Hub",
+                name: "MYKERANI Urus Niaga Utama",
                 category: "DEMO",
               });
             }

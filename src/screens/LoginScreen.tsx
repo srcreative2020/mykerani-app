@@ -13,7 +13,8 @@ import {
   Wallet,
   FileText,
   LockKeyhole,
-  CheckCircle2
+  CheckCircle2,
+  ChevronRight
 } from "lucide-react";
 
 export default function LoginScreen() {
@@ -194,6 +195,93 @@ export default function LoginScreen() {
             )}
           </button>
         </form>
+
+        {/* LOG MASUK EKSPRES / DEMO */}
+        {!isSignUpMode && (
+          <div className="pt-2 border-t border-slate-100 space-y-3" id="quick_demo_access_section">
+            <div className="text-center">
+              <span className="text-[10px] font-bold tracking-wider text-slate-400 uppercase">
+                Akses Demo Segera (Tap Sekali Terus Masuk)
+              </span>
+            </div>
+            <div className="grid grid-cols-1 gap-2">
+              <button
+                type="button"
+                onClick={async () => {
+                  setFormLoading(true);
+                  try {
+                    await signIn("hq@mykerani.demo", "MyKerani@123");
+                  } catch (e) {}
+                  setFormLoading(false);
+                }}
+                disabled={formLoading}
+                className="w-full flex items-center justify-between p-3 bg-rose-50 border border-rose-100/50 hover:bg-rose-100/30 rounded-xl transition text-left cursor-pointer group"
+                id="quick_hq_btn"
+              >
+                <div className="flex items-center space-x-2.5">
+                  <div className="w-8 h-8 rounded-lg bg-rose-100 text-rose-700 flex items-center justify-center font-bold text-sm">
+                    👑
+                  </div>
+                  <div>
+                    <p className="text-xs font-bold text-rose-950">HQ Console (Sistem Owner)</p>
+                    <p className="text-[10px] text-rose-600/70 font-mono">hq@mykerani.demo</p>
+                  </div>
+                </div>
+                <ChevronRight className="w-4 h-4 text-rose-400 group-hover:translate-x-0.5 transition" />
+              </button>
+
+              <button
+                type="button"
+                onClick={async () => {
+                  setFormLoading(true);
+                  try {
+                    await signIn("owner@mykerani.demo", "MyKerani@123");
+                  } catch (e) {}
+                  setFormLoading(false);
+                }}
+                disabled={formLoading}
+                className="w-full flex items-center justify-between p-3 bg-amber-50 border border-amber-100/50 hover:bg-amber-100/30 rounded-xl transition text-left cursor-pointer group"
+                id="quick_owner_btn"
+              >
+                <div className="flex items-center space-x-2.5">
+                  <div className="w-8 h-8 rounded-lg bg-amber-100 text-amber-700 flex items-center justify-center font-bold text-sm">
+                    💼
+                  </div>
+                  <div>
+                    <p className="text-xs font-bold text-amber-950">Tenant Owner (Pemilik Kedai)</p>
+                    <p className="text-[10px] text-amber-600/70 font-mono">owner@mykerani.demo</p>
+                  </div>
+                </div>
+                <ChevronRight className="w-4 h-4 text-amber-400 group-hover:translate-x-0.5 transition" />
+              </button>
+
+              <button
+                type="button"
+                onClick={async () => {
+                  setFormLoading(true);
+                  try {
+                    await signIn("staff@mykerani.demo", "MyKerani@123");
+                  } catch (e) {}
+                  setFormLoading(false);
+                }}
+                disabled={formLoading}
+                className="w-full flex items-center justify-between p-3 bg-indigo-50 border border-indigo-100/50 hover:bg-indigo-100/30 rounded-xl transition text-left cursor-pointer group"
+                id="quick_staff_btn"
+              >
+                <div className="flex items-center space-x-2.5">
+                  <div className="w-8 h-8 rounded-lg bg-indigo-100 text-indigo-700 flex items-center justify-center font-bold text-sm">
+                    👤
+                  </div>
+                  <div>
+                    <p className="text-xs font-bold text-indigo-950">Staff Account (Kakitangan)</p>
+                    <p className="text-[10px] text-indigo-600/70 font-mono">staff@mykerani.demo</p>
+                  </div>
+                </div>
+                <ChevronRight className="w-4 h-4 text-indigo-400 group-hover:translate-x-0.5 transition" />
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* BOTTOM SECTION */}
         <div className="pt-4 border-t border-slate-100 text-center" id="login_toggle_container">

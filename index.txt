@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="ms">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+    <title>MyKerani - Platform Kewangan AI</title>
+    <!-- Tailwind + Font Awesome -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <!-- Supabase JS -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        body { background: #f3f4f6; }
+        .card-hover:hover { transform: translateY(-2px); transition: all 0.2s; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1); }
+        .loading { display: none; text-align: center; padding: 2rem; }
+        .active-tab { background-color: #2563eb; color: white; }
+        [data-role] { transition: all 0.1s; }
+    </style>
+</head>
+<body class="font-sans antialiased">
+
+<div id="app" class="min-h-screen">
+    <!-- Loading spinner -->
+    <div id="loading" class="loading fixed inset-0 bg-white bg-opacity-80 flex items-center justify-center z-50">
+        <div class="text-blue-600 text-xl"><i class="fas fa-spinner fa-spin mr-2"></i>Memuatkan...</div>
+    </div>
+
+    <!-- Main content will be injected here -->
+    <div id="main-content"></div>
+</div>
+
+<script>
+    // ==================== KONFIGURASI SUPABASE ====================
+    // >>> AWAK PERLU GANTI DENGAN NILAI DARI SUPABASE PROJECT <<<
+    const SUPABASE_URL = "https://giwnioxqacrfpyuyhrkf.supabase.co";
+    const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imdpd25pb3hxYWNyZnB5dXlocmtmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA3NjcyMjksImV4cCI6MjA5NjM0MzIyOX0.20Dx-2BA0ECBC6jpyi2TAB8uw68AwWF84VsVytzVk1o";
+
+    const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+    // ==================== HELPER FUNCTIONS ====================
+    function showLoading(show) {
+        document.getElementById('loading').style.display = show ? 'flex' : 'none';
+    }
+
+    async function getCurrentUser() {
+        const { data: { user }, error } = await supabase.auth.getUser();
+        if (error || !user) return null;
+        // get profile with role
+        const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single();
+        return { user, role: profile?.role || 'staff' };
+    }
+
+    async function getCurrentCompany() {
+        // For owner/staff: get the first company they belong to (simplified V1)
+        const { data: membership } = await supabase.from('company_members').select('company_id').limit(1).single();
+        if (membership) return membership.company_id;
+        return null;
+    }
+
+    // Simple router based on role
+    async function renderApp() {
+        const current = await getCurrentUser();
+        if (!current) {
+            renderAuth();
+            return;
+        }
+        // Redirect based on role
+        if (current.role === 'hq') renderHQDashboard(current);
+        else if (current.role === 'owner') renderOwnerDashboard(current);
+        else renderStaffDashboard(current);
+    }
+
+    // ==================== AUTHENTICATION UI ====================
+    function renderAuth() {
+        document.getElementById('main-content').innerHTML = `
+            <div class="max-w-md mx-auto mt-16 p-6 bg-white rounded-xl shadow-md">
+                <h2 class="text-2xl font-bold text-center text-blue-700 mb-6">MyKerani</h2>
+                <div id="auth-form">
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium">Email</label>
+                        <input id="email" type="email" class="w-full border rounded-lg px-3 py-2 mt-1">
+                    </div>
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium">Kata Laluan</label>
+                        <input id="password" type="password" class="w-full border rounded-lg px-3 py-2 mt-1">
+                    </div>
+                    <div class="flex gap-2">
+                        <button id="loginBtn" class="bg-blue-600 text-white px-4 py-2 rounded-lg flex-1">Log Masuk</button>
+                        <button id="registerBtn" class="bg-gray-600 text-white px-4 py-2 rounded-lg flex-1">Daftar</button>
+                    </div>
+                    <div class="mt-3 text-center">
+                        <button id="forgotBtn" class="text-sm text-blue-500">Lupa kata laluan?</button>
+                    </div>
+                    <div id="authMsg" class="mt-3 text-center text-red-500 text-sm"></div>
+                </div>
+            </div>
+        `;
+        document.getElementById('loginBtn').onclick = async () => {
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            showLoading(true);
+            const { error } = await supabase.auth.signInWithPassword({ email, password });
+            showLoading(false);
+            if (error) document.getElementById('authMsg').innerText = error.message;
+            else renderApp();
+        };
+        document.getElementById('registerBtn').onclick = async () => {
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            showLoading(true);
+            const { error } = await supabase.auth.signUp({ email, password });
+            showLoading(false);
+            if (error) document.getElementById('authMsg').innerText = error.message;
+            else document.getElementById('authMsg').innerText = "Pendaftaran berjaya! Sila semak email untuk verifikasi. (Untuk V1, verifikasi auto diabaikan, tetapi anda boleh log masuk selepas ini)";
+        };
+        document.getElementById('forgotBtn').onclick = async () => {
+            const email = document.getElementById('email').value;
+            if (!email) { alert('Masukkan email'); return; }
+            const { error } = await supabase.auth.resetPasswordForEmail(email);
+            if (error) alert(error.message);
+            else alert('Email reset kata laluan telah dihantar.');
+        };
+    }
+
+    // ==================== HQ DASHBOARD ====================
+    function renderHQDashboard(user) {
+        document.getElementById('main-content').innerHTML = `
+            <div class="max-w-7xl mx-auto px-4 py-6">
+                <div class="flex justify-between items-center mb-6">
+                    <h1 class="text-2xl font-bold">HQ Dashboard</h1>
+                    <button id="logoutBtn" class="bg-red-500 text-white px-4 py-2 rounded-lg text-sm">Log Keluar</button>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                    <div class="bg-white p-4 rounded-xl shadow"><p class="text-gray-500">Syarikat</p><p class="text-2xl font-bold" id="totalCompanies">0</p></div>
+                    <div class="bg-white p-4 rounded-xl shadow"><p class="text-gray-500">Pengguna</p><p class="text-2xl font-bold" id="totalUsers">0</p></div>
+                    <div class="bg-white p-4 rounded-xl shadow"><p class="text-gray-500">Hasil Bulanan</p><p class="text-2xl font-bold" id="monthlyRevenue">RM 0</p></div>
+                </div>
+                <div class="bg-white p-4 rounded-xl shadow">
+                    <h3 class="font-semibold mb-2">Senarai Syarikat</h3>
+                    <ul id="companyList" class="divide-y"></ul>
+                </div>
+            </div>
+        `;
+        document.getElementById('logoutBtn').onclick = async () => { await supabase.auth.signOut(); renderApp(); };
+        // Load data from Supabase (simplified aggregates)
+        (async () => {
+            const { count: companies } = await supabase.from('companies').select('*', { count: 'exact', head: true });
+            document.getElementById('totalCompanies').innerText = companies || 0;
+            const { count: users } = await supabase.from('profiles').select('*', { count: 'exact', head: true });
+            document.getElementById('totalUsers').innerText = users || 0;
+            const { data: transactions } = await supabase.from('transactions').select('amount').eq('type', 'income').gte('created_at', new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString());
+            let total = 0;
+            transactions?.forEach(t => total += Number(t.amount));
+            document.getElementById('monthlyRevenue').innerText = `RM ${total.toFixed(2)}`;
+            const { data: companiesData } = await supabase.from('companies').select('id,name');
+            const list = document.getElementById('companyList');
+            list.innerHTML = '';
+            companiesData?.forEach(c => { list.innerHTML += `<li class="py-2">${c.name}</li>`; });
+        })();
+    }
+
+    // ==================== OWNER DASHBOARD (Ringkas tapi functional) ====================
+    function renderOwnerDashboard(user) {
+        document.getElementById('main-content').innerHTML = `
+            <div class="max-w-7xl mx-auto px-4 py-6">
+                <div class="flex justify-between items-center mb-4">
+                    <h1 class="text-2xl font-bold">Owner Dashboard</h1>
+                    <button id="logoutBtn" class="bg-red-500 text-white px-4 py-2 rounded-lg text-sm">Log Keluar</button>
+                </div>
+                <!-- Menu tabs -->
+                <div class="flex flex-wrap gap-2 border-b pb-2 mb-4">
+                    <button data-tab="dashboard" class="tab-btn active-tab px-4 py-2 rounded-t-lg">Dashboard</button>
+                    <button data-tab="transactions" class="tab-btn px-4 py-2 rounded-t-lg">Transaksi</button>
+                    <button data-tab="documents" class="tab-btn px-4 py-2 rounded-t-lg">Dokumen</button>
+                    <button data-tab="bills" class="tab-btn px-4 py-2 rounded-t-lg">Bil</button>
+                    <button data-tab="reports" class="tab-btn px-4 py-2 rounded-t-lg">Laporan</button>
+                    <button data-tab="assistant" class="tab-btn px-4 py-2 rounded-t-lg">Assistant</button>
+                    <button data-tab="team" class="tab-btn px-4 py-2 rounded-t-lg">Pasukan</button>
+                    <button data-tab="settings" class="tab-btn px-4 py-2 rounded-t-lg">Tetapan</button>
+                </div>
+                <div id="tabContent"></div>
+            </div>
+        `;
+        document.getElementById('logoutBtn').onclick = async () => { await supabase.auth.signOut(); renderApp(); };
+        
+        // Load company id for owner (assuming user is member of a company as owner)
+        async function getOwnerCompanyId() {
+            const { data: member } = await supabase.from('company_members').select('company_id').eq('user_id', user.user.id).eq('role', 'owner').single();
+            return member?.company_id;
+        }
+
+        // Dashboard tab content
+        async function loadDashboard() {
+            const companyId = await getOwnerCompanyId();
+            if (!companyId) { document.getElementById('tabContent').innerHTML = '<p>Sila cipta syarikat dahulu di tetapan.</p>'; return; }
+            // Fetch aggregates
+            const { data: incomes } = await supabase.from('transactions').select('amount').eq('company_id', companyId).eq('type', 'income').gte('transaction_date', new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0]);
+            let totalIncome = 0; incomes?.forEach(i => totalIncome += Number(i.amount));
+            const { data: expenses } = await supabase.from('transactions').select('amount').eq('company_id', companyId).eq('type', 'expense').gte('transaction_date', new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0]);
+            let totalExpense = 0; expenses?.forEach(e => totalExpense += Number(e.amount));
+            document.getElementById('tabContent').innerHTML = `
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+                    <div class="bg-white p-4 rounded shadow">Pendapatan Bulan Ini<br><span class="text-2xl font-bold text-green-600">RM ${totalIncome.toFixed(2)}</span></div>
+                    <div class="bg-white p-4 rounded shadow">Perbelanjaan Bulan Ini<br><span class="text-2xl font-bold text-red-600">RM ${totalExpense.toFixed(2)}</span></div>
+                    <div class="bg-white p-4 rounded shadow">Baki Semasa<br><span class="text-2xl font-bold">RM ${(totalIncome - totalExpense).toFixed(2)}</span></div>
+                </div>
+                <div class="flex gap-2 flex-wrap">
+                    <button id="addIncomeBtn" class="bg-green-600 text-white px-4 py-2 rounded">Tambah Pendapatan</button>
+                    <button id="addExpenseBtn" class="bg-red-600 text-white px-4 py-2 rounded">Tambah Perbelanjaan</button>
+                </div>
+                <div id="txnForm" class="mt-4 hidden bg-white p-4 rounded"></div>
+            `;
+            document.getElementById('addIncomeBtn').onclick = () => showTransactionForm(companyId, 'income');
+            document.getElementById('addExpenseBtn').onclick = () => showTransactionForm(companyId, 'expense');
+        }
+        
+        async function showTransactionForm(companyId, type) {
+            const formDiv = document.getElementById('txnForm');
+            formDiv.innerHTML = `
+                <h3 class="font-bold mb-2">Tambah ${type === 'income' ? 'Pendapatan' : 'Perbelanjaan'}</h3>
+                <input id="amount" type="number" placeholder="Jumlah" class="border p-2 w-full mb-2">
+                <input id="desc" placeholder="Keterangan" class="border p-2 w-full mb-2">
+                <input id="date" type="date" class="border p-2 w-full mb-2">
+                <button id="saveTxn" class="bg-blue-600 text-white px-4 py-2 rounded">Simpan</button>
+            `;
+            formDiv.classList.remove('hidden');
+            document.getElementById('saveTxn').onclick = async () => {
+                const amount = parseFloat(document.getElementById('amount').value);
+                const description = document.getElementById('desc').value;
+                const date = document.getElementById('date').value;
+                if (!amount) return;
+                const { error } = await supabase.from('transactions').insert({
+                    company_id: companyId,
+                    user_id: (await getCurrentUser()).user.id,
+                    type: type,
+                    amount: amount,
+                    description: description,
+                    transaction_date: date || new Date().toISOString().split('T')[0]
+                });
+                if (error) alert(error.message);
+                else { alert('Disimpan'); loadDashboard(); }
+            };
+        }
+        
+        // Transactions tab
+        async function loadTransactions() {
+            const companyId = await getOwnerCompanyId();
+            if (!companyId) { document.getElementById('tabContent').innerHTML = '<p>Tiada syarikat.</p>'; return; }
+            const { data: txns } = await supabase.from('transactions').select('*').eq('company_id', companyId).order('created_at', { ascending: false });
+            let html = `<div class="bg-white p-4 rounded shadow"><h3 class="font-semibold mb-2">Senarai Transaksi</h3><ul>`;
+            txns?.forEach(t => {
+                html += `<li class="border-b py-2 flex justify-between"><span>${t.description || t.type} - RM ${t.amount}</span><span class="text-sm text-gray-500">${t.transaction_date}</span></li>`;
+            });
+            html += `</ul><button id="addTxnBtn" class="mt-4 bg-blue-600 text-white px-4 py-2 rounded">Tambah Transaksi</button></div>`;
+            document.getElementById('tabContent').innerHTML = html;
+            document.getElementById('addTxnBtn').onclick = () => {
+                // simple prompt for quick add
+                const type = prompt('Jenis (income/expense)');
+                const amount = prompt('Jumlah');
+                if (amount) supabase.from('transactions').insert({ company_id: companyId, user_id: (await getCurrentUser()).user.id, type, amount: parseFloat(amount), transaction_date: new Date().toISOString().split('T')[0] }).then(() => loadTransactions());
+            };
+        }
+        
+        // Documents tab (upload to storage)
+        async function loadDocuments() {
+            const companyId = await getOwnerCompanyId();
+            document.getElementById('tabContent').innerHTML = `
+                <div class="bg-white p-4 rounded shadow">
+                    <h3 class="font-semibold mb-2">Muat Naik Dokumen</h3>
+                    <input type="file" id="fileInput" class="mb-2">
+                    <select id="docType" class="border p-2 mb-2 w-full">
+                        <option value="receipt">Resit</option>
+                        <option value="invoice">Invois</option>
+                        <option value="bank_statement">Penyata Bank</option>
+                    </select>
+                    <button id="uploadBtn" class="bg-blue-600 text-white px-4 py-2 rounded">Upload</button>
+                    <div id="docList" class="mt-4"></div>
+                </div>
+            `;
+            document.getElementById('uploadBtn').onclick = async () => {
+                const file = document.getElementById('fileInput').files[0];
+                if (!file) return;
+                const fileType = document.getElementById('docType').value;
+                const filePath = `${companyId}/${Date.now()}_${file.name}`;
+                const { data, error } = await supabase.storage.from('documents').upload(filePath, file);
+                if (error) { alert(error.message); return; }
+                const { data: { publicUrl } } = supabase.storage.from('documents').getPublicUrl(filePath);
+                await supabase.from('documents').insert({
+                    company_id: companyId,
+                    user_id: (await getCurrentUser()).user.id,
+                    file_name: file.name,
+                    file_url: publicUrl,
+                    file_type: fileType,
+                    storage_path: filePath
+                });
+                alert('Muat naik berjaya');
+                loadDocuments();
+            };
+            // list documents
+            const { data: docs } = await supabase.from('documents').select('*').eq('company_id', companyId);
+            const listDiv = document.getElementById('docList');
+            listDiv.innerHTML = '<h4 class="font-semibold">Dokumen sebelum ini:</h4><ul>';
+            docs?.forEach(d => { listDiv.innerHTML += `<li>${d.file_name} (${d.file_type})</li>`; });
+            listDiv.innerHTML += '</ul>';
+        }
+        
+        // Bills, Reports, Assistant, Team, Settings simplified (V1 core)
+        function loadBills() { document.getElementById('tabContent').innerHTML = '<div class="bg-white p-4 rounded">Fungsi Bil akan datang (V1.1)</div>'; }
+        function loadReports() { document.getElementById('tabContent').innerHTML = '<div class="bg-white p-4 rounded">Laporan P&L, Cashflow (akan siap dalam V1.0 final)</div>'; }
+        function loadAssistant() { document.getElementById('tabContent').innerHTML = '<div class="bg-white p-4 rounded"><textarea id="question" class="w-full border p-2" rows="3" placeholder="Tanya MyKerani..."></textarea><button id="askBtn" class="mt-2 bg-purple-600 text-white px-4 py-2 rounded">Tanya</button><div id="answer" class="mt-2"></div></div><script>document.getElementById("askBtn")?.addEventListener("click", async function() { const q = document.getElementById("question").value; document.getElementById("answer").innerHTML = "<i>AI (OpenAI belum disambung, ini mock. Dalam V1 penuh, integrasi OpenAI akan berfungsi.</i>"; });<\/script>'; }
+        function loadTeam() { document.getElementById('tabContent').innerHTML = '<div class="bg-white p-4 rounded">Jemput staff: <input id="inviteEmail" class="border p-2"><button id="inviteBtn" class="bg-blue-600 text-white p-2 rounded">Hantar Jemputan</button></div>'; document.getElementById('inviteBtn')?.addEventListener('click', async () => { alert('Fungsi jemputan akan siap dengan Supabase Edge Functions.'); }); }
+        function loadSettings() { document.getElementById('tabContent').innerHTML = '<div class="bg-white p-4 rounded"><button id="createCompanyBtn" class="bg-green-600 text-white px-4 py-2 rounded">Cipta Syarikat Baru</button><div id="companyInfo"></div></div>'; document.getElementById('createCompanyBtn')?.addEventListener('click', async () => { const name = prompt('Nama Syarikat:'); if(name){ const { data } = await supabase.from('companies').insert({ name, slug: name.toLowerCase().replace(/ /g,'-'), owner_id: (await getCurrentUser()).user.id }).select().single(); if(data) await supabase.from('company_members').insert({ company_id: data.id, user_id: (await getCurrentUser()).user.id, role: 'owner' }); alert('Syarikat dicipta'); loadSettings(); } }); }
+        
+        // Tab switching
+        const tabs = { dashboard: loadDashboard, transactions: loadTransactions, documents: loadDocuments, bills: loadBills, reports: loadReports, assistant: loadAssistant, team: loadTeam, settings: loadSettings };
+        document.querySelectorAll('.tab-btn').forEach(btn => {
+            btn.onclick = () => {
+                document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active-tab', 'bg-blue-600', 'text-white'));
+                btn.classList.add('active-tab', 'bg-blue-600', 'text-white');
+                const tabName = btn.getAttribute('data-tab');
+                tabs[tabName]();
+            };
+        });
+        // load default dashboard
+        loadDashboard();
+    }
+
+    // ==================== STAFF DASHBOARD (ringkas) ====================
+    function renderStaffDashboard(user) {
+        document.getElementById('main-content').innerHTML = `
+            <div class="max-w-7xl mx-auto px-4 py-6">
+                <div class="flex justify-between items-center mb-4">
+                    <h1 class="text-2xl font-bold">Staff - Tugasan Hari Ini</h1>
+                    <button id="logoutBtn" class="bg-red-500 text-white px-4 py-2 rounded-lg text-sm">Log Keluar</button>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div class="bg-white p-4 rounded shadow"><button id="addExpenseBtn" class="bg-red-500 text-white w-full py-2 rounded">Tambah Perbelanjaan</button></div>
+                    <div class="bg-white p-4 rounded shadow"><button id="uploadReceiptBtn" class="bg-blue-500 text-white w-full py-2 rounded">Upload Resit</button></div>
+                </div>
+                <div id="staffContent" class="mt-4"></div>
+            </div>
+        `;
+        document.getElementById('logoutBtn').onclick = async () => { await supabase.auth.signOut(); renderApp(); };
+        document.getElementById('addExpenseBtn').onclick = () => { alert('Fungsi tambah perbelanjaan untuk staff akan menggunakan company yang sama dengan owner.'); };
+        document.getElementById('uploadReceiptBtn').onclick = () => { alert('Upload dokumen untuk diproses.'); };
+    }
+
+    // Start app
+    window.onload = () => { renderApp(); };
+</script>
+</body>
+</html>
