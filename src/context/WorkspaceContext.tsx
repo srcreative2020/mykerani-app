@@ -129,15 +129,16 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
             .eq("tenant_id", activeTenant.id);
 
           if (dbError) {
-            console.warn("Retrying query or checking workspaces schema:", dbError.message);
-            // Table might not be ready or empty, trigger defensive graceful mock list fallback 
-            const fallbackWS = getDefaultMockWorkspaces(activeTenant.id);
-            setState({
-              workspaces: fallbackWS,
-              activeWorkspace: fallbackWS[0],
-              loading: false,
-              error: null,
-            });
+            console.warn("Workspaces table not ready:", dbError.message);
+            // Real user: buat satu workspace kosong dari tenant — JANGAN guna demo workspaces
+            const realWS: Workspace = {
+              id: `ws-main-${activeTenant.id}`,
+              tenantId: activeTenant.id,
+              name: user?.fullName ? `${user.fullName} - Workspace` : "Workspace Utama",
+              slug: "main",
+              isActive: true,
+            };
+            setState({ workspaces: [realWS], activeWorkspace: realWS, loading: false, error: null });
             return;
           }
 

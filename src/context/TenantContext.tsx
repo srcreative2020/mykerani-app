@@ -94,20 +94,16 @@ export const TenantProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             .select("*");
 
           if (dbError) {
-            // If table does not exist or has connection permission errors, report but handle gracefully
-            console.warn("Retrying query or checking tenants schema:", dbError.message);
-            
-            // Auto fallback — pilih tenant berdasarkan role user
-            const fallbackActive = user.role === "HQ_OWNER"
-              ? DEFAULT_MOCK_TENANTS.find(t => t.category === "HQ") || DEFAULT_MOCK_TENANTS[0]
-              : DEFAULT_MOCK_TENANTS.find(t => t.category !== "HQ") || DEFAULT_MOCK_TENANTS[0];
-
-            setState({
-              tenants: [...DEFAULT_MOCK_TENANTS],
-              activeTenant: fallbackActive,
-              loading: false,
-              error: null,
-            });
+            console.warn("Tenants table not ready:", dbError.message);
+            // Real user: buat tenant dari metadata user — JANGAN guna demo tenant
+            const userTenantId = user.tenantId || `tenant-${user.id.slice(0, 8)}`;
+            const category: TenantCategory = user.role === "HQ_OWNER" ? "HQ" : "USER";
+            const realTenant: Tenant = {
+              id: userTenantId,
+              name: user.role === "HQ_OWNER" ? "MYKERANI HQ" : (user.fullName ? `${user.fullName} - Syarikat` : "Syarikat Saya"),
+              category,
+            };
+            setState({ tenants: [realTenant], activeTenant: realTenant, loading: false, error: null });
             return;
           }
 
