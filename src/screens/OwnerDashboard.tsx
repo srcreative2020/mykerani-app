@@ -239,7 +239,26 @@ export function OwnerDashboard() {
   ];
 
   return (
-    <div className="h-screen flex flex-col bg-slate-50 overflow-hidden" id="owner_root">
+    <div className="h-screen flex flex-col overflow-hidden" id="owner_root" style={{background:"#F4F8F5"}}>
+      <style>{`
+        #owner_root .bg-emerald-700{background-color:#5A9E7A!important}
+        #owner_root .bg-emerald-800{background-color:#3D7057!important}
+        #owner_root .bg-emerald-600{background-color:#6AAD8A!important}
+        #owner_root .bg-emerald-50{background-color:#DFF0E8!important}
+        #owner_root .bg-emerald-100{background-color:#CCE8D9!important}
+        #owner_root .text-emerald-700{color:#2C5040!important}
+        #owner_root .text-emerald-800{color:#1A3D2B!important}
+        #owner_root .text-emerald-600{color:#3D7057!important}
+        #owner_root .text-emerald-900{color:#122B1E!important}
+        #owner_root .text-emerald-500{color:#5A9E7A!important}
+        #owner_root .border-emerald-100{border-color:#CCE8D9!important}
+        #owner_root .border-emerald-200{border-color:#B3D9C5!important}
+        #owner_root .hover\\:bg-emerald-800:hover{background-color:#3D7057!important}
+        #owner_root .hover\\:bg-emerald-100:hover{background-color:#CCE8D9!important}
+        #owner_root .focus\\:border-emerald-400:focus{border-color:#7DC4A5!important}
+        #owner_root .from-emerald-600{--tw-gradient-from:#5A9E7A!important}
+        #owner_root .to-emerald-800{--tw-gradient-to:#3D7057!important}
+      `}</style>
 
       {/* â”€â”€ HEADER â”€â”€ */}
       <header className="bg-white border-b border-slate-100 px-4 py-3 flex items-center justify-between shrink-0 z-30" id="owner_header">

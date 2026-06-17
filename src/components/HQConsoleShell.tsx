@@ -236,7 +236,26 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
   );
 
   return (
-    <div className="h-screen flex flex-col bg-slate-50 overflow-hidden" id="hq_root">
+    <div className="h-screen flex flex-col overflow-hidden" id="hq_root" style={{background:"#F4F8F5"}}>
+      <style>{`
+        #hq_root .bg-emerald-700,.bg-emerald-700{background-color:#5A9E7A!important}
+        #hq_root .bg-emerald-800{background-color:#3D7057!important}
+        #hq_root .bg-emerald-600{background-color:#6AAD8A!important}
+        #hq_root .bg-emerald-50,.bg-emerald-50{background-color:#DFF0E8!important}
+        #hq_root .bg-emerald-100{background-color:#CCE8D9!important}
+        #hq_root .text-emerald-700{color:#2C5040!important}
+        #hq_root .text-emerald-800{color:#1A3D2B!important}
+        #hq_root .text-emerald-600{color:#3D7057!important}
+        #hq_root .text-emerald-900{color:#122B1E!important}
+        #hq_root .border-emerald-100{border-color:#CCE8D9!important}
+        #hq_root .border-emerald-200{border-color:#B3D9C5!important}
+        #hq_root .hover\\:bg-emerald-100:hover{background-color:#CCE8D9!important}
+        #hq_root .hover\\:bg-emerald-800:hover{background-color:#3D7057!important}
+        #hq_root .focus\\:border-emerald-400:focus{border-color:#7DC4A5!important}
+        #hq_root .text-emerald-500{color:#5A9E7A!important}
+        #hq_root aside{background:#fff}
+        #hq_root .bg-white{background:#fff!important}
+      `}</style>
 
       {/* Mobile header */}
       <header className="md:hidden bg-white border-b border-slate-200 px-4 py-3 flex items-center justify-between shrink-0">
