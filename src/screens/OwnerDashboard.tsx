@@ -9,12 +9,16 @@ import {
   TrendingUp, TrendingDown, Wallet, Clock,
   ChevronRight, Upload, LogOut, Users,
   History, Settings, User, X, Bot, UserPlus, RefreshCw,
+  HelpCircle, CreditCard, Cpu, HardDrive, Bell, Shield,
+  BookOpen, Ticket, MessageCircle, Zap, Database, Edit3,
+  UserCheck, UserX, KeyRound, AlertCircle, CheckCircle2,
+  ToggleLeft, ToggleRight, ExternalLink,
 } from "lucide-react";
 import { FinancialEvidencePackageManager } from "../components/FinancialEvidencePackage";
 import { FinancialReportsAnalytics } from "../components/FinancialReportsAnalytics";
 
 type MainTab = "home" | "dashboard" | "documents" | "reports" | "more";
-type MorePage = "menu" | "team" | "history" | "settings" | "profile";
+type MorePage = "menu" | "team" | "history" | "settings" | "profile" | "support" | "billing" | "resources";
 
 interface ChatMsg { id: string; sender: "user" | "ai"; text: string; }
 
@@ -102,6 +106,23 @@ export function OwnerDashboard() {
   const [inviteLoading, setInviteLoading] = useState(false);
   const [inviteResult, setInviteResult] = useState<{ success: boolean; message: string; tempPassword?: string } | null>(null);
 
+  // ── Support Center ──
+  const [supportMessages, setSupportMessages] = useState<{ id: string; sender: "user" | "ai"; text: string }[]>([]);
+  const [supportInput, setSupportInput] = useState("");
+  const [supportLoading, setSupportLoading] = useState(false);
+  const [supportView, setSupportView] = useState<"chat" | "faq" | "ticket" | "ticket_status">("chat");
+  const [ticketSubject, setTicketSubject] = useState("");
+  const [ticketDesc, setTicketDesc] = useState("");
+  const [ticketSent, setTicketSent] = useState(false);
+  const supportEndRef = useRef<HTMLDivElement>(null);
+
+  // ── Reminder Settings ──
+  const [reminders, setReminders] = useState({ subscription: "7", bill: "3", aiCredit: "7", storage: "7" });
+
+  // ── Resource Settings ──
+  const [resAI, setResAI] = useState<"mykerani" | "own">("mykerani");
+  const [resStorage, setResStorage] = useState<"mykerani" | "gdrive" | "onedrive" | "dropbox">("mykerani");
+
   const wsId = activeWorkspace?.id || "";
   const now = new Date();
   const thisMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
@@ -115,6 +136,7 @@ export function OwnerDashboard() {
   const totalPayable = useMemo(() => myEvents.filter(e => e.type === "PAYABLE" && !e.isCompleted).reduce((s, e) => s + e.amountMyr, 0), [myEvents]);
 
   useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [chatMessages, chatLoading]);
+  useEffect(() => { supportEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [supportMessages, supportLoading]);
 
   const sendChat = async (text?: string) => {
     const q = (text || chatInput).trim();
@@ -140,6 +162,30 @@ export function OwnerDashboard() {
       setChatMessages(prev => [...prev, { id: `e-${Date.now()}`, sender: "ai", text: "Minta maaf, sambungan terputus sebentar. Sila cuba lagi." }]);
     } finally {
       setChatLoading(false);
+    }
+  };
+
+  const sendSupport = async (text?: string) => {
+    const q = (text || supportInput).trim();
+    if (!q || supportLoading) return;
+    setSupportInput("");
+    setSupportMessages(prev => [...prev, { id: `u-${Date.now()}`, sender: "user", text: q }]);
+    setSupportLoading(true);
+    try {
+      const res = await fetch("/api/ai/assistant", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          query: `[SOKONGAN MYKERANI] ${q}`,
+          financialContext: { activeTenant, activeWorkspace, financialEvents },
+        }),
+      });
+      const data = await res.json() as any;
+      setSupportMessages(prev => [...prev, { id: `a-${Date.now()}`, sender: "ai", text: data.text || "Saya sedang menyemak soalan anda." }]);
+    } catch {
+      setSupportMessages(prev => [...prev, { id: `e-${Date.now()}`, sender: "ai", text: "Maaf, sambungan terputus. Cuba lagi atau buka tiket sokongan." }]);
+    } finally {
+      setSupportLoading(false);
     }
   };
 
@@ -458,10 +504,13 @@ export function OwnerDashboard() {
                 <h2 className="text-lg font-bold text-slate-900">Lagi</h2>
                 <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm divide-y divide-slate-100">
                   {([
-                    { id: "team" as MorePage, label: "Pasukan", desc: "Urus ahli pasukan syarikat", icon: Users },
-                    { id: "history" as MorePage, label: "Sejarah Aktiviti", desc: "Log semua transaksi & aktiviti", icon: History },
-                    { id: "settings" as MorePage, label: "Tetapan", desc: "Konfigurasi syarikat", icon: Settings },
-                    { id: "profile" as MorePage, label: "Profil Saya", desc: user?.email || "", icon: User },
+                    { id: "team" as MorePage,      label: "Pasukan",           desc: "Tambah, edit & urus kakitangan",        icon: Users },
+                    { id: "billing" as MorePage,   label: "Bil & Langganan",   desc: "Plan, kredit AI & storan",              icon: CreditCard },
+                    { id: "resources" as MorePage, label: "Tetapan Sumber",    desc: "AI & storan yang digunakan",            icon: Cpu },
+                    { id: "support" as MorePage,   label: "Pusat Sokongan",    desc: "Bantuan, FAQ & tiket sokongan",         icon: HelpCircle },
+                    { id: "history" as MorePage,   label: "Sejarah Aktiviti",  desc: "Log semua transaksi & aktiviti",        icon: History },
+                    { id: "settings" as MorePage,  label: "Tetapan",           desc: "Konfigurasi & peringatan",              icon: Settings },
+                    { id: "profile" as MorePage,   label: "Profil Saya",       desc: user?.email || "",                       icon: User },
                   ]).map(({ id, label, desc, icon: Icon }) => (
                     <button key={id} onClick={() => setMorePage(id)}
                       className="w-full flex items-center space-x-4 px-4 py-4 hover:bg-slate-50 transition cursor-pointer text-left">
@@ -574,7 +623,9 @@ export function OwnerDashboard() {
             {morePage === "settings" && (
               <div className="space-y-4">
                 <h2 className="text-lg font-bold text-slate-900">Tetapan</h2>
+                {/* Company info */}
                 <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-3">
+                  <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Maklumat Syarikat</p>
                   {[
                     { label: "Nama Syarikat", value: activeWorkspace?.name || "-" },
                     { label: "Mata Wang", value: "MYR (Ringgit Malaysia)" },
@@ -586,6 +637,33 @@ export function OwnerDashboard() {
                       <span className="text-xs font-semibold text-slate-800">{value}</span>
                     </div>
                   ))}
+                </div>
+
+                {/* Reminder Settings — Feature 6 */}
+                <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-4">
+                  <div className="flex items-center space-x-2">
+                    <Bell className="w-4 h-4 text-indigo-500" />
+                    <p className="text-sm font-bold text-slate-900">Tetapan Peringatan</p>
+                  </div>
+                  {[
+                    { key: "subscription" as const, label: "Peringatan Langganan" },
+                    { key: "bill" as const,         label: "Peringatan Bil" },
+                    { key: "aiCredit" as const,     label: "Peringatan Kredit AI" },
+                    { key: "storage" as const,      label: "Peringatan Storan" },
+                  ].map(({ key, label }) => (
+                    <div key={key} className="flex items-center justify-between">
+                      <span className="text-xs text-slate-600">{label}</span>
+                      <select value={reminders[key]} onChange={e => setReminders(r => ({ ...r, [key]: e.target.value }))}
+                        className="text-xs border border-slate-200 rounded-lg px-2 py-1.5 bg-white outline-none cursor-pointer font-semibold text-slate-700">
+                        {[{ v: "30", l: "30 Hari" }, { v: "14", l: "14 Hari" }, { v: "7", l: "7 Hari" }, { v: "3", l: "3 Hari" }, { v: "1", l: "1 Hari" }].map(o => (
+                          <option key={o.v} value={o.v}>{o.l}</option>
+                        ))}
+                      </select>
+                    </div>
+                  ))}
+                  <button className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition cursor-pointer">
+                    Simpan Peringatan
+                  </button>
                 </div>
               </div>
             )}
@@ -609,6 +687,358 @@ export function OwnerDashboard() {
                     Log Keluar
                   </button>
                 </div>
+              </div>
+            )}
+
+            {/* ═══ SUPPORT CENTER — Feature 1 ═══ */}
+            {morePage === "support" && (
+              <div className="space-y-4">
+                <h2 className="text-lg font-bold text-slate-900">Pusat Sokongan</h2>
+
+                {/* Sub-nav */}
+                <div className="flex gap-2 overflow-x-auto pb-1">
+                  {([
+                    { id: "chat" as const,          label: "Tanya AI",        icon: MessageCircle },
+                    { id: "faq" as const,           label: "FAQ",             icon: BookOpen },
+                    { id: "ticket" as const,        label: "Buka Tiket",      icon: Ticket },
+                    { id: "ticket_status" as const, label: "Status Tiket",    icon: CheckCircle2 },
+                  ]).map(({ id, label, icon: Icon }) => (
+                    <button key={id} onClick={() => setSupportView(id)}
+                      className={`flex items-center space-x-1.5 px-3 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition cursor-pointer ${supportView === id ? "bg-indigo-600 text-white" : "bg-white border border-slate-200 text-slate-600"}`}>
+                      <Icon className="w-3.5 h-3.5" /><span>{label}</span>
+                    </button>
+                  ))}
+                </div>
+
+                {/* AI Support Chat */}
+                {supportView === "chat" && (
+                  <div className="bg-white border border-slate-200 rounded-2xl shadow-sm flex flex-col" style={{ height: "420px" }}>
+                    <div className="px-4 py-3 border-b border-slate-100 flex items-center space-x-2">
+                      <Brain className="w-4 h-4 text-indigo-500" />
+                      <span className="text-xs font-bold text-slate-700">MYKERANI AI Sokongan</span>
+                    </div>
+                    <div className="flex-1 overflow-y-auto p-4 space-y-3">
+                      {supportMessages.length === 0 && (
+                        <div className="text-center py-6 space-y-3">
+                          <HelpCircle className="w-10 h-10 text-slate-200 mx-auto" />
+                          <p className="text-xs text-slate-400">Tanya apa sahaja tentang cara guna MYKERANI</p>
+                          <div className="flex flex-wrap gap-2 justify-center">
+                            {["Cara muat naik resit?", "Cara rekod perbelanjaan?", "Cara cari rekod lama?", "Cara lampir dokumen?"].map(q => (
+                              <button key={q} onClick={() => sendSupport(q)}
+                                className="px-3 py-1.5 bg-indigo-50 border border-indigo-100 rounded-xl text-xs text-indigo-700 font-semibold cursor-pointer hover:bg-indigo-100 transition">
+                                {q}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      {supportMessages.map(msg => {
+                        const isUser = msg.sender === "user";
+                        return (
+                          <div key={msg.id} className={`flex items-start gap-2 ${isUser ? "flex-row-reverse" : ""}`}>
+                            <div className={`w-6 h-6 rounded-lg flex items-center justify-center shrink-0 ${isUser ? "bg-indigo-600 text-white" : "bg-slate-900 text-white"}`}>
+                              {isUser ? <UserIcon className="w-3 h-3" /> : <Brain className="w-3 h-3" />}
+                            </div>
+                            <div className={`max-w-[80%] px-3 py-2 rounded-xl text-xs leading-relaxed ${isUser ? "bg-indigo-600 text-white rounded-tr-none" : "bg-slate-50 border border-slate-200 text-slate-800 rounded-tl-none whitespace-pre-wrap"}`}>
+                              {msg.text}
+                            </div>
+                          </div>
+                        );
+                      })}
+                      {supportLoading && (
+                        <div className="flex items-start gap-2">
+                          <div className="w-6 h-6 rounded-lg bg-slate-900 text-white flex items-center justify-center shrink-0">
+                            <RefreshCw className="w-3 h-3 animate-spin" />
+                          </div>
+                          <div className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-400 animate-pulse">Mencari jawapan...</div>
+                        </div>
+                      )}
+                      <div ref={supportEndRef} />
+                    </div>
+                    <div className="p-3 border-t border-slate-100">
+                      <form onSubmit={e => { e.preventDefault(); sendSupport(); }} className="flex gap-2">
+                        <input type="text" value={supportInput} onChange={e => setSupportInput(e.target.value)}
+                          placeholder="Tanya soalan tentang MYKERANI..."
+                          className="flex-1 text-xs border border-slate-200 rounded-xl px-3 py-2 outline-none focus:border-indigo-400 bg-white" />
+                        <button type="submit" disabled={!supportInput.trim() || supportLoading}
+                          className="px-3 py-2 bg-indigo-600 text-white rounded-xl disabled:bg-slate-200 cursor-pointer transition">
+                          <Send className="w-3.5 h-3.5" />
+                        </button>
+                      </form>
+                      <button onClick={() => setSupportView("ticket")} className="mt-2 w-full text-center text-[11px] text-slate-400 hover:text-indigo-600 transition cursor-pointer">
+                        Masalah tidak selesai? Buka tiket sokongan →
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* FAQ */}
+                {supportView === "faq" && (
+                  <div className="space-y-2">
+                    {[
+                      { q: "Bagaimana cara muat naik resit?", a: "Pergi ke tab Dokumen → klik 'Muat Naik Resit' → pilih gambar atau PDF resit anda." },
+                      { q: "Bagaimana cara rekod perbelanjaan?", a: "Di Home, taip 'Saya bayar [nama] RM[jumlah]' atau klik '- Rekod Perbelanjaan' di bawah kotak chat." },
+                      { q: "Bagaimana cara cari rekod lama?", a: "Pergi ke Dashboard → skrol ke bawah untuk lihat senarai transaksi terkini." },
+                      { q: "Bagaimana cara jemput kakitangan?", a: "Pergi ke Lagi → Pasukan → klik 'Jemput Staf' → masukkan nama dan email." },
+                      { q: "Bagaimana cara lihat laporan?", a: "Klik tab 'Laporan' di bawah navigasi untuk lihat P&L, Cashflow dan ringkasan kewangan." },
+                      { q: "Boleh saya guna AI saya sendiri?", a: "Ya, jika HQ mengizinkan. Pergi ke Lagi → Tetapan Sumber untuk tukar ke AI anda sendiri." },
+                      { q: "Apa itu kredit AI?", a: "Kredit AI digunakan apabila anda bertanya kepada MYKERANI. Semak baki di Lagi → Bil & Langganan." },
+                    ].map(({ q, a }) => (
+                      <details key={q} className="bg-white border border-slate-200 rounded-xl shadow-sm group">
+                        <summary className="px-4 py-3.5 text-xs font-semibold text-slate-800 cursor-pointer list-none flex items-center justify-between">
+                          {q}
+                          <ChevronRight className="w-3.5 h-3.5 text-slate-300 group-open:rotate-90 transition-transform" />
+                        </summary>
+                        <p className="px-4 pb-4 text-xs text-slate-500 leading-relaxed">{a}</p>
+                      </details>
+                    ))}
+                  </div>
+                )}
+
+                {/* Open Ticket */}
+                {supportView === "ticket" && (
+                  <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-4">
+                    <div className="flex items-center space-x-2">
+                      <Ticket className="w-4 h-4 text-indigo-500" />
+                      <h3 className="text-sm font-bold text-slate-900">Buka Tiket Sokongan</h3>
+                    </div>
+                    {ticketSent ? (
+                      <div className="text-center py-8 space-y-3">
+                        <CheckCircle2 className="w-12 h-12 text-emerald-500 mx-auto" />
+                        <p className="text-sm font-bold text-emerald-700">Tiket berjaya dihantar!</p>
+                        <p className="text-xs text-slate-400">Pasukan HQ akan menjawab dalam 1-2 hari bekerja.</p>
+                        <button onClick={() => { setTicketSent(false); setTicketSubject(""); setTicketDesc(""); setSupportView("ticket_status"); }}
+                          className="px-4 py-2 bg-indigo-600 text-white rounded-xl text-xs font-bold cursor-pointer">
+                          Semak Status Tiket
+                        </button>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="space-y-3">
+                          <div>
+                            <label className="text-[11px] font-bold text-slate-400 uppercase">Tajuk Masalah</label>
+                            <input type="text" value={ticketSubject} onChange={e => setTicketSubject(e.target.value)}
+                              placeholder="Cth: Tidak boleh muat naik resit"
+                              className="w-full mt-1 border border-slate-200 rounded-xl px-3 py-2.5 text-sm outline-none focus:border-indigo-400 bg-white" />
+                          </div>
+                          <div>
+                            <label className="text-[11px] font-bold text-slate-400 uppercase">Penerangan</label>
+                            <textarea value={ticketDesc} onChange={e => setTicketDesc(e.target.value)}
+                              placeholder="Terangkan masalah anda dengan terperinci..."
+                              rows={4}
+                              className="w-full mt-1 border border-slate-200 rounded-xl px-3 py-2.5 text-sm outline-none focus:border-indigo-400 bg-white resize-none" />
+                          </div>
+                          <div className="p-3 bg-indigo-50 border border-indigo-100 rounded-xl">
+                            <p className="text-[11px] text-indigo-700 font-semibold">AI akan ringkaskan isu anda sebelum hantar ke pasukan HQ.</p>
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => { if (ticketSubject.trim() && ticketDesc.trim()) setTicketSent(true); }}
+                          disabled={!ticketSubject.trim() || !ticketDesc.trim()}
+                          className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-200 text-white rounded-xl text-sm font-bold transition cursor-pointer">
+                          Hantar Tiket
+                        </button>
+                      </>
+                    )}
+                  </div>
+                )}
+
+                {/* Ticket Status */}
+                {supportView === "ticket_status" && (
+                  <div className="space-y-3">
+                    <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
+                      <div className="flex items-center space-x-2 mb-4">
+                        <Ticket className="w-4 h-4 text-indigo-500" />
+                        <h3 className="text-sm font-bold text-slate-900">Status Tiket Saya</h3>
+                      </div>
+                      {ticketSent ? (
+                        <div className="space-y-3">
+                          <div className="p-3 bg-amber-50 border border-amber-100 rounded-xl flex items-start space-x-3">
+                            <Clock className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
+                            <div>
+                              <p className="text-xs font-bold text-amber-800">#{Date.now().toString().slice(-6)} — {ticketSubject}</p>
+                              <p className="text-[11px] text-amber-600 mt-0.5">Status: Sedang diproses oleh HQ Staff</p>
+                              <p className="text-[10px] text-amber-400 mt-1">Dihantar hari ini</p>
+                            </div>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="text-center py-6">
+                          <CheckCircle2 className="w-8 h-8 text-slate-200 mx-auto mb-2" />
+                          <p className="text-xs text-slate-400">Tiada tiket aktif</p>
+                          <button onClick={() => setSupportView("ticket")} className="mt-3 px-4 py-2 bg-indigo-600 text-white rounded-xl text-xs font-bold cursor-pointer">
+                            Buka Tiket Baru
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* ═══ BILLING — Features 2, 3, 4 ═══ */}
+            {morePage === "billing" && (
+              <div className="space-y-4">
+                <h2 className="text-lg font-bold text-slate-900">Bil & Langganan</h2>
+
+                {/* Current Plan */}
+                <div className="bg-gradient-to-br from-indigo-600 to-violet-700 rounded-2xl p-5 text-white shadow">
+                  <div className="flex items-center justify-between mb-3">
+                    <div>
+                      <p className="text-[11px] text-indigo-200">Plan Semasa</p>
+                      <p className="text-2xl font-bold">Starter</p>
+                    </div>
+                    <span className="bg-emerald-400 text-emerald-900 text-[10px] font-bold px-2.5 py-1 rounded-full">Aktif</span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 text-[11px]">
+                    <div><p className="text-indigo-300">Tarikh Pembaharuan</p><p className="font-semibold">17 Jul 2026</p></div>
+                    <div><p className="text-indigo-300">Harga Bulanan</p><p className="font-semibold">RM 99/bulan</p></div>
+                  </div>
+                </div>
+
+                {/* Plan actions */}
+                <div className="grid grid-cols-3 gap-2">
+                  {[
+                    { label: "Perbaharui", color: "bg-emerald-50 border-emerald-100 text-emerald-700" },
+                    { label: "Naik Taraf", color: "bg-indigo-50 border-indigo-100 text-indigo-700" },
+                    { label: "Turun Taraf", color: "bg-slate-50 border-slate-200 text-slate-600" },
+                  ].map(({ label, color }) => (
+                    <button key={label} className={`py-2.5 rounded-xl text-xs font-bold border transition cursor-pointer ${color}`}>{label}</button>
+                  ))}
+                </div>
+
+                {/* AI Credits — Feature 3 */}
+                <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-2">
+                      <Zap className="w-4 h-4 text-amber-500" />
+                      <p className="text-sm font-bold text-slate-900">Kredit AI</p>
+                    </div>
+                    <span className="text-xs text-slate-400">Paket Starter</span>
+                  </div>
+                  <div className="space-y-1">
+                    <div className="flex justify-between text-xs">
+                      <span className="text-slate-500">Digunakan</span>
+                      <span className="font-semibold text-slate-800">47 / 500 kredit</span>
+                    </div>
+                    <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
+                      <div className="h-full bg-amber-400 rounded-full" style={{ width: "9.4%" }} />
+                    </div>
+                    <p className="text-[10px] text-slate-400">453 kredit berbaki</p>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button className="py-2.5 bg-amber-50 border border-amber-100 text-amber-700 rounded-xl text-xs font-bold cursor-pointer hover:bg-amber-100 transition">Beli Kredit</button>
+                    <button className="py-2.5 bg-slate-50 border border-slate-200 text-slate-600 rounded-xl text-xs font-bold cursor-pointer hover:bg-slate-100 transition">Lihat Penggunaan</button>
+                  </div>
+                </div>
+
+                {/* Storage — Feature 4 */}
+                <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-2">
+                      <Database className="w-4 h-4 text-blue-500" />
+                      <p className="text-sm font-bold text-slate-900">Storan</p>
+                    </div>
+                    <span className="text-xs text-slate-400">5 GB termasuk</span>
+                  </div>
+                  <div className="space-y-1">
+                    <div className="flex justify-between text-xs">
+                      <span className="text-slate-500">Digunakan</span>
+                      <span className="font-semibold text-slate-800">0.3 GB / 5 GB</span>
+                    </div>
+                    <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
+                      <div className="h-full bg-blue-400 rounded-full" style={{ width: "6%" }} />
+                    </div>
+                    <p className="text-[10px] text-slate-400">4.7 GB berbaki</p>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button className="py-2.5 bg-blue-50 border border-blue-100 text-blue-700 rounded-xl text-xs font-bold cursor-pointer hover:bg-blue-100 transition">Beli Storan</button>
+                    <button className="py-2.5 bg-slate-50 border border-slate-200 text-slate-600 rounded-xl text-xs font-bold cursor-pointer hover:bg-slate-100 transition">Lihat Penggunaan</button>
+                  </div>
+                </div>
+
+                {/* Invoices */}
+                <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-3">
+                  <p className="text-sm font-bold text-slate-900">Invois & Sejarah Pembayaran</p>
+                  <div className="text-center py-4">
+                    <Receipt className="w-7 h-7 text-slate-200 mx-auto mb-1" />
+                    <p className="text-xs text-slate-400">Tiada invois lagi</p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* ═══ RESOURCE SETTINGS — Feature 5 ═══ */}
+            {morePage === "resources" && (
+              <div className="space-y-4">
+                <h2 className="text-lg font-bold text-slate-900">Tetapan Sumber</h2>
+                <div className="p-3 bg-amber-50 border border-amber-100 rounded-xl flex items-start space-x-2">
+                  <AlertCircle className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
+                  <p className="text-[11px] text-amber-700">Pilihan yang dipaparkan bergantung kepada kebenaran yang ditetapkan oleh HQ.</p>
+                </div>
+
+                {/* AI Resource */}
+                <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-4">
+                  <div className="flex items-center space-x-2">
+                    <Cpu className="w-4 h-4 text-indigo-500" />
+                    <p className="text-sm font-bold text-slate-900">Sumber AI</p>
+                  </div>
+                  {([
+                    { id: "mykerani" as const, label: "Guna MYKERANI AI", desc: "AI rasmi MYKERANI — disyorkan" },
+                    { id: "own" as const,      label: "Guna AI Sendiri",  desc: "Sambung API AI anda sendiri" },
+                  ] as const).map(({ id, label, desc }) => (
+                    <button key={id} onClick={() => setResAI(id)}
+                      className={`w-full flex items-center space-x-3 p-4 rounded-xl border-2 transition cursor-pointer ${resAI === id ? "border-indigo-500 bg-indigo-50" : "border-slate-200 bg-white hover:border-slate-300"}`}>
+                      <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 ${resAI === id ? "border-indigo-500 bg-indigo-500" : "border-slate-300"}`}>
+                        {resAI === id && <div className="w-2 h-2 rounded-full bg-white" />}
+                      </div>
+                      <div className="text-left">
+                        <p className={`text-sm font-semibold ${resAI === id ? "text-indigo-800" : "text-slate-700"}`}>{label}</p>
+                        <p className="text-[11px] text-slate-400">{desc}</p>
+                      </div>
+                    </button>
+                  ))}
+                  {resAI === "own" && (
+                    <input placeholder="Masukkan API Key anda" type="password"
+                      className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm outline-none focus:border-indigo-400 bg-white font-mono" />
+                  )}
+                </div>
+
+                {/* Storage Resource */}
+                <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-4">
+                  <div className="flex items-center space-x-2">
+                    <HardDrive className="w-4 h-4 text-blue-500" />
+                    <p className="text-sm font-bold text-slate-900">Sumber Storan</p>
+                  </div>
+                  {([
+                    { id: "mykerani" as const,  label: "Guna Storan MYKERANI", desc: "Storan selamat MYKERANI" },
+                    { id: "gdrive" as const,    label: "Google Drive",          desc: "Sambung akaun Google Drive anda" },
+                    { id: "onedrive" as const,  label: "OneDrive",              desc: "Sambung akaun Microsoft OneDrive" },
+                    { id: "dropbox" as const,   label: "Dropbox",               desc: "Sambung akaun Dropbox anda" },
+                  ] as const).map(({ id, label, desc }) => (
+                    <button key={id} onClick={() => setResStorage(id)}
+                      className={`w-full flex items-center space-x-3 p-3.5 rounded-xl border-2 transition cursor-pointer ${resStorage === id ? "border-indigo-500 bg-indigo-50" : "border-slate-200 bg-white hover:border-slate-300"}`}>
+                      <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 ${resStorage === id ? "border-indigo-500 bg-indigo-500" : "border-slate-300"}`}>
+                        {resStorage === id && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+                      </div>
+                      <div className="text-left">
+                        <p className={`text-xs font-semibold ${resStorage === id ? "text-indigo-800" : "text-slate-700"}`}>{label}</p>
+                        <p className="text-[10px] text-slate-400">{desc}</p>
+                      </div>
+                    </button>
+                  ))}
+                  {resStorage !== "mykerani" && (
+                    <button className="w-full flex items-center justify-center space-x-2 py-2.5 bg-slate-900 text-white rounded-xl text-xs font-bold cursor-pointer hover:bg-slate-800 transition">
+                      <ExternalLink className="w-3.5 h-3.5" />
+                      <span>Sambung {resStorage === "gdrive" ? "Google Drive" : resStorage === "onedrive" ? "OneDrive" : "Dropbox"}</span>
+                    </button>
+                  )}
+                </div>
+
+                <button className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl text-sm font-bold transition cursor-pointer">
+                  Simpan Tetapan Sumber
+                </button>
               </div>
             )}
           </div>
