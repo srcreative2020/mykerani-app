@@ -1,7 +1,7 @@
-import React, { useState, useMemo } from "react";
+﻿import React, { useState, useMemo } from "react";
 import { useFinancials } from "../context/FinancialRecordsContext";
 import { type FinancialCommitment } from "../types";
-import { motion, AnimatePresence } from "motion/react";
+import { motion, AnimatePresence } from "../lib/motionCompat";
 import { 
   Plus, 
   Trash2, 

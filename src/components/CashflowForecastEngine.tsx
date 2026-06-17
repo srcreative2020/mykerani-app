@@ -1,7 +1,7 @@
-import React, { useState, useMemo } from "react";
+﻿import React, { useState, useMemo } from "react";
 import { useFinancials } from "../context/FinancialRecordsContext";
 import { type FinancialEvent, type DebtRecord, type FinancialCommitment } from "../types";
-import { motion } from "motion/react";
+import { motion } from "../lib/motionCompat";
 import {
   CalendarDays,
   TrendingUp,

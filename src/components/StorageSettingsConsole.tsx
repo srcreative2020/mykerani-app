@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from "react";
+﻿import React, { useState, useEffect } from "react";
 import { useStorage } from "../context/StorageContext";
 import { useWorkspace } from "../context/WorkspaceContext";
 import { useAuth } from "../context/AuthContext";
-import { motion, AnimatePresence } from "motion/react";
+import { motion, AnimatePresence } from "../lib/motionCompat";
 import {
   Lock,
   Cloud,

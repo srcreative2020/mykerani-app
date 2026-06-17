@@ -1,11 +1,11 @@
-import React, { useState, useEffect, useRef } from "react";
+﻿import React, { useState, useEffect, useRef } from "react";
 import { useFinancials } from "../context/FinancialRecordsContext";
 import { useAuth } from "../context/AuthContext";
 import { useWorkspace } from "../context/WorkspaceContext";
 import { useTenant } from "../context/TenantContext";
 import { useAudit } from "../context/AuditContext";
 import { useStorage } from "../context/StorageContext";
-import { motion, AnimatePresence } from "motion/react";
+import { motion, AnimatePresence } from "../lib/motionCompat";
 import {
   Archive,
   Download,
