@@ -56,24 +56,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     // Semak sesi Supabase yang aktif
+    // Guna functional setState supaya tidak override demo session yang mungkin dah aktif
     supabase.auth.getSession().then(({ data: { session }, error }) => {
-      if (error) {
-        setState({ user: null, loading: false, error: error.message, isMockUser: false });
-        return;
-      }
-
-      if (session?.user) {
-        const profile: UserSessionProfile = {
-          id: session.user.id,
-          email: session.user.email || "",
-          role: (session.user.user_metadata?.role as UserRole) || "TENANT_OWNER",
-          fullName: session.user.user_metadata?.fullName || "Account Operator",
-          tenantId: session.user.user_metadata?.tenantId,
-        };
-        setState({ user: profile, loading: false, error: null, isMockUser: false });
-      } else {
-        setState({ user: null, loading: false, error: null, isMockUser: false });
-      }
+      setState(prev => {
+        if (prev.isMockUser) return prev; // demo aktif — jangan override
+        if (error) return { user: null, loading: false, error: error.message, isMockUser: false };
+        if (session?.user) {
+          return {
+            user: {
+              id: session.user.id,
+              email: session.user.email || "",
+              role: (session.user.user_metadata?.role as UserRole) || "TENANT_OWNER",
+              fullName: session.user.user_metadata?.fullName || "Account Operator",
+              tenantId: session.user.user_metadata?.tenantId,
+            },
+            loading: false,
+            error: null,
+            isMockUser: false,
+          };
+        }
+        return { user: null, loading: false, error: null, isMockUser: false };
+      });
     });
 
     // Dengar perubahan sesi Supabase secara real-time
@@ -113,6 +116,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // Tiada auto-login. Tiada simpanan ke localStorage.
     const demoAccount = DEMO_ACCOUNTS[cleanEmail];
     if (demoAccount) {
+      // Buang sesi Supabase lama dulu supaya onAuthStateChange tidak override mock user
+      if (supabase) {
+        try { await supabase.auth.signOut(); } catch {}
+      }
       const mockProfile: UserSessionProfile = {
         id: `demo-${cleanEmail.split("@")[0]}`,
         email: cleanEmail,
