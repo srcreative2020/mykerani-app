@@ -245,6 +245,33 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
   const [allowOwnStorage, setAllowOwnStorage] = useState(false);
   const [allowOwnOCR, setAllowOwnOCR] = useState(false);
 
+  // Business settings — persistent
+  interface BizSettings {
+    bizName: string; bizTagline: string; bizEmail: string; bizPhone: string;
+    aiProvider: "gemini" | "openai" | "anthropic"; aiModel: string; aiApiKey: string;
+    notifyNewCustomer: boolean; notifyRenewal: boolean; notifySupport: boolean; notifyHighUsage: boolean;
+    currency: string; timezone: string;
+  }
+  const settingsKey = `mykerani_bizsettings_${user?.id ?? "guest"}`;
+  const defaultSettings: BizSettings = {
+    bizName: "MYKERANI", bizTagline: "AI Financial Clerk", bizEmail: user?.email || "", bizPhone: "",
+    aiProvider: "gemini", aiModel: "gemini-2.0-flash", aiApiKey: "",
+    notifyNewCustomer: true, notifyRenewal: true, notifySupport: true, notifyHighUsage: false,
+    currency: "MYR", timezone: "Asia/Kuala_Lumpur",
+  };
+  const [bizSettings, setBizSettings] = useState<BizSettings>(() => {
+    try { const s = localStorage.getItem(settingsKey); if (s) return { ...defaultSettings, ...JSON.parse(s) }; } catch {}
+    return defaultSettings;
+  });
+  const [settingsSaved, setSettingsSaved] = useState(false);
+  const saveBizSettings = (patch: Partial<BizSettings>) => {
+    const updated = { ...bizSettings, ...patch };
+    setBizSettings(updated);
+    localStorage.setItem(settingsKey, JSON.stringify(updated));
+    setSettingsSaved(true);
+    setTimeout(() => setSettingsSaved(false), 2000);
+  };
+
   // Tickets — persistent for all users
   interface Ticket {
     id: string;
@@ -1037,15 +1064,16 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
             {/* â•â•â•â• SETTINGS (HQ_OWNER only) â•â•â•â• */}
             {activePage === "settings" && !isStaff && (
               <div className="space-y-5" id="hq_settings">
-                <h1 className="text-xl font-bold text-slate-900">Tetapan</h1>
+                <div className="flex items-center justify-between">
+                  <h1 className="text-xl font-bold text-slate-900">Tetapan</h1>
+                  {settingsSaved && <span className="text-xs text-emerald-600 font-bold bg-emerald-50 border border-emerald-200 px-3 py-1.5 rounded-xl">Tersimpan</span>}
+                </div>
 
-                {/* HQ Profile */}
-                <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-4">
-                  <h3 className="text-sm font-bold text-slate-900 flex items-center space-x-2">
-                    <Shield className="w-4 h-4 text-emerald-600" /><span>Profil HQ</span>
-                  </h3>
-                  <div className="flex items-center space-x-4 p-4 bg-emerald-50 rounded-xl border border-emerald-100">
-                    <div className="w-12 h-12 rounded-2xl bg-emerald-700 text-white flex items-center justify-center text-xl font-bold shadow">
+                {/* Account */}
+                <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-3">
+                  <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2"><User className="w-4 h-4 text-emerald-600" />Akaun HQ</h3>
+                  <div className="flex items-center gap-4 p-4 bg-emerald-50 rounded-xl border border-emerald-100">
+                    <div className="w-12 h-12 rounded-2xl bg-emerald-700 text-white flex items-center justify-center text-xl font-bold shadow shrink-0">
                       {user?.fullName?.charAt(0).toUpperCase() || "H"}
                     </div>
                     <div>
@@ -1056,27 +1084,155 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
                   </div>
                 </div>
 
+                {/* Business Profile */}
+                <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-4">
+                  <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2"><Building2 className="w-4 h-4 text-emerald-600" />Profil Perniagaan</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-xs font-semibold text-slate-500 mb-1 block">Nama Perniagaan</label>
+                      <input value={bizSettings.bizName} onChange={e => setBizSettings(s => ({...s, bizName: e.target.value}))}
+                        className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-emerald-400" />
+                    </div>
+                    <div>
+                      <label className="text-xs font-semibold text-slate-500 mb-1 block">Tagline</label>
+                      <input value={bizSettings.bizTagline} onChange={e => setBizSettings(s => ({...s, bizTagline: e.target.value}))}
+                        className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-emerald-400" />
+                    </div>
+                    <div>
+                      <label className="text-xs font-semibold text-slate-500 mb-1 block">E-mel Perniagaan</label>
+                      <input type="email" value={bizSettings.bizEmail} onChange={e => setBizSettings(s => ({...s, bizEmail: e.target.value}))}
+                        className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-emerald-400" />
+                    </div>
+                    <div>
+                      <label className="text-xs font-semibold text-slate-500 mb-1 block">No. Telefon</label>
+                      <input value={bizSettings.bizPhone} onChange={e => setBizSettings(s => ({...s, bizPhone: e.target.value}))}
+                        className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-emerald-400" />
+                    </div>
+                    <div>
+                      <label className="text-xs font-semibold text-slate-500 mb-1 block">Mata Wang</label>
+                      <select value={bizSettings.currency} onChange={e => setBizSettings(s => ({...s, currency: e.target.value}))}
+                        className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-emerald-400 bg-white">
+                        <option value="MYR">MYR - Ringgit Malaysia</option>
+                        <option value="USD">USD - US Dollar</option>
+                        <option value="SGD">SGD - Singapore Dollar</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-xs font-semibold text-slate-500 mb-1 block">Zon Masa</label>
+                      <select value={bizSettings.timezone} onChange={e => setBizSettings(s => ({...s, timezone: e.target.value}))}
+                        className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-emerald-400 bg-white">
+                        <option value="Asia/Kuala_Lumpur">Asia/Kuala Lumpur (UTC+8)</option>
+                        <option value="Asia/Singapore">Asia/Singapore (UTC+8)</option>
+                        <option value="UTC">UTC</option>
+                      </select>
+                    </div>
+                  </div>
+                  <button onClick={() => saveBizSettings(bizSettings)}
+                    className="px-4 py-2 bg-emerald-700 text-white rounded-xl text-xs font-bold cursor-pointer hover:bg-emerald-800 transition">
+                    Simpan Profil
+                  </button>
+                </div>
+
+                {/* AI Configuration */}
+                <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-4">
+                  <div className="flex items-center gap-2">
+                    <Brain className="w-4 h-4 text-emerald-600" />
+                    <h3 className="text-sm font-bold text-slate-900">Konfigurasi AI</h3>
+                    <span className="text-[10px] bg-violet-100 text-violet-700 font-bold px-2 py-0.5 rounded-full">Invisible kepada pelanggan</span>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-xs font-semibold text-slate-500 mb-1 block">Provider AI</label>
+                      <select value={bizSettings.aiProvider} onChange={e => setBizSettings(s => ({...s, aiProvider: e.target.value as any, aiModel: e.target.value === "gemini" ? "gemini-2.0-flash" : e.target.value === "openai" ? "gpt-4o-mini" : "claude-haiku-4-5-20251001"}))}
+                        className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-emerald-400 bg-white">
+                        <option value="gemini">Google Gemini (Default)</option>
+                        <option value="openai">OpenAI GPT</option>
+                        <option value="anthropic">Anthropic Claude</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-xs font-semibold text-slate-500 mb-1 block">Model</label>
+                      <select value={bizSettings.aiModel} onChange={e => setBizSettings(s => ({...s, aiModel: e.target.value}))}
+                        className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-emerald-400 bg-white">
+                        {bizSettings.aiProvider === "gemini" && <>
+                          <option value="gemini-2.0-flash">gemini-2.0-flash (Pantas)</option>
+                          <option value="gemini-1.5-pro">gemini-1.5-pro (Pintar)</option>
+                        </>}
+                        {bizSettings.aiProvider === "openai" && <>
+                          <option value="gpt-4o-mini">gpt-4o-mini (Jimat)</option>
+                          <option value="gpt-4o">gpt-4o (Terbaik)</option>
+                        </>}
+                        {bizSettings.aiProvider === "anthropic" && <>
+                          <option value="claude-haiku-4-5-20251001">Claude Haiku (Pantas)</option>
+                          <option value="claude-sonnet-4-6">Claude Sonnet (Seimbang)</option>
+                        </>}
+                      </select>
+                    </div>
+                    <div className="md:col-span-2">
+                      <label className="text-xs font-semibold text-slate-500 mb-1 block">API Key</label>
+                      <input type="password" value={bizSettings.aiApiKey} onChange={e => setBizSettings(s => ({...s, aiApiKey: e.target.value}))}
+                        placeholder="Masukkan API key anda..."
+                        className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-emerald-400 font-mono" />
+                      <p className="text-[10px] text-slate-400 mt-1">API key disimpan secara selamat dan tidak dikongsi dengan pelanggan.</p>
+                    </div>
+                  </div>
+                  <button onClick={() => saveBizSettings({ aiProvider: bizSettings.aiProvider, aiModel: bizSettings.aiModel, aiApiKey: bizSettings.aiApiKey })}
+                    className="px-4 py-2 bg-emerald-700 text-white rounded-xl text-xs font-bold cursor-pointer hover:bg-emerald-800 transition">
+                    Simpan Konfigurasi AI
+                  </button>
+                </div>
+
+                {/* Credit Limits per Plan */}
+                <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-4">
+                  <div className="flex items-center gap-2">
+                    <Zap className="w-4 h-4 text-amber-500" />
+                    <h3 className="text-sm font-bold text-slate-900">Had Kredit AI Mengikut Plan</h3>
+                  </div>
+                  {plans.length === 0 ? (
+                    <div className="text-center py-6">
+                      <p className="text-xs text-slate-400">Cipta plan dahulu di halaman Pengebilan</p>
+                      <button onClick={() => setActivePage("billing")} className="mt-2 text-xs text-emerald-600 font-semibold cursor-pointer hover:underline">Pergi ke Pengebilan</button>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {plans.map(p => (
+                        <div key={p.id} className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl">
+                          <div className="flex-1">
+                            <p className="text-xs font-bold text-slate-800">{p.name}</p>
+                            <p className="text-[10px] text-slate-400">RM {p.price}/bln</p>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <label className="text-[10px] text-slate-500 font-semibold">Kredit/bln:</label>
+                            <input type="number" min={0} value={p.aiCredits}
+                              onChange={e => setPlans(prev => prev.map(pl => pl.id === p.id ? { ...pl, aiCredits: Number(e.target.value) } : pl))}
+                              onBlur={() => localStorage.setItem(plansKey, JSON.stringify(plans))}
+                              className="w-24 border border-slate-200 rounded-lg px-2 py-1.5 text-xs text-center focus:outline-none focus:border-emerald-400 bg-white" />
+                          </div>
+                        </div>
+                      ))}
+                      <p className="text-[10px] text-slate-400">Perubahan disimpan secara automatik apabila anda klik di luar medan.</p>
+                    </div>
+                  )}
+                </div>
+
                 {/* HQ Staff */}
                 <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-4">
                   <div className="flex items-center justify-between">
-                    <h3 className="text-sm font-bold text-slate-900 flex items-center space-x-2">
-                      <Users className="w-4 h-4 text-emerald-600" /><span>Kakitangan HQ</span>
-                    </h3>
+                    <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2"><Users className="w-4 h-4 text-emerald-600" />Kakitangan HQ</h3>
                     <button onClick={() => { setShowCreateStaff(v => !v); setStaffResult(null); }}
-                      className="flex items-center space-x-1.5 px-3 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs font-bold cursor-pointer transition">
-                      <Plus className="w-3.5 h-3.5" /><span>Tambah Staf</span>
+                      className="flex items-center gap-1.5 px-3 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs font-bold cursor-pointer transition">
+                      <Plus className="w-3.5 h-3.5" />Tambah Staf
                     </button>
                   </div>
-
                   {showCreateStaff && (
                     <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-4 space-y-3">
                       <p className="text-xs font-bold text-emerald-800">Cipta Akaun HQ_STAFF</p>
-                      <input type="text" value={staffName} onChange={e => setStaffName(e.target.value)} placeholder="Nama penuh"
-                        className="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl focus:outline-none focus:border-emerald-400 bg-white" />
+                      <input value={staffName} onChange={e => setStaffName(e.target.value)} placeholder="Nama penuh"
+                        className="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl focus:outline-none focus:border-emerald-400 bg-white" />
                       <input type="email" value={staffEmail} onChange={e => setStaffEmail(e.target.value)} placeholder="Email kakitangan"
-                        className="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl focus:outline-none focus:border-emerald-400 bg-white" />
+                        className="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl focus:outline-none focus:border-emerald-400 bg-white" />
                       <button onClick={handleCreateHQStaff} disabled={staffCreating || !staffEmail.trim() || !staffName.trim()}
-                        className="w-full py-2.5 bg-emerald-700 hover:bg-emerald-800 disabled:bg-slate-300 text-white rounded-xl text-xs font-bold cursor-pointer transition">
+                        className="w-full py-2.5 bg-emerald-700 hover:bg-emerald-800 disabled:bg-slate-300 text-white rounded-xl text-sm font-bold cursor-pointer transition">
                         {staffCreating ? "Mencipta..." : "Cipta Akaun"}
                       </button>
                       {staffResult && (
@@ -1093,7 +1249,6 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
                       )}
                     </div>
                   )}
-
                   <div className="text-center py-4 bg-slate-50 rounded-xl">
                     <Users className="w-6 h-6 text-slate-200 mx-auto mb-1" />
                     <p className="text-xs text-slate-400">Hanya anda sebagai pentadbir HQ</p>
@@ -1102,22 +1257,30 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
 
                 {/* Notifications */}
                 <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-3">
-                  <h3 className="text-sm font-bold text-slate-900 flex items-center space-x-2">
-                    <Bell className="w-4 h-4 text-emerald-600" /><span>Pemberitahuan</span>
-                  </h3>
-                  {[
-                    { label: "Pelanggan baru mendaftar",  on: true },
-                    { label: "Perbaharuan akan tamat",     on: true },
-                    { label: "Kes sokongan baharu",        on: true },
-                    { label: "Penggunaan tinggi dikesan",  on: false },
-                  ].map(({ label, on }) => (
-                    <div key={label} className="flex items-center justify-between py-2 border-b border-slate-50 last:border-0">
+                  <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2"><Bell className="w-4 h-4 text-emerald-600" />Pemberitahuan</h3>
+                  {([
+                    ["notifyNewCustomer", "Pelanggan baru mendaftar"],
+                    ["notifyRenewal", "Perbaharuan akan tamat"],
+                    ["notifySupport", "Kes sokongan baharu"],
+                    ["notifyHighUsage", "Penggunaan tinggi dikesan"],
+                  ] as const).map(([key, label]) => (
+                    <div key={key} className="flex items-center justify-between py-2 border-b border-slate-50 last:border-0">
                       <span className="text-xs text-slate-700">{label}</span>
-                      <div className={`w-9 h-5 rounded-full flex items-center px-0.5 cursor-pointer transition ${on ? "bg-emerald-600 justify-end" : "bg-slate-200 justify-start"}`}>
+                      <button onClick={() => saveBizSettings({ [key]: !bizSettings[key] })}
+                        className={`w-9 h-5 rounded-full flex items-center px-0.5 cursor-pointer transition-all ${bizSettings[key] ? "bg-emerald-600 justify-end" : "bg-slate-200 justify-start"}`}>
                         <div className="w-4 h-4 rounded-full bg-white shadow-sm" />
-                      </div>
+                      </button>
                     </div>
                   ))}
+                </div>
+
+                {/* Danger Zone */}
+                <div className="bg-white rounded-2xl border border-red-100 shadow-sm p-5 space-y-3">
+                  <h3 className="text-sm font-bold text-red-600 flex items-center gap-2"><AlertTriangle className="w-4 h-4" />Zon Berbahaya</h3>
+                  <button onClick={() => { if (window.confirm("Log keluar dari akaun ini?")) signOut(); }}
+                    className="flex items-center gap-2 px-4 py-2.5 border border-red-200 text-red-600 rounded-xl text-xs font-bold cursor-pointer hover:bg-red-50 transition">
+                    <LogOut className="w-3.5 h-3.5" />Log Keluar
+                  </button>
                 </div>
               </div>
             )}
@@ -1143,7 +1306,7 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
                         <div className={`w-2 h-2 rounded-full ${status === "ok" ? "bg-emerald-500 animate-pulse" : "bg-red-500"}`} />
                         <div>
                           <p className="text-xs font-semibold text-slate-700">{label}</p>
-                          <p className="text-[10px] text-slate-400">{latency} Â· Operasi normal</p>
+                          <p className="text-[10px] text-slate-400">{latency} &middot; Operasi normal</p>
                         </div>
                       </div>
                     ))}
