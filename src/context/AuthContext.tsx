@@ -77,19 +77,26 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
 
     // Dengar perubahan sesi Supabase secara real-time
+    // PENTING: jangan override state kalau sedang dalam demo/mock mode
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session?.user) {
-        const profile: UserSessionProfile = {
-          id: session.user.id,
-          email: session.user.email || "",
-          role: (session.user.user_metadata?.role as UserRole) || "TENANT_OWNER",
-          fullName: session.user.user_metadata?.fullName || "Account Operator",
-          tenantId: session.user.user_metadata?.tenantId,
-        };
-        setState({ user: profile, loading: false, error: null, isMockUser: false });
-      } else {
-        setState({ user: null, loading: false, error: null, isMockUser: false });
-      }
+      setState(prev => {
+        if (prev.isMockUser) return prev; // demo session aktif — ignore Supabase event
+        if (session?.user) {
+          return {
+            user: {
+              id: session.user.id,
+              email: session.user.email || "",
+              role: (session.user.user_metadata?.role as UserRole) || "TENANT_OWNER",
+              fullName: session.user.user_metadata?.fullName || "Account Operator",
+              tenantId: session.user.user_metadata?.tenantId,
+            },
+            loading: false,
+            error: null,
+            isMockUser: false,
+          };
+        }
+        return { user: null, loading: false, error: null, isMockUser: false };
+      });
     });
 
     return () => {
