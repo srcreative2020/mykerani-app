@@ -147,10 +147,31 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
   ];
 
   return (
-    <div className="flex min-h-[80vh] rounded-2xl overflow-hidden border border-slate-200 shadow-sm bg-white" id="hq_console_root">
+    <div className="flex flex-col md:flex-row min-h-screen md:min-h-[80vh] md:rounded-2xl md:overflow-hidden md:border md:border-slate-200 md:shadow-sm bg-white" id="hq_console_root">
 
-      {/* ── SIDEBAR ── */}
-      <aside className="w-56 bg-slate-950 flex flex-col shrink-0" id="hq_sidebar">
+      {/* ── MOBILE TOP BAR ── */}
+      <header className="md:hidden bg-slate-950 px-4 py-3 flex items-center justify-between sticky top-0 z-20" id="hq_mobile_header">
+        <div className="flex items-center space-x-2.5">
+          <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-rose-500 to-rose-700 flex items-center justify-center">
+            <Shield className="w-3.5 h-3.5 text-white" />
+          </div>
+          <div>
+            <p className="text-white font-bold text-sm leading-none">MYKERANI</p>
+            <p className="text-rose-400 text-[9px] font-semibold">HQ Control</p>
+          </div>
+        </div>
+        <div className="flex items-center space-x-2">
+          <div className="w-7 h-7 rounded-full bg-gradient-to-br from-rose-500 to-violet-600 flex items-center justify-center text-white text-xs font-bold">
+            {user?.fullName?.charAt(0).toUpperCase() || "H"}
+          </div>
+          <button onClick={() => signOut()} className="p-1.5 text-slate-400 hover:text-rose-400 transition cursor-pointer">
+            <LogOut className="w-4 h-4" />
+          </button>
+        </div>
+      </header>
+
+      {/* ── DESKTOP SIDEBAR ── */}
+      <aside className="hidden md:flex w-56 bg-slate-950 flex-col shrink-0" id="hq_sidebar">
         {/* Brand */}
         <div className="px-5 py-5 border-b border-slate-800">
           <div className="flex items-center space-x-2.5">
@@ -165,7 +186,7 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
         </div>
 
         {/* Nav */}
-        <nav className="flex-1 px-3 py-4 space-y-0.5" id="hq_nav">
+        <nav className="flex-1 px-3 py-4 space-y-0.5" id="hq_nav_desktop">
           {navItems.map(({ id, label, icon: Icon, badge }) => (
             <button
               key={id}
@@ -207,7 +228,7 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
       </aside>
 
       {/* ── MAIN CONTENT ── */}
-      <main className="flex-1 bg-slate-50 overflow-auto" id="hq_main">
+      <main className="flex-1 bg-slate-50 overflow-auto pb-20 md:pb-0" id="hq_main">
 
         {/* ════ DASHBOARD ════ */}
         {activePage === "dashboard" && (
@@ -228,67 +249,61 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
             </div>
 
             {/* ── STAT CARDS ── */}
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4" id="hq_stat_cards">
+            <div className="grid grid-cols-2 gap-4" id="hq_stat_cards">
               {/* Monthly Revenue */}
-              <div className="bg-gradient-to-br from-indigo-600 to-indigo-800 rounded-2xl p-5 text-white shadow-lg shadow-indigo-200">
-                <div className="flex items-center justify-between mb-3">
-                  <p className="text-indigo-200 text-[10px] font-bold uppercase tracking-wider">Hasil Bulanan</p>
-                  <div className="w-8 h-8 rounded-xl bg-white/10 flex items-center justify-center">
-                    <DollarSign className="w-4 h-4 text-indigo-200" />
+              <div className="bg-gradient-to-br from-indigo-600 to-indigo-800 rounded-2xl p-4 text-white shadow-lg shadow-indigo-200">
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-indigo-200 text-[9px] font-bold uppercase tracking-wider leading-tight">Hasil Bulanan</p>
+                  <div className="w-7 h-7 rounded-lg bg-white/10 flex items-center justify-center shrink-0">
+                    <DollarSign className="w-3.5 h-3.5 text-indigo-200" />
                   </div>
                 </div>
-                <p className="text-2xl font-bold">RM {monthlyRevenue.toLocaleString()}</p>
+                <p className="text-xl font-bold leading-tight">RM {monthlyRevenue.toLocaleString()}</p>
                 <div className="flex items-center space-x-1 mt-1">
-                  <ArrowUpRight className="w-3 h-3 text-emerald-300" />
-                  <span className="text-[10px] text-indigo-200">+12% bulan ini</span>
+                  <ArrowUpRight className="w-3 h-3 text-emerald-300 shrink-0" />
+                  <span className="text-[9px] text-indigo-200">+12% bulan ini</span>
                 </div>
               </div>
 
               {/* Active Customers */}
-              <div className="bg-gradient-to-br from-emerald-500 to-emerald-700 rounded-2xl p-5 text-white shadow-lg shadow-emerald-200">
-                <div className="flex items-center justify-between mb-3">
-                  <p className="text-emerald-100 text-[10px] font-bold uppercase tracking-wider">Pelanggan Aktif</p>
-                  <div className="w-8 h-8 rounded-xl bg-white/10 flex items-center justify-center">
-                    <Users className="w-4 h-4 text-emerald-100" />
+              <div className="bg-gradient-to-br from-emerald-500 to-emerald-700 rounded-2xl p-4 text-white shadow-lg shadow-emerald-200">
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-emerald-100 text-[9px] font-bold uppercase tracking-wider leading-tight">Pelanggan Aktif</p>
+                  <div className="w-7 h-7 rounded-lg bg-white/10 flex items-center justify-center shrink-0">
+                    <Users className="w-3.5 h-3.5 text-emerald-100" />
                   </div>
                 </div>
-                <p className="text-2xl font-bold">{activeCustomers}</p>
-                <div className="flex items-center space-x-1 mt-1">
-                  <span className="text-[10px] text-emerald-100">daripada {MOCK_CUSTOMERS.length} jumlah</span>
-                </div>
+                <p className="text-xl font-bold">{activeCustomers}</p>
+                <span className="text-[9px] text-emerald-100">drpd {MOCK_CUSTOMERS.length} jumlah</span>
               </div>
 
               {/* Active Subscriptions */}
-              <div className="bg-gradient-to-br from-violet-500 to-violet-700 rounded-2xl p-5 text-white shadow-lg shadow-violet-200">
-                <div className="flex items-center justify-between mb-3">
-                  <p className="text-violet-100 text-[10px] font-bold uppercase tracking-wider">Langganan Aktif</p>
-                  <div className="w-8 h-8 rounded-xl bg-white/10 flex items-center justify-center">
-                    <CreditCard className="w-4 h-4 text-violet-100" />
+              <div className="bg-gradient-to-br from-violet-500 to-violet-700 rounded-2xl p-4 text-white shadow-lg shadow-violet-200">
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-violet-100 text-[9px] font-bold uppercase tracking-wider leading-tight">Langganan Aktif</p>
+                  <div className="w-7 h-7 rounded-lg bg-white/10 flex items-center justify-center shrink-0">
+                    <CreditCard className="w-3.5 h-3.5 text-violet-100" />
                   </div>
                 </div>
-                <p className="text-2xl font-bold">{activeCustomers}</p>
-                <div className="flex items-center space-x-1 mt-1">
-                  <span className="text-[10px] text-violet-100">Starter · Pro · Enterprise</span>
-                </div>
+                <p className="text-xl font-bold">{activeCustomers}</p>
+                <span className="text-[9px] text-violet-100">Starter · Pro · Enterprise</span>
               </div>
 
               {/* Attention */}
-              <div className={`rounded-2xl p-5 text-white shadow-lg ${attentionCount > 0 ? "bg-gradient-to-br from-rose-500 to-rose-700 shadow-rose-200" : "bg-gradient-to-br from-slate-600 to-slate-800 shadow-slate-200"}`}>
-                <div className="flex items-center justify-between mb-3">
-                  <p className="text-rose-100 text-[10px] font-bold uppercase tracking-wider">Perlu Perhatian</p>
-                  <div className="w-8 h-8 rounded-xl bg-white/10 flex items-center justify-center">
-                    <AlertCircle className="w-4 h-4 text-rose-100" />
+              <div className={`rounded-2xl p-4 text-white shadow-lg ${attentionCount > 0 ? "bg-gradient-to-br from-rose-500 to-rose-700 shadow-rose-200" : "bg-gradient-to-br from-slate-600 to-slate-800 shadow-slate-200"}`}>
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-rose-100 text-[9px] font-bold uppercase tracking-wider leading-tight">Perlu Perhatian</p>
+                  <div className="w-7 h-7 rounded-lg bg-white/10 flex items-center justify-center shrink-0">
+                    <AlertCircle className="w-3.5 h-3.5 text-rose-100" />
                   </div>
                 </div>
-                <p className="text-2xl font-bold">{attentionCount}</p>
-                <div className="flex items-center space-x-1 mt-1">
-                  <span className="text-[10px] text-rose-100">{attentionCount > 0 ? "pelanggan perlu tindakan" : "semua baik"}</span>
-                </div>
+                <p className="text-xl font-bold">{attentionCount}</p>
+                <span className="text-[9px] text-rose-100">{attentionCount > 0 ? "perlu tindakan" : "semua baik"}</span>
               </div>
             </div>
 
             {/* ── SECOND ROW CARDS ── */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               {/* AI Usage */}
               <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
                 <div className="flex items-center justify-between mb-4">
@@ -352,7 +367,7 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
             </div>
 
             {/* ── BOTTOM ROW ── */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {/* Customers Requiring Attention */}
               <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
                 <div className="flex items-center justify-between mb-4">
@@ -476,38 +491,60 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
               </button>
             </div>
 
-            {/* Customers Table */}
+            {/* Customers List — mobile card, desktop table */}
             <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
-              <div className="grid grid-cols-12 px-5 py-3 bg-slate-50 border-b border-slate-100 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                <div className="col-span-4">Nama Pelanggan</div>
+              {/* Desktop header */}
+              <div className="hidden md:grid grid-cols-12 px-5 py-3 bg-slate-50 border-b border-slate-100 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                <div className="col-span-5">Nama Pelanggan</div>
                 <div className="col-span-2">Plan</div>
                 <div className="col-span-2">Status</div>
-                <div className="col-span-1 text-center">Syarikat</div>
-                <div className="col-span-2">Aktiviti Terakhir</div>
+                <div className="col-span-2">Aktiviti</div>
                 <div className="col-span-1" />
               </div>
-              <div className="divide-y divide-slate-50">
+              <div className="divide-y divide-slate-100">
                 {MOCK_CUSTOMERS
                   .filter(c => c.name.toLowerCase().includes(searchQuery.toLowerCase()))
                   .map(c => (
-                  <div key={c.id} className={`grid grid-cols-12 px-5 py-3.5 items-center hover:bg-slate-50/80 transition ${c.attention ? "border-l-2 border-rose-400" : ""}`}>
-                    <div className="col-span-4 flex items-center space-x-3">
-                      <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-indigo-100 to-violet-100 flex items-center justify-center shrink-0">
-                        <span className="text-indigo-700 font-bold text-xs">{c.name.charAt(0)}</span>
+                  <div key={c.id} className={`p-4 hover:bg-slate-50/80 transition ${c.attention ? "border-l-4 border-rose-400" : ""}`}>
+                    {/* Mobile layout */}
+                    <div className="flex items-start justify-between md:hidden">
+                      <div className="flex items-center space-x-3 flex-1 min-w-0">
+                        <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-indigo-100 to-violet-100 flex items-center justify-center shrink-0">
+                          <span className="text-indigo-700 font-bold text-sm">{c.name.charAt(0)}</span>
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-xs font-semibold text-slate-900 truncate">{c.name}</p>
+                          <div className="flex items-center space-x-2 mt-1">
+                            <PlanBadge plan={c.plan} />
+                            <StatusBadge status={c.status} />
+                          </div>
+                          {c.attention && <p className="text-[10px] text-rose-500 mt-0.5 flex items-center space-x-1"><AlertCircle className="w-3 h-3 shrink-0" /><span>Perlu perhatian</span></p>}
+                        </div>
                       </div>
-                      <div>
-                        <p className="text-xs font-semibold text-slate-900">{c.name}</p>
-                        {c.attention && <p className="text-[10px] text-rose-500 flex items-center space-x-1"><AlertCircle className="w-3 h-3" /><span>Perlu perhatian</span></p>}
+                      <div className="text-right shrink-0 ml-2">
+                        <p className="text-[10px] text-slate-400">{c.lastActivity}</p>
+                        <p className="text-[10px] text-slate-500 mt-0.5">{c.companies} syarikat</p>
                       </div>
                     </div>
-                    <div className="col-span-2"><PlanBadge plan={c.plan} /></div>
-                    <div className="col-span-2"><StatusBadge status={c.status} /></div>
-                    <div className="col-span-1 text-center text-xs font-semibold text-slate-700">{c.companies}</div>
-                    <div className="col-span-2 text-[11px] text-slate-400">{c.lastActivity}</div>
-                    <div className="col-span-1 flex justify-end gap-1">
-                      <button className="p-1.5 rounded-lg hover:bg-slate-100 transition cursor-pointer text-slate-400 hover:text-indigo-600">
-                        <ChevronRight className="w-3.5 h-3.5" />
-                      </button>
+                    {/* Desktop layout */}
+                    <div className="hidden md:grid grid-cols-12 items-center">
+                      <div className="col-span-5 flex items-center space-x-3">
+                        <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-indigo-100 to-violet-100 flex items-center justify-center shrink-0">
+                          <span className="text-indigo-700 font-bold text-xs">{c.name.charAt(0)}</span>
+                        </div>
+                        <div>
+                          <p className="text-xs font-semibold text-slate-900">{c.name}</p>
+                          {c.attention && <p className="text-[10px] text-rose-500 flex items-center space-x-1"><AlertCircle className="w-3 h-3" /><span>Perlu perhatian</span></p>}
+                        </div>
+                      </div>
+                      <div className="col-span-2"><PlanBadge plan={c.plan} /></div>
+                      <div className="col-span-2"><StatusBadge status={c.status} /></div>
+                      <div className="col-span-2 text-[11px] text-slate-400">{c.lastActivity}</div>
+                      <div className="col-span-1 flex justify-end">
+                        <button className="p-1.5 rounded-lg hover:bg-slate-100 transition cursor-pointer text-slate-400 hover:text-indigo-600">
+                          <ChevronRight className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
                     </div>
                   </div>
                 ))}
@@ -876,6 +913,27 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
         )}
 
       </main>
+
+      {/* ── MOBILE BOTTOM NAV ── */}
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-slate-950 border-t border-slate-800 z-20 px-1 py-2 flex items-center justify-around" id="hq_bottom_nav">
+        {navItems.map(({ id, label, icon: Icon, badge }) => (
+          <button
+            key={id}
+            onClick={() => setActivePage(id)}
+            className={`flex flex-col items-center px-2 py-1 rounded-xl transition cursor-pointer relative ${
+              activePage === id ? "text-rose-400" : "text-slate-500"
+            }`}
+          >
+            <Icon className="w-5 h-5" />
+            <span className="text-[9px] font-semibold mt-0.5">{label}</span>
+            {badge !== undefined && (
+              <span className="absolute -top-0.5 -right-0.5 w-4 h-4 rounded-full bg-rose-500 text-white text-[8px] font-bold flex items-center justify-center">
+                {badge}
+              </span>
+            )}
+          </button>
+        ))}
+      </nav>
     </div>
   );
 };
