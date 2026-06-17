@@ -9,6 +9,7 @@ import { NotificationProvider } from "./context/NotificationContext";
 import { Guard } from "./components/Guard";
 import { HQConsoleShell } from "./components/HQConsoleShell";
 import { MyKeraniAppTabs } from "./components/MyKeraniAppTabs";
+import { StaffHomeScreen } from "./screens/StaffHomeScreen";
 import { FinancialRecordsProvider, useFinancials } from "./context/FinancialRecordsContext";
 import { FinancialRecordsConsole } from "./components/FinancialRecordsConsole";
 import { testSupabaseConnection, type SupabaseDiagnostics } from "./lib/supabase";
@@ -1106,6 +1107,14 @@ function MainDashboardContent() {
   );
 }
 
+function RoleRouter() {
+  const { user } = useAuth();
+  if (user?.role === "STAFF" || user?.role === "VIEWER") {
+    return <StaffHomeScreen />;
+  }
+  return <MainDashboardContent />;
+}
+
 export default function App() {
   return (
     <AuthProvider>
@@ -1117,7 +1126,7 @@ export default function App() {
                 <StorageProvider>
                   <FinancialRecordsProvider>
                     <NotificationProvider>
-                      <MainDashboardContent />
+                      <RoleRouter />
                     </NotificationProvider>
                   </FinancialRecordsProvider>
                 </StorageProvider>

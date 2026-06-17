@@ -55,9 +55,10 @@ const DEMO_USERS = [
 ];
 
 export default function LoginScreen() {
-  const { signIn, signUp, error, clearError } = useAuth();
+  const { signIn, signUp, resetPassword, error, clearError } = useAuth();
 
   const [isSignUpMode, setIsSignUpMode] = useState(false);
+  const [isForgotMode, setIsForgotMode] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [fullName, setFullName] = useState("");
@@ -65,6 +66,7 @@ export default function LoginScreen() {
 
   const [formLoading, setFormLoading] = useState(false);
   const [customError, setCustomError] = useState<string | null>(null);
+  const [forgotSuccess, setForgotSuccess] = useState<string | null>(null);
 
   const handleAuthSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -108,9 +110,29 @@ export default function LoginScreen() {
     setFormLoading(false);
   };
 
+  const handleForgotPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setCustomError(null);
+    setForgotSuccess(null);
+    if (!email.trim()) {
+      setCustomError("Sila masukkan alamat e-mel anda.");
+      return;
+    }
+    setFormLoading(true);
+    const result = await resetPassword(email);
+    setFormLoading(false);
+    if (result.success) {
+      setForgotSuccess(result.message);
+    } else {
+      setCustomError(result.message);
+    }
+  };
+
   const handleToggleMode = () => {
     setIsSignUpMode(prev => !prev);
+    setIsForgotMode(false);
     setCustomError(null);
+    setForgotSuccess(null);
     clearError();
   };
 
@@ -156,7 +178,60 @@ export default function LoginScreen() {
           ))}
         </div>
 
-        {/* Borang Log Masuk / Daftar */}
+        {/* Borang Lupa Kata Laluan */}
+        {isForgotMode ? (
+          <form onSubmit={handleForgotPassword} className="space-y-4" id="forgot_password_form">
+            <div className="text-center space-y-1">
+              <h2 className="font-bold text-slate-800 text-sm">Tetapkan Semula Kata Laluan</h2>
+              <p className="text-[11px] text-slate-400">Kami akan hantar pautan tetapan semula ke e-mel anda.</p>
+            </div>
+
+            {forgotSuccess ? (
+              <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-700 text-center font-medium">
+                {forgotSuccess}
+              </div>
+            ) : (
+              <>
+                <div className="space-y-1">
+                  <label className="block text-xs font-semibold text-slate-600">Alamat E-mel</label>
+                  <div className="relative">
+                    <Mail className="absolute left-3.5 top-3 w-4 h-4 text-slate-400" />
+                    <input
+                      type="email"
+                      value={email}
+                      onChange={e => setEmail(e.target.value)}
+                      placeholder="ali@kedai.com"
+                      className="w-full pl-10 pr-4 py-2.5 text-xs bg-slate-50 border border-slate-200 focus:bg-white focus:border-slate-900 rounded-xl transition outline-none text-slate-800"
+                      autoComplete="email"
+                    />
+                  </div>
+                </div>
+                {customError && (
+                  <div className="p-3 bg-rose-50 border border-rose-100 rounded-xl text-xs text-rose-600 flex items-start space-x-2">
+                    <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                    <span>{customError}</span>
+                  </div>
+                )}
+                <button
+                  type="submit"
+                  disabled={formLoading}
+                  className="w-full py-2.5 bg-slate-900 hover:bg-slate-800 disabled:opacity-50 text-white rounded-xl text-xs font-semibold shadow-sm transition flex items-center justify-center cursor-pointer"
+                >
+                  {formLoading ? <span className="animate-pulse">Sila tunggu...</span> : "Hantar E-mel Tetapan Semula"}
+                </button>
+              </>
+            )}
+
+            <button
+              type="button"
+              onClick={() => { setIsForgotMode(false); setCustomError(null); setForgotSuccess(null); }}
+              className="w-full text-center text-xs text-slate-400 hover:text-slate-700 transition cursor-pointer py-1"
+            >
+              ← Kembali ke Log Masuk
+            </button>
+          </form>
+        ) : (
+        /* Borang Log Masuk / Daftar */
         <form onSubmit={handleAuthSubmit} className="space-y-4" id="login_action_form">
 
           {isSignUpMode && (
@@ -193,7 +268,18 @@ export default function LoginScreen() {
           </div>
 
           <div className="space-y-1" id="password_field_container">
-            <label className="block text-xs font-semibold text-slate-600">Kata Laluan</label>
+            <div className="flex items-center justify-between">
+              <label className="block text-xs font-semibold text-slate-600">Kata Laluan</label>
+              {!isSignUpMode && (
+                <button
+                  type="button"
+                  onClick={() => { setIsForgotMode(true); setCustomError(null); clearError(); }}
+                  className="text-[11px] text-indigo-500 hover:text-indigo-700 font-medium cursor-pointer transition"
+                >
+                  Lupa Kata Laluan?
+                </button>
+              )}
+            </div>
             <div className="relative">
               <Lock className="absolute left-3.5 top-3 w-4 h-4 text-slate-400" />
               <input
@@ -230,9 +316,10 @@ export default function LoginScreen() {
             )}
           </button>
         </form>
+        )}
 
         {/* Akses Demo — hanya tunjuk pada skrin Log Masuk */}
-        {!isSignUpMode && (
+        {!isSignUpMode && !isForgotMode && (
           <div className="pt-1 border-t border-slate-100 space-y-3" id="demo_access_section">
             <p className="text-center text-[10px] font-bold tracking-widest text-slate-400 uppercase">
               Akses Demo Segera (Tap Sekali Terus Masuk)
@@ -264,7 +351,7 @@ export default function LoginScreen() {
         )}
 
         {/* Toggle Log Masuk / Daftar */}
-        <div className="pt-2 border-t border-slate-100 text-center">
+        {!isForgotMode && <div className="pt-2 border-t border-slate-100 text-center">
           {isSignUpMode ? (
             <p className="text-xs text-slate-500">
               Sudah ada akaun?{" "}
@@ -290,7 +377,7 @@ export default function LoginScreen() {
               </button>
             </p>
           )}
-        </div>
+        </div>}
       </div>
     </div>
   );

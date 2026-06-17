@@ -14,6 +14,7 @@ interface AuthContextType extends AuthState {
   signIn: (email: string, password: string) => Promise<void>;
   signUp: (email: string, password: string, fullName: string, initialRole?: UserRole) => Promise<void>;
   signOut: () => Promise<void>;
+  resetPassword: (email: string) => Promise<{ success: boolean; message: string }>;
   clearError: () => void;
   toggleBypassAuth: (enabled: boolean) => void;
   isMockUser: boolean;
@@ -224,6 +225,31 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const resetPassword = async (email: string): Promise<{ success: boolean; message: string }> => {
+    const cleanEmail = email.trim().toLowerCase();
+
+    // Demo accounts tidak boleh reset password
+    if (DEMO_ACCOUNTS[cleanEmail]) {
+      return { success: false, message: "Akaun demo tidak menyokong tetapan semula kata laluan." };
+    }
+
+    if (!isSupabaseConfigured() || !supabase) {
+      return { success: false, message: "Sistem tidak dikonfigurasi. Sila hubungi pentadbir." };
+    }
+
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(cleanEmail, {
+        redirectTo: `${window.location.origin}/reset-password`,
+      });
+      if (error) {
+        return { success: false, message: error.message };
+      }
+      return { success: true, message: `E-mel tetapan semula telah dihantar ke ${cleanEmail}. Sila semak peti masuk anda.` };
+    } catch {
+      return { success: false, message: "Ralat sambungan. Sila cuba lagi." };
+    }
+  };
+
   const signOut = async () => {
     setState(prev => ({ ...prev, loading: true }));
 
@@ -242,6 +268,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         signIn,
         signUp,
         signOut,
+        resetPassword,
         clearError,
         toggleBypassAuth,
       }}
