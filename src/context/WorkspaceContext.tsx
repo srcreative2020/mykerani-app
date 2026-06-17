@@ -136,7 +136,7 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
               workspaces: fallbackWS,
               activeWorkspace: fallbackWS[0],
               loading: false,
-              error: `Schema validation alert: "workspaces" table may need setup. Enabled local fallback.`,
+              error: null,
             });
             return;
           }

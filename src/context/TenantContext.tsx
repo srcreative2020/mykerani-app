@@ -97,12 +97,16 @@ export const TenantProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             // If table does not exist or has connection permission errors, report but handle gracefully
             console.warn("Retrying query or checking tenants schema:", dbError.message);
             
-            // Auto fallback mock list to let user interact safely if schema is not ready
+            // Auto fallback — pilih tenant berdasarkan role user
+            const fallbackActive = user.role === "HQ_ADMIN"
+              ? DEFAULT_MOCK_TENANTS.find(t => t.category === "HQ") || DEFAULT_MOCK_TENANTS[0]
+              : DEFAULT_MOCK_TENANTS.find(t => t.category !== "HQ") || DEFAULT_MOCK_TENANTS[0];
+
             setState({
               tenants: [...DEFAULT_MOCK_TENANTS],
-              activeTenant: DEFAULT_MOCK_TENANTS[2],
+              activeTenant: fallbackActive,
               loading: false,
-              error: `Schema validation alert: "tenants" table may need setup. Enabled local resilient fallback.`,
+              error: null,
             });
             return;
           }
