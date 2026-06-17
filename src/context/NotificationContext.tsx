@@ -6,6 +6,7 @@ import { useWorkspace } from "./WorkspaceContext";
 import { useAudit } from "./AuditContext";
 import { useStorage } from "./StorageContext";
 import { useFinancials } from "./FinancialRecordsContext";
+import { isDemoWorkspace } from "../lib/seeder";
 
 export interface WorkspaceNotification {
   id: string;
@@ -80,7 +81,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     const workspaceId = activeWorkspace.id;
     const tenantId = activeTenant.id;
 
-    if (!isSupabaseConfigured() || isMockUser) {
+    if (!isSupabaseConfigured() || isMockUser || isDemoWorkspace(activeWorkspace.id)) {
       // 1. Mock Local Storage Path
       // Load Preferences
       const storedPrefsRaw = localStorage.getItem(LOCAL_PREF_KEY);
@@ -230,7 +231,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     const oldState = { ...targetNotif };
     const newState = { ...targetNotif, status: "READ" as const, updatedAt: new Date().toISOString() };
 
-    if (!isSupabaseConfigured() || isMockUser) {
+    if (!isSupabaseConfigured() || isMockUser || isDemoWorkspace(activeWorkspace.id)) {
       // Mock update
       const storedNotifsRaw = localStorage.getItem(LOCAL_NOTIF_KEY);
       let allNotifs: WorkspaceNotification[] = storedNotifsRaw ? JSON.parse(storedNotifsRaw) : [];
@@ -282,7 +283,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     const oldState = { ...targetNotif };
     const newState = { ...targetNotif, status: "ARCHIVED" as const, updatedAt: new Date().toISOString() };
 
-    if (!isSupabaseConfigured() || isMockUser) {
+    if (!isSupabaseConfigured() || isMockUser || isDemoWorkspace(activeWorkspace.id)) {
       // Mock update
       const storedNotifsRaw = localStorage.getItem(LOCAL_NOTIF_KEY);
       let allNotifs: WorkspaceNotification[] = storedNotifsRaw ? JSON.parse(storedNotifsRaw) : [];
@@ -333,7 +334,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
     const nowStr = new Date().toISOString();
 
-    if (!isSupabaseConfigured() || isMockUser) {
+    if (!isSupabaseConfigured() || isMockUser || isDemoWorkspace(activeWorkspace.id)) {
       const storedNotifsRaw = localStorage.getItem(LOCAL_NOTIF_KEY);
       let allNotifs: WorkspaceNotification[] = storedNotifsRaw ? JSON.parse(storedNotifsRaw) : [];
       allNotifs = allNotifs.map(n => {
@@ -405,7 +406,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       updatedAt: nowStr,
     };
 
-    if (!isSupabaseConfigured() || isMockUser) {
+    if (!isSupabaseConfigured() || isMockUser || isDemoWorkspace(activeWorkspace.id)) {
       // Mock Storage update
       const storedPrefsRaw = localStorage.getItem(LOCAL_PREF_KEY);
       let allPrefs: WorkspaceNotificationPreferences[] = storedPrefsRaw ? JSON.parse(storedPrefsRaw) : [];
@@ -708,7 +709,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
     if (newAlertsToInsert.length === 0) return;
 
-    if (!isSupabaseConfigured() || isMockUser) {
+    if (!isSupabaseConfigured() || isMockUser || isDemoWorkspace(activeWorkspace.id)) {
       // Mock Storage Insert
       const storedNotifsRaw = localStorage.getItem(LOCAL_NOTIF_KEY);
       const allNotifs: WorkspaceNotification[] = storedNotifsRaw ? JSON.parse(storedNotifsRaw) : [];

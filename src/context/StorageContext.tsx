@@ -4,6 +4,7 @@ import { useAuth } from "./AuthContext";
 import { useTenant } from "./TenantContext";
 import { useWorkspace } from "./WorkspaceContext";
 import { useAudit } from "./AuditContext";
+import { isDemoWorkspace } from "../lib/seeder";
 
 export interface StorageProviderRegistry {
   id: string;
@@ -53,7 +54,7 @@ export const StorageProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
       const localKey = `mykerani_storage_provider_${activeWorkspace.id}`;
 
-      if (!isSupabaseConfigured() || isMockUser) {
+      if (!isSupabaseConfigured() || isMockUser || isDemoWorkspace(activeWorkspace.id)) {
         // Mock / Sandbox flow
         const cached = localStorage.getItem(localKey);
         if (cached) {
