@@ -22,14 +22,32 @@ export interface StorageUsage {
 
 const BUCKET = "evidence-packages";
 
+// Dapatkan Supabase auth session user ID yang sebenar (UUID)
+async function getRealUserId(): Promise<string | null> {
+  const { data } = await supabase.auth.getSession();
+  return data.session?.user?.id ?? null;
+}
+
 // Upload fail ke Supabase Storage + rekod dalam evidence_documents
 export async function uploadDocument(
   file: File,
   workspaceId: string,
-  userId: string,
+  _appUserId: string, // not used directly — we get real UUID from session
   docType: DocType = "SUPPORTING_DOC"
 ): Promise<{ doc: UploadedDoc | null; error: string | null }> {
   if (!workspaceId) return { doc: null, error: "Workspace tidak ditemui." };
+
+  // Must have real Supabase session
+  const realUserId = await getRealUserId();
+  if (!realUserId) {
+    return { doc: null, error: "Akaun demo tidak boleh muat naik dokumen. Log masuk dengan akaun sebenar." };
+  }
+
+  // workspaceId must be a valid UUID too
+  const uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  if (!uuidRe.test(workspaceId)) {
+    return { doc: null, error: "Workspace tidak sah. Pastikan anda log masuk dengan akaun sebenar." };
+  }
 
   const ext = file.name.split(".").pop() ?? "bin";
   const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
@@ -52,14 +70,13 @@ export async function uploadDocument(
       file_size_bytes: file.size,
       mime_type: file.type || `application/${ext}`,
       document_type: docType,
-      uploaded_by: userId,
+      uploaded_by: realUserId,
       ocr_parsed_content: {},
     })
     .select()
     .single();
 
   if (dbErr) {
-    // Rollback: remove uploaded file
     await supabase.storage.from(BUCKET).remove([path]);
     return { doc: null, error: dbErr.message };
   }

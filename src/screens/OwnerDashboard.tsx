@@ -204,6 +204,10 @@ export function OwnerDashboard() {
   }, [wsId]);
 
   const triggerUpload = (docType: DocType) => {
+    if (user?.email?.endsWith(".demo") || (user as any)?.isMockUser) {
+      setUploadError("Akaun demo tidak boleh muat naik dokumen. Log masuk dengan akaun sebenar.");
+      return;
+    }
     if (storageQuota.isFrozen) { setUploadError("Storan dibekukan. Hubungi HQ."); return; }
     if (!storageQuota.canUpload) { setUploadError("Storan penuh. Beli tambahan storan."); return; }
     setPendingDocType(docType);
