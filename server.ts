@@ -642,104 +642,63 @@ async function startServer() {
         return res.status(400).json({ error: "No file data provided." });
       }
 
-      const apiKey = process.env.GEMINI_API_KEY;
-      if (!apiKey) {
-        console.warn("GEMINI_API_KEY is not defined in environment secrets. Using realistic sandbox OCR fallback.");
+      const candidates = await getAiProviderCandidates();
+      if (candidates.length === 0) {
+        console.info("No AI provider configured (checked HQ Console AI Router settings, then OPENAI_API_KEY/GEMINI_API_KEY/ANTHROPIC_API_KEY env vars). Using realistic sandbox OCR fallback.");
         const mockResult = generateMockOcr(fileName, documentType);
         return res.json(mockResult);
       }
 
-      // Process fileDataUrl
-      // Format: data:<mimeType>;base64,<base64Data>
+      // Process fileDataUrl. Format: data:<mimeType>;base64,<base64Data>
       const match = fileDataUrl.match(/^data:([^;]+);base64,(.+)$/);
       let mimeType = "image/png";
       let base64Data = fileDataUrl;
-
       if (match) {
         mimeType = match[1];
         base64Data = match[2];
       }
 
-      const ai = new GoogleGenAI({
-        apiKey: apiKey,
-        httpOptions: {
-          headers: {
-            'User-Agent': 'aistudio-build',
-          }
-        }
-      });
+      const ocrPrompt = `Analyze this financial document (type: ${documentType}, filename: ${fileName}) and extract its structured details. If certain fields like Document Number or Merchant Name are not explicitly clear, use your reasoning intelligence to deduct the most accurate values from the visual context.
 
-      const response = await ai.models.generateContent({
-        model: "gemini-2.5-flash",
-        contents: [
-          {
-            inlineData: {
-              mimeType: mimeType,
-              data: base64Data
-            }
-          },
-          `Analyze this financial document (type: ${documentType}, filename: ${fileName}) and extract its structured details. If certain fields like Document Number or Merchant Name are not explicitly clear, use your reasoning intelligence to deduct the most accurate values from the visual context.`
-        ],
-        config: {
-          responseMimeType: "application/json",
-          responseSchema: {
-            type: Type.OBJECT,
-            properties: {
-              merchantName: {
-                type: Type.STRING,
-                description: "Name of the merchant, vendor, supplier, or company issuing the document."
-              },
-              documentNumber: {
-                type: Type.STRING,
-                description: "Invoice number, receipt ID, reference number, or statement number."
-              },
-              date: {
-                type: Type.STRING,
-                description: "The date of the document in YYYY-MM-DD format (if found)."
-              },
-              amount: {
-                type: Type.NUMBER,
-                description: "The total amount of the transaction. Number only."
-              },
-              currency: {
-                type: Type.STRING,
-                description: "Three-letter currency code (e.g., MYR, USD, EUR, SGD)."
-              },
-              suggestedCategory: {
-                type: Type.STRING,
-                description: "Suggested accounting or financial category (e.g., Travel, Software, Utilities, Meals, Office Supplies, Advertising, Services)."
-              },
-              confidenceScore: {
-                type: Type.NUMBER,
-                description: "Confidence score of the extraction as a float between 0.0 and 1.0."
-              },
-              rawExtractedText: {
-                type: Type.STRING,
-                description: "A short snippet or line summarizing what this document represents."
-              }
-            },
-            required: ["merchantName", "amount", "currency", "confidenceScore"]
-          }
-        }
-      });
+Provide your output precisely formatted as raw JSON matching exactly this shape, with no markdown code fences and no extra commentary outside the JSON object:
+{
+  "merchantName": "string — name of the merchant, vendor, supplier, or company issuing the document",
+  "documentNumber": "string — invoice number, receipt ID, reference number, or statement number",
+  "date": "string — YYYY-MM-DD format if found",
+  "amount": 0,
+  "currency": "string — three-letter currency code e.g. MYR, USD, EUR, SGD",
+  "suggestedCategory": "string — e.g. Travel, Software, Utilities, Meals, Office Supplies, Advertising, Services",
+  "confidenceScore": 0.0,
+  "rawExtractedText": "string — short snippet summarizing what this document represents"
+}`;
 
-      const resultText = response.text;
-      if (!resultText) {
-        throw new Error("No response text returned from Gemini API");
+      let parsedResult: any = null;
+      let lastErr: any = null;
+      for (const candidate of candidates) {
+        try {
+          parsedResult = await callAiProviderOcr(candidate, mimeType, base64Data, ocrPrompt);
+          break;
+        } catch (err: any) {
+          lastErr = err;
+          console.error(`AI provider "${candidate.provider}" OCR call failed, trying next candidate:`, err?.message || err);
+        }
       }
 
-      const parsedResult = JSON.parse(resultText);
+      if (!parsedResult) {
+        throw lastErr || new Error("All configured AI providers failed for OCR");
+      }
+
       return res.json(parsedResult);
 
     } catch (error: any) {
       const errStr = error?.message || (typeof error === 'object' ? JSON.stringify(error) : String(error));
       const isBillingOrCreditIssue = /depleted|exhausted|billing|prepay|429|credit/i.test(errStr);
-      
-      console.error("Gemini OCR call failed:", errStr);
+
+      console.error("AI OCR call failed:", errStr);
       if (isBillingOrCreditIssue) {
-        console.info("Gemini API key billing limits/credits reached. Smoothly transitioning to MYKERANI OCR Sandbox Simulator.");
+        console.info("AI provider billing limits/credits reached. Smoothly transitioning to MYKERANI OCR Sandbox Simulator.");
       } else {
-        console.info("Gemini OCR extraction resolved seamlessly to robust local cognitive fallback.");
+        console.info("AI OCR extraction resolved seamlessly to robust local cognitive fallback.");
       }
 
       const mockResult = generateMockOcr(req.body.fileName || "document.png", req.body.documentType || "RECEIPT");
@@ -1009,6 +968,108 @@ If you output markdown formatting inside the fields, escape quotes correctly.`;
     }
     const baseUrl = OPENAI_COMPATIBLE_BASE_URLS[candidate.provider];
     return callOpenAiCompatibleAssistant(baseUrl, candidate.apiKey, candidate.model, systemPrompt);
+  }
+
+  async function callAiProviderOcr(candidate: AiCandidate, mimeType: string, base64Data: string, ocrPrompt: string): Promise<any> {
+    if (candidate.provider === "gemini") {
+      return callGeminiOcr(candidate.apiKey, candidate.model, mimeType, base64Data, ocrPrompt);
+    }
+    if (candidate.provider === "anthropic") {
+      return callAnthropicOcr(candidate.apiKey, candidate.model, mimeType, base64Data, ocrPrompt);
+    }
+    const baseUrl = OPENAI_COMPATIBLE_BASE_URLS[candidate.provider];
+    return callOpenAiCompatibleOcr(baseUrl, candidate.apiKey, candidate.model, mimeType, base64Data, ocrPrompt);
+  }
+
+  async function callGeminiOcr(apiKey: string, model: string, mimeType: string, base64Data: string, ocrPrompt: string) {
+    const ai = new GoogleGenAI({
+      apiKey,
+      httpOptions: { headers: { 'User-Agent': 'aistudio-build' } }
+    });
+    const response = await ai.models.generateContent({
+      model,
+      contents: [
+        { inlineData: { mimeType, data: base64Data } },
+        ocrPrompt
+      ],
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            merchantName: { type: Type.STRING },
+            documentNumber: { type: Type.STRING },
+            date: { type: Type.STRING },
+            amount: { type: Type.NUMBER },
+            currency: { type: Type.STRING },
+            suggestedCategory: { type: Type.STRING },
+            confidenceScore: { type: Type.NUMBER },
+            rawExtractedText: { type: Type.STRING }
+          },
+          required: ["merchantName", "amount", "currency", "confidenceScore"]
+        }
+      }
+    });
+    const responseText = response.text;
+    if (!responseText) throw new Error("No response text returned from Gemini API");
+    return JSON.parse(responseText);
+  }
+
+  async function callOpenAiCompatibleOcr(baseUrl: string, apiKey: string, model: string, mimeType: string, base64Data: string, ocrPrompt: string) {
+    const resp = await fetch(`${baseUrl}/chat/completions`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${apiKey}` },
+      body: JSON.stringify({
+        model,
+        messages: [{
+          role: "user",
+          content: [
+            { type: "text", text: ocrPrompt },
+            { type: "image_url", image_url: { url: `data:${mimeType};base64,${base64Data}` } }
+          ]
+        }],
+        response_format: { type: "json_object" },
+        temperature: 0.2,
+      }),
+    });
+    if (!resp.ok) {
+      const errBody = await resp.text();
+      throw new Error(`AI provider OCR API error ${resp.status}: ${errBody}`);
+    }
+    const data: any = await resp.json();
+    const content = data.choices?.[0]?.message?.content;
+    if (!content) throw new Error("No response content returned from AI provider OCR API");
+    return parseJsonLoose(content);
+  }
+
+  async function callAnthropicOcr(apiKey: string, model: string, mimeType: string, base64Data: string, ocrPrompt: string) {
+    const resp = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
+      },
+      body: JSON.stringify({
+        model,
+        max_tokens: 2048,
+        messages: [{
+          role: "user",
+          content: [
+            { type: "image", source: { type: "base64", media_type: mimeType, data: base64Data } },
+            { type: "text", text: ocrPrompt }
+          ]
+        }],
+      }),
+    });
+    if (!resp.ok) {
+      const errBody = await resp.text();
+      throw new Error(`Anthropic OCR API error ${resp.status}: ${errBody}`);
+    }
+    const data: any = await resp.json();
+    const content = data.content?.[0]?.text;
+    if (!content) throw new Error("No response content returned from Anthropic OCR API");
+    return parseJsonLoose(content);
   }
 
   async function callGeminiAssistant(apiKey: string, model: string, systemPrompt: string) {
