@@ -1066,8 +1066,20 @@ Provide your output precisely formatted in JS JSON matching the required schema.
     app.use(vite.middlewares);
   } else {
     const distPath = path.join(process.cwd(), 'dist');
-    app.use(express.static(distPath));
+    // JS/CSS assets ada hash dalam nama fail — boleh cache lama
+    app.use(express.static(distPath, {
+      setHeaders(res, filePath) {
+        if (filePath.endsWith('.html')) {
+          // HTML jangan cache supaya browser sentiasa dapat versi terbaru
+          res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+        } else if (/\.(js|css|woff2?|ttf|svg|png|jpg|ico)$/.test(filePath)) {
+          // Asset dengan hash boleh cache setahun
+          res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+        }
+      },
+    }));
     app.get('*', (req, res) => {
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
       res.sendFile(path.join(distPath, 'index.html'));
     });
   }
