@@ -187,11 +187,18 @@ function MainDashboardContent() {
       const records = getDemoWorkspaceData(activeWorkspace.id);
       setDemoRecords(records);
       setDemoResetMsg("");
-      setSummaryLoading(true);
-    getDashboardSummary(activeWorkspace.id).then(result => {
-      if (result.data) setDashboardSummary(result.data);
-      setSummaryLoading(false);
-    });
+
+      if (isDemoWorkspace(activeWorkspace.id)) {
+        // Demo workspace IDs are not real UUIDs — skip the Supabase query entirely.
+        setDashboardSummary(null);
+        setSummaryLoading(false);
+      } else {
+        setSummaryLoading(true);
+        getDashboardSummary(activeWorkspace.id).then(result => {
+          if (result.data) setDashboardSummary(result.data);
+          setSummaryLoading(false);
+        });
+      }
     } else {
       setDemoRecords([]);
       setDashboardSummary(null);
@@ -611,7 +618,7 @@ function MainDashboardContent() {
             toggleBypassAuth={toggleBypassAuth}
             getCategoryBadgeColor={getCategoryBadgeColor}
             dashboardSummary={dashboardSummary}
-          summaryLoading={summaryLoading}
+            summaryLoading={summaryLoading}
           />
         )}
 

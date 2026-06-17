@@ -38,7 +38,7 @@ const getMockAuditLogs = (tenantId: string): AuditLogEntry[] => [
     id: "audit-2",
     userId: "user-mock-sarah",
     userEmail: "sarah@company.com",
-    userRole: "STAFF",
+    userRole: "TENANT_STAFF",
     tenantId,
     workspaceId: "ws-mock-1",
     module: "Financial Evidence Package",
@@ -80,7 +80,7 @@ export const AuditProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     setLoading(true);
     setError(null);
 
-    if (!isSupabaseConfigured() || isMockUser) {
+    if (!isSupabaseConfigured() || isMockUser || activeTenant.category === "DEMO") {
       // --- SANDBOX MOCKPERSISTENCE ---
       const localAuditKey = `mykerani_audit_logs_${activeTenant.id}`;
       const cached = localStorage.getItem(localAuditKey);
@@ -182,7 +182,7 @@ export const AuditProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       timestamp: new Date().toISOString()
     };
 
-    if (!isSupabaseConfigured() || isMockUser) {
+    if (!isSupabaseConfigured() || isMockUser || activeTenant.category === "DEMO") {
       // --- MOCK STORAGE ---
       const localAuditKey = `mykerani_audit_logs_${activeTenant.id}`;
       const currentLogs = [...auditLogs];

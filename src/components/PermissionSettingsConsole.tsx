@@ -73,11 +73,7 @@ export const PermissionSettingsConsole: React.FC = () => {
   const rolesList: UserRole[] = [
     "HQ_OWNER",
     "HQ_STAFF",
-    "HQ_AUDITOR",
     "TENANT_OWNER",
-    "TENANT_OWNER",
-    "MANAGER",
-    "STAFF",
     "TENANT_STAFF"
   ];
 
@@ -85,11 +81,7 @@ export const PermissionSettingsConsole: React.FC = () => {
     switch (role) {
       case "HQ_OWNER": return "Master absolute root administrator. Enforces multi-tenant compliance.";
       case "HQ_STAFF": return "HQ system operator context. Read & create profiles but restrict deletion.";
-      case "HQ_AUDITOR": return "Global read-only auditor across multiple client tenancy directories.";
       case "TENANT_OWNER": return "Corporate account owner. Full billing, data disposal, and tenancy control.";
-      case "TENANT_OWNER": return "Enterprise workspace admin. Full CRUD access for financial instruments.";
-      case "MANAGER": return "Operational workspace lead. CRUD operations excluding forecast modeling.";
-      case "STAFF": return "General ledger writer. Log income, expenses & evidence packages.";
       case "TENANT_STAFF": return "Strict auditor or client view-only context. Read is validated.";
     }
   };

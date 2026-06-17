@@ -4,6 +4,7 @@ import { useAuth } from "./AuthContext";
 import { useWorkspace } from "./WorkspaceContext";
 import { useAudit } from "./AuditContext";
 import { supabase, isSupabaseConfigured } from "../lib/supabase";
+import { isDemoWorkspace } from "../lib/seeder";
 
 interface FinancialRecordsContextType {
   financialEvents: FinancialEvent[];
@@ -314,7 +315,7 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
       setError(null);
       const wsId = activeWorkspace.id;
 
-      if (!isSupabaseConfigured() || isMockUser) {
+      if (!isSupabaseConfigured() || isMockUser || isDemoWorkspace(wsId)) {
         // --- SANDBOX / LOCAL STORAGE FLOW ---
         const keyPrefix = `mykerani_financials_ws_${wsId}`;
         const storedEvents = localStorage.getItem(`${keyPrefix}_events`);
@@ -746,7 +747,7 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
     }
 
     // Save to Database in the background
-    if (isSupabaseConfigured() && !isMockUser && supabase && activeWorkspace) {
+    if (isSupabaseConfigured() && !isMockUser && supabase && activeWorkspace && !isDemoWorkspace(activeWorkspace.id)) {
       (async () => {
         try {
           const catId = await getOrCreateCategoryId(activeWorkspace.id, newEvent.categoryName, newEvent.type);
@@ -833,7 +834,7 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
       });
     }
 
-    if (isSupabaseConfigured() && !isMockUser && supabase && activeWorkspace) {
+    if (isSupabaseConfigured() && !isMockUser && supabase && activeWorkspace && !isDemoWorkspace(activeWorkspace.id)) {
       (async () => {
         try {
           const item = financialEvents.find((e) => e.id === id);
@@ -920,7 +921,7 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
       });
     }
 
-    if (isSupabaseConfigured() && !isMockUser && supabase && activeWorkspace) {
+    if (isSupabaseConfigured() && !isMockUser && supabase && activeWorkspace && !isDemoWorkspace(activeWorkspace.id)) {
       (async () => {
         try {
           const item = financialEvents.find((e) => e.id === id);
@@ -951,7 +952,7 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
     setCashAccounts(updated);
     persistCurrentState(financialEvents, updated);
 
-    if (isSupabaseConfigured() && !isMockUser && supabase && activeWorkspace) {
+    if (isSupabaseConfigured() && !isMockUser && supabase && activeWorkspace && !isDemoWorkspace(activeWorkspace.id)) {
       (async () => {
         try {
           await supabase.from("cash_accounts").insert({
@@ -978,7 +979,7 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
     setCashAccounts(nextList);
     persistCurrentState(financialEvents, cashAccounts, nextList);
 
-    if (isSupabaseConfigured() && !isMockUser && supabase && activeWorkspace) {
+    if (isSupabaseConfigured() && !isMockUser && supabase && activeWorkspace && !isDemoWorkspace(activeWorkspace.id)) {
       (async () => {
         try {
           await supabase
@@ -1002,7 +1003,7 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
     setCashAccounts(nextList);
     persistCurrentState(financialEvents, nextList);
 
-    if (isSupabaseConfigured() && !isMockUser && supabase && activeWorkspace) {
+    if (isSupabaseConfigured() && !isMockUser && supabase && activeWorkspace && !isDemoWorkspace(activeWorkspace.id)) {
       (async () => {
         try {
           await supabase.from("cash_accounts").delete().eq("id", id).eq("workspace_id", activeWorkspace.id);
@@ -1021,7 +1022,7 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
     setBankAccounts(updated);
     persistCurrentState(financialEvents, cashAccounts, updated);
 
-    if (isSupabaseConfigured() && !isMockUser && supabase && activeWorkspace) {
+    if (isSupabaseConfigured() && !isMockUser && supabase && activeWorkspace && !isDemoWorkspace(activeWorkspace.id)) {
       (async () => {
         try {
           await supabase.from("bank_accounts").insert({
@@ -1051,7 +1052,7 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
     setBankAccounts(nextList);
     persistCurrentState(financialEvents, cashAccounts, bankAccounts, nextList);
 
-    if (isSupabaseConfigured() && !isMockUser && supabase && activeWorkspace) {
+    if (isSupabaseConfigured() && !isMockUser && supabase && activeWorkspace && !isDemoWorkspace(activeWorkspace.id)) {
       (async () => {
         try {
           await supabase
@@ -1077,7 +1078,7 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
     setBankAccounts(nextList);
     persistCurrentState(financialEvents, cashAccounts, nextList);
 
-    if (isSupabaseConfigured() && !isMockUser && supabase && activeWorkspace) {
+    if (isSupabaseConfigured() && !isMockUser && supabase && activeWorkspace && !isDemoWorkspace(activeWorkspace.id)) {
       (async () => {
         try {
           await supabase.from("bank_accounts").delete().eq("id", id).eq("workspace_id", activeWorkspace.id);
@@ -1096,7 +1097,7 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
     setDebtRecords(updated);
     persistCurrentState(financialEvents, cashAccounts, bankAccounts, updated);
 
-    if (isSupabaseConfigured() && !isMockUser && supabase && activeWorkspace) {
+    if (isSupabaseConfigured() && !isMockUser && supabase && activeWorkspace && !isDemoWorkspace(activeWorkspace.id)) {
       (async () => {
         try {
           await supabase.from("debts").insert({
@@ -1128,7 +1129,7 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
     setDebtRecords(nextList);
     persistCurrentState(financialEvents, cashAccounts, bankAccounts, nextList);
 
-    if (isSupabaseConfigured() && !isMockUser && supabase && activeWorkspace) {
+    if (isSupabaseConfigured() && !isMockUser && supabase && activeWorkspace && !isDemoWorkspace(activeWorkspace.id)) {
       (async () => {
         try {
           const current = debtRecords.find((d) => d.id === id);
@@ -1162,7 +1163,7 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
     setDebtRecords(nextList);
     persistCurrentState(financialEvents, cashAccounts, bankAccounts, nextList);
 
-    if (isSupabaseConfigured() && !isMockUser && supabase && activeWorkspace) {
+    if (isSupabaseConfigured() && !isMockUser && supabase && activeWorkspace && !isDemoWorkspace(activeWorkspace.id)) {
       (async () => {
         try {
           await supabase.from("debts").delete().eq("id", id).eq("workspace_id", activeWorkspace.id);
@@ -1191,7 +1192,7 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
       });
     }
 
-    if (isSupabaseConfigured() && !isMockUser && supabase && activeWorkspace) {
+    if (isSupabaseConfigured() && !isMockUser && supabase && activeWorkspace && !isDemoWorkspace(activeWorkspace.id)) {
       (async () => {
         try {
           // postgres enum safe mapping
@@ -1239,7 +1240,7 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
       });
     }
 
-    if (isSupabaseConfigured() && !isMockUser && supabase && activeWorkspace) {
+    if (isSupabaseConfigured() && !isMockUser && supabase && activeWorkspace && !isDemoWorkspace(activeWorkspace.id)) {
       (async () => {
         try {
           const current = financialCommitments.find((e) => e.id === id);
@@ -1296,7 +1297,7 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
       });
     }
 
-    if (isSupabaseConfigured() && !isMockUser && supabase && activeWorkspace) {
+    if (isSupabaseConfigured() && !isMockUser && supabase && activeWorkspace && !isDemoWorkspace(activeWorkspace.id)) {
       (async () => {
         try {
           await supabase.from("financial_commitments").delete().eq("id", id).eq("workspace_id", activeWorkspace.id);
@@ -1325,7 +1326,7 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
       });
     }
 
-    if (isSupabaseConfigured() && !isMockUser && supabase && activeWorkspace) {
+    if (isSupabaseConfigured() && !isMockUser && supabase && activeWorkspace && !isDemoWorkspace(activeWorkspace.id)) {
       (async () => {
         try {
           await supabase.from("financial_evidence_packages").insert({
@@ -1367,7 +1368,7 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
       });
     }
 
-    if (isSupabaseConfigured() && !isMockUser && supabase && activeWorkspace) {
+    if (isSupabaseConfigured() && !isMockUser && supabase && activeWorkspace && !isDemoWorkspace(activeWorkspace.id)) {
       (async () => {
         try {
           const current = financialEvidencePackages.find((e) => e.id === id);
@@ -1415,7 +1416,7 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
       });
     }
 
-    if (isSupabaseConfigured() && !isMockUser && supabase && activeWorkspace) {
+    if (isSupabaseConfigured() && !isMockUser && supabase && activeWorkspace && !isDemoWorkspace(activeWorkspace.id)) {
       (async () => {
         try {
           // Clean up physical file in Supabase Storage if present
@@ -1586,7 +1587,7 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
     if (!activeWorkspace) return;
     const wsId = activeWorkspace.id;
 
-    if (!isSupabaseConfigured() || isMockUser) {
+    if (!isSupabaseConfigured() || isMockUser || isDemoWorkspace(wsId)) {
       setPresenterPresets();
     } else {
       setLoading(true);
@@ -1778,7 +1779,7 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
     );
 
     // If Supabase is online
-    if (isSupabaseConfigured() && !isMockUser && supabase) {
+    if (isSupabaseConfigured() && !isMockUser && supabase && !isDemoWorkspace(wsId)) {
       setLoading(true);
       setError(null);
       try {

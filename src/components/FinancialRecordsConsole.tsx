@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { type DashboardSummary } from "../lib/financialService";
 import { useFinancials } from "../context/FinancialRecordsContext";
 import { useWorkspace } from "../context/WorkspaceContext";
 import { useAuth } from "../context/AuthContext";
@@ -43,7 +44,6 @@ import { StorageSettingsConsole } from "./StorageSettingsConsole";
 import { NotificationCenterConsole } from "./NotificationCenterConsole";
 import { usePermission } from "../context/PermissionContext";
 import { Sparkles, Archive } from "lucide-react";
-import { type DashboardSummary } from "../lib/financialService";
 
 interface FinancialRecordsConsoleProps {
   supabaseSummary?: DashboardSummary | null;
@@ -461,6 +461,13 @@ export const FinancialRecordsConsole: React.FC<FinancialRecordsConsoleProps> = (
               </span>
               <span className="font-mono font-bold text-rose-600">
                 - RM {totalOutflowMyr.toLocaleString("en-MY", { minimumFractionDigits: 2 })}
+              </span>
+            </div>
+            <div className="flex items-center justify-between text-xs font-sans border-t border-slate-100 pt-2 mt-1">
+              <span className="text-slate-600 font-semibold">Net Balance:</span>
+              <span className={`font-mono font-bold ${netBalanceMyr >= 0 ? "text-emerald-700" : "text-rose-700"}`}>
+                {netBalanceMyr >= 0 ? "+" : ""} RM {netBalanceMyr.toLocaleString("en-MY", { minimumFractionDigits: 2 })}
+                {summaryLoading && <span className="text-slate-400 font-normal ml-1">(loading…)</span>}
               </span>
             </div>
           </div>

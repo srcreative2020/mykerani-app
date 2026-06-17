@@ -124,9 +124,15 @@ export const TenantProvider: React.FC<{ children: React.ReactNode }> = ({ childr
               });
             }
 
-            // Restore from localStorage setting
+            // Restore from localStorage setting, else auto-select HQ tenant for HQ roles
+            const isHqRole = user.role === "HQ_OWNER" || user.role === "HQ_STAFF";
             const lastSelectedId = localStorage.getItem(`mykerani_active_tenant_${user.id}`);
-            let active = mappedTenants.find(t => t.id === lastSelectedId) || mappedTenants[0];
+            let active = mappedTenants.find(t => t.id === lastSelectedId);
+            if (!active) {
+              active = isHqRole
+                ? mappedTenants.find(t => t.category === "HQ") || mappedTenants[0]
+                : mappedTenants[0];
+            }
 
             setState({
               tenants: mappedTenants,
@@ -136,12 +142,13 @@ export const TenantProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             });
           } else {
             // Create a default tenant since none exists
+            const isHqRole = user.role === "HQ_OWNER" || user.role === "HQ_STAFF";
             const defaultName = `${user.fullName || "Operator"}'s Venture`;
             const { data: newTenant, error: createError } = await supabase
               .from("tenants")
               .insert({
                 name: defaultName,
-                category: (user.role === "HQ_OWNER" || user.role === "HQ_STAFF") ? "HQ" : "USER",
+                category: isHqRole ? "HQ" : "USER",
               })
               .select()
               .single();

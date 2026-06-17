@@ -1,8 +1,8 @@
 import React, { useState } from "react";
 import { useFinancials } from "../context/FinancialRecordsContext";
 import { useAudit } from "../context/AuditContext";
-import { type UserSessionProfile, type Tenant, type Workspace, type TenantCategory } from "../types";
 import { type DashboardSummary } from "../lib/financialService";
+import { type UserSessionProfile, type Tenant, type Workspace, type TenantCategory } from "../types";
 import {
   Home,
   Lightbulb,
@@ -86,7 +86,7 @@ export const MyKeraniAppTabs: React.FC<MyKeraniAppTabsProps> = ({
   toggleBypassAuth,
   getCategoryBadgeColor,
   dashboardSummary,
-  summaryLoading
+  summaryLoading,
 }) => {
   const [activeNavTab, setActiveNavTab] = useState<"mykerani" | "insights" | "documents" | "more">("mykerani");
 
