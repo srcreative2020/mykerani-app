@@ -130,49 +130,31 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({
 
       {/* HQ Statistics Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4" id="hq_statistics_grid">
-        {/* Statistics Metric: Total Tenants */}
-        <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm transition hover:shadow-md hover:border-slate-300">
-          <div className="flex items-center justify-between">
-            <span className="text-[10px] font-mono font-bold text-slate-400 uppercase tracking-widest">Total Tenants</span>
-            <div className="p-1 px-2 text-[9px] font-mono font-bold bg-indigo-50 border border-indigo-100 text-indigo-700 rounded-full">
-              LIVE NODES
-            </div>
-          </div>
+        {/* Jumlah Syarikat */}
+        <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm transition hover:shadow-md">
+          <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block">Jumlah Syarikat</span>
           <div className="mt-4 flex items-baseline space-x-2">
             <span className="text-3xl font-display font-semibold text-slate-900">{totalTenants}</span>
-            <span className="text-xs text-slate-500 font-sans">Active Clients</span>
+            <span className="text-xs text-slate-500">pelanggan aktif</span>
           </div>
-          <p className="text-[10px] text-slate-400 mt-2 font-mono">Isolated tenant sandboxes.</p>
         </div>
 
-        {/* Statistics Metric: Total Workspaces */}
-        <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm transition hover:shadow-md hover:border-slate-300">
-          <div className="flex items-center justify-between">
-            <span className="text-[10px] font-mono font-bold text-slate-400 uppercase tracking-widest">Total Workspaces</span>
-            <div className="p-1 px-2 text-[9px] font-mono font-bold bg-amber-50 border border-amber-100 text-amber-700 rounded-full">
-              DIRECTORIES
-            </div>
-          </div>
+        {/* Jumlah Akaun */}
+        <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm transition hover:shadow-md">
+          <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block">Jumlah Akaun</span>
           <div className="mt-4 flex items-baseline space-x-2">
             <span className="text-3xl font-display font-semibold text-slate-900">{totalWorkspaces}</span>
-            <span className="text-xs text-slate-500 font-sans">Active Sectors</span>
+            <span className="text-xs text-slate-500">akaun didaftarkan</span>
           </div>
-          <p className="text-[10px] text-slate-400 mt-2 font-mono">RLS partitioned scopes.</p>
         </div>
 
-        {/* Statistics Metric: Total Users */}
-        <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm transition hover:shadow-md hover:border-slate-300">
-          <div className="flex items-center justify-between">
-            <span className="text-[10px] font-mono font-bold text-slate-400 uppercase tracking-widest">Total Users</span>
-            <div className="p-1 px-2 text-[9px] font-mono font-bold bg-rose-50 border border-rose-100 text-rose-700 rounded-full">
-              OPERATORS
-            </div>
-          </div>
+        {/* Jumlah Pengguna */}
+        <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm transition hover:shadow-md">
+          <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block">Jumlah Pengguna</span>
           <div className="mt-4 flex items-baseline space-x-2">
             <span className="text-3xl font-display font-semibold text-slate-900">{totalUsersCount.toLocaleString()}</span>
-            <span className="text-xs text-slate-500 font-sans">Assigned Seats</span>
+            <span className="text-xs text-slate-500">pengguna berdaftar</span>
           </div>
-          <p className="text-[10px] text-slate-400 mt-2 font-mono">Multi-role administrative logons.</p>
         </div>
 
         {/* Statistics Metric: Total Demo Accounts */}
