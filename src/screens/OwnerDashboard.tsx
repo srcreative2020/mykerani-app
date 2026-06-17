@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useMemo } from "react";
+﻿import React, { useState, useRef, useEffect, useMemo } from "react";
 import { useAuth } from "../context/AuthContext";
 import { useWorkspace } from "../context/WorkspaceContext";
 import { useFinancials } from "../context/FinancialRecordsContext";
@@ -30,7 +30,7 @@ function getGreeting() {
   return "Selamat Malam";
 }
 
-// ── Quick Add Record Modal ────────────────────────────────────────────────────
+// â”€â”€ Quick Add Record Modal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function QuickAddModal({
   type, onClose, onSave,
 }: {
@@ -82,7 +82,7 @@ function QuickAddModal({
   );
 }
 
-// ─── Main Component ───────────────────────────────────────────────────────────
+// â”€â”€â”€ Main Component â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 export function OwnerDashboard() {
   const { user, signOut } = useAuth();
   const { activeWorkspace, workspaces, selectWorkspace } = useWorkspace();
@@ -93,20 +93,20 @@ export function OwnerDashboard() {
   const [morePage, setMorePage] = useState<MorePage>("menu");
   const [quickAdd, setQuickAdd] = useState<"INCOME" | "EXPENSE" | null>(null);
 
-  // ── AI Chat State ──
+  // â”€â”€ AI Chat State â”€â”€
   const [chatMessages, setChatMessages] = useState<ChatMsg[]>([]);
   const [chatInput, setChatInput] = useState("");
   const [chatLoading, setChatLoading] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
-  // ── Invite staff ──
+  // â”€â”€ Invite staff â”€â”€
   const [showInvite, setShowInvite] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteName, setInviteName] = useState("");
   const [inviteLoading, setInviteLoading] = useState(false);
   const [inviteResult, setInviteResult] = useState<{ success: boolean; message: string; tempPassword?: string } | null>(null);
 
-  // ── Support Center ──
+  // â”€â”€ Support Center â”€â”€
   const [supportMessages, setSupportMessages] = useState<{ id: string; sender: "user" | "ai"; text: string }[]>([]);
   const [supportInput, setSupportInput] = useState("");
   const [supportLoading, setSupportLoading] = useState(false);
@@ -116,10 +116,10 @@ export function OwnerDashboard() {
   const [ticketSent, setTicketSent] = useState(false);
   const supportEndRef = useRef<HTMLDivElement>(null);
 
-  // ── Reminder Settings ──
+  // â”€â”€ Reminder Settings â”€â”€
   const [reminders, setReminders] = useState({ subscription: "7", bill: "3", aiCredit: "7", storage: "7" });
 
-  // ── Resource Settings ──
+  // â”€â”€ Resource Settings â”€â”€
   const [resAI, setResAI] = useState<"mykerani" | "own">("mykerani");
   const [resStorage, setResStorage] = useState<"mykerani" | "gdrive" | "onedrive" | "dropbox">("mykerani");
 
@@ -232,16 +232,16 @@ export function OwnerDashboard() {
   };
 
   const QUICK_PROMPTS = [
-    { label: "💰 Baki tunai saya?", q: "Berapa baki tunai saya sekarang?" },
-    { label: "📊 Ringkasan bulan ini", q: "Ringkaskan kewangan saya bulan ini." },
-    { label: "📋 Bil tertunggak?", q: "Adakah ada bil yang perlu dibayar?" },
-    { label: "📈 Pendapatan vs Perbelanjaan", q: "Bandingkan pendapatan dan perbelanjaan bulan ini." },
+    { label: "ðŸ’° Baki tunai saya?", q: "Berapa baki tunai saya sekarang?" },
+    { label: "ðŸ“Š Ringkasan bulan ini", q: "Ringkaskan kewangan saya bulan ini." },
+    { label: "ðŸ“‹ Bil tertunggak?", q: "Adakah ada bil yang perlu dibayar?" },
+    { label: "ðŸ“ˆ Pendapatan vs Perbelanjaan", q: "Bandingkan pendapatan dan perbelanjaan bulan ini." },
   ];
 
   return (
     <div className="h-screen flex flex-col bg-slate-50 overflow-hidden" id="owner_root">
 
-      {/* ── HEADER ── */}
+      {/* â”€â”€ HEADER â”€â”€ */}
       <header className="bg-white border-b border-slate-100 px-4 py-3 flex items-center justify-between shrink-0 z-30" id="owner_header">
         <div className="flex items-center space-x-2.5">
           <div className="w-8 h-8 rounded-xl bg-slate-900 flex items-center justify-center text-white font-bold text-sm shadow-sm">MK</div>
@@ -265,7 +265,7 @@ export function OwnerDashboard() {
               {firstName.charAt(0).toUpperCase()}
             </div>
             <span className="text-[11px] font-semibold text-slate-700 hidden sm:block">{firstName}</span>
-            <span className="text-[10px] text-slate-400 hidden sm:block">·</span>
+            <span className="text-[10px] text-slate-400 hidden sm:block">Â·</span>
             <span className="text-[10px] text-indigo-500 font-semibold hidden sm:block">Pemilik</span>
           </div>
           <button onClick={() => signOut()}
@@ -275,17 +275,17 @@ export function OwnerDashboard() {
         </div>
       </header>
 
-      {/* ── MAIN ── */}
+      {/* â”€â”€ MAIN â”€â”€ */}
       <div className="flex-1 overflow-hidden flex flex-col" id="owner_main">
 
-        {/* ════ HOME — AI CONVERSATION (Primary Screen) ════ */}
+        {/* â•â•â•â• HOME â€” AI CONVERSATION (Primary Screen) â•â•â•â• */}
         {activeTab === "home" && (
           <div className="flex-1 flex flex-col overflow-hidden" id="owner_home_pane">
 
             {/* Conversation area */}
             <div className="flex-1 overflow-y-auto px-4 pt-4 pb-2 space-y-4" id="owner_chat_area">
 
-              {/* Welcome — shown only if no messages */}
+              {/* Welcome â€” shown only if no messages */}
               {chatMessages.length === 0 && (
                 <div className="flex flex-col items-center justify-center py-8 space-y-2 text-center">
                   <div className="w-14 h-14 rounded-2xl bg-slate-900 flex items-center justify-center shadow-lg mb-1">
@@ -325,7 +325,7 @@ export function OwnerDashboard() {
               <div ref={chatEndRef} />
             </div>
 
-            {/* Quick prompts — shown only if no messages */}
+            {/* Quick prompts â€” shown only if no messages */}
             {chatMessages.length === 0 && (
               <div className="px-4 pb-2 flex flex-wrap gap-2">
                 {QUICK_PROMPTS.map(({ label, q }) => (
@@ -340,9 +340,9 @@ export function OwnerDashboard() {
             {/* Upload shortcuts */}
             <div className="px-4 pb-2 flex gap-2">
               {[
-                { label: "📷 Resit", desc: "RECEIPT" },
-                { label: "📄 Invois", desc: "INVOICE" },
-                { label: "🏦 Penyata Bank", desc: "STATEMENT" },
+                { label: "ðŸ“· Resit", desc: "RECEIPT" },
+                { label: "ðŸ“„ Invois", desc: "INVOICE" },
+                { label: "ðŸ¦ Penyata Bank", desc: "STATEMENT" },
               ].map(({ label }) => (
                 <button key={label} onClick={() => setActiveTab("documents")}
                   className="flex-1 py-2 bg-white border border-slate-200 rounded-xl text-xs font-semibold text-slate-600 hover:border-indigo-200 hover:bg-indigo-50 transition cursor-pointer shadow-sm">
@@ -373,7 +373,7 @@ export function OwnerDashboard() {
                 {[
                   { label: "+ Pendapatan", action: () => setQuickAdd("INCOME"), color: "text-emerald-600 bg-emerald-50 border-emerald-100" },
                   { label: "- Perbelanjaan", action: () => setQuickAdd("EXPENSE"), color: "text-rose-600 bg-rose-50 border-rose-100" },
-                  { label: "📊 Dashboard", action: () => setActiveTab("dashboard"), color: "text-indigo-600 bg-indigo-50 border-indigo-100" },
+                  { label: "ðŸ“Š Dashboard", action: () => setActiveTab("dashboard"), color: "text-indigo-600 bg-indigo-50 border-indigo-100" },
                 ].map(({ label, action, color }) => (
                   <button key={label} onClick={action}
                     className={`py-2 rounded-xl text-xs font-bold border transition cursor-pointer ${color}`}>
@@ -385,7 +385,7 @@ export function OwnerDashboard() {
           </div>
         )}
 
-        {/* ════ DASHBOARD ════ */}
+        {/* â•â•â•â• DASHBOARD â•â•â•â• */}
         {activeTab === "dashboard" && (
           <div className="flex-1 overflow-y-auto p-4 space-y-4 max-w-2xl mx-auto w-full pb-20" id="owner_dashboard_pane">
             <div>
@@ -394,7 +394,7 @@ export function OwnerDashboard() {
             </div>
 
             <div className="grid grid-cols-2 gap-3">
-              <div className="bg-gradient-to-br from-emerald-500 to-teal-600 rounded-2xl p-4 text-white shadow">
+              <div className="bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-2xl p-4 text-white shadow">
                 <p className="text-[11px] text-emerald-100">Pendapatan Bulan Ini</p>
                 <p className="text-xl font-bold mt-1">RM {incomeThisMonth.toLocaleString("ms-MY", { minimumFractionDigits: 2 })}</p>
                 <TrendingUp className="w-4 h-4 text-emerald-200 mt-1" />
@@ -465,7 +465,7 @@ export function OwnerDashboard() {
           </div>
         )}
 
-        {/* ════ DOCUMENTS ════ */}
+        {/* â•â•â•â• DOCUMENTS â•â•â•â• */}
         {activeTab === "documents" && (
           <div className="flex-1 overflow-y-auto p-4 space-y-4 max-w-2xl mx-auto w-full pb-20" id="owner_docs_pane">
             <h2 className="text-lg font-bold text-slate-900">Dokumen</h2>
@@ -487,7 +487,7 @@ export function OwnerDashboard() {
           </div>
         )}
 
-        {/* ════ REPORTS ════ */}
+        {/* â•â•â•â• REPORTS â•â•â•â• */}
         {activeTab === "reports" && (
           <div className="flex-1 overflow-y-auto p-4 space-y-4 max-w-2xl mx-auto w-full pb-20" id="owner_reports_pane">
             <h2 className="text-lg font-bold text-slate-900">Laporan</h2>
@@ -495,7 +495,7 @@ export function OwnerDashboard() {
           </div>
         )}
 
-        {/* ════ MORE ════ */}
+        {/* â•â•â•â• MORE â•â•â•â• */}
         {activeTab === "more" && (
           <div className="flex-1 overflow-y-auto p-4 space-y-4 max-w-2xl mx-auto w-full pb-20" id="owner_more_pane">
 
@@ -560,7 +560,7 @@ export function OwnerDashboard() {
                     </button>
                     {inviteResult && (
                       <div className={`rounded-xl p-3 text-xs ${inviteResult.success ? "bg-emerald-50 border border-emerald-200" : "bg-rose-50 border border-rose-200"}`}>
-                        <p className={`font-bold ${inviteResult.success ? "text-emerald-700" : "text-rose-700"}`}>{inviteResult.success ? "✓ Berjaya!" : "✗ Gagal"}</p>
+                        <p className={`font-bold ${inviteResult.success ? "text-emerald-700" : "text-rose-700"}`}>{inviteResult.success ? "âœ“ Berjaya!" : "âœ— Gagal"}</p>
                         <p className={inviteResult.success ? "text-emerald-600" : "text-rose-600"}>{inviteResult.message}</p>
                         {inviteResult.tempPassword && (
                           <div className="mt-2 p-2 bg-white border border-emerald-200 rounded-lg">
@@ -639,7 +639,7 @@ export function OwnerDashboard() {
                   ))}
                 </div>
 
-                {/* Reminder Settings — Feature 6 */}
+                {/* Reminder Settings â€” Feature 6 */}
                 <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-4">
                   <div className="flex items-center space-x-2">
                     <Bell className="w-4 h-4 text-indigo-500" />
@@ -690,7 +690,7 @@ export function OwnerDashboard() {
               </div>
             )}
 
-            {/* ═══ SUPPORT CENTER — Feature 1 ═══ */}
+            {/* â•â•â• SUPPORT CENTER â€” Feature 1 â•â•â• */}
             {morePage === "support" && (
               <div className="space-y-4">
                 <h2 className="text-lg font-bold text-slate-900">Pusat Sokongan</h2>
@@ -766,7 +766,7 @@ export function OwnerDashboard() {
                         </button>
                       </form>
                       <button onClick={() => setSupportView("ticket")} className="mt-2 w-full text-center text-[11px] text-slate-400 hover:text-indigo-600 transition cursor-pointer">
-                        Masalah tidak selesai? Buka tiket sokongan →
+                        Masalah tidak selesai? Buka tiket sokongan â†’
                       </button>
                     </div>
                   </div>
@@ -776,13 +776,13 @@ export function OwnerDashboard() {
                 {supportView === "faq" && (
                   <div className="space-y-2">
                     {[
-                      { q: "Bagaimana cara muat naik resit?", a: "Pergi ke tab Dokumen → klik 'Muat Naik Resit' → pilih gambar atau PDF resit anda." },
+                      { q: "Bagaimana cara muat naik resit?", a: "Pergi ke tab Dokumen â†’ klik 'Muat Naik Resit' â†’ pilih gambar atau PDF resit anda." },
                       { q: "Bagaimana cara rekod perbelanjaan?", a: "Di Home, taip 'Saya bayar [nama] RM[jumlah]' atau klik '- Rekod Perbelanjaan' di bawah kotak chat." },
-                      { q: "Bagaimana cara cari rekod lama?", a: "Pergi ke Dashboard → skrol ke bawah untuk lihat senarai transaksi terkini." },
-                      { q: "Bagaimana cara jemput kakitangan?", a: "Pergi ke Lagi → Pasukan → klik 'Jemput Staf' → masukkan nama dan email." },
+                      { q: "Bagaimana cara cari rekod lama?", a: "Pergi ke Dashboard â†’ skrol ke bawah untuk lihat senarai transaksi terkini." },
+                      { q: "Bagaimana cara jemput kakitangan?", a: "Pergi ke Lagi â†’ Pasukan â†’ klik 'Jemput Staf' â†’ masukkan nama dan email." },
                       { q: "Bagaimana cara lihat laporan?", a: "Klik tab 'Laporan' di bawah navigasi untuk lihat P&L, Cashflow dan ringkasan kewangan." },
-                      { q: "Boleh saya guna AI saya sendiri?", a: "Ya, jika HQ mengizinkan. Pergi ke Lagi → Tetapan Sumber untuk tukar ke AI anda sendiri." },
-                      { q: "Apa itu kredit AI?", a: "Kredit AI digunakan apabila anda bertanya kepada MYKERANI. Semak baki di Lagi → Bil & Langganan." },
+                      { q: "Boleh saya guna AI saya sendiri?", a: "Ya, jika HQ mengizinkan. Pergi ke Lagi â†’ Tetapan Sumber untuk tukar ke AI anda sendiri." },
+                      { q: "Apa itu kredit AI?", a: "Kredit AI digunakan apabila anda bertanya kepada MYKERANI. Semak baki di Lagi â†’ Bil & Langganan." },
                     ].map(({ q, a }) => (
                       <details key={q} className="bg-white border border-slate-200 rounded-xl shadow-sm group">
                         <summary className="px-4 py-3.5 text-xs font-semibold text-slate-800 cursor-pointer list-none flex items-center justify-between">
@@ -856,7 +856,7 @@ export function OwnerDashboard() {
                           <div className="p-3 bg-amber-50 border border-amber-100 rounded-xl flex items-start space-x-3">
                             <Clock className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
                             <div>
-                              <p className="text-xs font-bold text-amber-800">#{Date.now().toString().slice(-6)} — {ticketSubject}</p>
+                              <p className="text-xs font-bold text-amber-800">#{Date.now().toString().slice(-6)} â€” {ticketSubject}</p>
                               <p className="text-[11px] text-amber-600 mt-0.5">Status: Sedang diproses oleh HQ Staff</p>
                               <p className="text-[10px] text-amber-400 mt-1">Dihantar hari ini</p>
                             </div>
@@ -877,7 +877,7 @@ export function OwnerDashboard() {
               </div>
             )}
 
-            {/* ═══ BILLING — Features 2, 3, 4 ═══ */}
+            {/* â•â•â• BILLING â€” Features 2, 3, 4 â•â•â• */}
             {morePage === "billing" && (
               <div className="space-y-4">
                 <h2 className="text-lg font-bold text-slate-900">Bil & Langganan</h2>
@@ -908,7 +908,7 @@ export function OwnerDashboard() {
                   ))}
                 </div>
 
-                {/* AI Credits — Feature 3 */}
+                {/* AI Credits â€” Feature 3 */}
                 <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-3">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center space-x-2">
@@ -933,7 +933,7 @@ export function OwnerDashboard() {
                   </div>
                 </div>
 
-                {/* Storage — Feature 4 */}
+                {/* Storage â€” Feature 4 */}
                 <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-3">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center space-x-2">
@@ -969,7 +969,7 @@ export function OwnerDashboard() {
               </div>
             )}
 
-            {/* ═══ RESOURCE SETTINGS — Feature 5 ═══ */}
+            {/* â•â•â• RESOURCE SETTINGS â€” Feature 5 â•â•â• */}
             {morePage === "resources" && (
               <div className="space-y-4">
                 <h2 className="text-lg font-bold text-slate-900">Tetapan Sumber</h2>
@@ -985,7 +985,7 @@ export function OwnerDashboard() {
                     <p className="text-sm font-bold text-slate-900">Sumber AI</p>
                   </div>
                   {([
-                    { id: "mykerani" as const, label: "Guna MYKERANI AI", desc: "AI rasmi MYKERANI — disyorkan" },
+                    { id: "mykerani" as const, label: "Guna MYKERANI AI", desc: "AI rasmi MYKERANI â€” disyorkan" },
                     { id: "own" as const,      label: "Guna AI Sendiri",  desc: "Sambung API AI anda sendiri" },
                   ] as const).map(({ id, label, desc }) => (
                     <button key={id} onClick={() => setResAI(id)}
@@ -1045,7 +1045,7 @@ export function OwnerDashboard() {
         )}
       </div>
 
-      {/* ── BOTTOM NAV ── */}
+      {/* â”€â”€ BOTTOM NAV â”€â”€ */}
       <nav className="bg-white border-t border-slate-200 flex items-center justify-around px-2 py-1.5 shrink-0 z-40" id="owner_bottom_nav">
         {([
           { id: "home" as MainTab,      label: "Home",      icon: Home },
@@ -1070,3 +1070,4 @@ export function OwnerDashboard() {
     </div>
   );
 }
+

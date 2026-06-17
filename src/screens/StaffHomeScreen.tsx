@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useMemo } from "react";
+﻿import React, { useState, useRef, useEffect, useMemo } from "react";
 import { useAuth } from "../context/AuthContext";
 import { useWorkspace } from "../context/WorkspaceContext";
 import { useFinancials } from "../context/FinancialRecordsContext";
@@ -21,7 +21,7 @@ function getGreeting() {
   return "Selamat Malam";
 }
 
-// ── Quick Add Form (inline) ───────────────────────────────────────────────────
+// â”€â”€ Quick Add Form (inline) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function AddRecordForm({
   defaultType,
   onSave,
@@ -104,7 +104,7 @@ function AddRecordForm({
   );
 }
 
-// ─── Main Component ───────────────────────────────────────────────────────────
+// â”€â”€â”€ Main Component â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 export function StaffHomeScreen() {
   const { user, signOut } = useAuth();
   const { activeWorkspace, workspaces, selectWorkspace } = useWorkspace();
@@ -114,13 +114,13 @@ export function StaffHomeScreen() {
   const [activeTab, setActiveTab] = useState<StaffTab>("home");
   const [addDefaultType, setAddDefaultType] = useState<"INCOME" | "EXPENSE">("EXPENSE");
 
-  // ── AI Chat ──
+  // â”€â”€ AI Chat â”€â”€
   const [chatMessages, setChatMessages] = useState<{ id: string; sender: "user" | "ai"; text: string }[]>([]);
   const [chatInput, setChatInput] = useState("");
   const [chatLoading, setChatLoading] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
-  // ── Support Center ──
+  // â”€â”€ Support Center â”€â”€
   const [showSupport, setShowSupport] = useState(false);
   const [supportView, setSupportView] = useState<"chat" | "faq" | "ticket">("chat");
   const [supportMessages, setSupportMessages] = useState<{ id: string; sender: "user" | "ai"; text: string }[]>([]);
@@ -206,16 +206,16 @@ export function StaffHomeScreen() {
   };
 
   const QUICK_PROMPTS = [
-    { label: "📋 Rekod hari ini", q: "Apakah rekod yang telah dimasukkan hari ini?" },
-    { label: "💸 Tambah perbelanjaan", action: () => { setAddDefaultType("EXPENSE"); setActiveTab("tambah"); } },
-    { label: "💰 Tambah pendapatan", action: () => { setAddDefaultType("INCOME"); setActiveTab("tambah"); } },
-    { label: "📎 Muat naik resit", action: () => setActiveTab("muat_naik") },
+    { label: "ðŸ“‹ Rekod hari ini", q: "Apakah rekod yang telah dimasukkan hari ini?" },
+    { label: "ðŸ’¸ Tambah perbelanjaan", action: () => { setAddDefaultType("EXPENSE"); setActiveTab("tambah"); } },
+    { label: "ðŸ’° Tambah pendapatan", action: () => { setAddDefaultType("INCOME"); setActiveTab("tambah"); } },
+    { label: "ðŸ“Ž Muat naik resit", action: () => setActiveTab("muat_naik") },
   ];
 
   return (
     <div className="h-screen flex flex-col bg-slate-50 overflow-hidden" id="staff_root">
 
-      {/* ── HEADER ── */}
+      {/* â”€â”€ HEADER â”€â”€ */}
       <header className="bg-white border-b border-slate-100 px-4 py-3 flex items-center justify-between shrink-0" id="staff_header">
         <div className="flex items-center space-x-2.5">
           <div className="w-8 h-8 rounded-xl bg-slate-900 flex items-center justify-center text-white font-bold text-sm shadow-sm">MK</div>
@@ -239,7 +239,7 @@ export function StaffHomeScreen() {
               {firstName.charAt(0).toUpperCase()}
             </div>
             <span className="text-[11px] font-semibold text-slate-700 hidden sm:block">{firstName}</span>
-            <span className="text-[10px] text-slate-400 hidden sm:block">·</span>
+            <span className="text-[10px] text-slate-400 hidden sm:block">Â·</span>
             <span className="text-[10px] text-slate-500 font-semibold hidden sm:block">Kakitangan</span>
           </div>
           <button onClick={() => signOut()}
@@ -249,17 +249,17 @@ export function StaffHomeScreen() {
         </div>
       </header>
 
-      {/* ── MAIN ── */}
+      {/* â”€â”€ MAIN â”€â”€ */}
       <div className="flex-1 overflow-hidden flex flex-col" id="staff_main">
 
-        {/* ════ HOME — AI CONVERSATION ════ */}
+        {/* â•â•â•â• HOME â€” AI CONVERSATION â•â•â•â• */}
         {activeTab === "home" && (
           <div className="flex-1 flex flex-col overflow-hidden" id="staff_home_pane">
 
             {/* Conversation area */}
             <div className="flex-1 overflow-y-auto px-4 pt-4 pb-2 space-y-4" id="staff_chat_area">
 
-              {/* Welcome — shown only if no messages */}
+              {/* Welcome â€” shown only if no messages */}
               {chatMessages.length === 0 && (
                 <div className="flex flex-col items-center justify-center py-8 space-y-2 text-center">
                   <div className="w-14 h-14 rounded-2xl bg-slate-900 flex items-center justify-center shadow-lg mb-1">
@@ -300,7 +300,7 @@ export function StaffHomeScreen() {
               <div ref={chatEndRef} />
             </div>
 
-            {/* Quick prompts — shown only if no messages */}
+            {/* Quick prompts â€” shown only if no messages */}
             {chatMessages.length === 0 && (
               <div className="px-4 pb-2 flex flex-wrap gap-2">
                 {QUICK_PROMPTS.map(({ label, q, action }) => (
@@ -316,9 +316,9 @@ export function StaffHomeScreen() {
             {/* Upload shortcuts */}
             <div className="px-4 pb-2 flex gap-2">
               {[
-                { label: "📷 Resit" },
-                { label: "📄 Invois" },
-                { label: "🏦 Penyata" },
+                { label: "ðŸ“· Resit" },
+                { label: "ðŸ“„ Invois" },
+                { label: "ðŸ¦ Penyata" },
               ].map(({ label }) => (
                 <button key={label} onClick={() => setActiveTab("muat_naik")}
                   className="flex-1 py-2 bg-white border border-slate-200 rounded-xl text-xs font-semibold text-slate-600 hover:border-slate-400 hover:bg-slate-50 transition cursor-pointer shadow-sm">
@@ -359,7 +359,7 @@ export function StaffHomeScreen() {
           </div>
         )}
 
-        {/* ════ TAMBAH REKOD ════ */}
+        {/* â•â•â•â• TAMBAH REKOD â•â•â•â• */}
         {activeTab === "tambah" && (
           <div className="flex-1 overflow-y-auto p-4 pb-24 max-w-lg mx-auto w-full" id="staff_add_pane">
             <h2 className="text-lg font-bold text-slate-900 mb-4">Tambah Rekod</h2>
@@ -377,7 +377,7 @@ export function StaffHomeScreen() {
           </div>
         )}
 
-        {/* ════ MUAT NAIK ════ */}
+        {/* â•â•â•â• MUAT NAIK â•â•â•â• */}
         {activeTab === "muat_naik" && (
           <div className="flex-1 overflow-y-auto p-4 pb-24 max-w-lg mx-auto w-full space-y-4" id="staff_upload_pane">
             <h2 className="text-lg font-bold text-slate-900">Muat Naik Dokumen</h2>
@@ -396,14 +396,14 @@ export function StaffHomeScreen() {
                 </span>
                 <input type="file" accept="image/*,.pdf" className="hidden" />
               </label>
-              <p className="text-[10px] text-slate-300">JPG, PNG atau PDF · Maks 10MB</p>
+              <p className="text-[10px] text-slate-300">JPG, PNG atau PDF Â· Maks 10MB</p>
             </div>
 
             <div className="grid grid-cols-3 gap-3">
               {[
-                { label: "📷 Resit", icon: Receipt, bg: "bg-amber-50 text-amber-500 border-amber-100" },
-                { label: "📄 Invois", icon: FileSpreadsheet, bg: "bg-blue-50 text-blue-500 border-blue-100" },
-                { label: "🏦 Penyata", icon: Landmark, bg: "bg-violet-50 text-violet-500 border-violet-100" },
+                { label: "ðŸ“· Resit", icon: Receipt, bg: "bg-amber-50 text-amber-500 border-amber-100" },
+                { label: "ðŸ“„ Invois", icon: FileSpreadsheet, bg: "bg-blue-50 text-blue-500 border-blue-100" },
+                { label: "ðŸ¦ Penyata", icon: Landmark, bg: "bg-violet-50 text-violet-500 border-violet-100" },
               ].map(({ label, icon: Icon, bg }) => (
                 <button key={label} className={`flex flex-col items-center space-y-2 p-4 bg-white border ${bg} rounded-2xl shadow-sm cursor-pointer hover:shadow-md transition`}>
                   <div className={`w-9 h-9 rounded-lg flex items-center justify-center ${bg}`}>
@@ -416,7 +416,7 @@ export function StaffHomeScreen() {
           </div>
         )}
 
-        {/* ════ REKOD ════ */}
+        {/* â•â•â•â• REKOD â•â•â•â• */}
         {activeTab === "rekod" && (
           <div className="flex-1 overflow-y-auto p-4 pb-24 max-w-lg mx-auto w-full space-y-3" id="staff_records_pane">
             <h2 className="text-lg font-bold text-slate-900">Rekod Saya</h2>
@@ -450,7 +450,7 @@ export function StaffHomeScreen() {
           </div>
         )}
 
-        {/* ════ NOTIFIKASI ════ */}
+        {/* â•â•â•â• NOTIFIKASI â•â•â•â• */}
         {activeTab === "notifikasi" && (
           <div className="flex-1 overflow-y-auto p-4 pb-24 max-w-lg mx-auto w-full space-y-4" id="staff_notif_pane">
             <h2 className="text-lg font-bold text-slate-900">Notifikasi</h2>
@@ -461,7 +461,7 @@ export function StaffHomeScreen() {
           </div>
         )}
 
-        {/* ════ PROFIL ════ */}
+        {/* â•â•â•â• PROFIL â•â•â•â• */}
         {activeTab === "profil" && (
           <div className="flex-1 overflow-y-auto p-4 pb-24 max-w-lg mx-auto w-full space-y-4" id="staff_profile_pane">
             <h2 className="text-lg font-bold text-slate-900">Profil Saya</h2>
@@ -582,7 +582,7 @@ export function StaffHomeScreen() {
                     </button>
                   </form>
                   <button onClick={() => setSupportView("ticket")} className="mt-2 w-full text-center text-[11px] text-slate-400 hover:text-indigo-600 cursor-pointer">
-                    Masalah tidak selesai? Buka tiket →
+                    Masalah tidak selesai? Buka tiket â†’
                   </button>
                 </div>
               </div>
@@ -592,8 +592,8 @@ export function StaffHomeScreen() {
             {supportView === "faq" && (
               <div className="flex-1 overflow-y-auto p-4 space-y-2">
                 {[
-                  { q: "Bagaimana cara muat naik resit?", a: "Klik tab 'Muat Naik' di bawah → pilih 'Resit' → ambil gambar atau pilih fail." },
-                  { q: "Bagaimana cara rekod perbelanjaan?", a: "Klik tab 'Tambah' → pilih 'Perbelanjaan' → isi jumlah dan butiran." },
+                  { q: "Bagaimana cara muat naik resit?", a: "Klik tab 'Muat Naik' di bawah â†’ pilih 'Resit' â†’ ambil gambar atau pilih fail." },
+                  { q: "Bagaimana cara rekod perbelanjaan?", a: "Klik tab 'Tambah' â†’ pilih 'Perbelanjaan' â†’ isi jumlah dan butiran." },
                   { q: "Bagaimana cara lihat rekod lama?", a: "Klik tab 'Rekod' untuk lihat semua rekod yang telah dimasukkan." },
                   { q: "Boleh saya padam rekod?", a: "Rekod tidak boleh dipadam oleh kakitangan. Hubungi Pemilik Syarikat untuk bantuan." },
                   { q: "Apa yang boleh saya lakukan di MYKERANI?", a: "Anda boleh rekod transaksi, muat naik dokumen, cari rekod, dan tanya soalan kepada AI MYKERANI." },
@@ -646,7 +646,7 @@ export function StaffHomeScreen() {
         )}
       </div>
 
-      {/* ── BOTTOM NAV ── */}
+      {/* â”€â”€ BOTTOM NAV â”€â”€ */}
       <nav className="bg-white border-t border-slate-200 flex items-center justify-around px-2 py-1.5 shrink-0 z-40" id="staff_bottom_nav">
         {([
           { id: "home" as StaffTab,        label: "Home",     icon: Home },
@@ -669,3 +669,4 @@ export function StaffHomeScreen() {
     </div>
   );
 }
+
