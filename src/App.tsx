@@ -12,6 +12,7 @@ import { MyKeraniAppTabs } from "./components/MyKeraniAppTabs";
 import { FinancialRecordsProvider, useFinancials } from "./context/FinancialRecordsContext";
 import { FinancialRecordsConsole } from "./components/FinancialRecordsConsole";
 import { testSupabaseConnection, type SupabaseDiagnostics } from "./lib/supabase";
+import { getDashboardSummary, type DashboardSummary } from "./lib/financialService";
 import { type TenantCategory } from "./types";
 import {
   isDemoWorkspace,
@@ -159,6 +160,8 @@ function MainDashboardContent() {
 
   // --- Task 6 Demo Seeding & Resetting State ---
   const [demoRecords, setDemoRecords] = useState<DemoFinancialRecord[]>([]);
+  const [dashboardSummary, setDashboardSummary] = useState<DashboardSummary | null>(null);
+  const [summaryLoading, setSummaryLoading] = useState(false);
   const [showAddDemoRecordForm, setShowAddDemoRecordForm] = useState(false);
   const [demoResetMsg, setDemoResetMsg] = useState("");
 
@@ -175,8 +178,14 @@ function MainDashboardContent() {
       const records = getDemoWorkspaceData(activeWorkspace.id);
       setDemoRecords(records);
       setDemoResetMsg("");
+      setSummaryLoading(true);
+    getDashboardSummary(activeWorkspace.id).then(result => {
+      if (result.data) setDashboardSummary(result.data);
+      setSummaryLoading(false);
+    });
     } else {
       setDemoRecords([]);
+      setDashboardSummary(null);
     }
   }, [activeWorkspace]);
 
@@ -713,6 +722,8 @@ function MainDashboardContent() {
             isMockUser={isMockUser}
             toggleBypassAuth={toggleBypassAuth}
             getCategoryBadgeColor={getCategoryBadgeColor}
+            dashboardSummary={dashboardSummary}
+          summaryLoading={summaryLoading}
           />
         )}
 
