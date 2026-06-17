@@ -2,12 +2,12 @@ import React, { createContext, useContext, useState, useEffect } from "react";
 import { supabase, isSupabaseConfigured } from "../lib/supabase";
 import { type UserSessionProfile, type AuthState, type UserRole } from "../types";
 
-// Akaun demo yang dibenarkan untuk presentation/sales — hanya aktif bila user
-// ketap butang secara eksplisit. Tidak boleh auto-login dari localStorage.
+// Akaun demo untuk presentation/sales — hanya aktif bila user ketap butang secara
+// eksplisit. Tidak boleh auto-login. Tenant ID diselaraskan dengan DEFAULT_MOCK_TENANTS.
 const DEMO_ACCOUNTS: Record<string, { role: UserRole; fullName: string; tenantId: string }> = {
-  "hq@mykerani.demo":    { role: "HQ_ADMIN",      fullName: "HQ Operator",   tenantId: "tenant-hq-0001" },
-  "owner@mykerani.demo": { role: "TENANT_ADMIN",   fullName: "Tenant Owner",  tenantId: "tenant-demo-8bit" },
-  "staff@mykerani.demo": { role: "STAFF",           fullName: "Staff Account", tenantId: "tenant-demo-8bit" },
+  "hq@mykerani.demo":      { role: "HQ_ADMIN",      fullName: "Pengurus Sistem (HQ)",   tenantId: "tenant-hq-0001" },
+  "owner@mykerani.demo":   { role: "TENANT_OWNER",   fullName: "Pemilik Perniagaan",     tenantId: "tenant-demo-presentation" },
+  "staff@mykerani.demo":   { role: "STAFF",           fullName: "Kakitangan",             tenantId: "tenant-demo-presentation" },
 };
 
 interface AuthContextType extends AuthState {
