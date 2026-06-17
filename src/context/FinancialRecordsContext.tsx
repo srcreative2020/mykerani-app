@@ -355,7 +355,9 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
             .from("general_ledger_categories")
             .select("*")
             .eq("workspace_id", wsId);
-          if (catError) throw catError;
+          if (catError) {
+            console.warn("general_ledger_categories not ready, skipping:", catError.message);
+          }
 
           const categoryMap = new Map<string, string>();
           catData?.forEach((c) => categoryMap.set(c.id, c.name));

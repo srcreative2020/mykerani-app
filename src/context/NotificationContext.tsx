@@ -140,7 +140,21 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
           .eq("workspace_id", workspaceId)
           .maybeSingle();
 
-        if (prefError) throw prefError;
+        if (prefError) {
+          // Table belum wujud — guna default fallback tanpa crash
+          console.warn("workspace_notification_preferences not ready:", prefError.message);
+          setPreferences({
+            id: `pref-fallback-${workspaceId}`,
+            workspaceId,
+            tenantId,
+            enableInApp: true,
+            enableEmail: false,
+            enablePush: false,
+          });
+          setNotifications([]);
+          setLoading(false);
+          return;
+        }
 
         let activePrefs: WorkspaceNotificationPreferences;
         if (prefData) {

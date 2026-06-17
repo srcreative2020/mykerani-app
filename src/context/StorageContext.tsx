@@ -101,7 +101,21 @@ export const StorageProvider: React.FC<{ children: React.ReactNode }> = ({ child
             .maybeSingle();
 
           if (fetchError) {
-            throw fetchError;
+            // Table belum wujud — guna localStorage sebagai fallback
+            console.warn("workspace_storage_providers not ready, using local fallback:", fetchError.message);
+            const defaultFallback: StorageProviderRegistry = {
+              id: `prov-local-${activeWorkspace.id}`,
+              workspaceId: activeWorkspace.id,
+              tenantId: activeTenant.id,
+              providerType: "HQ_MANAGED",
+              connectionStatus: "CONNECTED",
+              storageType: "HQ_STORAGE",
+              lastSync: new Date().toISOString(),
+            };
+            localStorage.setItem(localKey, JSON.stringify(defaultFallback));
+            setActiveProvider(defaultFallback);
+            setLoading(false);
+            return;
           }
 
           if (data) {
