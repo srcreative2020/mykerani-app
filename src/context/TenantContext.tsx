@@ -69,7 +69,7 @@ export const TenantProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         
         if (!active && tenantList.length > 0) {
           // Fallback based on user context
-          if (user.role === "HQ_OWNER") {
+          if (user.role === "HQ_OWNER" || user.role === "HQ_STAFF") {
             active = tenantList.find(t => t.category === "HQ") || tenantList[0];
           } else {
             active = tenantList.find(t => t.category !== "HQ") || tenantList[0];
@@ -97,10 +97,10 @@ export const TenantProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             console.warn("Tenants table not ready:", dbError.message);
             // Real user: buat tenant dari metadata user — JANGAN guna demo tenant
             const userTenantId = user.tenantId || `tenant-${user.id.slice(0, 8)}`;
-            const category: TenantCategory = user.role === "HQ_OWNER" ? "HQ" : "USER";
+            const category: TenantCategory = (user.role === "HQ_OWNER" || user.role === "HQ_STAFF") ? "HQ" : "USER";
             const realTenant: Tenant = {
               id: userTenantId,
-              name: user.role === "HQ_OWNER" ? "MYKERANI HQ" : (user.fullName ? `${user.fullName} - Syarikat` : "Syarikat Saya"),
+              name: (user.role === "HQ_OWNER" || user.role === "HQ_STAFF") ? "MYKERANI HQ" : (user.fullName ? `${user.fullName} - Syarikat` : "Syarikat Saya"),
               category,
             };
             setState({ tenants: [realTenant], activeTenant: realTenant, loading: false, error: null });
@@ -141,7 +141,7 @@ export const TenantProvider: React.FC<{ children: React.ReactNode }> = ({ childr
               .from("tenants")
               .insert({
                 name: defaultName,
-                category: user.role === "HQ_OWNER" ? "HQ" : "USER",
+                category: (user.role === "HQ_OWNER" || user.role === "HQ_STAFF") ? "HQ" : "USER",
               })
               .select()
               .single();

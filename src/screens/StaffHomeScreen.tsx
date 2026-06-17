@@ -31,6 +31,7 @@ export function StaffHomeScreen() {
   const [addAmount, setAddAmount] = useState("");
   const [addDesc, setAddDesc] = useState("");
   const [addSuccess, setAddSuccess] = useState<string | null>(null);
+  const [showAddModal, setShowAddModal] = useState(false);
 
   const today = new Date().toLocaleDateString("ms-MY", {
     weekday: "long",
