@@ -101,7 +101,7 @@ const MetricCard = ({ label, value, sub, icon: Icon, color = "teal", trend }: {
   );
 };
 
-// â”€â”€ Plan type â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// â”€â”€ Types â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 interface Plan {
   id: string;
   name: string;
@@ -112,17 +112,48 @@ interface Plan {
   featured?: boolean;
 }
 
+interface Customer {
+  id: string;
+  name: string;
+  email: string;
+  phone?: string;
+  plan: string;
+  status: “active” | “suspended” | “pending”;
+  renewal: string;
+  aiUsage: number;
+  storageGB: number;
+  attention: boolean;
+  mrr: number;
+  joinedAt: string;
+  notes?: string;
+}
+
 const BLANK_PLAN: Omit<Plan, “id”> = { name: “”, price: 0, aiCredits: 500, storageGB: 5, maxUsers: 3, featured: false };
+const BLANK_CUSTOMER: Omit<Customer, “id” | “aiUsage” | “storageGB” | “attention” | “mrr” | “joinedAt”> = {
+  name: “”, email: “”, phone: “”, plan: “”, status: “active”, renewal: “”, notes: “”
+};
 
 // â”€â”€â”€ Main Component â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
   const { signOut, isMockUser } = useAuth();
 
   const isStaff = user?.role === “HQ_STAFF”;
-  const customers = isMockUser ? MOCK_CUSTOMERS : [];
-  const tickets   = isMockUser ? MOCK_TICKETS   : [];
+  const tickets = isMockUser ? MOCK_TICKETS : [];
 
-  // Plans — persistent for all users (mock seeds on first load)
+  // Customers — persistent for all users
+  const customersKey = `mykerani_customers_${user?.id ?? “guest”}`;
+  const [customers, setCustomers] = useState<Customer[]>(() => {
+    try {
+      const stored = localStorage.getItem(customersKey);
+      if (stored) return JSON.parse(stored);
+    } catch {}
+    return isMockUser
+      ? MOCK_CUSTOMERS.map(c => ({ ...c, email: `${c.id}@demo.my`, phone: “”, joinedAt: “2026-01-01”, notes: “” }))
+      : [];
+  });
+  useEffect(() => { localStorage.setItem(customersKey, JSON.stringify(customers)); }, [customers, customersKey]);
+
+  // Plans — persistent for all users
   const plansKey = `mykerani_plans_${user?.id ?? “guest”}`;
   const [plans, setPlans] = useState<Plan[]>(() => {
     try {
@@ -133,10 +164,7 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
       ? MOCK_PLANS.map(p => ({ ...p, storageGB: parseInt(p.storage), maxUsers: 10 }))
       : [];
   });
-
-  useEffect(() => {
-    localStorage.setItem(plansKey, JSON.stringify(plans));
-  }, [plans, plansKey]);
+  useEffect(() => { localStorage.setItem(plansKey, JSON.stringify(plans)); }, [plans, plansKey]);
 
   // Plan modal state
   const [showPlanModal, setShowPlanModal] = useState(false);
@@ -157,14 +185,59 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
   };
   const deletePlan = (id: string) => { setPlans(prev => prev.filter(p => p.id !== id)); setDeletingPlanId(null); };
 
-  const [activePage, setActivePage] = useState<HQPage>("dashboard");
+  // Customer modal & detail state
+  const [showCustomerModal, setShowCustomerModal] = useState(false);
+  const [customerForm, setCustomerForm] = useState(BLANK_CUSTOMER);
+  const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
+  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
+  const [deletingCustomerId, setDeletingCustomerId] = useState<string | null>(null);
+
+  const openAddCustomer = () => {
+    const defaultPlan = plans[0]?.name ?? “”;
+    setCustomerForm({ ...BLANK_CUSTOMER, plan: defaultPlan });
+    setEditingCustomer(null);
+    setShowCustomerModal(true);
+  };
+  const openEditCustomer = (c: Customer) => {
+    setCustomerForm({ name: c.name, email: c.email, phone: c.phone ?? “”, plan: c.plan, status: c.status, renewal: c.renewal, notes: c.notes ?? “” });
+    setEditingCustomer(c);
+    setSelectedCustomer(null);
+    setShowCustomerModal(true);
+  };
+  const saveCustomer = () => {
+    if (!customerForm.name.trim() || !customerForm.email.trim()) return;
+    const planObj = plans.find(p => p.name === customerForm.plan);
+    const mrr = planObj?.price ?? 0;
+    const renewal = customerForm.renewal || new Date(Date.now() + 30 * 86400000).toLocaleDateString(“ms-MY”, { day:”numeric”, month:”short”, year:”numeric” });
+    if (editingCustomer) {
+      setCustomers(prev => prev.map(c => c.id === editingCustomer.id
+        ? { ...c, ...customerForm, renewal, mrr }
+        : c));
+      setSelectedCustomer(prev => prev?.id === editingCustomer.id ? { ...prev, ...customerForm, renewal, mrr } : prev);
+    } else {
+      const nc: Customer = { ...customerForm, renewal, mrr, id: `c-${Date.now()}`, aiUsage: 0, storageGB: 0, attention: false, joinedAt: new Date().toISOString().split(“T”)[0] };
+      setCustomers(prev => [...prev, nc]);
+    }
+    setShowCustomerModal(false);
+  };
+  const toggleStatus = (id: string) => {
+    setCustomers(prev => prev.map(c => c.id === id ? { ...c, status: c.status === “active” ? “suspended” : “active” } : c));
+    setSelectedCustomer(prev => prev?.id === id ? { ...prev, status: prev.status === “active” ? “suspended” : “active” } : prev);
+  };
+  const deleteCustomer = (id: string) => {
+    setCustomers(prev => prev.filter(c => c.id !== id));
+    setDeletingCustomerId(null);
+    setSelectedCustomer(null);
+  };
+
+  const [activePage, setActivePage] = useState<HQPage>(“dashboard”);
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [searchQuery, setSearchQuery] = useState("");
+  const [searchQuery, setSearchQuery] = useState(“”);
 
   // Cipta HQ Staff state
   const [showCreateStaff, setShowCreateStaff] = useState(false);
-  const [staffEmail, setStaffEmail] = useState("");
-  const [staffName, setStaffName] = useState("");
+  const [staffEmail, setStaffEmail] = useState(“”);
+  const [staffName, setStaffName] = useState(“”);
   const [staffCreating, setStaffCreating] = useState(false);
   const [staffResult, setStaffResult] = useState<{ success: boolean; message: string; tempPassword?: string } | null>(null);
 
@@ -175,11 +248,11 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
 
   // Support ticket reply
   const [replyTicket, setReplyTicket] = useState<string | null>(null);
-  const [replyText, setReplyText] = useState("");
+  const [replyText, setReplyText] = useState(“”);
 
-  const totalMRR    = customers.reduce((s, c) => s + c.mrr, 0);
-  const activeCount = customers.filter(c => c.status === "active").length;
-  const openCases   = tickets.filter(t => t.status === "open" || t.status === "pending").length;
+  const totalMRR    = customers.reduce((s, c) => s + (c.status === “active” ? c.mrr : 0), 0);
+  const activeCount = customers.filter(c => c.status === “active”).length;
+  const openCases   = tickets.filter(t => t.status === “open” || t.status === “pending”).length;
   const totalAI     = customers.reduce((s, c) => s + c.aiUsage, 0);
 
   const handleCreateHQStaff = async () => {
@@ -418,7 +491,7 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
                           </div>
                           <p className="text-xs text-slate-500">{t.customer}</p>
                           <p className="text-[11px] text-slate-400 bg-slate-50 rounded-lg px-3 py-2 border border-slate-100">
-                            ðŸ¤– AI: {t.summary}
+                            AI: {t.summary}
                           </p>
                         </div>
                       ))}
@@ -435,7 +508,7 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
                       { label: "Semak Penggunaan", icon: Activity,   page: "usage" as HQPage,      color: "bg-white border border-slate-200 text-slate-700" },
                       { label: "Urus Plan",        icon: Package,    page: "billing" as HQPage,    color: "bg-white border border-slate-200 text-slate-700" },
                     ].map(({ label, icon: Icon, page, color }) => (
-                      <button key={label} onClick={() => setActivePage(page)}
+                      <button key={label} onClick={() => { setActivePage(page); if (label === "Tambah Pelanggan") openAddCustomer(); }}
                         className={`flex items-center space-x-2 px-4 py-3 rounded-xl text-xs font-bold shadow-sm transition cursor-pointer ${color}`}>
                         <Icon className="w-4 h-4 shrink-0" /><span>{label}</span>
                       </button>
@@ -457,7 +530,7 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
                         placeholder="Cari pelanggan..."
                         className="pl-8 pr-3 py-2 text-xs border border-slate-200 rounded-xl outline-none focus:border-emerald-400 bg-white w-44" />
                     </div>
-                    <button className="flex items-center space-x-1.5 px-3 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs font-bold transition cursor-pointer shadow-sm">
+                    <button onClick={openAddCustomer} className="flex items-center space-x-1.5 px-3 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs font-bold transition cursor-pointer shadow-sm">
                       <Plus className="w-3.5 h-3.5" /><span>Tambah</span>
                     </button>
                   </div>
@@ -468,13 +541,12 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
                     <Building2 className="w-10 h-10 text-slate-200 mx-auto mb-3" />
                     <p className="text-sm font-semibold text-slate-500">Tiada pelanggan lagi</p>
                     <p className="text-xs text-slate-400 mt-1">Pelanggan yang mendaftar akan muncul di sini</p>
-                    <button className="mt-4 px-5 py-2.5 bg-emerald-700 text-white rounded-xl text-xs font-bold cursor-pointer hover:bg-emerald-800 transition">
+                    <button onClick={openAddCustomer} className="mt-4 px-5 py-2.5 bg-emerald-700 text-white rounded-xl text-xs font-bold cursor-pointer hover:bg-emerald-800 transition">
                       Tambah Pelanggan Pertama
                     </button>
                   </div>
                 ) : (
                   <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-                    {/* Table header */}
                     <div className="grid grid-cols-12 px-5 py-3 bg-slate-50 border-b border-slate-100 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
                       <div className="col-span-4">Pelanggan</div>
                       <div className="col-span-2">Plan</div>
@@ -483,37 +555,40 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
                       <div className="col-span-2">Tindakan</div>
                     </div>
                     {customers
-                      .filter(c => !searchQuery || c.name.toLowerCase().includes(searchQuery.toLowerCase()))
+                      .filter(c => !searchQuery || c.name.toLowerCase().includes(searchQuery.toLowerCase()) || c.email.toLowerCase().includes(searchQuery.toLowerCase()))
                       .map(c => (
                         <div key={c.id} className="grid grid-cols-12 px-5 py-4 border-b border-slate-50 hover:bg-slate-50 transition items-center">
                           <div className="col-span-4 flex items-center space-x-3">
                             <div className="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-700 font-bold text-sm flex items-center justify-center shrink-0">
-                              {c.name.charAt(0)}
+                              {c.name.charAt(0).toUpperCase()}
                             </div>
                             <div className="min-w-0">
                               <p className="text-xs font-semibold text-slate-800 truncate">{c.name}</p>
+                              <p className="text-[10px] text-slate-400 truncate">{c.email}</p>
                               {c.attention && <span className="text-[9px] text-amber-600 font-bold bg-amber-50 px-1.5 py-0.5 rounded-full">Perlu Perhatian</span>}
                             </div>
                           </div>
                           <div className="col-span-2">
-                            <span className="text-xs font-semibold text-slate-600">{c.plan}</span>
+                            <span className="text-xs font-semibold text-slate-600">{c.plan || "—"}</span>
                           </div>
                           <div className="col-span-2">
                             <StatusBadge status={c.status} />
                           </div>
                           <div className="col-span-2 hidden md:block">
-                            <span className="text-xs text-slate-500">{c.renewal}</span>
+                            <span className="text-xs text-slate-500">{c.renewal || "—"}</span>
                           </div>
                           <div className="col-span-2 flex items-center gap-1.5">
-                            <button className="px-2.5 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded-lg text-[10px] font-bold cursor-pointer transition">Buka</button>
-                            {c.status === "suspended" ? (
-                              <button className="px-2.5 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded-lg text-[10px] font-bold cursor-pointer transition">Aktif</button>
-                            ) : (
-                              <button className="px-2.5 py-1.5 bg-slate-50 hover:bg-red-50 text-slate-500 hover:text-red-600 rounded-lg text-[10px] font-bold cursor-pointer transition">Gantung</button>
-                            )}
+                            <button onClick={() => setSelectedCustomer(c)} className="px-2.5 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded-lg text-[10px] font-bold cursor-pointer transition">Buka</button>
+                            <button onClick={() => toggleStatus(c.id)}
+                              className={`px-2.5 py-1.5 rounded-lg text-[10px] font-bold cursor-pointer transition ${c.status === "suspended" ? "bg-emerald-50 hover:bg-emerald-100 text-emerald-700" : "bg-slate-50 hover:bg-red-50 text-slate-400 hover:text-red-500"}`}>
+                              {c.status === "suspended" ? "Aktif" : "Gantung"}
+                            </button>
                           </div>
                         </div>
                       ))}
+                    {customers.filter(c => !searchQuery || c.name.toLowerCase().includes(searchQuery.toLowerCase()) || c.email.toLowerCase().includes(searchQuery.toLowerCase())).length === 0 && searchQuery && (
+                      <div className="p-10 text-center text-xs text-slate-400">Tiada hasil carian untuk "{searchQuery}"</div>
+                    )}
                   </div>
                 )}
               </div>
@@ -954,6 +1029,149 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
           </div>
         </main>
       </div>
+
+      {/* ── Customer Detail Panel ── */}
+      {selectedCustomer && (
+        <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-black/40 backdrop-blur-sm" onClick={() => setSelectedCustomer(null)}>
+          <div className="w-full max-w-md bg-white rounded-t-3xl md:rounded-3xl shadow-2xl" onClick={e => e.stopPropagation()}>
+            <div className="px-6 pt-6 pb-4 border-b border-slate-100 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-emerald-50 text-emerald-700 font-bold text-base flex items-center justify-center">
+                  {selectedCustomer.name.charAt(0).toUpperCase()}
+                </div>
+                <div>
+                  <p className="text-sm font-bold text-slate-900">{selectedCustomer.name}</p>
+                  <p className="text-[11px] text-slate-400">{selectedCustomer.email}</p>
+                </div>
+              </div>
+              <button onClick={() => setSelectedCustomer(null)} className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-slate-100 cursor-pointer"><X className="w-4 h-4 text-slate-500" /></button>
+            </div>
+
+            <div className="px-6 py-4 space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="bg-slate-50 rounded-2xl p-3 space-y-0.5">
+                  <p className="text-[10px] text-slate-400 font-semibold">Plan</p>
+                  <p className="text-sm font-bold text-slate-800">{selectedCustomer.plan || "—"}</p>
+                </div>
+                <div className="bg-slate-50 rounded-2xl p-3 space-y-0.5">
+                  <p className="text-[10px] text-slate-400 font-semibold">Status</p>
+                  <StatusBadge status={selectedCustomer.status} />
+                </div>
+                <div className="bg-slate-50 rounded-2xl p-3 space-y-0.5">
+                  <p className="text-[10px] text-slate-400 font-semibold">MRR</p>
+                  <p className="text-sm font-bold text-emerald-700">RM {selectedCustomer.mrr.toLocaleString()}</p>
+                </div>
+                <div className="bg-slate-50 rounded-2xl p-3 space-y-0.5">
+                  <p className="text-[10px] text-slate-400 font-semibold">Perbaharui</p>
+                  <p className="text-sm font-bold text-slate-800">{selectedCustomer.renewal || "—"}</p>
+                </div>
+              </div>
+              {selectedCustomer.phone && (
+                <div className="flex items-center gap-2 text-xs text-slate-500">
+                  <span className="font-semibold">Tel:</span><span>{selectedCustomer.phone}</span>
+                </div>
+              )}
+              {selectedCustomer.notes && (
+                <div className="bg-amber-50 border border-amber-100 rounded-xl px-3 py-2">
+                  <p className="text-[11px] text-amber-700">{selectedCustomer.notes}</p>
+                </div>
+              )}
+              <div className="text-[10px] text-slate-400">Sejak: {selectedCustomer.joinedAt}</div>
+            </div>
+
+            <div className="px-6 pb-6 grid grid-cols-3 gap-2">
+              <button onClick={() => openEditCustomer(selectedCustomer)}
+                className="py-2.5 border border-slate-200 rounded-xl text-xs font-bold text-slate-600 cursor-pointer hover:bg-slate-50 transition flex items-center justify-center gap-1">
+                <Edit3 className="w-3.5 h-3.5" />Edit
+              </button>
+              <button onClick={() => { toggleStatus(selectedCustomer.id); }}
+                className={`py-2.5 rounded-xl text-xs font-bold cursor-pointer transition ${selectedCustomer.status === "suspended" ? "bg-emerald-50 border border-emerald-100 text-emerald-700 hover:bg-emerald-100" : "bg-amber-50 border border-amber-100 text-amber-600 hover:bg-amber-100"}`}>
+                {selectedCustomer.status === "suspended" ? "Aktifkan" : "Gantung"}
+              </button>
+              <button onClick={() => setDeletingCustomerId(selectedCustomer.id)}
+                className="py-2.5 bg-red-50 border border-red-100 rounded-xl text-xs font-bold text-red-500 cursor-pointer hover:bg-red-100 transition">
+                Padam
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Add/Edit Customer Modal ── */}
+      {showCustomerModal && (
+        <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-black/40 backdrop-blur-sm" onClick={() => setShowCustomerModal(false)}>
+          <div className="w-full max-w-md bg-white rounded-t-3xl md:rounded-3xl shadow-2xl p-6 space-y-4" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between">
+              <h2 className="text-base font-bold text-slate-900">{editingCustomer ? "Edit Pelanggan" : "Tambah Pelanggan"}</h2>
+              <button onClick={() => setShowCustomerModal(false)} className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-slate-100 cursor-pointer"><X className="w-4 h-4 text-slate-500" /></button>
+            </div>
+
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs font-semibold text-slate-500 mb-1 block">Nama Syarikat / Individu *</label>
+                <input value={customerForm.name} onChange={e => setCustomerForm(f => ({...f, name: e.target.value}))}
+                  placeholder="cth: Kedai Makan Pak Ali Sdn Bhd"
+                  className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100" />
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-slate-500 mb-1 block">E-mel *</label>
+                <input type="email" value={customerForm.email} onChange={e => setCustomerForm(f => ({...f, email: e.target.value}))}
+                  placeholder="owner@syarikat.com"
+                  className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100" />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-semibold text-slate-500 mb-1 block">No. Telefon</label>
+                  <input value={customerForm.phone ?? ""} onChange={e => setCustomerForm(f => ({...f, phone: e.target.value}))}
+                    placeholder="0123456789"
+                    className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100" />
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-slate-500 mb-1 block">Plan</label>
+                  <select value={customerForm.plan} onChange={e => setCustomerForm(f => ({...f, plan: e.target.value}))}
+                    className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-emerald-400 bg-white">
+                    <option value="">— Pilih Plan —</option>
+                    {plans.map(p => <option key={p.id} value={p.name}>{p.name} (RM {p.price}/bln)</option>)}
+                  </select>
+                </div>
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-slate-500 mb-1 block">Nota (pilihan)</label>
+                <textarea value={customerForm.notes ?? ""} onChange={e => setCustomerForm(f => ({...f, notes: e.target.value}))}
+                  rows={2} placeholder="Nota dalaman tentang pelanggan ini..."
+                  className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100 resize-none" />
+              </div>
+            </div>
+
+            <div className="flex gap-3 pt-1">
+              <button onClick={() => setShowCustomerModal(false)} className="flex-1 py-3 border border-slate-200 rounded-2xl text-sm font-bold text-slate-500 cursor-pointer hover:bg-slate-50 transition">Batal</button>
+              <button onClick={saveCustomer} disabled={!customerForm.name.trim() || !customerForm.email.trim()}
+                className="flex-1 py-3 bg-emerald-700 text-white rounded-2xl text-sm font-bold cursor-pointer hover:bg-emerald-800 transition disabled:opacity-40 disabled:cursor-not-allowed">
+                {editingCustomer ? "Simpan" : "Tambah Pelanggan"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Delete Customer Confirmation ── */}
+      {deletingCustomerId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm" onClick={() => setDeletingCustomerId(null)}>
+          <div className="w-80 bg-white rounded-3xl shadow-2xl p-6 space-y-4 mx-4" onClick={e => e.stopPropagation()}>
+            <div className="w-12 h-12 bg-red-50 rounded-2xl flex items-center justify-center mx-auto">
+              <AlertTriangle className="w-6 h-6 text-red-500" />
+            </div>
+            <div className="text-center space-y-1">
+              <h3 className="font-bold text-slate-900">Padam Pelanggan?</h3>
+              <p className="text-xs text-slate-400">Rekod pelanggan ini akan dipadam. Tindakan ini tidak boleh dibatalkan.</p>
+            </div>
+            <div className="flex gap-3">
+              <button onClick={() => setDeletingCustomerId(null)} className="flex-1 py-2.5 border border-slate-200 rounded-xl text-sm font-bold text-slate-500 cursor-pointer hover:bg-slate-50">Batal</button>
+              <button onClick={() => deleteCustomer(deletingCustomerId)} className="flex-1 py-2.5 bg-red-500 text-white rounded-xl text-sm font-bold cursor-pointer hover:bg-red-600">Padam</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Plan Create/Edit Modal ── */}
       {showPlanModal && (
