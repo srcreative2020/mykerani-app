@@ -3,15 +3,12 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+// V1.0 Role Authority — only 4 roles
 export type UserRole =
-  | "HQ_ADMIN"
-  | "HQ_SUPPORT"
-  | "HQ_AUDITOR"
+  | "HQ_OWNER"
+  | "HQ_STAFF"
   | "TENANT_OWNER"
-  | "TENANT_ADMIN"
-  | "MANAGER"
-  | "STAFF"
-  | "VIEWER";
+  | "TENANT_STAFF";
 
 export type TenantCategory = "HQ" | "DEMO" | "USER";
 

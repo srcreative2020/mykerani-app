@@ -57,7 +57,7 @@ export const TenantProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           // Initialize for this specific mock user
           tenantList = [...DEFAULT_MOCK_TENANTS];
           // If user email has specifiers, we can make their primary tenant matches role
-          if (user.role === "HQ_ADMIN") {
+          if (user.role === "HQ_OWNER") {
             // First item is active
           }
           localStorage.setItem(`mykerani_tenants_${user.id}`, JSON.stringify(tenantList));
@@ -69,8 +69,7 @@ export const TenantProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         
         if (!active && tenantList.length > 0) {
           // Fallback based on user context
-          const isHqRole = user.role === "HQ_ADMIN" || user.role === "HQ_SUPPORT" || user.role === "HQ_AUDITOR";
-          if (isHqRole) {
+          if (user.role === "HQ_OWNER" || user.role === "HQ_STAFF") {
             active = tenantList.find(t => t.category === "HQ") || tenantList[0];
           } else {
             active = tenantList.find(t => t.category !== "HQ") || tenantList[0];
@@ -95,16 +94,16 @@ export const TenantProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             .select("*");
 
           if (dbError) {
-            // If table does not exist or has connection permission errors, report but handle gracefully
-            console.warn("Retrying query or checking tenants schema:", dbError.message);
-            
-            // Auto fallback mock list to let user interact safely if schema is not ready
-            setState({
-              tenants: [...DEFAULT_MOCK_TENANTS],
-              activeTenant: DEFAULT_MOCK_TENANTS[2],
-              loading: false,
-              error: `Schema validation alert: "tenants" table may need setup. Enabled local resilient fallback.`,
-            });
+            console.warn("Tenants table not ready:", dbError.message);
+            // Real user: buat tenant dari metadata user — JANGAN guna demo tenant
+            const userTenantId = user.tenantId || `tenant-${user.id.slice(0, 8)}`;
+            const category: TenantCategory = (user.role === "HQ_OWNER" || user.role === "HQ_STAFF") ? "HQ" : "USER";
+            const realTenant: Tenant = {
+              id: userTenantId,
+              name: (user.role === "HQ_OWNER" || user.role === "HQ_STAFF") ? "MYKERANI HQ" : (user.fullName ? `${user.fullName} - Syarikat` : "Syarikat Saya"),
+              category,
+            };
+            setState({ tenants: [realTenant], activeTenant: realTenant, loading: false, error: null });
             return;
           }
 
@@ -126,7 +125,7 @@ export const TenantProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             }
 
             // Restore from localStorage setting, else auto-select HQ tenant for HQ roles
-            const isHqRole = user.role === "HQ_ADMIN" || user.role === "HQ_SUPPORT" || user.role === "HQ_AUDITOR";
+            const isHqRole = user.role === "HQ_OWNER" || user.role === "HQ_STAFF";
             const lastSelectedId = localStorage.getItem(`mykerani_active_tenant_${user.id}`);
             let active = mappedTenants.find(t => t.id === lastSelectedId);
             if (!active) {
@@ -143,7 +142,7 @@ export const TenantProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             });
           } else {
             // Create a default tenant since none exists
-            const isHqRole = user.role === "HQ_ADMIN" || user.role === "HQ_SUPPORT" || user.role === "HQ_AUDITOR";
+            const isHqRole = user.role === "HQ_OWNER" || user.role === "HQ_STAFF";
             const defaultName = `${user.fullName || "Operator"}'s Venture`;
             const { data: newTenant, error: createError } = await supabase
               .from("tenants")

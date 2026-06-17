@@ -1,11 +1,11 @@
-import React, { useState, useRef, useEffect } from "react";
+﻿import React, { useState, useRef, useEffect } from "react";
 import { type FinancialEvidencePackage, type FinancialEvent, type FinancialCommitment } from "../types";
 import { useFinancials } from "../context/FinancialRecordsContext";
 import { useWorkspace } from "../context/WorkspaceContext";
 import { useStorage } from "../context/StorageContext";
 import { supabase, isSupabaseConfigured } from "../lib/supabase";
 import { useAuth } from "../context/AuthContext";
-import { AnimatePresence, motion } from "motion/react";
+import { AnimatePresence, motion } from "../lib/motionCompat";
 import {
   UploadCloud,
   FileText,

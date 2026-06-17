@@ -356,7 +356,9 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
             .from("general_ledger_categories")
             .select("*")
             .eq("workspace_id", wsId);
-          if (catError) throw catError;
+          if (catError) {
+            console.warn("general_ledger_categories not ready, skipping:", catError.message);
+          }
 
           const categoryMap = new Map<string, string>();
           catData?.forEach((c) => categoryMap.set(c.id, c.name));
@@ -551,15 +553,8 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
                 status: row.is_active !== false ? "ACTIVE" : "PAUSED",
               });
             });
-          } else {
-            const keyPrefix = `mykerani_financials_ws_${wsId}`;
-            const storedCommitments = localStorage.getItem(`${keyPrefix}_commitments`);
-            if (storedCommitments) {
-              mappedCommitments.push(...JSON.parse(storedCommitments));
-            } else {
-              mappedCommitments.push(...getPresetFinancialCommitments(wsId));
-            }
           }
+          // Real user: kalau Supabase kosong, kekal kosong — jangan load demo data
 
           // Fetch evidence packages from Supabase
           let evidenceData: any[] = [];
@@ -592,15 +587,8 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
                 notes: row.notes || undefined,
               });
             });
-          } else {
-            const keyPrefix = `mykerani_financials_ws_${wsId}`;
-            const storedEvidence = localStorage.getItem(`${keyPrefix}_evidence`);
-            if (storedEvidence) {
-              mappedEvidence.push(...JSON.parse(storedEvidence));
-            } else {
-              mappedEvidence.push(...getPresetEvidencePackages(wsId));
-            }
           }
+          // Real user: kalau Supabase kosong, kekal kosong — jangan load demo data
 
           // Load OCR learned patterns from local storage as fallback or principal
           const keyPrefixStr = `mykerani_financials_ws_${wsId}`;
@@ -640,24 +628,15 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
           setLoading(false);
         } catch (dbError: any) {
           console.warn("Database Loader Error (table may need setup):", dbError.message);
-          setError(`Supabase tables missing, using sandbox cache: ${dbError.message}`);
-          
-          // Fallback to local
-          const keyPrefix = `mykerani_financials_ws_${wsId}`;
-          const storedEvents = localStorage.getItem(`${keyPrefix}_events`);
-          const storedCash = localStorage.getItem(`${keyPrefix}_cash`);
-          const storedBank = localStorage.getItem(`${keyPrefix}_bank`);
-          const storedDebts = localStorage.getItem(`${keyPrefix}_debts`);
-          const storedCommitments = localStorage.getItem(`${keyPrefix}_commitments`);
-          const storedEvidence = localStorage.getItem(`${keyPrefix}_evidence`);
-          const storedPatterns = localStorage.getItem(`${keyPrefix}_ocr_patterns`);
-          setFinancialEvents(storedEvents ? JSON.parse(storedEvents) : getPresetFinancialEvents(wsId));
-          setCashAccounts(storedCash ? JSON.parse(storedCash) : getPresetCashAccounts(wsId));
-          setBankAccounts(storedBank ? JSON.parse(storedBank) : getPresetBankAccounts(wsId));
-          setDebtRecords(storedDebts ? JSON.parse(storedDebts) : getPresetDebts(wsId));
-          setFinancialCommitments(storedCommitments ? JSON.parse(storedCommitments) : getPresetFinancialCommitments(wsId));
-          setFinancialEvidencePackages(storedEvidence ? JSON.parse(storedEvidence) : getPresetEvidencePackages(wsId));
-          setOcrLearnedPatterns(storedPatterns ? JSON.parse(storedPatterns) : []);
+          // Real user: tables tak wujud lagi — data kosong, JANGAN load demo data
+          setFinancialEvents([]);
+          setCashAccounts([]);
+          setBankAccounts([]);
+          setDebtRecords([]);
+          setFinancialCommitments([]);
+          setFinancialEvidencePackages([]);
+          setOcrLearnedPatterns([]);
+          setError(null);
           setLoading(false);
         }
       }

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, lazy, Suspense } from "react";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import { TenantProvider, useTenant } from "./context/TenantContext";
 import { WorkspaceProvider, useWorkspace } from "./context/WorkspaceContext";
@@ -7,10 +7,23 @@ import { AuditProvider, useAudit } from "./context/AuditContext";
 import { StorageProvider } from "./context/StorageContext";
 import { NotificationProvider } from "./context/NotificationContext";
 import { Guard } from "./components/Guard";
-import { HQConsoleShell } from "./components/HQConsoleShell";
-import { MyKeraniAppTabs } from "./components/MyKeraniAppTabs";
+import { Loader2 } from "lucide-react";
+
+// Lazy-load screens to isolate their module initialization into separate chunks,
+// preventing TDZ errors from complex packages (motion, supabase realtime, etc.)
+const HQConsoleShell = lazy(() => import("./components/HQConsoleShell").then(m => ({ default: m.HQConsoleShell })));
+const MyKeraniAppTabs = lazy(() => import("./components/MyKeraniAppTabs").then(m => ({ default: m.MyKeraniAppTabs })));
+const StaffHomeScreen = lazy(() => import("./screens/StaffHomeScreen").then(m => ({ default: m.StaffHomeScreen })));
+const OwnerDashboard = lazy(() => import("./screens/OwnerDashboard").then(m => ({ default: m.OwnerDashboard })));
+
+function LazyFallback() {
+  return (
+    <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+      <Loader2 className="w-6 h-6 text-slate-400 animate-spin" />
+    </div>
+  );
+}
 import { FinancialRecordsProvider, useFinancials } from "./context/FinancialRecordsContext";
-import { FinancialRecordsConsole } from "./components/FinancialRecordsConsole";
 import { testSupabaseConnection, type SupabaseDiagnostics } from "./lib/supabase";
 import { getDashboardSummary, type DashboardSummary } from "./lib/financialService";
 import { type TenantCategory } from "./types";
@@ -56,10 +69,6 @@ import {
   Folder,
   Settings,
 } from "lucide-react";
-
-import { AIFinancialAssistant } from "./components/AIFinancialAssistant";
-import { FinancialReportsAnalytics } from "./components/FinancialReportsAnalytics";
-import { FinancialEvidencePackageManager } from "./components/FinancialEvidencePackage";
 
 function MainDashboardContent() {
   const { user, signOut, isMockUser, toggleBypassAuth } = useAuth();
@@ -393,110 +402,63 @@ function MainDashboardContent() {
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800 font-sans flex flex-col justify-between" id="dashboard_root">
       
-      {/* Global Telemetry Header / Main Navigation Scaffolding */}
-      <header className="border-b border-slate-200 bg-white px-6 py-4 flex flex-col lg:flex-row lg:items-center justify-between gap-4" id="app_header">
-        <div className="flex items-center space-x-3">
-          <div className="w-10 h-10 rounded-xl bg-slate-900 flex items-center justify-center text-white font-display font-bold text-lg shadow-sm">
+      {/* App Header */}
+      <header className="border-b border-slate-200 bg-white px-5 py-3.5 flex items-center justify-between gap-4" id="app_header">
+        {/* Logo + Company Name */}
+        <div className="flex items-center space-x-3 min-w-0">
+          <div className="w-9 h-9 rounded-xl bg-slate-900 flex items-center justify-center text-white font-display font-bold text-base shadow-sm shrink-0">
             MK
           </div>
-          <div>
-            <div className="flex items-center space-x-2">
-              <h1 className="font-display font-semibold text-lg text-slate-900 tracking-tight">MYKERANI</h1>
-              <span className="inline-flex items-center px-1.5 py-0.2 rounded-full text-[9px] font-mono bg-slate-900 text-white font-semibold">
-                V1.0
-              </span>
+          <div className="min-w-0">
+            <div className="flex items-center space-x-1.5">
+              <h1 className="font-display font-bold text-slate-900 text-base tracking-tight">MYKERANI</h1>
+              <span className="text-[9px] font-mono bg-slate-900 text-white px-1.5 py-0.5 rounded-full font-semibold shrink-0">V1.0</span>
             </div>
-            <p className="text-[11px] text-slate-500 font-mono flex items-center flex-wrap">
-              TENANT: <span className="font-bold underline ml-1 text-slate-700">{activeTenant?.name || "RESOLVING..."}</span>
-              <span className="mx-1.5 text-slate-300">•</span>
-              WORKSPACE: <span className="font-bold text-indigo-600 ml-1">{activeWorkspace?.name || "UNASSIGNED"}</span>
-            </p>
+            {activeWorkspace && (
+              <p className="text-[11px] text-slate-500 truncate max-w-[200px]">
+                {activeWorkspace.name}
+              </p>
+            )}
           </div>
         </div>
 
-        {/* Dynamic Context Switchers Toolbar */}
-        <div className="flex flex-wrap items-center gap-3">
-          
-          {/* Tenant Switcher dropdown */}
-          <div className="flex items-center space-x-2 bg-slate-50 border border-slate-200 p-1.5 rounded-xl" id="tenant_switcher_wrapper">
-            <Building className="w-3.5 h-3.5 text-slate-400 ml-1" />
-            <select
-              value={activeTenant?.id || ""}
-              onChange={(e) => selectTenant(e.target.value)}
-              className="text-xs font-semibold font-sans bg-transparent border-none focus:ring-0 outline-none pr-8 cursor-pointer select-none text-slate-700 max-w-[160px]"
-              id="tenant_select_dropdown"
-            >
-              <option value="" disabled>-- Load Company --</option>
-              {tenants.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.name} ({t.category})
-                </option>
-              ))}
-            </select>
-            <button
-              onClick={() => {
-                setShowCreateForm(!showCreateForm);
-                setShowCreateWSForm(false);
-              }}
-              className="p-1 bg-slate-900 hover:bg-slate-800 text-white rounded-lg transition shrink-0 cursor-pointer"
-              title="Add New Tenant Group"
-              id="toggle_create_tenant_btn"
-            >
-              <Plus className="w-3 h-3" />
-            </button>
-          </div>
-
-          {/* Workspace Switcher dropdown (Belongs to Tenant) */}
-          <div className="flex items-center space-x-2 bg-slate-50 border border-slate-200 p-1.5 rounded-xl" id="workspace_switcher_wrapper">
-            <LayoutGrid className="w-3.5 h-3.5 text-slate-400 ml-1" />
+        {/* Right: Company switcher (owner only) + User + Logout */}
+        <div className="flex items-center gap-2 shrink-0">
+          {/* Company switcher — hanya untuk owner yang ada lebih 1 syarikat */}
+          {!["STAFF", "VIEWER"].includes(user?.role || "") && workspaces.length > 1 && (
             <select
               value={activeWorkspace?.id || ""}
               onChange={(e) => selectWorkspace(e.target.value)}
-              className="text-xs font-semibold font-sans bg-transparent border-none focus:ring-0 outline-none pr-8 cursor-pointer select-none text-slate-700 max-w-[160px]"
-              id="workspace_select_dropdown"
-              disabled={!activeTenant}
+              className="text-xs font-semibold bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 outline-none focus:border-slate-900 cursor-pointer text-slate-700 max-w-[150px] hidden sm:block"
+              id="company_select_header"
             >
-              <option value="" disabled>-- Select Workspace --</option>
               {workspaces.map((ws) => (
-                <option key={ws.id} value={ws.id}>
-                  {ws.name}
-                </option>
+                <option key={ws.id} value={ws.id}>{ws.name}</option>
               ))}
             </select>
-            <button
-              onClick={() => {
-                setShowCreateWSForm(!showCreateWSForm);
-                setShowCreateForm(false);
-              }}
-              className="p-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition shrink-0 cursor-pointer disabled:opacity-30 disabled:hover:bg-indigo-600 disabled:cursor-not-allowed"
-              title={["MANAGER", "STAFF", "VIEWER"].includes(user?.role || "") ? "Workspace creation restricted for your role" : "Add New Workspace"}
-              id="toggle_create_ws_btn"
-              disabled={!activeTenant || ["MANAGER", "STAFF", "VIEWER"].includes(user?.role || "")}
-            >
-              <Plus className="w-3 h-3" />
-            </button>
-          </div>
+          )}
 
-          {/* Logged in User Indicator & Action Panel */}
-          <div className="bg-slate-100/85 border border-slate-200/50 rounded-xl px-3 py-1 flex items-center space-x-2.5">
-            <div className="w-5.5 h-5.5 rounded-full bg-slate-900 text-white flex items-center justify-center text-xs font-mono font-bold">
-              {user?.fullName?.substring(0, 1).toUpperCase() || <User className="w-3" />}
+          {/* User badge */}
+          <div className="bg-slate-100 border border-slate-200 rounded-xl px-3 py-1.5 flex items-center space-x-2">
+            <div className="w-5 h-5 rounded-full bg-slate-900 text-white flex items-center justify-center text-[10px] font-bold shrink-0">
+              {user?.fullName?.charAt(0).toUpperCase() || "?"}
             </div>
-            <div className="text-left font-sans">
-              <p className="text-[11px] font-semibold text-slate-950 leading-tight">
-                {user?.fullName || "Operator"}
-              </p>
-              <p className="text-[8px] text-slate-500 font-mono leading-none">
-                {user?.role || "TENANT_ADMIN"}
-              </p>
+            <div className="hidden sm:block">
+              <p className="text-[11px] font-semibold text-slate-900 leading-tight">{user?.fullName || "Pengguna"}</p>
+              <p className="text-[9px] text-slate-400 leading-none">{
+                user?.role === "HQ_OWNER" ? "Pemilik HQ" :
+                user?.role === "HQ_STAFF" ? "Kakitangan HQ" :
+                user?.role === "TENANT_OWNER" ? "Pemilik Syarikat" :
+                user?.role === "TENANT_STAFF" ? "Kakitangan" : "Pengguna"
+              }</p>
             </div>
           </div>
 
-          {/* Sign Out */}
+          {/* Log keluar */}
           <button
             onClick={() => signOut()}
-            className="p-1.5 bg-slate-100 hover:bg-slate-250 text-slate-600 hover:text-rose-600 border border-slate-200 rounded-xl transition cursor-pointer shadow-sm"
-            title="Terminate Active Session"
+            className="p-2 bg-slate-100 hover:bg-rose-50 text-slate-500 hover:text-rose-600 border border-slate-200 rounded-xl transition cursor-pointer"
+            title="Log Keluar"
             id="signout_button"
           >
             <LogOut className="w-3.5 h-3.5" />
@@ -507,60 +469,7 @@ function MainDashboardContent() {
       {/* Main Content Area */}
       <main className="max-w-4xl w-full mx-auto p-6 md:p-8 space-y-6 flex-grow flex flex-col justify-start" id="app_main_content">
         
-        {/* Active Tenant Category-Specific Cockpit Dashboard Banners */}
-        {activeTenant && (
-          <div className={`border p-6 rounded-2xl shadow-sm transition-all duration-350 ${
-            activeTenant.category === "HQ" 
-              ? "bg-rose-50/50 border-rose-200/80" 
-              : activeTenant.category === "DEMO"
-              ? "bg-amber-50/40 border-amber-200/80"
-              : "bg-indigo-50/40 border-indigo-200/80"
-          }`} id="active_tenant_status_panel">
-            <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
-              <div className="flex items-start space-x-4">
-                <div className={`p-3 rounded-xl ${
-                  activeTenant.category === "HQ"
-                    ? "bg-rose-100 text-rose-700"
-                    : activeTenant.category === "DEMO"
-                    ? "bg-amber-100 text-amber-700"
-                    : "bg-indigo-100 text-indigo-700"
-                }`}>
-                  {activeTenant.category === "HQ" ? (
-                    <Activity className="w-6 h-6" />
-                  ) : activeTenant.category === "DEMO" ? (
-                    <Compass className="w-6 h-6" />
-                  ) : (
-                    <Layers className="w-6 h-6" />
-                  )}
-                </div>
-                <div>
-                  <div className="flex items-center gap-2 mb-1 flex-wrap">
-                    <h2 className="font-display font-semibold text-xl text-slate-950">
-                      {activeTenant.name}
-                    </h2>
-                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-mono font-bold uppercase tracking-wider border ${getCategoryBadgeColor(activeTenant.category)}`}>
-                      {activeTenant.category} BOUNDARY
-                    </span>
-                  </div>
-                  <p className="text-xs text-slate-600 font-sans max-w-xl leading-relaxed">
-                    {activeTenant.category === "HQ" 
-                      ? "System operators hub. This boundary allows administrative staff to manage subscription models and perform global supplier audits."
-                      : activeTenant.category === "DEMO"
-                      ? "Preloaded simulation dashboard. Used to demonstrate MYR financial features without manipulating the actual user general financial records."
-                      : "Standard enterprise boundary. Active workspace compartments represent isolated Financial Record Management datasets for legal corporations."}
-                  </p>
-                </div>
-              </div>
-              
-              <div className="flex-shrink-0">
-                <span className="text-[9px] block font-mono text-slate-400">ORGANIZATION HASH ID:</span>
-                <span className="font-mono text-xs text-slate-500 font-bold bg-slate-100/90 border border-slate-200 rounded px-2 py-1 inline-block mt-1">
-                  {activeTenant.id}
-                </span>
-              </div>
-            </div>
-          </div>
-        )}
+        {/* Tiada banner teknikal — UI bersih */}
 
         {/* Tenant/Workspace Error Alerts Handler */}
         {(tenantError || workspaceError) && (
@@ -570,26 +479,26 @@ function MainDashboardContent() {
           </div>
         )}
 
-        {/* Create Tenant Form Dropdown UI Panel */}
+        {/* Daftar Syarikat Baru */}
         {showCreateForm && (
-          <div className="bg-white border border-slate-350/60 rounded-2xl p-6 shadow-md" id="create_tenant_form_panel">
+          <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-md" id="create_tenant_form_panel">
             <div className="flex items-center justify-between mb-4">
               <h3 className="font-display font-medium text-lg text-slate-950 flex items-center">
                 <Building className="w-5 h-5 mr-2 text-slate-400" />
-                Register New Tenant Corporation
+                Daftar Syarikat Baru
               </h3>
               <button
                 onClick={() => setShowCreateForm(false)}
-                className="text-xs text-slate-400 hover:text-slate-600 font-mono uppercase"
+                className="text-xs text-slate-400 hover:text-slate-600"
               >
-                Dismiss Form
+                Tutup
               </button>
             </div>
             
             <form onSubmit={handleCreateTenantSubmit} className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-1">
-                  <label className="block text-xs font-semibold text-slate-500 font-mono uppercase">Organization Name</label>
+                  <label className="block text-xs font-semibold text-slate-500 uppercase">Nama Syarikat</label>
                   <input
                     type="text"
                     value={newTenantName}
@@ -600,17 +509,17 @@ function MainDashboardContent() {
                   />
                 </div>
                 <div className="space-y-1">
-                  <label className="block text-xs font-semibold text-slate-500 font-mono uppercase">Category Boundary</label>
+                  <label className="block text-xs font-semibold text-slate-500 uppercase">Jenis Akaun</label>
                   <select
                     value={newTenantCategory}
                     onChange={(e) => setNewTenantCategory(e.target.value as TenantCategory)}
                     className="w-full px-3 py-2 text-sm bg-slate-50 border border-slate-200 outline-none focus:bg-white focus:border-slate-900 rounded-xl cursor-pointer"
                     id="new_tenant_category"
                   >
-                    <option value="USER">Standard User (Corporate general financial records)</option>
-                    <option value="DEMO">Demo Account (Simulation/Testbed workspace)</option>
-                    {user?.role === "HQ_ADMIN" && (
-                      <option value="HQ">HQ Administrative Office (Special platform owner)</option>
+                    <option value="USER">Syarikat (Akaun Perniagaan)</option>
+                    <option value="DEMO">Demo (Akaun Latihan)</option>
+                    {user?.role === "HQ_OWNER" && (
+                      <option value="HQ">Pentadbiran Sistem (HQ)</option>
                     )}
                   </select>
                 </div>
@@ -630,60 +539,39 @@ function MainDashboardContent() {
                   className="px-4 py-2 text-xs font-semibold text-white bg-slate-900 hover:bg-slate-800 rounded-xl transition shadow-sm disabled:opacity-50 cursor-pointer"
                   id="submit_create_tenant_btn"
                 >
-                  {createLoading ? "Provisioning boundary..." : "Create Organization"}
+                  {createLoading ? "Mendaftar..." : "Daftar Syarikat"}
                 </button>
               </div>
             </form>
           </div>
         )}
 
-        {/* Create Workspace Form Dropdown UI Panel */}
+        {/* Tambah Akaun Syarikat Baru */}
         {showCreateWSForm && (
-          <div className="bg-white border border-slate-350/60 rounded-2xl p-6 shadow-md" id="create_workspace_form_panel">
+          <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-md" id="create_workspace_form_panel">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="font-display font-medium text-lg text-indigo-950 flex items-center">
-                <LayoutGrid className="w-5 h-5 mr-2 text-indigo-500" />
-                Register New Workspace Compartment
+              <h3 className="font-display font-medium text-lg text-slate-950 flex items-center">
+                <Plus className="w-5 h-5 mr-2 text-indigo-500" />
+                Tambah Akaun Syarikat
               </h3>
-              <button
-                onClick={() => setShowCreateWSForm(false)}
-                className="text-xs text-slate-400 hover:text-slate-600 font-mono uppercase"
-              >
-                Dismiss Form
-              </button>
+              <button onClick={() => setShowCreateWSForm(false)} className="text-xs text-slate-400 hover:text-slate-600">Tutup</button>
             </div>
-            
             <form onSubmit={handleCreateWSSubmit} className="space-y-4">
               <div className="space-y-1">
-                <label className="block text-xs font-semibold text-slate-500 font-mono uppercase">Workspace Label</label>
+                <label className="block text-xs font-semibold text-slate-500 uppercase">Nama Syarikat</label>
                 <input
                   type="text"
                   value={newWSName}
                   onChange={(e) => setNewWSName(e.target.value)}
-                  placeholder="e.g. Company A (Sdn Bhd) General Financial Records"
+                  placeholder="cth: LemonTree Bakery Sdn Bhd"
                   className="w-full px-4 py-2 text-sm bg-slate-50 border border-slate-200 outline-none focus:bg-white focus:border-indigo-600 rounded-xl transition"
                   required
                 />
-                <p className="text-[10px] text-slate-400 font-mono">
-                  Belongs strictly to: <span className="font-bold">{activeTenant?.name}</span>
-                </p>
               </div>
-
               <div className="flex justify-end space-x-2 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setShowCreateWSForm(false)}
-                  className="px-4 py-2 text-xs font-medium text-slate-600 hover:bg-slate-50 border border-transparent hover:border-slate-200 rounded-xl transition cursor-pointer"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={createWSLoading}
-                  className="px-4 py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl transition shadow-sm disabled:opacity-50 cursor-pointer"
-                  id="submit_create_ws_btn"
-                >
-                  {createWSLoading ? "Initializing directory..." : "Register Workspace"}
+                <button type="button" onClick={() => setShowCreateWSForm(false)} className="px-4 py-2 text-xs font-medium text-slate-600 hover:bg-slate-50 rounded-xl transition cursor-pointer">Batal</button>
+                <button type="submit" disabled={createWSLoading} className="px-4 py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl transition shadow-sm disabled:opacity-50 cursor-pointer" id="submit_create_ws_btn">
+                  {createWSLoading ? "Menyimpan..." : "Simpan"}
                 </button>
               </div>
             </form>
@@ -697,7 +585,7 @@ function MainDashboardContent() {
             <span>{createSuccessMsg || createWSSuccessMsg}</span>
           </div>
         )}
-        {activeTenant?.category === "HQ" ? (
+        {(user?.role === "HQ_OWNER" || user?.role === "HQ_STAFF" || activeTenant?.category === "HQ") ? (
           <HQConsoleShell
             tenants={tenants}
             workspaces={workspaces}
@@ -1232,26 +1120,80 @@ function MainDashboardContent() {
   );
 }
 
+function RoleRouter() {
+  const { user } = useAuth();
+  const { activeTenant } = useTenant();
+
+  // V1.0 Role Authority routing
+  if (user?.role === "TENANT_STAFF") {
+    return <Suspense fallback={<LazyFallback />}><StaffHomeScreen /></Suspense>;
+  }
+
+  if (user?.role === "HQ_OWNER" || user?.role === "HQ_STAFF" || activeTenant?.category === "HQ") {
+    return <Suspense fallback={<LazyFallback />}><MainDashboardContent /></Suspense>;
+  }
+
+  // TENANT_OWNER → Owner Business Dashboard
+  return <Suspense fallback={<LazyFallback />}><OwnerDashboard /></Suspense>;
+}
+
+class AppErrorBoundary extends React.Component<
+  { children: React.ReactNode },
+  { hasError: boolean; message: string }
+> {
+  constructor(props: { children: React.ReactNode }) {
+    super(props);
+    this.state = { hasError: false, message: "" };
+  }
+  static getDerivedStateFromError(err: Error) {
+    return { hasError: true, message: err?.message || "Ralat tidak diketahui." };
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 p-8 gap-4">
+          <div className="w-12 h-12 rounded-2xl bg-rose-100 flex items-center justify-center">
+            <AlertTriangle className="w-6 h-6 text-rose-600" />
+          </div>
+          <div className="text-center max-w-md">
+            <h2 className="text-lg font-display font-bold text-slate-900 mb-1">Ralat Aplikasi</h2>
+            <p className="text-sm text-slate-500 mb-4">{this.state.message}</p>
+            <button
+              onClick={() => window.location.reload()}
+              className="px-5 py-2 bg-slate-900 text-white text-xs font-semibold rounded-xl hover:bg-slate-800 transition cursor-pointer"
+            >
+              Cuba Semula
+            </button>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 export default function App() {
   return (
-    <AuthProvider>
-      <Guard>
-        <TenantProvider>
-          <WorkspaceProvider>
-            <PermissionProvider>
-              <AuditProvider>
-                <StorageProvider>
-                  <FinancialRecordsProvider>
-                    <NotificationProvider>
-                      <MainDashboardContent />
-                    </NotificationProvider>
-                  </FinancialRecordsProvider>
-                </StorageProvider>
-              </AuditProvider>
-            </PermissionProvider>
-          </WorkspaceProvider>
-        </TenantProvider>
-      </Guard>
-    </AuthProvider>
+    <AppErrorBoundary>
+      <AuthProvider>
+        <Guard>
+          <TenantProvider>
+            <WorkspaceProvider>
+              <PermissionProvider>
+                <AuditProvider>
+                  <StorageProvider>
+                    <FinancialRecordsProvider>
+                      <NotificationProvider>
+                        <RoleRouter />
+                      </NotificationProvider>
+                    </FinancialRecordsProvider>
+                  </StorageProvider>
+                </AuditProvider>
+              </PermissionProvider>
+            </WorkspaceProvider>
+          </TenantProvider>
+        </Guard>
+      </AuthProvider>
+    </AppErrorBoundary>
   );
 }

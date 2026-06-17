@@ -554,6 +554,87 @@ async function startServer() {
     res.json(output);
   });
 
+  // ── CREATE STAFF ACCOUNT (Admin only) ─────────────────────────────────────
+  app.post("/api/admin/create-staff", async (req, res) => {
+    try {
+      const { email, fullName, role, tenantId, callerJwt } = req.body;
+
+      if (!email || !fullName || !role) {
+        return res.status(400).json({ success: false, error: "Email, nama, dan role diperlukan." });
+      }
+
+      const allowedRoles = ["HQ_STAFF", "TENANT_STAFF"];
+      if (!allowedRoles.includes(role)) {
+        return res.status(400).json({ success: false, error: "Role tidak dibenarkan." });
+      }
+
+      const supabaseUrl = process.env.VITE_SUPABASE_URL;
+      const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+      if (!supabaseUrl || !serviceRoleKey) {
+        return res.status(503).json({ success: false, error: "Sistem belum dikonfigurasi. Sila tambah SUPABASE_SERVICE_ROLE_KEY dalam Railway." });
+      }
+
+      // Verify caller JWT — pastikan caller adalah HQ_OWNER atau TENANT_OWNER
+      if (callerJwt) {
+        const verifyRes = await fetch(`${supabaseUrl}/auth/v1/user`, {
+          headers: { "Authorization": `Bearer ${callerJwt}`, "apikey": process.env.VITE_SUPABASE_ANON_KEY || "" }
+        });
+        if (!verifyRes.ok) {
+          return res.status(401).json({ success: false, error: "Sesi tidak sah. Sila log masuk semula." });
+        }
+        const callerData = await verifyRes.json() as any;
+        const callerRole = callerData?.user_metadata?.role || callerData?.role;
+        const allowed = ["HQ_OWNER", "TENANT_OWNER"];
+        if (!allowed.includes(callerRole)) {
+          return res.status(403).json({ success: false, error: "Hanya HQ Pemilik atau Pemilik Syarikat boleh cipta akaun staf." });
+        }
+      }
+
+      // Generate temporary password
+      const tempPassword = `MyKerani@${Math.random().toString(36).slice(2, 8).toUpperCase()}${Date.now().toString().slice(-4)}!`;
+
+      // Call Supabase Admin API to create user
+      const createRes = await fetch(`${supabaseUrl}/auth/v1/admin/users`, {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${serviceRoleKey}`,
+          "apikey": serviceRoleKey,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          email: email.trim().toLowerCase(),
+          password: tempPassword,
+          email_confirm: true,
+          user_metadata: {
+            fullName,
+            role,
+            tenantId: tenantId || "",
+          }
+        })
+      });
+
+      const createData = await createRes.json() as any;
+
+      if (!createRes.ok) {
+        const errMsg = createData?.msg || createData?.message || createData?.error_description || "Gagal cipta akaun.";
+        return res.status(400).json({ success: false, error: errMsg });
+      }
+
+      return res.json({
+        success: true,
+        userId: createData.id,
+        email: createData.email,
+        tempPassword,
+        message: `Akaun ${role} berjaya dicipta. Kongsikan kata laluan sementara kepada staf anda.`
+      });
+
+    } catch (err: any) {
+      console.error("create-staff error:", err);
+      return res.status(500).json({ success: false, error: err?.message || "Ralat sistem." });
+    }
+  });
+
   app.post("/api/ocr/analyze", async (req, res) => {
     try {
       const { fileDataUrl, fileName, documentType } = req.body;
@@ -985,8 +1066,20 @@ Provide your output precisely formatted in JS JSON matching the required schema.
     app.use(vite.middlewares);
   } else {
     const distPath = path.join(process.cwd(), 'dist');
-    app.use(express.static(distPath));
+    // JS/CSS assets ada hash dalam nama fail — boleh cache lama
+    app.use(express.static(distPath, {
+      setHeaders(res, filePath) {
+        if (filePath.endsWith('.html')) {
+          // HTML jangan cache supaya browser sentiasa dapat versi terbaru
+          res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+        } else if (/\.(js|css|woff2?|ttf|svg|png|jpg|ico)$/.test(filePath)) {
+          // Asset dengan hash boleh cache setahun
+          res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+        }
+      },
+    }));
     app.get('*', (req, res) => {
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
       res.sendFile(path.join(distPath, 'index.html'));
     });
   }

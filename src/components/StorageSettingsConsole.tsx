@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from "react";
+﻿import React, { useState, useEffect } from "react";
 import { useStorage } from "../context/StorageContext";
 import { useWorkspace } from "../context/WorkspaceContext";
 import { useAuth } from "../context/AuthContext";
-import { motion, AnimatePresence } from "motion/react";
+import { motion, AnimatePresence } from "../lib/motionCompat";
 import {
   Lock,
   Cloud,
@@ -52,7 +52,7 @@ export const StorageSettingsConsole: React.FC = () => {
 
   const handleProviderSelect = async (provider: "HQ_MANAGED" | "GOOGLE_DRIVE" | "ONEDRIVE" | "DROPBOX") => {
     if (!isOwnerOrAdmin) {
-      setErrMsg("Access Denied: Only HQ_ADMIN or TENANT owners and administrators may modify storage configurations.");
+      setErrMsg("Access Denied: Only HQ_OWNER or TENANT owners and administrators may modify storage configurations.");
       return;
     }
 
@@ -72,7 +72,7 @@ export const StorageSettingsConsole: React.FC = () => {
 
   const handleToggleConnection = async () => {
     if (!isOwnerOrAdmin) {
-      setErrMsg("Access Denied: Only HQ_ADMIN or TENANT owners and administrators may link storage accounts.");
+      setErrMsg("Access Denied: Only HQ_OWNER or TENANT owners and administrators may link storage accounts.");
       return;
     }
 
@@ -178,7 +178,7 @@ export const StorageSettingsConsole: React.FC = () => {
                 <div>
                   <p className="font-semibold">ROLE SECURITY OVERRIDE ACTIVE</p>
                   <p className="mt-0.5 text-rose-700">
-                    Your current system actor role ({user?.role || "GUEST"}) does not have permissions to modify storage providers. Only **HQ_ADMIN**, **TENANT_OWNER**, or **TENANT_ADMIN** credentials can update workspace storage routing.
+                    Your current system actor role ({user?.role || "GUEST"}) does not have permissions to modify storage providers. Only **HQ_OWNER**, **TENANT_OWNER**, or **TENANT_OWNER** credentials can update workspace storage routing.
                   </p>
                 </div>
               </div>

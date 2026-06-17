@@ -1,9 +1,9 @@
-import React, { useState, useEffect, useRef } from "react";
+﻿import React, { useState, useEffect, useRef } from "react";
 import { useFinancials } from "../context/FinancialRecordsContext";
 import { useAudit } from "../context/AuditContext";
 import { useTenant } from "../context/TenantContext";
 import { useWorkspace } from "../context/WorkspaceContext";
-import { motion } from "motion/react";
+import { motion } from "../lib/motionCompat";
 import {
   Brain,
   Send,

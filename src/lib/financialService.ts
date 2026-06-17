@@ -1,4 +1,4 @@
-import { supabase } from "./supabase";
+import { supabase, isSupabaseConfigured } from "./supabase";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -139,7 +139,7 @@ export async function createExpenseRecord(input: CreateExpenseInput): Promise<Se
 // ─── Dashboard Summary ────────────────────────────────────────────────────────
 
 export async function getDashboardSummary(workspaceId: string): Promise<ServiceResult<DashboardSummary>> {
-  if (!supabase) return notConfigured();
+  if (!isSupabaseConfigured() || !supabase) return notConfigured();
 
   const [incomeResult, expenseResult] = await Promise.all([
     supabase

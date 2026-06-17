@@ -247,7 +247,7 @@ export const MyKeraniAppTabs: React.FC<MyKeraniAppTabsProps> = ({
 
         <div className="text-right px-2 hidden md:block">
           <span className="text-[11px] font-sans font-bold text-slate-500">
-            Ruang Kerja Aktif: <span className="text-indigo-900 font-extrabold">{activeWorkspace?.name || "Tiada Ruang Kerja"}</span>
+            Syarikat: <span className="text-indigo-900 font-extrabold">{activeWorkspace?.name || "Belum dipilih"}</span>
           </span>
         </div>
       </div>
@@ -263,15 +263,15 @@ export const MyKeraniAppTabs: React.FC<MyKeraniAppTabsProps> = ({
             ) : (
               <div className="bg-white border border-slate-200 rounded-3xl p-12 text-center space-y-4 shadow-sm" id="tab_active_ws_lock">
                 <FolderLock className="w-12 h-12 text-amber-500 mx-auto animate-pulse" />
-                <h3 className="font-display font-semibold text-slate-900 text-lg">Helaian Ruang Kerja Ditutup</h3>
+                <h3 className="font-display font-semibold text-slate-900 text-lg">Pilih Syarikat Anda</h3>
                 <p className="text-sm text-slate-500 max-w-sm mx-auto">
-                  Sila pilih ruang kerja (Workspace) dalam tab <strong>More</strong> untuk membolehkan penganalisisan kewangan pintar dengan Kerani AI peribadi anda.
+                  Sila pilih syarikat dalam tab <strong>More</strong> untuk mula berbual dengan Kerani AI anda.
                 </p>
                 <button
                   onClick={() => setActiveNavTab("more")}
                   className="px-5 py-2.5 bg-indigo-950 text-white rounded-xl text-xs font-semibold hover:bg-slate-900 transition cursor-pointer shadow-md"
                 >
-                  Pilih Ruang Kerja Di Tab More
+                  Pilih Syarikat →
                 </button>
               </div>
             )}
@@ -286,15 +286,15 @@ export const MyKeraniAppTabs: React.FC<MyKeraniAppTabsProps> = ({
             ) : (
               <div className="bg-white border border-slate-200 rounded-3xl p-12 text-center space-y-4 shadow-sm">
                 <AlertTriangle className="w-12 h-12 text-amber-500 mx-auto animate-pulse" />
-                <h3 className="font-display font-semibold text-slate-900 text-lg">Peta Graf Tidak Tersedia</h3>
+                <h3 className="font-display font-semibold text-slate-900 text-lg">Laporan Belum Tersedia</h3>
                 <p className="text-sm text-slate-500 max-w-sm mx-auto">
-                  Pilih ruang kerja dalam tab <strong>More</strong> dahulu untuk memaparkan statistik kewangan perniagaan dari lekatan pangkalan data.
+                  Pilih syarikat dalam tab <strong>More</strong> dahulu untuk melihat laporan kewangan anda.
                 </p>
                 <button
                   onClick={() => setActiveNavTab("more")}
                   className="px-5 py-2.5 bg-indigo-950 text-white rounded-xl text-xs font-semibold hover:bg-slate-900 transition cursor-pointer shadow-md"
                 >
-                  Pilih Ruang Kerja &rarr;
+                  Pilih Syarikat →
                 </button>
               </div>
             )}
@@ -309,37 +309,33 @@ export const MyKeraniAppTabs: React.FC<MyKeraniAppTabsProps> = ({
             ) : (
               <div className="bg-white border border-slate-200 rounded-3xl p-12 text-center space-y-4 shadow-sm">
                 <Folder className="w-12 h-12 text-amber-500 mx-auto animate-pulse" />
-                <h3 className="font-display font-semibold text-slate-900 text-lg">Folder Dokumen Terkunci</h3>
+                <h3 className="font-display font-semibold text-slate-900 text-lg">Dokumen Belum Dipilih</h3>
                 <p className="text-sm text-slate-500 max-w-sm mx-auto">
-                  Peti simpanan bukti-bukti resit, invois, dan penyata tidak dapat diakses tanpa pemilihan fail ruang kerja di tab <strong>More</strong>.
+                  Pilih syarikat dalam tab <strong>More</strong> untuk melihat resit, invois, dan penyata bank anda.
                 </p>
                 <button
                   onClick={() => setActiveNavTab("more")}
                   className="px-5 py-2.5 bg-indigo-950 text-white rounded-xl text-xs font-semibold hover:bg-slate-900 transition cursor-pointer shadow-md"
                 >
-                  Buka Kunci Ruang Kerja &rarr;
+                  Pilih Syarikat →
                 </button>
               </div>
             )}
           </div>
         )}
 
-        {/* TAB 4: ⚙️ MORE (ADVANCED SWITCHER, LEDGERS CONSOLE AND DATABASE GOVERNANCE CENTER) */}
+        {/* TAB 4: ⚙️ MORE */}
         {activeNavTab === "more" && (
           <div className="space-y-8 animate-fade-in" id="more_tab_pane">
-            
-            {/* WORKSPACE SELECTION DECK */}
+
+            {/* PILIH SYARIKAT */}
             <div className="bg-white border border-slate-200 rounded-3xl p-6 md:p-8 shadow-sm space-y-6" id="workspace_switcher_module">
               <div>
-                <div className="flex items-center space-x-2 text-indigo-600 font-mono text-xs uppercase tracking-wider mb-1">
-                  <FolderLock className="w-4 h-4" />
-                  <span>Petak Ruang Kerja (Workspace Compartments)</span>
-                </div>
-                <h3 className="font-display font-semibold text-2xl text-slate-950 tracking-tight">
-                  Saling Tukar Ruang Kerja Terpelihara
+                <h3 className="font-display font-semibold text-xl text-slate-950 tracking-tight">
+                  Syarikat Saya
                 </h3>
-                <p className="text-xs text-slate-500 leading-relaxed max-w-2xl font-sans">
-                  Sistem Kerani MyKerani mengasingkan data perniagaan berbeza mengikut Ruang Kerja. Tukar fail akaun anda dengan satu klik mudah di bawah.
+                <p className="text-xs text-slate-500 leading-relaxed max-w-2xl font-sans mt-1">
+                  Pilih syarikat yang ingin anda urus. Semua rekod kewangan akan dipaparkan mengikut syarikat yang dipilih.
                 </p>
               </div>
 
@@ -370,7 +366,7 @@ export const MyKeraniAppTabs: React.FC<MyKeraniAppTabsProps> = ({
                       </div>
                       <div>
                         <p className={`text-[9px] font-sans uppercase tracking-tight ${isCurrent ? "text-indigo-300" : "text-slate-400 font-medium"}`}>
-                          Syarikat Akaun
+                          Syarikat
                         </p>
                         <h4 className="font-semibold text-xs leading-snug mt-1 truncate max-w-full">
                           {ws.name}
@@ -382,15 +378,14 @@ export const MyKeraniAppTabs: React.FC<MyKeraniAppTabsProps> = ({
               </div>
             </div>
 
-            {/* FINANCIAL LEDGER WRITING INTERFACE */}
+            {/* REKOD TRANSAKSI */}
             {activeWorkspace && (
               <div className="space-y-4" id="modular_records_console">
                 <div className="pb-2 border-b border-slate-100 flex items-center justify-between">
                   <div className="flex items-center space-x-2">
                     <FileSpreadsheet className="w-4 h-4 text-slate-400" />
-                    <span className="text-xs font-bold uppercase font-sans text-indigo-950">Rekod Transaksi Kewangan Lejar</span>
+                    <span className="text-xs font-bold uppercase text-slate-700">Rekod Transaksi</span>
                   </div>
-                  <span className="text-[10px] font-sans bg-indigo-50 border border-indigo-150 text-indigo-950 px-2 py-0.5 rounded font-bold uppercase font-sans">Manual Log</span>
                 </div>
                 <FinancialRecordsConsole supabaseSummary={dashboardSummary} summaryLoading={summaryLoading} />
               </div>
