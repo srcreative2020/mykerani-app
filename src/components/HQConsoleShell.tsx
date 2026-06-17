@@ -257,34 +257,22 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
         #hq_root .bg-white{background:#fff!important}
       `}</style>
 
-      {/* Mobile header */}
-      <header className="md:hidden bg-white border-b border-slate-200 px-4 py-3 flex items-center justify-between shrink-0">
+      {/* Mobile top header */}
+      <header className="md:hidden bg-white border-b px-4 py-3 flex items-center justify-between shrink-0" style={{borderColor:"#CCE8D9"}}>
         <div className="flex items-center space-x-2.5">
-          <div className="w-7 h-7 rounded-lg bg-emerald-700 flex items-center justify-center text-white font-bold text-xs">MK</div>
-          <span className="font-bold text-slate-900 text-sm">MYKERANI HQ</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="text-xs text-slate-500 font-medium">{navItems.find(n => n.id === activePage)?.label}</span>
-          <button onClick={() => setSidebarOpen(true)} className="p-1.5 rounded-lg hover:bg-slate-100 cursor-pointer">
-            <Menu className="w-5 h-5 text-slate-600" />
-          </button>
-        </div>
-      </header>
-
-      {/* Mobile sidebar drawer */}
-      {sidebarOpen && (
-        <div className="md:hidden fixed inset-0 z-50 flex">
-          <div className="absolute inset-0 bg-black/40" onClick={() => setSidebarOpen(false)} />
-          <div className="relative w-64 h-full z-10">
-            <div className="absolute top-3 right-3">
-              <button onClick={() => setSidebarOpen(false)} className="p-1.5 bg-white rounded-lg shadow cursor-pointer">
-                <X className="w-4 h-4 text-slate-500" />
-              </button>
-            </div>
-            <Sidebar mobile />
+          <div className="w-7 h-7 rounded-xl flex items-center justify-center text-white font-bold text-xs shadow-sm" style={{background:"#5A9E7A"}}>MK</div>
+          <div>
+            <p className="font-bold text-slate-900 text-sm leading-tight">MYKERANI HQ</p>
+            <p className="text-[10px]" style={{color:"#5A9E7A"}}>{isStaff ? "Kakitangan HQ" : "Pemilik HQ"}</p>
           </div>
         </div>
-      )}
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-semibold" style={{color:"#2C5040"}}>{navItems.find(n => n.id === activePage)?.label}</span>
+          <div className="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-bold" style={{background:"#5A9E7A"}}>
+            {firstName.charAt(0).toUpperCase()}
+          </div>
+        </div>
+      </header>
 
       <div className="flex flex-1 overflow-hidden">
         {/* Desktop sidebar */}
@@ -294,7 +282,7 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
 
         {/* Main content */}
         <main className="flex-1 overflow-y-auto" id="hq_main">
-          <div className="max-w-5xl mx-auto p-5 pb-10 space-y-5">
+          <div className="max-w-5xl mx-auto p-4 md:p-5 pb-28 md:pb-10 space-y-4 md:space-y-5">
 
             {/* â•â•â•â• DASHBOARD â•â•â•â• */}
             {activePage === "dashboard" && (
@@ -906,6 +894,45 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
           </div>
         </main>
       </div>
+
+      {/* ── Mobile Bottom Nav ── */}
+      {(() => {
+        const ownerBottomNav = [
+          { id: "dashboard" as HQPage,  label: "Dashboard",  icon: LayoutDashboard },
+          { id: "customers" as HQPage,  label: "Pelanggan",  icon: Users },
+          { id: "support" as HQPage,    label: "Sokongan",   icon: Headphones, badge: openCases },
+          { id: "revenue" as HQPage,    label: "Hasil",      icon: DollarSign },
+          { id: "settings" as HQPage,   label: "Tetapan",    icon: Settings },
+        ];
+        const staffBottomNav = [
+          { id: "dashboard" as HQPage,     label: "Dashboard",  icon: LayoutDashboard },
+          { id: "customers" as HQPage,     label: "Pelanggan",  icon: Users },
+          { id: "subscriptions" as HQPage, label: "Langganan",  icon: Repeat },
+          { id: "support" as HQPage,       label: "Sokongan",   icon: Headphones, badge: openCases },
+        ];
+        const mobileNav = isStaff ? staffBottomNav : ownerBottomNav;
+        return (
+          <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white border-t flex items-stretch" style={{borderColor:"#CCE8D9", paddingBottom:"env(safe-area-inset-bottom)"}}>
+            {mobileNav.map(({ id, label, icon: Icon, badge }: any) => {
+              const active = activePage === id;
+              return (
+                <button key={id} onClick={() => setActivePage(id)}
+                  className="flex-1 flex flex-col items-center justify-center py-2.5 gap-0.5 relative cursor-pointer transition-all"
+                  style={{color: active ? "#5A9E7A" : "#94a3b8"}}>
+                  <div className="relative">
+                    <Icon className="w-5 h-5" />
+                    {badge > 0 && (
+                      <span className="absolute -top-1.5 -right-1.5 w-3.5 h-3.5 rounded-full bg-red-500 text-white text-[8px] font-bold flex items-center justify-center">{badge}</span>
+                    )}
+                  </div>
+                  <span className="text-[10px] font-semibold leading-tight">{label}</span>
+                  {active && <div className="absolute top-0 left-1/2 -translate-x-1/2 w-8 h-0.5 rounded-full" style={{background:"#5A9E7A"}} />}
+                </button>
+              );
+            })}
+          </nav>
+        );
+      })()}
     </div>
   );
 };
