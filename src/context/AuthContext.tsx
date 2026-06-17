@@ -143,12 +143,47 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
 
       if (data.user) {
+        // Lookup role assignment from DB (source of truth)
+        const { data: roleRows } = await supabase
+          .from("user_role_assignments")
+          .select("role, tenant_id, full_name")
+          .eq("user_id", data.user.id)
+          .limit(1);
+
+        let tenantId   = data.user.user_metadata?.tenantId;
+        let role       = (data.user.user_metadata?.role as UserRole) || "TENANT_OWNER";
+        let fullName   = data.user.user_metadata?.fullName || data.user.email?.split("@")[0] || "Pengguna";
+
+        if (roleRows && roleRows.length > 0) {
+          // Use DB record — more reliable than metadata
+          tenantId = roleRows[0].tenant_id;
+          role     = roleRows[0].role as UserRole;
+          fullName = roleRows[0].full_name || fullName;
+        } else {
+          // First login — auto-provision tenant + workspace + role assignment
+          const newTenantId   = crypto.randomUUID();
+          const newWorkspaceId = crypto.randomUUID();
+          const bizName = fullName;
+
+          await supabase.from("tenants").insert({ id: newTenantId, name: bizName, category: "USER" });
+          await supabase.from("workspaces").insert({ id: newWorkspaceId, tenant_id: newTenantId, name: bizName, slug: newTenantId.slice(0, 8), is_active: true });
+          await supabase.from("user_role_assignments").insert({
+            user_id: data.user.id, email: cleanEmail, full_name: fullName,
+            role: "TENANT_OWNER", tenant_id: newTenantId,
+          });
+
+          // Save tenantId to user metadata for next login
+          await supabase.auth.updateUser({ data: { tenantId: newTenantId, role: "TENANT_OWNER", fullName } });
+          tenantId = newTenantId;
+          role     = "TENANT_OWNER";
+        }
+
         const profile: UserSessionProfile = {
           id: data.user.id,
           email: data.user.email || "",
-          role: (data.user.user_metadata?.role as UserRole) || "TENANT_OWNER",
-          fullName: data.user.user_metadata?.fullName || "Account Operator",
-          tenantId: data.user.user_metadata?.tenantId,
+          role,
+          fullName,
+          tenantId,
         };
         setState({ user: profile, loading: false, error: null, isMockUser: false });
       }
