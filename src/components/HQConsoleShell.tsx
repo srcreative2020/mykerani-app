@@ -463,7 +463,7 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
                           </div>
                           <div className="flex-1 min-w-0">
                             <p className="text-sm font-semibold text-slate-800 truncate">{c.name}</p>
-                            <p className="text-[11px] text-slate-400">{c.plan} Â· Perbaharui {c.renewal}</p>
+                            <p className="text-[11px] text-slate-400">{c.plan} &middot; Perbaharui {c.renewal || "-"}</p>
                           </div>
                           <StatusBadge status={c.status} />
                           <button onClick={() => setActivePage("customers")} className="text-slate-300 hover:text-emerald-600 transition cursor-pointer">
@@ -815,7 +815,7 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
                         <div key={c.id} className="px-5 py-4 flex items-center space-x-4">
                           <div className="flex-1 min-w-0">
                             <p className="text-sm font-semibold text-slate-800 truncate">{c.name}</p>
-                            <p className="text-[11px] text-slate-400">{c.plan} Â· Perbaharui {c.renewal}</p>
+                            <p className="text-[11px] text-slate-400">{c.plan} &middot; Perbaharui {c.renewal || "-"}</p>
                           </div>
                           <StatusBadge status={c.status} />
                           <div className="flex gap-1.5">
@@ -831,38 +831,112 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
             )}
 
             {/* â•â•â•â• REVENUE (HQ_OWNER only) â•â•â•â• */}
-            {activePage === "revenue" && !isStaff && (
+            {activePage === "revenue" && !isStaff && (() => {
+              const activeC = customers.filter(c => c.status === "active");
+              const suspendedC = customers.filter(c => c.status === "suspended");
+              const arr = totalMRR * 12;
+              return (
               <div className="space-y-5" id="hq_revenue">
-                <h1 className="text-xl font-bold text-slate-900">Hasil & Keuntungan</h1>
+                <h1 className="text-xl font-bold text-slate-900">Hasil & Pendapatan</h1>
 
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                  <MetricCard label="Hasil Bulan Ini"  value={`RM ${totalMRR.toLocaleString()}`} icon={DollarSign} color="emerald" trend="up" />
-                  <MetricCard label="Kos AI"           value="RM -"    sub="anggaran"   icon={Zap}        color="amber" />
-                  <MetricCard label="Kos Storan"       value="RM -"    sub="anggaran"   icon={HardDrive}  color="slate" />
-                  <MetricCard label="Keuntungan Kasar" value="RM -"    sub="anggaran"   icon={TrendingUp} color="teal" trend="up" />
-                  <MetricCard label="MRR"              value={`RM ${totalMRR.toLocaleString()}`} sub="Recurring Revenue" icon={RefreshCw} color="violet" />
-                  <MetricCard label="Kos OCR"          value="RM -"    sub="anggaran"   icon={Brain}      color="slate" />
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  <MetricCard label="MRR" value={`RM ${totalMRR.toLocaleString()}`} sub="bulan ini" icon={DollarSign} color="emerald" trend="up" />
+                  <MetricCard label="ARR" value={`RM ${arr.toLocaleString()}`} sub="anggaran tahunan" icon={TrendingUp} color="teal" trend="up" />
+                  <MetricCard label="Pelanggan Aktif" value={activeC.length} sub={`${suspendedC.length} digantung`} icon={UserCheck} color="violet" />
+                  <MetricCard label="Perlu Perhatian" value={customers.filter(c=>c.attention).length} sub="berisiko" icon={AlertCircle} color={customers.filter(c=>c.attention).length > 0 ? "red" : "slate"} />
                 </div>
 
                 {/* Revenue by plan */}
                 <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-4">
                   <h3 className="text-sm font-bold text-slate-900">Hasil Mengikut Plan</h3>
+                  {plans.length === 0 && <p className="text-xs text-slate-400 text-center py-4">Tiada plan lagi. Cipta plan di halaman Pengebilan.</p>}
                   {plans.map(p => {
-                    const rev = customers.filter(c => c.plan === p.name && c.status === "active").length * p.price;
+                    const subs = activeC.filter(c => c.plan === p.name);
+                    const rev = subs.length * p.price;
+                    const pct = totalMRR > 0 ? (rev / totalMRR) * 100 : 0;
                     return (
-                      <div key={p.id} className="flex items-center space-x-4">
-                        <span className="text-xs font-semibold text-slate-700 w-24 shrink-0">{p.name}</span>
-                        <div className="flex-1 h-2 bg-slate-100 rounded-full overflow-hidden">
-                          <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${totalMRR > 0 ? (rev/totalMRR)*100 : 0}%` }} />
+                      <div key={p.id} className="space-y-1">
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="font-semibold text-slate-700">{p.name} <span className="text-slate-400 font-normal">({subs.length} aktif)</span></span>
+                          <span className="font-bold text-slate-800">RM {rev.toLocaleString()}/bln</span>
                         </div>
-                        <span className="text-xs font-bold text-slate-800 w-20 text-right shrink-0">RM {rev.toLocaleString()}</span>
+                        <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
+                          <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${pct}%` }} />
+                        </div>
                       </div>
                     );
                   })}
-                  {plans.length === 0 && <p className="text-xs text-slate-400 text-center py-4">Tiada data lagi</p>}
                 </div>
+
+                {/* Customer MRR table */}
+                <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+                  <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
+                    <h3 className="text-sm font-bold text-slate-900">Sumbangan Pelanggan</h3>
+                    <span className="text-xs text-slate-400">{activeC.length} aktif</span>
+                  </div>
+                  {activeC.length === 0 ? (
+                    <div className="p-10 text-center">
+                      <DollarSign className="w-8 h-8 text-slate-200 mx-auto mb-2" />
+                      <p className="text-xs text-slate-400">Tambah pelanggan untuk lihat sumbangan hasil</p>
+                    </div>
+                  ) : (
+                    <div className="divide-y divide-slate-50">
+                      {activeC.sort((a, b) => b.mrr - a.mrr).map(c => {
+                        const pct = totalMRR > 0 ? (c.mrr / totalMRR) * 100 : 0;
+                        return (
+                          <div key={c.id} className="px-5 py-3 flex items-center gap-4">
+                            <div className="w-7 h-7 rounded-xl bg-emerald-50 text-emerald-700 font-bold text-xs flex items-center justify-center shrink-0">
+                              {c.name.charAt(0).toUpperCase()}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-xs font-semibold text-slate-800 truncate">{c.name}</p>
+                              <div className="flex items-center gap-2 mt-0.5">
+                                <div className="flex-1 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                                  <div className="h-full bg-emerald-400 rounded-full" style={{ width: `${pct}%` }} />
+                                </div>
+                                <span className="text-[10px] text-slate-400 shrink-0">{pct.toFixed(0)}%</span>
+                              </div>
+                            </div>
+                            <div className="text-right shrink-0">
+                              <p className="text-xs font-bold text-emerald-700">RM {c.mrr.toLocaleString()}</p>
+                              <p className="text-[10px] text-slate-400">{c.plan || "tiada plan"}</p>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+
+                {/* At-risk / suspended */}
+                {suspendedC.length > 0 && (
+                  <div className="bg-red-50 border border-red-100 rounded-2xl p-5 space-y-3">
+                    <div className="flex items-center gap-2">
+                      <AlertTriangle className="w-4 h-4 text-red-500" />
+                      <h3 className="text-sm font-bold text-red-700">Akaun Digantung ({suspendedC.length})</h3>
+                    </div>
+                    <p className="text-xs text-red-500">
+                      Potensi MRR terhilang: RM {suspendedC.reduce((s, c) => s + c.mrr, 0).toLocaleString()}/bln
+                    </p>
+                    <div className="space-y-2">
+                      {suspendedC.map(c => (
+                        <div key={c.id} className="flex items-center justify-between bg-white rounded-xl px-4 py-2.5 border border-red-100">
+                          <div>
+                            <p className="text-xs font-semibold text-slate-800">{c.name}</p>
+                            <p className="text-[10px] text-slate-400">{c.plan} &middot; {c.email}</p>
+                          </div>
+                          <button onClick={() => toggleStatus(c.id)}
+                            className="px-3 py-1.5 bg-emerald-600 text-white rounded-lg text-[10px] font-bold cursor-pointer hover:bg-emerald-700 transition">
+                            Aktifkan
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
-            )}
+              );
+            })()}
 
             {/* â•â•â•â• SETTINGS (HQ_OWNER only) â•â•â•â• */}
             {activePage === "settings" && !isStaff && (
