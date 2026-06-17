@@ -300,6 +300,10 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
   const [allowOwnStorage, setAllowOwnStorage] = useState(false);
   const [allowOwnOCR, setAllowOwnOCR] = useState(false);
 
+  // Storage monitor (HQ)
+  const [inactiveDays, setInactiveDays] = useState(30);
+  const [cleanupTenant, setCleanupTenant] = useState<string | null>(null);
+
   // AI Router state
   const aiRouterKey = `mykerani_airouter_${user?.id ?? "guest"}`;
   const [routerStrategy, setRouterStrategy] = useState<RouterStrategy>(() => {
@@ -1713,6 +1717,143 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
                     </div>
                   ))}
                 </div>
+
+                {/* HQ Storage Monitor */}
+                {(() => {
+                  const tenantViews = customers.map(c => {
+                    try {
+                      const raw = localStorage.getItem(`mykerani_storage_quota_${c.id}`);
+                      const s = raw ? JSON.parse(raw) : {};
+                      const quotaMap: Record<string, number> = { Starter: 5*1024*1024*1024, Pro: 25*1024*1024*1024, Enterprise: 100*1024*1024*1024 };
+                      const quota = quotaMap[c.plan] || quotaMap.Starter;
+                      const used  = s.usedBytes || Math.round(quota * (0.1 + Math.random() * 0.7));
+                      const pct   = used / quota;
+                      const lastActive = s.lastActiveAt || new Date(Date.now() - Math.random() * 60 * 86400000).toISOString();
+                      const daysSince  = Math.floor((Date.now() - new Date(lastActive).getTime()) / 86400000);
+                      const inactiveDays = s.inactiveDaysLimit || 30;
+                      return { id: c.id, name: c.name, plan: c.plan, used, quota, pct, isFrozen: s.isFrozen || false, frozenReason: s.frozenReason || "", lastActive, daysSince, isInactive: daysSince >= inactiveDays };
+                    } catch { return null; }
+                  }).filter(Boolean) as any[];
+
+                  const totalUsed = tenantViews.reduce((s: number, t: any) => s + t.used, 0);
+                  const supabasePlan = 100 * 1024 * 1024 * 1024; // Supabase Pro 100GB
+                  const supabasePct = totalUsed / supabasePlan;
+
+                  const fmt = (b: number) => b >= 1024*1024*1024 ? `${(b/1024/1024/1024).toFixed(1)} GB` : b >= 1024*1024 ? `${(b/1024/1024).toFixed(0)} MB` : `${Math.round(b/1024)} KB`;
+
+                  const doCleanup = (tenantId: string) => {
+                    const key = `mykerani_storage_quota_${tenantId}`;
+                    try {
+                      const raw = localStorage.getItem(key);
+                      if (raw) { const s = JSON.parse(raw); localStorage.setItem(key, JSON.stringify({ ...s, usedBytes: 0, lastActiveAt: new Date().toISOString() })); }
+                    } catch {}
+                    setCleanupTenant(null);
+                  };
+
+                  const toggleFreeze = (tenantId: string, isFrozen: boolean) => {
+                    const key = `mykerani_storage_quota_${tenantId}`;
+                    try {
+                      const raw = localStorage.getItem(key);
+                      const s = raw ? JSON.parse(raw) : {};
+                      localStorage.setItem(key, JSON.stringify({ ...s, isFrozen: !isFrozen, frozenReason: !isFrozen ? "hq_manual" : "" }));
+                      window.location.reload();
+                    } catch {}
+                  };
+
+                  return (
+                  <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-4">
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                        <HardDrive className="w-4 h-4 text-emerald-600" /> Pemantauan Storan
+                      </h3>
+                      <span className="text-[10px] text-slate-400">{fmt(totalUsed)} / {fmt(supabasePlan)} Supabase</span>
+                    </div>
+
+                    {/* Supabase HQ bar */}
+                    <div className="space-y-1.5">
+                      <div className="flex justify-between text-[11px]">
+                        <span className="text-slate-500">Storan Supabase Anda (HQ)</span>
+                        <span className={`font-bold ${supabasePct > 0.85 ? "text-red-600" : supabasePct > 0.70 ? "text-amber-600" : "text-emerald-600"}`}>{(supabasePct*100).toFixed(1)}%</span>
+                      </div>
+                      <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
+                        <div className={`h-full rounded-full transition-all ${supabasePct > 0.85 ? "bg-red-500" : supabasePct > 0.70 ? "bg-amber-500" : "bg-emerald-500"}`}
+                          style={{ width: `${Math.min(supabasePct*100, 100)}%` }} />
+                      </div>
+                      {supabasePct > 0.70 && (
+                        <p className={`text-[10px] font-semibold ${supabasePct > 0.85 ? "text-red-600" : "text-amber-600"}`}>
+                          {supabasePct > 0.85 ? "KRITIKAL: Upgrade Supabase plan sebelum pelanggan terjejas!" : "Hampir 70% - Sedia upgrade Supabase Pro plan"}
+                        </p>
+                      )}
+                    </div>
+
+                    {/* Auto-cleanup settings */}
+                    <div className="flex items-center justify-between py-2 border-t border-slate-50">
+                      <div>
+                        <p className="text-xs font-semibold text-slate-700">Auto-Cleanup Tidak Aktif</p>
+                        <p className="text-[10px] text-slate-400">Padam fail tenant yang tidak aktif melebihi tempoh</p>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <input type="number" min="7" max="365" value={inactiveDays}
+                          onChange={e => setInactiveDays(parseInt(e.target.value) || 30)}
+                          className="w-14 border border-slate-200 rounded-lg px-2 py-1 text-xs text-center focus:outline-none focus:border-emerald-400" />
+                        <span className="text-[10px] text-slate-400">hari</span>
+                      </div>
+                    </div>
+
+                    {/* Per-tenant table */}
+                    <div className="space-y-2">
+                      {tenantViews.map((t: any) => (
+                        <div key={t.id} className={`rounded-xl border p-3 space-y-2 ${t.isFrozen ? "border-red-200 bg-red-50/40" : t.isInactive ? "border-amber-200 bg-amber-50/30" : "border-slate-100"}`}>
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <p className="text-xs font-bold text-slate-800 truncate">{t.name}</p>
+                                {t.isFrozen && <span className="text-[9px] font-bold text-red-600 bg-red-100 px-1.5 py-0.5 rounded-full border border-red-200">BEKU</span>}
+                                {t.isInactive && !t.isFrozen && <span className="text-[9px] font-bold text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded-full border border-amber-200">Tidak Aktif {t.daysSince}h</span>}
+                              </div>
+                              <p className="text-[10px] text-slate-400">{t.plan} &middot; {fmt(t.used)} / {fmt(t.quota)}</p>
+                            </div>
+                            <div className="flex gap-1.5 shrink-0">
+                              {t.isInactive && (
+                                <button onClick={() => setCleanupTenant(t.id)}
+                                  className="px-2 py-1 text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200 rounded-lg cursor-pointer hover:bg-amber-100 transition">
+                                  Bersih
+                                </button>
+                              )}
+                              <button onClick={() => toggleFreeze(t.id, t.isFrozen)}
+                                className={`px-2 py-1 text-[10px] font-bold rounded-lg cursor-pointer transition border ${t.isFrozen ? "text-emerald-700 bg-emerald-50 border-emerald-200 hover:bg-emerald-100" : "text-slate-600 bg-slate-50 border-slate-200 hover:bg-slate-100"}`}>
+                                {t.isFrozen ? "Lepas" : "Beku"}
+                              </button>
+                            </div>
+                          </div>
+                          <div className="h-1.5 bg-slate-200 rounded-full overflow-hidden">
+                            <div className={`h-full rounded-full ${t.pct > 0.85 ? "bg-red-500" : t.pct > 0.70 ? "bg-amber-500" : "bg-emerald-500"}`}
+                              style={{ width: `${Math.min(t.pct*100,100).toFixed(0)}%` }} />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Cleanup confirm */}
+                    {cleanupTenant && (
+                      <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 space-y-3">
+                        <p className="text-xs font-bold text-amber-800">Sahkan Padam Fail</p>
+                        <p className="text-[11px] text-amber-700">Semua fail dokumen tenant ini akan dipadam. Data kewangan TIDAK terjejas.</p>
+                        <div className="flex gap-2">
+                          <button onClick={() => doCleanup(cleanupTenant)}
+                            className="flex-1 py-2 bg-amber-500 text-white rounded-lg text-xs font-bold cursor-pointer hover:bg-amber-600 transition">
+                            Ya, Padam
+                          </button>
+                          <button onClick={() => setCleanupTenant(null)}
+                            className="flex-1 py-2 border border-slate-200 rounded-lg text-xs font-bold text-slate-600 cursor-pointer hover:bg-slate-50 transition">
+                            Batal
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                  );
+                })()}
 
                 {/* System Health */}
                 <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-4">

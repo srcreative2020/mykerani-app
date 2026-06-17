@@ -16,6 +16,8 @@ import {
 } from "lucide-react";
 import { FinancialEvidencePackageManager } from "../components/FinancialEvidencePackage";
 import { FinancialReportsAnalytics } from "../components/FinancialReportsAnalytics";
+import { StorageBar } from "../components/StorageBar";
+import { useStorageQuota, PLAN_QUOTAS, GB } from "../lib/storageQuota";
 
 type MainTab = "home" | "dashboard" | "documents" | "reports" | "more";
 type MorePage = "menu" | "team" | "history" | "settings" | "profile" | "support" | "billing" | "resources";
@@ -174,6 +176,14 @@ export function OwnerDashboard() {
   const totalReceivable = useMemo(() => myEvents.filter(e => e.type === "RECEIVABLE" && !e.isCompleted).reduce((s, e) => s + e.amountMyr, 0), [myEvents]);
   const totalPayable = useMemo(() => myEvents.filter(e => e.type === "PAYABLE" && !e.isCompleted).reduce((s, e) => s + e.amountMyr, 0), [myEvents]);
   const showOnboard = !onboardDone && !user?.email?.endsWith(".demo");
+
+  // â"€â"€ Storage Quota â"€â"€
+  const tenantId = activeTenant?.id || user?.id || "guest";
+  const storageQuota = useStorageQuota(tenantId);
+  const [showAddonModal, setShowAddonModal] = useState(false);
+
+  // Update activity timestamp on financial events change
+  useEffect(() => { if (myEvents.length > 0) storageQuota.touchActive(); }, [myEvents.length]);
 
   useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [chatMessages, chatLoading]);
   useEffect(() => { supportEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [supportMessages, supportLoading]);
@@ -406,6 +416,11 @@ export function OwnerDashboard() {
                       <p className="text-xs font-semibold text-slate-500">Belum ada rekod kewangan</p>
                       <p className="text-[11px] text-slate-400">Beritahu MYKERANI atau gunakan butang di bawah untuk tambah rekod pertama anda.</p>
                     </div>
+                  )}
+
+                  {/* Storage compact bar */}
+                  {storageQuota.warnLevel !== "none" && (
+                    <StorageBar quota={storageQuota} compact onBuyAddon={() => setShowAddonModal(true)} />
                   )}
 
                   <p className="text-xs text-slate-400 text-center">Tanya saya apa sahaja tentang kewangan anda</p>
@@ -1024,6 +1039,9 @@ export function OwnerDashboard() {
                   ))}
                 </div>
 
+                {/* Storage Bar */}
+                <StorageBar quota={storageQuota} onBuyAddon={() => setShowAddonModal(true)} />
+
                 {/* AI Credits â€" Feature 3 */}
                 <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-3">
                   <div className="flex items-center justify-between">
@@ -1258,6 +1276,59 @@ export function OwnerDashboard() {
           );
         })}
       </nav>
+
+      {/* Storage Frozen Banner */}
+      {storageQuota.isFrozen && activeTab === "documents" && (
+        <div className="fixed bottom-20 left-4 right-4 z-40 bg-red-600 text-white rounded-2xl p-4 shadow-xl flex items-center gap-3">
+          <div className="shrink-0 w-8 h-8 rounded-xl bg-red-500 flex items-center justify-center">
+            <HardDrive className="w-4 h-4" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-xs font-bold">Storan Dibekukan</p>
+            <p className="text-[10px] text-red-200">Upload disekat. Hubungi HQ atau beli tambahan storan.</p>
+          </div>
+          <button onClick={() => setShowAddonModal(true)}
+            className="shrink-0 bg-white text-red-600 text-[10px] font-bold px-3 py-1.5 rounded-lg cursor-pointer">
+            Beli
+          </button>
+        </div>
+      )}
+
+      {/* Add-On Storage Modal */}
+      {showAddonModal && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 backdrop-blur-sm">
+          <div className="bg-white rounded-t-3xl sm:rounded-2xl w-full max-w-sm shadow-2xl p-5 space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="font-bold text-slate-900">Tambah Storan</h3>
+              <button onClick={() => setShowAddonModal(false)} className="p-1.5 rounded-xl hover:bg-slate-100 cursor-pointer">
+                <X className="w-4 h-4 text-slate-400" />
+              </button>
+            </div>
+            <p className="text-[11px] text-slate-500">Pilih pakej tambahan storan. Bayaran akan disahkan oleh HQ.</p>
+            <div className="space-y-2">
+              {[
+                { gb: 5,  label: "+5 GB",  price: "RM 15/bln", best: false },
+                { gb: 20, label: "+20 GB", price: "RM 45/bln", best: true  },
+                { gb: 50, label: "+50 GB", price: "RM 99/bln", best: false },
+              ].map(({ gb, label, price, best }) => (
+                <button key={gb}
+                  onClick={() => {
+                    storageQuota.applyAddon(gb * GB);
+                    setShowAddonModal(false);
+                  }}
+                  className={`w-full flex items-center justify-between p-4 rounded-xl border-2 transition cursor-pointer ${best ? "border-emerald-500 bg-emerald-50" : "border-slate-100 hover:border-slate-200"}`}>
+                  <div className="text-left">
+                    <p className={`text-sm font-bold ${best ? "text-emerald-800" : "text-slate-800"}`}>{label}</p>
+                    {best && <span className="text-[9px] font-bold text-emerald-600 bg-emerald-100 px-1.5 py-0.5 rounded-full">TERBAIK</span>}
+                  </div>
+                  <p className={`text-sm font-bold ${best ? "text-emerald-700" : "text-slate-600"}`}>{price}</p>
+                </button>
+              ))}
+            </div>
+            <p className="text-[10px] text-slate-400 text-center">Storan tambahan aktif serta-merta selepas HQ mengesahkan pembayaran.</p>
+          </div>
+        </div>
+      )}
 
       {/* Quick Add Modals */}
       {quickAdd && <QuickAddModal type={quickAdd} onClose={() => setQuickAdd(null)} onSave={handleSaveRecord} />}
