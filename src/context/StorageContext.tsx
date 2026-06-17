@@ -39,7 +39,7 @@ export const StorageProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const [error, setError] = useState<string | null>(null);
 
   // Permission Integration: Only HQ_ADMIN, TENANT_OWNER, TENANT_ADMIN can modify storage settings
-  const isOwnerOrAdmin = !!(user && ["HQ_ADMIN", "TENANT_OWNER", "TENANT_ADMIN"].includes(user.role));
+  const isOwnerOrAdmin = !!(user && ["HQ_OWNER", "TENANT_OWNER"].includes(user.role));
 
   useEffect(() => {
     if (!activeWorkspace || !activeTenant || !user) {

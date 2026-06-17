@@ -64,7 +64,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
   const [error, setError] = useState<string | null>(null);
 
   // Permission Integration: Only HQ_ADMIN, TENANT_OWNER, TENANT_ADMIN can modify preferences
-  const isOwnerOrAdmin = !!(user && ["HQ_ADMIN", "TENANT_OWNER", "TENANT_ADMIN"].includes(user.role));
+  const isOwnerOrAdmin = !!(user && ["HQ_OWNER", "HQ_STAFF", "TENANT_OWNER"].includes(user.role));
 
   // Load Preferences & Notifications
   const fetchNotificationSettings = useCallback(async () => {

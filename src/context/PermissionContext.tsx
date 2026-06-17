@@ -27,26 +27,19 @@ export interface PermissionContextType {
 const PermissionContext = createContext<PermissionContextType | undefined>(undefined);
 
 export const DEFAULT_PERMISSION_MATRIX: Record<UserRole, RolePermissions> = {
-  HQ_ADMIN: {
+  HQ_OWNER: {
     "Financial Records": { read: true, create: true, update: true, delete: true },
     "Financial Commitments": { read: true, create: true, update: true, delete: true },
     "Financial Forecast": { read: true, create: true, update: true, delete: true },
     "Financial Evidence Package": { read: true, create: true, update: true, delete: true },
     "Notifications": { read: true, create: true, update: true, delete: true }
   },
-  HQ_SUPPORT: {
+  HQ_STAFF: {
     "Financial Records": { read: true, create: true, update: true, delete: false },
     "Financial Commitments": { read: true, create: true, update: true, delete: false },
-    "Financial Forecast": { read: true, create: true, update: true, delete: false },
+    "Financial Forecast": { read: true, create: false, update: false, delete: false },
     "Financial Evidence Package": { read: true, create: true, update: true, delete: false },
     "Notifications": { read: true, create: true, update: true, delete: false }
-  },
-  HQ_AUDITOR: {
-    "Financial Records": { read: true, create: false, update: false, delete: false },
-    "Financial Commitments": { read: true, create: false, update: false, delete: false },
-    "Financial Forecast": { read: true, create: false, update: false, delete: false },
-    "Financial Evidence Package": { read: true, create: false, update: false, delete: false },
-    "Notifications": { read: true, create: false, update: false, delete: false }
   },
   TENANT_OWNER: {
     "Financial Records": { read: true, create: true, update: true, delete: true },
@@ -55,43 +48,18 @@ export const DEFAULT_PERMISSION_MATRIX: Record<UserRole, RolePermissions> = {
     "Financial Evidence Package": { read: true, create: true, update: true, delete: true },
     "Notifications": { read: true, create: true, update: true, delete: true }
   },
-  TENANT_ADMIN: {
-    "Financial Records": { read: true, create: true, update: true, delete: true },
-    "Financial Commitments": { read: true, create: true, update: true, delete: true },
-    "Financial Forecast": { read: true, create: true, update: true, delete: true },
-    "Financial Evidence Package": { read: true, create: true, update: true, delete: true },
-    "Notifications": { read: true, create: true, update: true, delete: true }
-  },
-  MANAGER: {
-    "Financial Records": { read: true, create: true, update: true, delete: true },
-    "Financial Commitments": { read: true, create: true, update: true, delete: true },
-    "Financial Forecast": { read: true, create: false, update: false, delete: false },
-    "Financial Evidence Package": { read: true, create: true, update: true, delete: true },
-    "Notifications": { read: true, create: true, update: true, delete: false }
-  },
-  STAFF: {
+  TENANT_STAFF: {
     "Financial Records": { read: true, create: true, update: true, delete: false },
     "Financial Commitments": { read: true, create: false, update: false, delete: false },
     "Financial Forecast": { read: false, create: false, update: false, delete: false },
     "Financial Evidence Package": { read: true, create: true, update: true, delete: false },
     "Notifications": { read: true, create: false, update: false, delete: false }
-  },
-  VIEWER: {
-    "Financial Records": { read: true, create: false, update: false, delete: false },
-    "Financial Commitments": { read: true, create: false, update: false, delete: false },
-    "Financial Forecast": { read: true, create: false, update: false, delete: false },
-    "Financial Evidence Package": { read: true, create: false, update: false, delete: false },
-    "Notifications": { read: true, create: false, update: false, delete: false }
   }
 };
 
 const getMockAssignments = (tenantId: string): UserRoleAssignment[] => [
-  { id: "role-asm-owner", userId: "user-mock-owner-demo", fullName: "Tenant Owner", email: "owner@mykerani.demo", role: "TENANT_ADMIN", tenantId },
-  { id: "role-asm-staff", userId: "user-mock-staff-demo", fullName: "Staff Account", email: "staff@mykerani.demo", role: "STAFF", tenantId },
-  { id: "role-asm-1", userId: "user-mock-ahmad", fullName: "Ahmad Bukhari", email: "ahmad@company.com", role: "MANAGER", tenantId },
-  { id: "role-asm-2", userId: "user-mock-sarah", fullName: "Sarah Connor", email: "sarah@company.com", role: "STAFF", tenantId },
-  { id: "role-asm-3", userId: "user-mock-john", fullName: "John Doe", email: "john@company.com", role: "VIEWER", tenantId },
-  { id: "role-asm-4", userId: "user-mock-auditor", fullName: "Hasnah Hassan (External Audit)", email: "hasnah@external-audit.my", role: "HQ_AUDITOR", tenantId },
+  { id: "role-asm-owner", userId: "user-mock-owner-demo", fullName: "Pemilik Syarikat", email: "owner@mykerani.demo", role: "TENANT_OWNER", tenantId },
+  { id: "role-asm-staff", userId: "user-mock-staff-demo", fullName: "Kakitangan Syarikat", email: "staff@mykerani.demo", role: "TENANT_STAFF", tenantId },
 ];
 
 export const PermissionProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -273,19 +241,17 @@ export const PermissionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   // Direct active user security context verification
   const hasPermission = (module: ModuleName, action: keyof ModulePermissions): boolean => {
     // HQ Admin holds total absolute override master clearance
-    if (user?.role === "HQ_ADMIN") return true;
-    return checkPermission(user?.role || "VIEWER", module, action);
+    if (user?.role === "HQ_OWNER") return true;
+    return checkPermission(user?.role || "TENANT_STAFF", module, action);
   };
 
-  // Check if active user role can manage workspaces
   const canManageWorkspaces = (): boolean => {
-    const role = user?.role || "VIEWER";
-    return ["HQ_ADMIN", "TENANT_OWNER", "TENANT_ADMIN"].includes(role);
+    const role = user?.role || "TENANT_STAFF";
+    return ["HQ_OWNER", "TENANT_OWNER"].includes(role);
   };
 
-  // Check if active user role can manage tenants
   const canManageTenants = (): boolean => {
-    return user?.role === "HQ_ADMIN";
+    return user?.role === "HQ_OWNER";
   };
 
   // Assign user roles within active tenant boundary

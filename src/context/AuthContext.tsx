@@ -5,9 +5,10 @@ import { type UserSessionProfile, type AuthState, type UserRole } from "../types
 // Akaun demo untuk presentation/sales — hanya aktif bila user ketap butang secara
 // eksplisit. Tidak boleh auto-login. Tenant ID diselaraskan dengan DEFAULT_MOCK_TENANTS.
 const DEMO_ACCOUNTS: Record<string, { role: UserRole; fullName: string; tenantId: string }> = {
-  "hq@mykerani.demo":      { role: "HQ_ADMIN",      fullName: "Pengurus Sistem (HQ)",   tenantId: "tenant-hq-0001" },
-  "owner@mykerani.demo":   { role: "TENANT_OWNER",   fullName: "Pemilik Perniagaan",     tenantId: "tenant-demo-presentation" },
-  "staff@mykerani.demo":   { role: "STAFF",           fullName: "Kakitangan",             tenantId: "tenant-demo-presentation" },
+  "hq@mykerani.demo":      { role: "HQ_OWNER",       fullName: "Pemilik HQ MyKerani",    tenantId: "tenant-hq-0001" },
+  "hqstaff@mykerani.demo": { role: "HQ_STAFF",        fullName: "Kakitangan HQ",          tenantId: "tenant-hq-0001" },
+  "owner@mykerani.demo":   { role: "TENANT_OWNER",    fullName: "Pemilik Perniagaan",     tenantId: "tenant-demo-presentation" },
+  "staff@mykerani.demo":   { role: "TENANT_STAFF",    fullName: "Kakitangan Syarikat",    tenantId: "tenant-demo-presentation" },
 };
 
 interface AuthContextType extends AuthState {
@@ -65,7 +66,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const profile: UserSessionProfile = {
           id: session.user.id,
           email: session.user.email || "",
-          role: (session.user.user_metadata?.role as UserRole) || "TENANT_ADMIN",
+          role: (session.user.user_metadata?.role as UserRole) || "TENANT_OWNER",
           fullName: session.user.user_metadata?.fullName || "Account Operator",
           tenantId: session.user.user_metadata?.tenantId,
         };
@@ -81,7 +82,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const profile: UserSessionProfile = {
           id: session.user.id,
           email: session.user.email || "",
-          role: (session.user.user_metadata?.role as UserRole) || "TENANT_ADMIN",
+          role: (session.user.user_metadata?.role as UserRole) || "TENANT_OWNER",
           fullName: session.user.user_metadata?.fullName || "Account Operator",
           tenantId: session.user.user_metadata?.tenantId,
         };
@@ -145,7 +146,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const profile: UserSessionProfile = {
           id: data.user.id,
           email: data.user.email || "",
-          role: (data.user.user_metadata?.role as UserRole) || "TENANT_ADMIN",
+          role: (data.user.user_metadata?.role as UserRole) || "TENANT_OWNER",
           fullName: data.user.user_metadata?.fullName || "Account Operator",
           tenantId: data.user.user_metadata?.tenantId,
         };
@@ -164,7 +165,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     email: string,
     password: string,
     fullName: string,
-    initialRole: UserRole = "TENANT_ADMIN"
+    initialRole: UserRole = "TENANT_OWNER"
   ) => {
     setState(prev => ({ ...prev, loading: true, error: null }));
 

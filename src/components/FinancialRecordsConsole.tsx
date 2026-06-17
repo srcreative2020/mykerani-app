@@ -165,7 +165,7 @@ export const FinancialRecordsConsole: React.FC<FinancialRecordsConsoleProps> = (
 
   const { hasPermission } = usePermission();
   const { user } = useAuth();
-  const sessionUserRole = user?.role || "VIEWER";
+  const sessionUserRole = user?.role || "TENANT_STAFF";
 
   // Selected sub-module navigation
   const [activeModule, setActiveModule] = useState<

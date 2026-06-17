@@ -218,7 +218,7 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     }
 
     const role = user?.role || "VIEWER";
-    if (["MANAGER", "STAFF", "VIEWER"].includes(role)) {
+    if (["TENANT_STAFF"].includes(role)) {
       throw new Error(`Access Denied: Your system actor role (${role}) is restricted from constructing new workspaces.`);
     }
 

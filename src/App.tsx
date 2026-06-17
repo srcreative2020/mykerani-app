@@ -432,12 +432,10 @@ function MainDashboardContent() {
             <div className="hidden sm:block">
               <p className="text-[11px] font-semibold text-slate-900 leading-tight">{user?.fullName || "Pengguna"}</p>
               <p className="text-[9px] text-slate-400 leading-none">{
-                user?.role === "HQ_ADMIN" ? "Pentadbir Sistem" :
+                user?.role === "HQ_OWNER" ? "Pemilik HQ" :
+                user?.role === "HQ_STAFF" ? "Kakitangan HQ" :
                 user?.role === "TENANT_OWNER" ? "Pemilik Syarikat" :
-                user?.role === "TENANT_ADMIN" ? "Pentadbir" :
-                user?.role === "MANAGER" ? "Pengurus" :
-                user?.role === "STAFF" ? "Kakitangan" :
-                user?.role === "VIEWER" ? "Pemerhati" : "Pengguna"
+                user?.role === "TENANT_STAFF" ? "Kakitangan" : "Pengguna"
               }</p>
             </div>
           </div>
@@ -506,7 +504,7 @@ function MainDashboardContent() {
                   >
                     <option value="USER">Syarikat (Akaun Perniagaan)</option>
                     <option value="DEMO">Demo (Akaun Latihan)</option>
-                    {user?.role === "HQ_ADMIN" && (
+                    {user?.role === "HQ_OWNER" && (
                       <option value="HQ">Pentadbiran Sistem (HQ)</option>
                     )}
                   </select>
@@ -1112,15 +1110,16 @@ function RoleRouter() {
   const { user } = useAuth();
   const { activeTenant } = useTenant();
 
-  if (user?.role === "STAFF" || user?.role === "VIEWER") {
+  // V1.0 Role Authority routing
+  if (user?.role === "TENANT_STAFF") {
     return <StaffHomeScreen />;
   }
 
-  if (activeTenant?.category === "HQ" || user?.role === "HQ_ADMIN" || user?.role === "HQ_SUPPORT" || user?.role === "HQ_AUDITOR") {
+  if (user?.role === "HQ_OWNER" || user?.role === "HQ_STAFF" || activeTenant?.category === "HQ") {
     return <MainDashboardContent />;
   }
 
-  // TENANT_OWNER, TENANT_ADMIN, MANAGER → new Owner Dashboard
+  // TENANT_OWNER → Owner Business Dashboard
   return <OwnerDashboard />;
 }
 

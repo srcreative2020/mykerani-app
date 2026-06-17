@@ -43,7 +43,7 @@ export const PermissionSettingsConsole: React.FC = () => {
   const [submittingUser, setSubmittingUser] = useState(false);
   const [formMsg, setFormMsg] = useState("");
 
-  const editRights = ["HQ_ADMIN", "TENANT_OWNER", "TENANT_ADMIN"].includes(user?.role || "");
+  const editRights = ["HQ_OWNER", "TENANT_OWNER", "TENANT_OWNER"].includes(user?.role || "");
 
   const handleAddAssignment = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -71,26 +71,26 @@ export const PermissionSettingsConsole: React.FC = () => {
   ];
 
   const rolesList: UserRole[] = [
-    "HQ_ADMIN",
-    "HQ_SUPPORT",
+    "HQ_OWNER",
+    "HQ_STAFF",
     "HQ_AUDITOR",
     "TENANT_OWNER",
-    "TENANT_ADMIN",
+    "TENANT_OWNER",
     "MANAGER",
     "STAFF",
-    "VIEWER"
+    "TENANT_STAFF"
   ];
 
   const getRoleDescription = (role: UserRole): string => {
     switch (role) {
-      case "HQ_ADMIN": return "Master absolute root administrator. Enforces multi-tenant compliance.";
-      case "HQ_SUPPORT": return "HQ system operator context. Read & create profiles but restrict deletion.";
+      case "HQ_OWNER": return "Master absolute root administrator. Enforces multi-tenant compliance.";
+      case "HQ_STAFF": return "HQ system operator context. Read & create profiles but restrict deletion.";
       case "HQ_AUDITOR": return "Global read-only auditor across multiple client tenancy directories.";
       case "TENANT_OWNER": return "Corporate account owner. Full billing, data disposal, and tenancy control.";
-      case "TENANT_ADMIN": return "Enterprise workspace admin. Full CRUD access for financial instruments.";
+      case "TENANT_OWNER": return "Enterprise workspace admin. Full CRUD access for financial instruments.";
       case "MANAGER": return "Operational workspace lead. CRUD operations excluding forecast modeling.";
       case "STAFF": return "General ledger writer. Log income, expenses & evidence packages.";
-      case "VIEWER": return "Strict auditor or client view-only context. Read is validated.";
+      case "TENANT_STAFF": return "Strict auditor or client view-only context. Read is validated.";
     }
   };
 
@@ -520,7 +520,7 @@ export const PermissionSettingsConsole: React.FC = () => {
                     </div>
                     <div className="flex justify-between items-center text-xs">
                       <span className="text-slate-400">Workspace Disposal (Delete):</span>
-                      {["HQ_ADMIN", "TENANT_OWNER"].includes(user?.role || "") ? (
+                      {["HQ_OWNER", "TENANT_OWNER"].includes(user?.role || "") ? (
                         <span className="text-emerald-600 font-bold flex items-center"><Check className="w-3.5 h-3.5 mr-1" /> ALLOWED</span>
                       ) : (
                         <span className="text-rose-650 font-bold flex items-center"><X className="w-3.5 h-3.5 mr-1" /> RESTRICTED</span>
@@ -550,10 +550,10 @@ export const PermissionSettingsConsole: React.FC = () => {
                   <p>{`>> [SEC_INIT] Mapped authentication role parameter: "${user?.role}"`}</p>
                   <p>{`>> [SEC_MATRIX] Evaluating active structural modules clearances...`}</p>
                   {modules.map(modName => {
-                    const r = permissionMatrix[user?.role || "VIEWER"]?.[modName]?.read;
-                    const c = permissionMatrix[user?.role || "VIEWER"]?.[modName]?.create;
-                    const u = permissionMatrix[user?.role || "VIEWER"]?.[modName]?.update;
-                    const d = permissionMatrix[user?.role || "VIEWER"]?.[modName]?.delete;
+                    const r = permissionMatrix[user?.role || "TENANT_STAFF"]?.[modName]?.read;
+                    const c = permissionMatrix[user?.role || "TENANT_STAFF"]?.[modName]?.create;
+                    const u = permissionMatrix[user?.role || "TENANT_STAFF"]?.[modName]?.update;
+                    const d = permissionMatrix[user?.role || "TENANT_STAFF"]?.[modName]?.delete;
                     return (
                       <p key={modName} className="pl-4">
                         {`-> Module: "${modName}" => [R:${r ? "OK" : "NO"} | C:${c ? "OK" : "NO"} | U:${u ? "OK" : "NO"} | D:${d ? "OK" : "NO"}]`}

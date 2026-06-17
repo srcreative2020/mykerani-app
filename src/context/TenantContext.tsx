@@ -57,7 +57,7 @@ export const TenantProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           // Initialize for this specific mock user
           tenantList = [...DEFAULT_MOCK_TENANTS];
           // If user email has specifiers, we can make their primary tenant matches role
-          if (user.role === "HQ_ADMIN") {
+          if (user.role === "HQ_OWNER") {
             // First item is active
           }
           localStorage.setItem(`mykerani_tenants_${user.id}`, JSON.stringify(tenantList));
@@ -69,7 +69,7 @@ export const TenantProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         
         if (!active && tenantList.length > 0) {
           // Fallback based on user context
-          if (user.role === "HQ_ADMIN") {
+          if (user.role === "HQ_OWNER") {
             active = tenantList.find(t => t.category === "HQ") || tenantList[0];
           } else {
             active = tenantList.find(t => t.category !== "HQ") || tenantList[0];
@@ -98,7 +98,7 @@ export const TenantProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             console.warn("Retrying query or checking tenants schema:", dbError.message);
             
             // Auto fallback — pilih tenant berdasarkan role user
-            const fallbackActive = user.role === "HQ_ADMIN"
+            const fallbackActive = user.role === "HQ_OWNER"
               ? DEFAULT_MOCK_TENANTS.find(t => t.category === "HQ") || DEFAULT_MOCK_TENANTS[0]
               : DEFAULT_MOCK_TENANTS.find(t => t.category !== "HQ") || DEFAULT_MOCK_TENANTS[0];
 
@@ -145,7 +145,7 @@ export const TenantProvider: React.FC<{ children: React.ReactNode }> = ({ childr
               .from("tenants")
               .insert({
                 name: defaultName,
-                category: user.role === "HQ_ADMIN" ? "HQ" : "USER",
+                category: user.role === "HQ_OWNER" ? "HQ" : "USER",
               })
               .select()
               .single();

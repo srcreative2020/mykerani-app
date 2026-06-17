@@ -326,7 +326,7 @@ export const NotificationCenterConsole: React.FC = () => {
                       Active User Session: <strong className="font-mono">{user?.role}</strong> role. 
                       {isOwnerOrAdmin 
                         ? " You are cleared to save routing configuration changes." 
-                        : " Revision of notification filters is restricted to HQ_ADMIN, TENANT_OWNER, and TENANT_ADMIN roles."}
+                        : " Revision of notification filters is restricted to HQ_OWNER, TENANT_OWNER, and TENANT_OWNER roles."}
                     </span>
                   </div>
                 </div>

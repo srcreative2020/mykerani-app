@@ -86,8 +86,8 @@ export const MyKeraniBackupRecovery: React.FC = () => {
   const [showUploadPreview, setShowUploadPreview] = useState(false);
 
   // Role gate matching Requirement 5
-  // Only HQ_ADMIN, TENANT_OWNER, TENANT_ADMIN can restore backups.
-  const canRestore = user && ["HQ_ADMIN", "TENANT_OWNER", "TENANT_ADMIN"].includes(user.role);
+  // Only HQ_OWNER, TENANT_OWNER, TENANT_OWNER can restore backups.
+  const canRestore = user && ["HQ_OWNER", "TENANT_OWNER", "TENANT_OWNER"].includes(user.role);
 
   // Sync workspace and tenant backups
   useEffect(() => {
@@ -286,7 +286,7 @@ export const MyKeraniBackupRecovery: React.FC = () => {
 
     // 1. Permission verify
     if (!canRestore) {
-      setErrorMessage("Access Denied: You do not have permission to restore backups. Require HN_ADMIN, TENANT_OWNER, or TENANT_ADMIN roles.");
+      setErrorMessage("Access Denied: You do not have permission to restore backups. Require HN_ADMIN, TENANT_OWNER, or TENANT_OWNER roles.");
       return;
     }
 
