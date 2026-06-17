@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from "react";
+import React, { createContext, useContext, useState, useEffect, useRef } from "react";
 import { supabase, isSupabaseConfigured } from "../lib/supabase";
 import { type UserSessionProfile, type AuthState, type UserRole } from "../types";
 
@@ -24,6 +24,9 @@ interface AuthContextType extends AuthState {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  // Ref untuk track mock mode secara synchronous — tidak bergantung pada React batching
+  const isMockRef = useRef(false);
+
   const [state, setState] = useState<AuthState>({
     user: null,
     loading: true,
@@ -56,50 +59,46 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     // Semak sesi Supabase yang aktif
-    // Guna functional setState supaya tidak override demo session yang mungkin dah aktif
     supabase.auth.getSession().then(({ data: { session }, error }) => {
-      setState(prev => {
-        if (prev.isMockUser) return prev; // demo aktif — jangan override
-        if (error) return { user: null, loading: false, error: error.message, isMockUser: false };
-        if (session?.user) {
-          return {
-            user: {
-              id: session.user.id,
-              email: session.user.email || "",
-              role: (session.user.user_metadata?.role as UserRole) || "TENANT_OWNER",
-              fullName: session.user.user_metadata?.fullName || "Account Operator",
-              tenantId: session.user.user_metadata?.tenantId,
-            },
-            loading: false,
-            error: null,
-            isMockUser: false,
-          };
-        }
-        return { user: null, loading: false, error: null, isMockUser: false };
-      });
+      if (isMockRef.current) return; // demo aktif — jangan override (ref synchronous)
+      if (error) { setState({ user: null, loading: false, error: error.message, isMockUser: false }); return; }
+      if (session?.user) {
+        setState({
+          user: {
+            id: session.user.id,
+            email: session.user.email || "",
+            role: (session.user.user_metadata?.role as UserRole) || "TENANT_OWNER",
+            fullName: session.user.user_metadata?.fullName || "Account Operator",
+            tenantId: session.user.user_metadata?.tenantId,
+          },
+          loading: false,
+          error: null,
+          isMockUser: false,
+        });
+      } else {
+        setState({ user: null, loading: false, error: null, isMockUser: false });
+      }
     });
 
-    // Dengar perubahan sesi Supabase secara real-time
-    // PENTING: jangan override state kalau sedang dalam demo/mock mode
+    // Dengar perubahan sesi Supabase — ref guard memastikan demo session tidak ditimpa
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setState(prev => {
-        if (prev.isMockUser) return prev; // demo session aktif — ignore Supabase event
-        if (session?.user) {
-          return {
-            user: {
-              id: session.user.id,
-              email: session.user.email || "",
-              role: (session.user.user_metadata?.role as UserRole) || "TENANT_OWNER",
-              fullName: session.user.user_metadata?.fullName || "Account Operator",
-              tenantId: session.user.user_metadata?.tenantId,
-            },
-            loading: false,
-            error: null,
-            isMockUser: false,
-          };
-        }
-        return { user: null, loading: false, error: null, isMockUser: false };
-      });
+      if (isMockRef.current) return; // demo aktif — abaikan semua Supabase events
+      if (session?.user) {
+        setState({
+          user: {
+            id: session.user.id,
+            email: session.user.email || "",
+            role: (session.user.user_metadata?.role as UserRole) || "TENANT_OWNER",
+            fullName: session.user.user_metadata?.fullName || "Account Operator",
+            tenantId: session.user.user_metadata?.tenantId,
+          },
+          loading: false,
+          error: null,
+          isMockUser: false,
+        });
+      } else {
+        setState({ user: null, loading: false, error: null, isMockUser: false });
+      }
     });
 
     return () => {
@@ -116,7 +115,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // Tiada auto-login. Tiada simpanan ke localStorage.
     const demoAccount = DEMO_ACCOUNTS[cleanEmail];
     if (demoAccount) {
-      // Buang sesi Supabase lama dulu supaya onAuthStateChange tidak override mock user
+      // Set ref DAHULU (synchronous) sebelum apa-apa async — ini menghalang
+      // onAuthStateChange daripada override walaupun ia fire pada masa yang sama
+      isMockRef.current = true;
       if (supabase) {
         try { await supabase.auth.signOut(); } catch {}
       }
@@ -301,9 +302,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const signOut = async () => {
+    isMockRef.current = false; // reset ref dulu supaya onAuthStateChange boleh fire
     setState(prev => ({ ...prev, loading: true }));
 
-    // Hanya panggil Supabase signOut untuk user sebenar (bukan demo)
     if (supabase && !state.isMockUser) {
       await supabase.auth.signOut();
     }
