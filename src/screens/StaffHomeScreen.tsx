@@ -21,7 +21,7 @@ function getGreeting() {
   return "Selamat Malam";
 }
 
-// â”€â”€ Quick Add Form (inline) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// â"€â"€ Quick Add Form (inline) â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 function AddRecordForm({
   defaultType,
   onSave,
@@ -104,7 +104,7 @@ function AddRecordForm({
   );
 }
 
-// â”€â”€â”€ Main Component â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// â"€â"€â"€ Main Component â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 export function StaffHomeScreen() {
   const { user, signOut } = useAuth();
   const { activeWorkspace, workspaces, selectWorkspace } = useWorkspace();
@@ -114,13 +114,13 @@ export function StaffHomeScreen() {
   const [activeTab, setActiveTab] = useState<StaffTab>("home");
   const [addDefaultType, setAddDefaultType] = useState<"INCOME" | "EXPENSE">("EXPENSE");
 
-  // â”€â”€ AI Chat â”€â”€
+  // â"€â"€ AI Chat â"€â"€
   const [chatMessages, setChatMessages] = useState<{ id: string; sender: "user" | "ai"; text: string }[]>([]);
   const [chatInput, setChatInput] = useState("");
   const [chatLoading, setChatLoading] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
-  // â”€â”€ Support Center â”€â”€
+  // â"€â"€ Support Center â"€â"€
   const [showSupport, setShowSupport] = useState(false);
   const [supportView, setSupportView] = useState<"chat" | "faq" | "ticket">("chat");
   const [supportMessages, setSupportMessages] = useState<{ id: string; sender: "user" | "ai"; text: string }[]>([]);
@@ -234,7 +234,7 @@ export function StaffHomeScreen() {
         #staff_root .to-emerald-800{--tw-gradient-to:#3D7057!important}
       `}</style>
 
-      {/* â”€â”€ HEADER â”€â”€ */}
+      {/* â"€â"€ HEADER â"€â"€ */}
       <header className="bg-white border-b border-slate-100 px-4 py-3 flex items-center justify-between shrink-0" id="staff_header">
         <div className="flex items-center space-x-2.5">
           <div className="w-8 h-8 rounded-xl bg-slate-900 flex items-center justify-center text-white font-bold text-sm shadow-sm">MK</div>
@@ -268,17 +268,17 @@ export function StaffHomeScreen() {
         </div>
       </header>
 
-      {/* â”€â”€ MAIN â”€â”€ */}
+      {/* â"€â"€ MAIN â"€â"€ */}
       <div className="flex-1 overflow-hidden flex flex-col" id="staff_main">
 
-        {/* â•â•â•â• HOME â€” AI CONVERSATION â•â•â•â• */}
+        {/* â•â•â•â• HOME â€" AI CONVERSATION â•â•â•â• */}
         {activeTab === "home" && (
           <div className="flex-1 flex flex-col overflow-hidden" id="staff_home_pane">
 
             {/* Conversation area */}
             <div className="flex-1 overflow-y-auto px-4 pt-4 pb-2 space-y-4" id="staff_chat_area">
 
-              {/* Welcome â€” shown only if no messages */}
+              {/* Welcome â€" shown only if no messages */}
               {chatMessages.length === 0 && (
                 <div className="flex flex-col items-center justify-center py-8 space-y-2 text-center">
                   <div className="w-14 h-14 rounded-2xl bg-slate-900 flex items-center justify-center shadow-lg mb-1">
@@ -319,7 +319,7 @@ export function StaffHomeScreen() {
               <div ref={chatEndRef} />
             </div>
 
-            {/* Quick prompts â€” shown only if no messages */}
+            {/* Quick prompts â€" shown only if no messages */}
             {chatMessages.length === 0 && (
               <div className="px-4 pb-2 flex flex-wrap gap-2">
                 {QUICK_PROMPTS.map(({ label, q, action }) => (
@@ -601,7 +601,7 @@ export function StaffHomeScreen() {
                     </button>
                   </form>
                   <button onClick={() => setSupportView("ticket")} className="mt-2 w-full text-center text-[11px] text-slate-400 hover:text-indigo-600 cursor-pointer">
-                    Masalah tidak selesai? Buka tiket â†’
+                    Masalah tidak selesai? Buka tiket â†'
                   </button>
                 </div>
               </div>
@@ -611,8 +611,8 @@ export function StaffHomeScreen() {
             {supportView === "faq" && (
               <div className="flex-1 overflow-y-auto p-4 space-y-2">
                 {[
-                  { q: "Bagaimana cara muat naik resit?", a: "Klik tab 'Muat Naik' di bawah â†’ pilih 'Resit' â†’ ambil gambar atau pilih fail." },
-                  { q: "Bagaimana cara rekod perbelanjaan?", a: "Klik tab 'Tambah' â†’ pilih 'Perbelanjaan' â†’ isi jumlah dan butiran." },
+                  { q: "Bagaimana cara muat naik resit?", a: "Klik tab 'Muat Naik' di bawah â†' pilih 'Resit' â†' ambil gambar atau pilih fail." },
+                  { q: "Bagaimana cara rekod perbelanjaan?", a: "Klik tab 'Tambah' â†' pilih 'Perbelanjaan' â†' isi jumlah dan butiran." },
                   { q: "Bagaimana cara lihat rekod lama?", a: "Klik tab 'Rekod' untuk lihat semua rekod yang telah dimasukkan." },
                   { q: "Boleh saya padam rekod?", a: "Rekod tidak boleh dipadam oleh kakitangan. Hubungi Pemilik Syarikat untuk bantuan." },
                   { q: "Apa yang boleh saya lakukan di MYKERANI?", a: "Anda boleh rekod transaksi, muat naik dokumen, cari rekod, dan tanya soalan kepada AI MYKERANI." },
@@ -665,7 +665,7 @@ export function StaffHomeScreen() {
         )}
       </div>
 
-      {/* â”€â”€ BOTTOM NAV â”€â”€ */}
+      {/* â"€â"€ BOTTOM NAV â"€â"€ */}
       <nav className="bg-white border-t border-slate-200 flex items-center justify-around px-2 py-1.5 shrink-0 z-40" id="staff_bottom_nav">
         {([
           { id: "home" as StaffTab,        label: "Home",     icon: Home },

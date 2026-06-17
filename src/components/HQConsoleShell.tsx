@@ -22,7 +22,7 @@ interface HQConsoleShellProps {
 // HQ_STAFF pages: dashboard, customers, subscriptions, support
 type HQPage = "dashboard" | "customers" | "billing" | "usage" | "support" | "revenue" | "settings" | "system" | "subscriptions";
 
-// â”€â”€ Mock data (demo accounts only) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// â"€â"€ Mock data (demo accounts only) â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 const MOCK_CUSTOMERS = [
   { id: "c1", name: "Kedai Makan Pak Ali Sdn Bhd",    plan: "Starter",    status: "active",    renewal: "15 Jul 2026", aiUsage: 45,  storageGB: 0.8, attention: false, mrr: 99 },
   { id: "c2", name: "Syarikat Binaan Teguh MY",        plan: "Pro",        status: "active",    renewal: "3 Jul 2026",  aiUsage: 312, storageGB: 8.2, attention: true,  mrr: 299 },
@@ -32,7 +32,7 @@ const MOCK_CUSTOMERS = [
 ];
 
 const MOCK_TICKETS = [
-  { id: "T-001", customer: "Butik Raudah Enterprise",  subject: "Tidak boleh log masuk",     priority: "high",   status: "open",     summary: "Pengguna tidak dapat masuk sejak 2 hari lalu. AI mengesan isu kata laluan.",     assigned: "â€”" },
+  { id: "T-001", customer: "Butik Raudah Enterprise",  subject: "Tidak boleh log masuk",     priority: "high",   status: "open",     summary: "Pengguna tidak dapat masuk sejak 2 hari lalu. AI mengesan isu kata laluan.",     assigned: "â€"" },
   { id: "T-002", customer: "Syarikat Binaan Teguh MY", subject: "Resit tidak dapat dimuat naik", priority: "medium", status: "pending",  summary: "Saiz fail melebihi had. AI cadangkan kurangkan saiz atau naik taraf storan.", assigned: "Amir" },
   { id: "T-003", customer: "Ladang Hijau Organik",     subject: "Soalan tentang laporan P&L", priority: "low",    status: "resolved", summary: "AI telah menjawab soalan. Pengguna berpuas hati.",                                assigned: "Siti" },
 ];
@@ -43,7 +43,7 @@ const MOCK_PLANS = [
   { id: "p3", name: "Enterprise", price: 899, aiCredits: 10000, storage: "100 GB",customers: 1 },
 ];
 
-// â”€â”€ Status Badge â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// â"€â"€ Status Badge â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 const StatusBadge = ({ status }: { status: string }) => {
   const map: Record<string, string> = {
     active: "bg-emerald-50 text-emerald-700 border-emerald-200",
@@ -66,7 +66,7 @@ const StatusBadge = ({ status }: { status: string }) => {
   );
 };
 
-// â”€â”€ Metric Card â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// â"€â"€ Metric Card â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 const MetricCard = ({ label, value, sub, icon: Icon, color = "teal", trend }: {
   label: string; value: string | number; sub?: string;
   icon: React.ElementType; color?: "teal" | "emerald" | "red" | "amber" | "violet" | "slate";
@@ -101,7 +101,7 @@ const MetricCard = ({ label, value, sub, icon: Icon, color = "teal", trend }: {
   );
 };
 
-// â”€â”€ Types â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// â"€â"€ Types â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 interface Plan {
   id: string;
   name: string;
@@ -118,7 +118,7 @@ interface Customer {
   email: string;
   phone?: string;
   plan: string;
-  status: “active” | “suspended” | “pending”;
+  status: "active" | "suspended" | "pending";
   renewal: string;
   aiUsage: number;
   storageGB: number;
@@ -128,33 +128,33 @@ interface Customer {
   notes?: string;
 }
 
-const BLANK_PLAN: Omit<Plan, “id”> = { name: “”, price: 0, aiCredits: 500, storageGB: 5, maxUsers: 3, featured: false };
-const BLANK_CUSTOMER: Omit<Customer, “id” | “aiUsage” | “storageGB” | “attention” | “mrr” | “joinedAt”> = {
-  name: “”, email: “”, phone: “”, plan: “”, status: “active”, renewal: “”, notes: “”
+const BLANK_PLAN: Omit<Plan, "id"> = { name: "", price: 0, aiCredits: 500, storageGB: 5, maxUsers: 3, featured: false };
+const BLANK_CUSTOMER: Omit<Customer, "id" | "aiUsage" | "storageGB" | "attention" | "mrr" | "joinedAt"> = {
+  name: "", email: "", phone: "", plan: "", status: "active", renewal: "", notes: ""
 };
 
-// â”€â”€â”€ Main Component â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// â"€â"€â"€ Main Component â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
   const { signOut, isMockUser } = useAuth();
 
-  const isStaff = user?.role === “HQ_STAFF”;
+  const isStaff = user?.role === "HQ_STAFF";
   const tickets = isMockUser ? MOCK_TICKETS : [];
 
   // Customers — persistent for all users
-  const customersKey = `mykerani_customers_${user?.id ?? “guest”}`;
+  const customersKey = `mykerani_customers_${user?.id ?? "guest"}`;
   const [customers, setCustomers] = useState<Customer[]>(() => {
     try {
       const stored = localStorage.getItem(customersKey);
       if (stored) return JSON.parse(stored);
     } catch {}
     return isMockUser
-      ? MOCK_CUSTOMERS.map(c => ({ ...c, email: `${c.id}@demo.my`, phone: “”, joinedAt: “2026-01-01”, notes: “” }))
+      ? MOCK_CUSTOMERS.map(c => ({ ...c, email: `${c.id}@demo.my`, phone: "", joinedAt: "2026-01-01", notes: "" }))
       : [];
   });
   useEffect(() => { localStorage.setItem(customersKey, JSON.stringify(customers)); }, [customers, customersKey]);
 
   // Plans — persistent for all users
-  const plansKey = `mykerani_plans_${user?.id ?? “guest”}`;
+  const plansKey = `mykerani_plans_${user?.id ?? "guest"}`;
   const [plans, setPlans] = useState<Plan[]>(() => {
     try {
       const stored = localStorage.getItem(plansKey);
@@ -169,7 +169,7 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
   // Plan modal state
   const [showPlanModal, setShowPlanModal] = useState(false);
   const [editingPlan, setEditingPlan] = useState<Plan | null>(null);
-  const [planForm, setPlanForm] = useState<Omit<Plan, “id”>>(BLANK_PLAN);
+  const [planForm, setPlanForm] = useState<Omit<Plan, "id">>(BLANK_PLAN);
   const [deletingPlanId, setDeletingPlanId] = useState<string | null>(null);
 
   const openCreatePlan = () => { setPlanForm(BLANK_PLAN); setEditingPlan(null); setShowPlanModal(true); };
@@ -193,13 +193,13 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
   const [deletingCustomerId, setDeletingCustomerId] = useState<string | null>(null);
 
   const openAddCustomer = () => {
-    const defaultPlan = plans[0]?.name ?? “”;
+    const defaultPlan = plans[0]?.name ?? "";
     setCustomerForm({ ...BLANK_CUSTOMER, plan: defaultPlan });
     setEditingCustomer(null);
     setShowCustomerModal(true);
   };
   const openEditCustomer = (c: Customer) => {
-    setCustomerForm({ name: c.name, email: c.email, phone: c.phone ?? “”, plan: c.plan, status: c.status, renewal: c.renewal, notes: c.notes ?? “” });
+    setCustomerForm({ name: c.name, email: c.email, phone: c.phone ?? "", plan: c.plan, status: c.status, renewal: c.renewal, notes: c.notes ?? "" });
     setEditingCustomer(c);
     setSelectedCustomer(null);
     setShowCustomerModal(true);
@@ -208,21 +208,21 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
     if (!customerForm.name.trim() || !customerForm.email.trim()) return;
     const planObj = plans.find(p => p.name === customerForm.plan);
     const mrr = planObj?.price ?? 0;
-    const renewal = customerForm.renewal || new Date(Date.now() + 30 * 86400000).toLocaleDateString(“ms-MY”, { day:”numeric”, month:”short”, year:”numeric” });
+    const renewal = customerForm.renewal || new Date(Date.now() + 30 * 86400000).toLocaleDateString("ms-MY", { day:"numeric", month:"short", year:"numeric" });
     if (editingCustomer) {
       setCustomers(prev => prev.map(c => c.id === editingCustomer.id
         ? { ...c, ...customerForm, renewal, mrr }
         : c));
       setSelectedCustomer(prev => prev?.id === editingCustomer.id ? { ...prev, ...customerForm, renewal, mrr } : prev);
     } else {
-      const nc: Customer = { ...customerForm, renewal, mrr, id: `c-${Date.now()}`, aiUsage: 0, storageGB: 0, attention: false, joinedAt: new Date().toISOString().split(“T”)[0] };
+      const nc: Customer = { ...customerForm, renewal, mrr, id: `c-${Date.now()}`, aiUsage: 0, storageGB: 0, attention: false, joinedAt: new Date().toISOString().split("T")[0] };
       setCustomers(prev => [...prev, nc]);
     }
     setShowCustomerModal(false);
   };
   const toggleStatus = (id: string) => {
-    setCustomers(prev => prev.map(c => c.id === id ? { ...c, status: c.status === “active” ? “suspended” : “active” } : c));
-    setSelectedCustomer(prev => prev?.id === id ? { ...prev, status: prev.status === “active” ? “suspended” : “active” } : prev);
+    setCustomers(prev => prev.map(c => c.id === id ? { ...c, status: c.status === "active" ? "suspended" : "active" } : c));
+    setSelectedCustomer(prev => prev?.id === id ? { ...prev, status: prev.status === "active" ? "suspended" : "active" } : prev);
   };
   const deleteCustomer = (id: string) => {
     setCustomers(prev => prev.filter(c => c.id !== id));
@@ -230,14 +230,14 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
     setSelectedCustomer(null);
   };
 
-  const [activePage, setActivePage] = useState<HQPage>(“dashboard”);
+  const [activePage, setActivePage] = useState<HQPage>("dashboard");
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [searchQuery, setSearchQuery] = useState(“”);
+  const [searchQuery, setSearchQuery] = useState("");
 
   // Cipta HQ Staff state
   const [showCreateStaff, setShowCreateStaff] = useState(false);
-  const [staffEmail, setStaffEmail] = useState(“”);
-  const [staffName, setStaffName] = useState(“”);
+  const [staffEmail, setStaffEmail] = useState("");
+  const [staffName, setStaffName] = useState("");
   const [staffCreating, setStaffCreating] = useState(false);
   const [staffResult, setStaffResult] = useState<{ success: boolean; message: string; tempPassword?: string } | null>(null);
 
@@ -248,11 +248,11 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
 
   // Support ticket reply
   const [replyTicket, setReplyTicket] = useState<string | null>(null);
-  const [replyText, setReplyText] = useState(“”);
+  const [replyText, setReplyText] = useState("");
 
-  const totalMRR    = customers.reduce((s, c) => s + (c.status === “active” ? c.mrr : 0), 0);
-  const activeCount = customers.filter(c => c.status === “active”).length;
-  const openCases   = tickets.filter(t => t.status === “open” || t.status === “pending”).length;
+  const totalMRR    = customers.reduce((s, c) => s + (c.status === "active" ? c.mrr : 0), 0);
+  const activeCount = customers.filter(c => c.status === "active").length;
+  const openCases   = tickets.filter(t => t.status === "open" || t.status === "pending").length;
   const totalAI     = customers.reduce((s, c) => s + c.aiUsage, 0);
 
   const handleCreateHQStaff = async () => {
@@ -282,7 +282,7 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
     }
   };
 
-  // â”€â”€ Nav items â”€â”€
+  // â"€â"€ Nav items â"€â"€
   const ownerNav = [
     { id: "dashboard" as HQPage,   label: "Dashboard",      icon: LayoutDashboard },
     { id: "customers" as HQPage,   label: "Pelanggan",      icon: Users },
@@ -304,7 +304,7 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
   const navItems = isStaff ? staffNav : ownerNav;
   const firstName = user?.fullName?.split(" ")[0] || "HQ";
 
-  // â”€â”€ Sidebar â”€â”€
+  // â"€â"€ Sidebar â"€â"€
   const Sidebar = ({ mobile }: { mobile?: boolean }) => (
     <aside className={`${mobile ? "w-full" : "w-56"} flex flex-col h-full bg-white border-r border-slate-200`}>
       {/* Logo */}
@@ -447,7 +447,7 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
                 <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
                   <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
                     <h3 className="text-sm font-bold text-slate-900">{isStaff ? "Pelanggan Perlu Perhatian" : "Pelanggan Terkini"}</h3>
-                    <button onClick={() => setActivePage("customers")} className="text-xs text-emerald-700 font-semibold hover:text-emerald-900 cursor-pointer">Lihat semua â†’</button>
+                    <button onClick={() => setActivePage("customers")} className="text-xs text-emerald-700 font-semibold hover:text-emerald-900 cursor-pointer">Lihat semua â†'</button>
                   </div>
                   {customers.length === 0 ? (
                     <div className="p-10 text-center">
@@ -480,13 +480,13 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
                   <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
                     <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
                       <h3 className="text-sm font-bold text-slate-900">Kes Sokongan Terbuka</h3>
-                      <button onClick={() => setActivePage("support")} className="text-xs text-emerald-700 font-semibold hover:text-emerald-900 cursor-pointer">Urus â†’</button>
+                      <button onClick={() => setActivePage("support")} className="text-xs text-emerald-700 font-semibold hover:text-emerald-900 cursor-pointer">Urus â†'</button>
                     </div>
                     <div className="divide-y divide-slate-50">
                       {tickets.filter(t => t.status !== "resolved").map(t => (
                         <div key={t.id} className="px-5 py-4 space-y-1">
                           <div className="flex items-center justify-between">
-                            <p className="text-xs font-bold text-slate-800">{t.id} â€” {t.subject}</p>
+                            <p className="text-xs font-bold text-slate-800">{t.id} â€" {t.subject}</p>
                             <StatusBadge status={t.priority} />
                           </div>
                           <p className="text-xs text-slate-500">{t.customer}</p>
@@ -672,7 +672,7 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                   <MetricCard label="Jumlah Kredit AI"  value={totalAI.toLocaleString()}      sub="semua pelanggan bulan ini" icon={Zap}      color="amber" />
                   <MetricCard label="Jumlah Storan"     value={`${customers.reduce((s,c)=>s+c.storageGB,0).toFixed(1)} GB`} sub="digunakan" icon={HardDrive} color="slate" />
-                  <MetricCard label="OCR Digunakan"     value="â€”"                              sub="belum diaktifkan"          icon={Brain}    color="violet" />
+                  <MetricCard label="OCR Digunakan"     value="â€""                              sub="belum diaktifkan"          icon={Brain}    color="violet" />
                 </div>
 
                 {/* Top usage customers */}
@@ -837,11 +837,11 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
 
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                   <MetricCard label="Hasil Bulan Ini"  value={`RM ${totalMRR.toLocaleString()}`} icon={DollarSign} color="emerald" trend="up" />
-                  <MetricCard label="Kos AI"           value="RM â€”"    sub="anggaran"   icon={Zap}        color="amber" />
-                  <MetricCard label="Kos Storan"       value="RM â€”"    sub="anggaran"   icon={HardDrive}  color="slate" />
-                  <MetricCard label="Keuntungan Kasar" value="RM â€”"    sub="anggaran"   icon={TrendingUp} color="teal" trend="up" />
+                  <MetricCard label="Kos AI"           value="RM â€""    sub="anggaran"   icon={Zap}        color="amber" />
+                  <MetricCard label="Kos Storan"       value="RM â€""    sub="anggaran"   icon={HardDrive}  color="slate" />
+                  <MetricCard label="Keuntungan Kasar" value="RM â€""    sub="anggaran"   icon={TrendingUp} color="teal" trend="up" />
                   <MetricCard label="MRR"              value={`RM ${totalMRR.toLocaleString()}`} sub="Recurring Revenue" icon={RefreshCw} color="violet" />
-                  <MetricCard label="Kos OCR"          value="RM â€”"    sub="anggaran"   icon={Brain}      color="slate" />
+                  <MetricCard label="Kos OCR"          value="RM â€""    sub="anggaran"   icon={Brain}      color="slate" />
                 </div>
 
                 {/* Revenue by plan */}
@@ -911,7 +911,7 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
                       </button>
                       {staffResult && (
                         <div className={`rounded-xl p-3 text-xs ${staffResult.success ? "bg-emerald-50 border border-emerald-200" : "bg-red-50 border border-red-200"}`}>
-                          <p className={`font-bold ${staffResult.success ? "text-emerald-700" : "text-red-700"}`}>{staffResult.success ? "âœ“ Berjaya!" : "âœ— Gagal"}</p>
+                          <p className={`font-bold ${staffResult.success ? "text-emerald-700" : "text-red-700"}`}>{staffResult.success ? "âœ" Berjaya!" : "âœ— Gagal"}</p>
                           <p className={staffResult.success ? "text-emerald-600" : "text-red-600"}>{staffResult.message}</p>
                           {staffResult.tempPassword && (
                             <div className="mt-2 p-2 bg-white border border-emerald-200 rounded-lg">

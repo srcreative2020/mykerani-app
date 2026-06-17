@@ -30,7 +30,7 @@ function getGreeting() {
   return "Selamat Malam";
 }
 
-// â”€â”€ Quick Add Record Modal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// â"€â"€ Quick Add Record Modal â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 function QuickAddModal({
   type, onClose, onSave,
 }: {
@@ -82,7 +82,7 @@ function QuickAddModal({
   );
 }
 
-// â”€â”€â”€ Main Component â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// â"€â"€â"€ Main Component â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 export function OwnerDashboard() {
   const { user, signOut } = useAuth();
   const { activeWorkspace, workspaces, selectWorkspace } = useWorkspace();
@@ -93,20 +93,20 @@ export function OwnerDashboard() {
   const [morePage, setMorePage] = useState<MorePage>("menu");
   const [quickAdd, setQuickAdd] = useState<"INCOME" | "EXPENSE" | null>(null);
 
-  // â”€â”€ AI Chat State â”€â”€
+  // â"€â"€ AI Chat State â"€â"€
   const [chatMessages, setChatMessages] = useState<ChatMsg[]>([]);
   const [chatInput, setChatInput] = useState("");
   const [chatLoading, setChatLoading] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
-  // â”€â”€ Invite staff â”€â”€
+  // â"€â"€ Invite staff â"€â"€
   const [showInvite, setShowInvite] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteName, setInviteName] = useState("");
   const [inviteLoading, setInviteLoading] = useState(false);
   const [inviteResult, setInviteResult] = useState<{ success: boolean; message: string; tempPassword?: string } | null>(null);
 
-  // â”€â”€ Support Center â”€â”€
+  // â"€â"€ Support Center â"€â"€
   const [supportMessages, setSupportMessages] = useState<{ id: string; sender: "user" | "ai"; text: string }[]>([]);
   const [supportInput, setSupportInput] = useState("");
   const [supportLoading, setSupportLoading] = useState(false);
@@ -116,10 +116,10 @@ export function OwnerDashboard() {
   const [ticketSent, setTicketSent] = useState(false);
   const supportEndRef = useRef<HTMLDivElement>(null);
 
-  // â”€â”€ Reminder Settings â”€â”€
+  // â"€â"€ Reminder Settings â"€â"€
   const [reminders, setReminders] = useState({ subscription: "7", bill: "3", aiCredit: "7", storage: "7" });
 
-  // â”€â”€ Resource Settings â”€â”€
+  // â"€â"€ Resource Settings â"€â"€
   const [resAI, setResAI] = useState<"mykerani" | "own">("mykerani");
   const [resStorage, setResStorage] = useState<"mykerani" | "gdrive" | "onedrive" | "dropbox">("mykerani");
 
@@ -260,7 +260,7 @@ export function OwnerDashboard() {
         #owner_root .to-emerald-800{--tw-gradient-to:#3D7057!important}
       `}</style>
 
-      {/* â”€â”€ HEADER â”€â”€ */}
+      {/* â"€â"€ HEADER â"€â"€ */}
       <header className="bg-white border-b border-slate-100 px-4 py-3 flex items-center justify-between shrink-0 z-30" id="owner_header">
         <div className="flex items-center space-x-2.5">
           <div className="w-8 h-8 rounded-xl bg-slate-900 flex items-center justify-center text-white font-bold text-sm shadow-sm">MK</div>
@@ -294,17 +294,17 @@ export function OwnerDashboard() {
         </div>
       </header>
 
-      {/* â”€â”€ MAIN â”€â”€ */}
+      {/* â"€â"€ MAIN â"€â"€ */}
       <div className="flex-1 overflow-hidden flex flex-col" id="owner_main">
 
-        {/* â•â•â•â• HOME â€” AI CONVERSATION (Primary Screen) â•â•â•â• */}
+        {/* â•â•â•â• HOME â€" AI CONVERSATION (Primary Screen) â•â•â•â• */}
         {activeTab === "home" && (
           <div className="flex-1 flex flex-col overflow-hidden" id="owner_home_pane">
 
             {/* Conversation area */}
             <div className="flex-1 overflow-y-auto px-4 pt-4 pb-2 space-y-4" id="owner_chat_area">
 
-              {/* Welcome â€” shown only if no messages */}
+              {/* Welcome â€" shown only if no messages */}
               {chatMessages.length === 0 && (
                 <div className="flex flex-col items-center justify-center py-8 space-y-2 text-center">
                   <div className="w-14 h-14 rounded-2xl bg-slate-900 flex items-center justify-center shadow-lg mb-1">
@@ -344,7 +344,7 @@ export function OwnerDashboard() {
               <div ref={chatEndRef} />
             </div>
 
-            {/* Quick prompts â€” shown only if no messages */}
+            {/* Quick prompts â€" shown only if no messages */}
             {chatMessages.length === 0 && (
               <div className="px-4 pb-2 flex flex-wrap gap-2">
                 {QUICK_PROMPTS.map(({ label, q }) => (
@@ -658,7 +658,7 @@ export function OwnerDashboard() {
                   ))}
                 </div>
 
-                {/* Reminder Settings â€” Feature 6 */}
+                {/* Reminder Settings â€" Feature 6 */}
                 <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-4">
                   <div className="flex items-center space-x-2">
                     <Bell className="w-4 h-4 text-indigo-500" />
@@ -709,7 +709,7 @@ export function OwnerDashboard() {
               </div>
             )}
 
-            {/* â•â•â• SUPPORT CENTER â€” Feature 1 â•â•â• */}
+            {/* â•â•â• SUPPORT CENTER â€" Feature 1 â•â•â• */}
             {morePage === "support" && (
               <div className="space-y-4">
                 <h2 className="text-lg font-bold text-slate-900">Pusat Sokongan</h2>
@@ -785,7 +785,7 @@ export function OwnerDashboard() {
                         </button>
                       </form>
                       <button onClick={() => setSupportView("ticket")} className="mt-2 w-full text-center text-[11px] text-slate-400 hover:text-indigo-600 transition cursor-pointer">
-                        Masalah tidak selesai? Buka tiket sokongan â†’
+                        Masalah tidak selesai? Buka tiket sokongan â†'
                       </button>
                     </div>
                   </div>
@@ -795,13 +795,13 @@ export function OwnerDashboard() {
                 {supportView === "faq" && (
                   <div className="space-y-2">
                     {[
-                      { q: "Bagaimana cara muat naik resit?", a: "Pergi ke tab Dokumen â†’ klik 'Muat Naik Resit' â†’ pilih gambar atau PDF resit anda." },
+                      { q: "Bagaimana cara muat naik resit?", a: "Pergi ke tab Dokumen â†' klik 'Muat Naik Resit' â†' pilih gambar atau PDF resit anda." },
                       { q: "Bagaimana cara rekod perbelanjaan?", a: "Di Home, taip 'Saya bayar [nama] RM[jumlah]' atau klik '- Rekod Perbelanjaan' di bawah kotak chat." },
-                      { q: "Bagaimana cara cari rekod lama?", a: "Pergi ke Dashboard â†’ skrol ke bawah untuk lihat senarai transaksi terkini." },
-                      { q: "Bagaimana cara jemput kakitangan?", a: "Pergi ke Lagi â†’ Pasukan â†’ klik 'Jemput Staf' â†’ masukkan nama dan email." },
+                      { q: "Bagaimana cara cari rekod lama?", a: "Pergi ke Dashboard â†' skrol ke bawah untuk lihat senarai transaksi terkini." },
+                      { q: "Bagaimana cara jemput kakitangan?", a: "Pergi ke Lagi â†' Pasukan â†' klik 'Jemput Staf' â†' masukkan nama dan email." },
                       { q: "Bagaimana cara lihat laporan?", a: "Klik tab 'Laporan' di bawah navigasi untuk lihat P&L, Cashflow dan ringkasan kewangan." },
-                      { q: "Boleh saya guna AI saya sendiri?", a: "Ya, jika HQ mengizinkan. Pergi ke Lagi â†’ Tetapan Sumber untuk tukar ke AI anda sendiri." },
-                      { q: "Apa itu kredit AI?", a: "Kredit AI digunakan apabila anda bertanya kepada MYKERANI. Semak baki di Lagi â†’ Bil & Langganan." },
+                      { q: "Boleh saya guna AI saya sendiri?", a: "Ya, jika HQ mengizinkan. Pergi ke Lagi â†' Tetapan Sumber untuk tukar ke AI anda sendiri." },
+                      { q: "Apa itu kredit AI?", a: "Kredit AI digunakan apabila anda bertanya kepada MYKERANI. Semak baki di Lagi â†' Bil & Langganan." },
                     ].map(({ q, a }) => (
                       <details key={q} className="bg-white border border-slate-200 rounded-xl shadow-sm group">
                         <summary className="px-4 py-3.5 text-xs font-semibold text-slate-800 cursor-pointer list-none flex items-center justify-between">
@@ -896,7 +896,7 @@ export function OwnerDashboard() {
               </div>
             )}
 
-            {/* â•â•â• BILLING â€” Features 2, 3, 4 â•â•â• */}
+            {/* â•â•â• BILLING â€" Features 2, 3, 4 â•â•â• */}
             {morePage === "billing" && (
               <div className="space-y-4">
                 <h2 className="text-lg font-bold text-slate-900">Bil & Langganan</h2>
@@ -927,7 +927,7 @@ export function OwnerDashboard() {
                   ))}
                 </div>
 
-                {/* AI Credits â€” Feature 3 */}
+                {/* AI Credits â€" Feature 3 */}
                 <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-3">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center space-x-2">
@@ -952,7 +952,7 @@ export function OwnerDashboard() {
                   </div>
                 </div>
 
-                {/* Storage â€” Feature 4 */}
+                {/* Storage â€" Feature 4 */}
                 <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-3">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center space-x-2">
@@ -988,7 +988,7 @@ export function OwnerDashboard() {
               </div>
             )}
 
-            {/* â•â•â• RESOURCE SETTINGS â€” Feature 5 â•â•â• */}
+            {/* â•â•â• RESOURCE SETTINGS â€" Feature 5 â•â•â• */}
             {morePage === "resources" && (
               <div className="space-y-4">
                 <h2 className="text-lg font-bold text-slate-900">Tetapan Sumber</h2>
@@ -1064,7 +1064,7 @@ export function OwnerDashboard() {
         )}
       </div>
 
-      {/* â”€â”€ BOTTOM NAV â”€â”€ */}
+      {/* â"€â"€ BOTTOM NAV â"€â"€ */}
       <nav className="bg-white border-t border-slate-200 flex items-center justify-around px-2 py-1.5 shrink-0 z-40" id="owner_bottom_nav">
         {([
           { id: "home" as MainTab,      label: "Home",      icon: Home },
