@@ -19,6 +19,11 @@ import { FinancialReportsAnalytics } from "../components/FinancialReportsAnalyti
 import { StorageBar } from "../components/StorageBar";
 import { useStorageQuota, PLAN_QUOTAS, GB } from "../lib/storageQuota";
 import { useNotifications, buildTenantNotifs, fmtNotifTime } from "../lib/notifications";
+import {
+  uploadDocument, listDocuments, deleteDocument, getDocumentUrl,
+  isAllowedFileType, MAX_FILE_SIZE, fmtBytes as fmtDocBytes,
+  type UploadedDoc, type DocType,
+} from "../lib/documentStorage";
 
 type MainTab = "home" | "dashboard" | "documents" | "reports" | "more";
 type MorePage = "menu" | "team" | "history" | "settings" | "profile" | "support" | "billing" | "resources";
@@ -180,8 +185,58 @@ export function OwnerDashboard() {
 
   // â"€â"€ Storage Quota â"€â"€
   const tenantId = activeTenant?.id || user?.id || "guest";
-  const storageQuota = useStorageQuota(tenantId);
+  const storageQuota = useStorageQuota(tenantId, wsId || undefined);
   const [showAddonModal, setShowAddonModal] = useState(false);
+
+  // â"€â"€ Document upload state â"€â"€
+  const [docs, setDocs] = useState<UploadedDoc[]>([]);
+  const [docsLoading, setDocsLoading] = useState(false);
+  const [uploadingDoc, setUploadingDoc] = useState<DocType | null>(null);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [pendingDocType, setPendingDocType] = useState<DocType>("SUPPORTING_DOC");
+
+  // Load documents when workspace ready
+  useEffect(() => {
+    if (!wsId) return;
+    setDocsLoading(true);
+    listDocuments(wsId).then(d => { setDocs(d); setDocsLoading(false); });
+  }, [wsId]);
+
+  const triggerUpload = (docType: DocType) => {
+    if (storageQuota.isFrozen) { setUploadError("Storan dibekukan. Hubungi HQ."); return; }
+    if (!storageQuota.canUpload) { setUploadError("Storan penuh. Beli tambahan storan."); return; }
+    setPendingDocType(docType);
+    setUploadError(null);
+    fileInputRef.current?.click();
+  };
+
+  const handleFileSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = "";
+    if (!isAllowedFileType(file)) { setUploadError("Jenis fail tidak disokong. Guna PDF, gambar, atau CSV."); return; }
+    if (file.size > MAX_FILE_SIZE) { setUploadError("Saiz fail melebihi 10MB."); return; }
+    if (!wsId || !user?.id) { setUploadError("Sesi tidak sah. Cuba log masuk semula."); return; }
+    setUploadingDoc(pendingDocType);
+    setUploadError(null);
+    const { doc, error } = await uploadDocument(file, wsId, user.id, pendingDocType);
+    setUploadingDoc(null);
+    if (error) { setUploadError(error); return; }
+    if (doc) { setDocs(prev => [doc, ...prev]); storageQuota.refresh(); }
+  };
+
+  const handleDeleteDoc = async (doc: UploadedDoc) => {
+    const err = await deleteDocument(doc);
+    if (err) { setUploadError(err); return; }
+    setDocs(prev => prev.filter(d => d.id !== doc.id));
+    storageQuota.refresh();
+  };
+
+  const handlePreviewDoc = async (doc: UploadedDoc) => {
+    const url = await getDocumentUrl(doc.file_path_supabase);
+    if (url) window.open(url, "_blank");
+  };
 
   // Update activity timestamp on financial events change
   useEffect(() => { if (myEvents.length > 0) storageQuota.touchActive(); }, [myEvents.length]);
@@ -691,22 +746,100 @@ export function OwnerDashboard() {
         {/* â•â•â•â• DOCUMENTS â•â•â•â• */}
         {activeTab === "documents" && (
           <div className="flex-1 overflow-y-auto p-4 space-y-4 max-w-2xl mx-auto w-full pb-20" id="owner_docs_pane">
-            <h2 className="text-lg font-bold text-slate-900">Dokumen</h2>
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-bold text-slate-900">Dokumen</h2>
+              <span className="text-[11px] text-slate-400">{docs.length} fail</span>
+            </div>
+
+            {/* Hidden file input */}
+            <input ref={fileInputRef} type="file" className="hidden"
+              accept=".pdf,.png,.jpg,.jpeg,.webp,.csv"
+              onChange={handleFileSelected} />
+
+            {/* Storage bar compact */}
+            <StorageBar quota={storageQuota} compact onBuyAddon={() => setShowAddonModal(true)} />
+
+            {/* Upload error */}
+            {uploadError && (
+              <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 flex items-center justify-between">
+                <p className="text-xs text-red-600 font-semibold">{uploadError}</p>
+                <button onClick={() => setUploadError(null)} className="text-red-400 hover:text-red-600 cursor-pointer">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            )}
+
+            {/* Upload buttons */}
             <div className="grid grid-cols-3 gap-3">
-              {[
-                { label: "Muat Naik Resit", icon: Receipt, bg: "bg-amber-50 border-amber-100 text-amber-500" },
-                { label: "Muat Naik Invois", icon: FileSpreadsheet, bg: "bg-blue-50 border-blue-100 text-blue-500" },
-                { label: "Penyata Bank", icon: Landmark, bg: "bg-violet-50 border-violet-100 text-violet-500" },
-              ].map(({ label, icon: Icon, bg }) => (
-                <button key={label} className={`flex flex-col items-center space-y-2 p-4 bg-white border ${bg} rounded-2xl shadow-sm hover:shadow-md transition cursor-pointer`}>
+              {([
+                { label: "Muat Naik Resit",  docType: "RECEIPT" as DocType,        icon: Receipt,         bg: "bg-amber-50 border-amber-100 text-amber-500" },
+                { label: "Muat Naik Invois", docType: "INVOICE" as DocType,        icon: FileSpreadsheet, bg: "bg-blue-50 border-blue-100 text-blue-500" },
+                { label: "Penyata Bank",     docType: "BANK_STATEMENT" as DocType, icon: Landmark,        bg: "bg-violet-50 border-violet-100 text-violet-500" },
+              ]).map(({ label, docType, icon: Icon, bg }) => (
+                <button key={docType} onClick={() => triggerUpload(docType)} disabled={!!uploadingDoc || storageQuota.isFrozen}
+                  className={`flex flex-col items-center space-y-2 p-4 bg-white border rounded-2xl shadow-sm hover:shadow-md transition cursor-pointer disabled:opacity-50 ${bg}`}>
                   <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${bg}`}>
-                    <Icon className="w-5 h-5" />
+                    {uploadingDoc === docType
+                      ? <RefreshCw className="w-5 h-5 animate-spin" />
+                      : <Icon className="w-5 h-5" />}
                   </div>
                   <span className="text-[11px] font-semibold text-slate-700 text-center leading-tight">{label}</span>
                 </button>
               ))}
             </div>
-            <FinancialEvidencePackageManager />
+
+            {/* Lain-lain */}
+            <button onClick={() => triggerUpload("SUPPORTING_DOC")} disabled={!!uploadingDoc || storageQuota.isFrozen}
+              className="w-full flex items-center gap-3 px-4 py-3 bg-white border border-dashed border-slate-300 rounded-2xl hover:border-emerald-400 hover:bg-emerald-50 transition cursor-pointer disabled:opacity-50">
+              <Upload className="w-4 h-4 text-slate-400" />
+              <span className="text-xs text-slate-500 font-semibold">Muat naik dokumen lain (Kontrak, dsb.)</span>
+            </button>
+
+            {/* Document list */}
+            {docsLoading ? (
+              <div className="py-8 text-center">
+                <RefreshCw className="w-5 h-5 text-slate-300 animate-spin mx-auto mb-2" />
+                <p className="text-xs text-slate-400">Memuatkan dokumen...</p>
+              </div>
+            ) : docs.length === 0 ? (
+              <div className="py-10 text-center bg-white border border-slate-100 rounded-2xl">
+                <FileText className="w-8 h-8 text-slate-200 mx-auto mb-2" />
+                <p className="text-xs font-semibold text-slate-400">Belum ada dokumen</p>
+                <p className="text-[11px] text-slate-300 mt-0.5">Muat naik resit, invois atau penyata bank</p>
+              </div>
+            ) : (
+              <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
+                <div className="divide-y divide-slate-50">
+                  {docs.map(doc => {
+                    const typeLabel: Record<string, string> = {
+                      RECEIPT: "Resit", INVOICE: "Invois", BANK_STATEMENT: "Penyata Bank",
+                      CONTRACT: "Kontrak", SUPPORTING_DOC: "Dokumen Lain",
+                    };
+                    return (
+                      <div key={doc.id} className="px-4 py-3.5 flex items-center gap-3">
+                        <div className="w-9 h-9 rounded-xl bg-slate-100 flex items-center justify-center shrink-0">
+                          <FileText className="w-4 h-4 text-slate-500" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-bold text-slate-800 truncate">{doc.file_name}</p>
+                          <p className="text-[10px] text-slate-400 mt-0.5">
+                            {typeLabel[doc.document_type] || doc.document_type} &middot; {fmtDocBytes(doc.file_size_bytes)} &middot; {new Date(doc.created_at).toLocaleDateString("ms-MY")}
+                          </p>
+                        </div>
+                        <button onClick={() => handlePreviewDoc(doc)} title="Buka"
+                          className="text-slate-300 hover:text-emerald-600 cursor-pointer p-1 shrink-0">
+                          <ExternalLink className="w-3.5 h-3.5" />
+                        </button>
+                        <button onClick={() => handleDeleteDoc(doc)} title="Padam"
+                          className="text-slate-300 hover:text-red-500 cursor-pointer p-1 shrink-0">
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
           </div>
         )}
 

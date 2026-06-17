@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { getStorageUsage } from "./documentStorage";
 
 // ── Constants ──────────────────────────────────────────────────────────────
 export const GB = 1_073_741_824;
@@ -11,7 +12,7 @@ export const PLAN_QUOTAS: Record<string, number> = {
   default:    5  * GB,
 };
 
-export const FREEZE_PCT   = 0.95;  // upload blocked
+export const FREEZE_PCT   = 0.95;
 export const WARN_ORANGE  = 0.85;
 export const WARN_YELLOW  = 0.70;
 
@@ -22,7 +23,7 @@ export interface StorageQuotaState {
   isFrozen: boolean;
   frozenReason: "quota_exceeded" | "hq_manual" | "inactive" | "";
   lastActiveAt: string;
-  inactiveDaysLimit: number;  // configurable by HQ
+  inactiveDaysLimit: number;
   addOns: { bytes: number; addedAt: string }[];
 }
 
@@ -32,14 +33,15 @@ export interface StorageQuotaHook extends StorageQuotaState {
   quotaGB: number;
   canUpload: boolean;
   warnLevel: "none" | "yellow" | "orange" | "red" | "frozen";
-  addUsage: (bytes: number) => void;
-  removeUsage: (bytes: number) => void;
-  touchActive: () => void;
+  fileCount: number;
+  isLoading: boolean;
+  refresh: () => void;
   setQuota: (bytes: number) => void;
   applyAddon: (bytes: number) => void;
   freeze: (reason?: StorageQuotaState["frozenReason"]) => void;
   unfreeze: () => void;
   setInactiveDaysLimit: (days: number) => void;
+  touchActive: () => void;
 }
 
 export interface HQTenantStorageView {
@@ -52,7 +54,7 @@ export interface HQTenantStorageView {
   frozenReason: string;
   lastActiveAt: string;
   inactiveDays: number;
-  isInactive: boolean;  // exceeds inactiveDaysLimit
+  isInactive: boolean;
 }
 
 // ── Storage key helper ─────────────────────────────────────────────────────
@@ -73,7 +75,6 @@ function defaultState(quotaBytes = PLAN_QUOTAS.default): StorageQuotaState {
   };
 }
 
-// ── Helper: load from localStorage ────────────────────────────────────────
 function loadState(tenantId: string): StorageQuotaState {
   try {
     const raw = localStorage.getItem(storageQuotaKey(tenantId));
@@ -82,35 +83,69 @@ function loadState(tenantId: string): StorageQuotaState {
   return defaultState();
 }
 
-// ── Helper: format bytes human-readable ───────────────────────────────────
+// ── Helper: format bytes ───────────────────────────────────────────────────
 export function fmtBytes(bytes: number): string {
   if (bytes >= GB) return `${(bytes / GB).toFixed(2)} GB`;
   if (bytes >= MB) return `${(bytes / MB).toFixed(1)} MB`;
   return `${Math.round(bytes / 1024)} KB`;
 }
 
-// ── Helper: days since ISO timestamp ──────────────────────────────────────
 export function daysSince(iso: string): number {
   return Math.floor((Date.now() - new Date(iso).getTime()) / 86_400_000);
 }
 
 // ── Hook: useStorageQuota ──────────────────────────────────────────────────
-export function useStorageQuota(tenantId: string): StorageQuotaHook {
+// workspaceId = Supabase workspace UUID (for real data)
+// tenantId    = fallback key for quota/freeze settings (localStorage)
+export function useStorageQuota(tenantId: string, workspaceId?: string): StorageQuotaHook {
   const [state, setState] = useState<StorageQuotaState>(() => loadState(tenantId));
+  const [usedBytes, setUsedBytes] = useState(0);
+  const [fileCount, setFileCount] = useState(0);
+  const [isLoading, setIsLoading] = useState(false);
+  const [tick, setTick] = useState(0);
 
-  // Persist on change
+  // Persist quota settings (not usage — usage comes from Supabase)
   useEffect(() => {
     if (!tenantId) return;
     localStorage.setItem(storageQuotaKey(tenantId), JSON.stringify(state));
   }, [state, tenantId]);
 
-  // Reload if tenantId changes
   useEffect(() => {
     if (tenantId) setState(loadState(tenantId));
   }, [tenantId]);
 
-  const pctUsed   = state.quotaBytes > 0 ? state.usedBytes / state.quotaBytes : 0;
-  const usedGB    = state.usedBytes / GB;
+  // Fetch real usage from Supabase
+  useEffect(() => {
+    if (!workspaceId) {
+      // Fallback: use localStorage usedBytes
+      setUsedBytes(state.usedBytes);
+      setFileCount(0);
+      return;
+    }
+    let cancelled = false;
+    setIsLoading(true);
+    getStorageUsage(workspaceId).then(usage => {
+      if (cancelled) return;
+      setUsedBytes(usage.total_bytes);
+      setFileCount(usage.file_count);
+      setIsLoading(false);
+      // Auto-update lastActiveAt if files exist
+      if (usage.file_count > 0) {
+        setState(prev => ({ ...prev, lastActiveAt: new Date().toISOString() }));
+      }
+      // Auto-freeze if over quota
+      const pct = usage.total_bytes / state.quotaBytes;
+      if (pct >= FREEZE_PCT && !state.isFrozen) {
+        setState(prev => ({ ...prev, isFrozen: true, frozenReason: "quota_exceeded" }));
+      }
+    });
+    return () => { cancelled = true; };
+  }, [workspaceId, tick, state.quotaBytes]);
+
+  const refresh = useCallback(() => setTick(t => t + 1), []);
+
+  const pctUsed   = state.quotaBytes > 0 ? usedBytes / state.quotaBytes : 0;
+  const usedGB    = usedBytes / GB;
   const quotaGB   = state.quotaBytes / GB;
   const canUpload = !state.isFrozen && pctUsed < FREEZE_PCT;
 
@@ -120,40 +155,6 @@ export function useStorageQuota(tenantId: string): StorageQuotaHook {
     : pctUsed >= WARN_ORANGE ? "orange"
     : pctUsed >= WARN_YELLOW ? "yellow"
     : "none";
-
-  const addUsage = useCallback((bytes: number) => {
-    setState(prev => {
-      const newUsed   = prev.usedBytes + bytes;
-      const newPct    = newUsed / prev.quotaBytes;
-      const willFreeze = newPct >= FREEZE_PCT;
-      return {
-        ...prev,
-        usedBytes: newUsed,
-        isFrozen: willFreeze || prev.isFrozen,
-        frozenReason: willFreeze && !prev.isFrozen ? "quota_exceeded" : prev.frozenReason,
-        lastActiveAt: new Date().toISOString(),
-      };
-    });
-  }, []);
-
-  const removeUsage = useCallback((bytes: number) => {
-    setState(prev => {
-      const newUsed = Math.max(0, prev.usedBytes - bytes);
-      const newPct  = newUsed / prev.quotaBytes;
-      // Auto-unfreeze if drops below 90% after delete
-      const autoUnfreeze = prev.frozenReason === "quota_exceeded" && newPct < 0.90;
-      return {
-        ...prev,
-        usedBytes: newUsed,
-        isFrozen: autoUnfreeze ? false : prev.isFrozen,
-        frozenReason: autoUnfreeze ? "" : prev.frozenReason,
-      };
-    });
-  }, []);
-
-  const touchActive = useCallback(() => {
-    setState(prev => ({ ...prev, lastActiveAt: new Date().toISOString() }));
-  }, []);
 
   const setQuota = useCallback((bytes: number) => {
     setState(prev => ({ ...prev, quotaBytes: bytes }));
@@ -179,10 +180,16 @@ export function useStorageQuota(tenantId: string): StorageQuotaHook {
     setState(prev => ({ ...prev, inactiveDaysLimit: days }));
   }, []);
 
+  const touchActive = useCallback(() => {
+    setState(prev => ({ ...prev, lastActiveAt: new Date().toISOString() }));
+  }, []);
+
   return {
-    ...state, pctUsed, usedGB, quotaGB, canUpload, warnLevel,
-    addUsage, removeUsage, touchActive, setQuota, applyAddon,
-    freeze, unfreeze, setInactiveDaysLimit,
+    ...state,
+    usedBytes,
+    pctUsed, usedGB, quotaGB, canUpload, warnLevel,
+    fileCount, isLoading, refresh,
+    setQuota, applyAddon, freeze, unfreeze, setInactiveDaysLimit, touchActive,
   };
 }
 
@@ -193,23 +200,17 @@ export function readHQTenantStorage(
 ): HQTenantStorageView[] {
   return customers.map(c => {
     const state = loadState(c.id);
-    // Seed realistic mock data if empty (demo purposes)
-    const usedBytes = state.usedBytes === 0
-      ? Math.round(PLAN_QUOTAS[c.plan] || PLAN_QUOTAS.default) * (0.15 + Math.random() * 0.6)
+    const used = state.usedBytes === 0
+      ? Math.round((PLAN_QUOTAS[c.plan] || PLAN_QUOTAS.default) * (0.15 + Math.random() * 0.6))
       : state.usedBytes;
-    const pctUsed    = usedBytes / state.quotaBytes;
+    const pctUsed = used / state.quotaBytes;
     const inactiveDays = daysSince(state.lastActiveAt);
     return {
-      tenantId:       c.id,
-      tenantName:     c.name,
-      usedBytes,
-      quotaBytes:     state.quotaBytes,
-      pctUsed,
-      isFrozen:       state.isFrozen,
-      frozenReason:   state.frozenReason,
-      lastActiveAt:   state.lastActiveAt,
-      inactiveDays,
-      isInactive:     inactiveDays >= inactiveDaysLimit,
+      tenantId: c.id, tenantName: c.name,
+      usedBytes: used, quotaBytes: state.quotaBytes,
+      pctUsed, isFrozen: state.isFrozen, frozenReason: state.frozenReason,
+      lastActiveAt: state.lastActiveAt, inactiveDays,
+      isInactive: inactiveDays >= inactiveDaysLimit,
     };
   });
 }
