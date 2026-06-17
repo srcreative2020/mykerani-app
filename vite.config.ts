@@ -11,14 +11,13 @@ export default defineConfig(() => {
         '@': path.resolve(__dirname, '.'),
       },
     },
-    optimizeDeps: {
-      include: ["motion/react"],
-    },
     build: {
+      minify: false,
+      sourcemap: false,
       rollupOptions: {
         output: {
           generatedCode: {
-            constBindings: true,
+            constBindings: false,
           },
         },
       },
