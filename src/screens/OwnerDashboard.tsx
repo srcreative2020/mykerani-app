@@ -93,6 +93,18 @@ export function OwnerDashboard() {
   const [morePage, setMorePage] = useState<MorePage>("menu");
   const [quickAdd, setQuickAdd] = useState<"INCOME" | "EXPENSE" | null>(null);
 
+  // â"€â"€ Onboarding Wizard â"€â"€
+  const onboardKey = `mykerani_onboarded_${user?.id ?? "guest"}`;
+  const [onboardDone, setOnboardDone] = useState(() => !!localStorage.getItem(onboardKey));
+  const [onboardStep, setOnboardStep] = useState(1);
+  const [obBizName, setObBizName] = useState(user?.fullName ? `${user.fullName} - Perniagaan` : "");
+  const [obBizType, setObBizType] = useState("");
+
+  const finishOnboard = () => {
+    localStorage.setItem(onboardKey, "1");
+    setOnboardDone(true);
+  };
+
   // â"€â"€ AI Chat State â"€â"€
   const [chatMessages, setChatMessages] = useState<ChatMsg[]>([]);
   const [chatInput, setChatInput] = useState("");
@@ -161,6 +173,7 @@ export function OwnerDashboard() {
   const expenseThisMonth = useMemo(() => myEvents.filter(e => e.type === "EXPENSE" && e.date.startsWith(thisMonth)).reduce((s, e) => s + e.amountMyr, 0), [myEvents, thisMonth]);
   const totalReceivable = useMemo(() => myEvents.filter(e => e.type === "RECEIVABLE" && !e.isCompleted).reduce((s, e) => s + e.amountMyr, 0), [myEvents]);
   const totalPayable = useMemo(() => myEvents.filter(e => e.type === "PAYABLE" && !e.isCompleted).reduce((s, e) => s + e.amountMyr, 0), [myEvents]);
+  const showOnboard = !onboardDone && !user?.email?.endsWith(".demo");
 
   useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [chatMessages, chatLoading]);
   useEffect(() => { supportEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [supportMessages, supportLoading]);
@@ -1248,6 +1261,125 @@ export function OwnerDashboard() {
 
       {/* Quick Add Modals */}
       {quickAdd && <QuickAddModal type={quickAdd} onClose={() => setQuickAdd(null)} onSave={handleSaveRecord} />}
+
+      {/* Onboarding Wizard */}
+      {showOnboard && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div className="bg-white rounded-t-3xl sm:rounded-3xl w-full max-w-sm shadow-2xl overflow-hidden">
+            {/* Progress bar */}
+            <div className="h-1 bg-slate-100">
+              <div className="h-full bg-emerald-500 transition-all duration-500" style={{ width: `${(onboardStep / 3) * 100}%` }} />
+            </div>
+
+            <div className="p-6 space-y-5">
+              {/* Step indicator */}
+              <div className="flex items-center justify-between">
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Langkah {onboardStep} / 3</p>
+                <button onClick={finishOnboard} className="text-[10px] text-slate-300 cursor-pointer hover:text-slate-400">Langkau</button>
+              </div>
+
+              {/* Step 1: Welcome + Biz name */}
+              {onboardStep === 1 && (
+                <div className="space-y-4">
+                  <div className="w-12 h-12 rounded-2xl bg-emerald-500 flex items-center justify-center shadow">
+                    <Brain className="w-6 h-6 text-white" />
+                  </div>
+                  <div>
+                    <h2 className="text-xl font-black text-slate-900">Selamat datang ke MYKERANI</h2>
+                    <p className="text-sm text-slate-500 mt-1">Juru Kira AI untuk perniagaan anda. Mari sediakan akaun anda dalam 3 langkah mudah.</p>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold text-slate-600">Nama Perniagaan Anda</label>
+                    <input value={obBizName} onChange={e => setObBizName(e.target.value)}
+                      placeholder="Contoh: Kedai Makan Mak Su"
+                      className="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-emerald-400" />
+                  </div>
+                  <button onClick={() => obBizName.trim() && setOnboardStep(2)} disabled={!obBizName.trim()}
+                    className="w-full py-3 bg-emerald-500 hover:bg-emerald-600 text-white rounded-2xl text-sm font-bold transition cursor-pointer disabled:opacity-40">
+                    Seterusnya
+                  </button>
+                </div>
+              )}
+
+              {/* Step 2: Jenis bisnes */}
+              {onboardStep === 2 && (
+                <div className="space-y-4">
+                  <div>
+                    <h2 className="text-lg font-black text-slate-900">Jenis Perniagaan</h2>
+                    <p className="text-sm text-slate-500 mt-1">Bantu MYKERANI faham perniagaan anda supaya AI dapat memberi cadangan yang lebih tepat.</p>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    {[
+                      { id: "makanan",      label: "Makanan & Minuman" },
+                      { id: "runcit",       label: "Runcit / Kedai" },
+                      { id: "perkhidmatan", label: "Perkhidmatan" },
+                      { id: "pembinaan",    label: "Pembinaan / Kontraktor" },
+                      { id: "pertanian",    label: "Pertanian" },
+                      { id: "lain",         label: "Lain-lain" },
+                    ].map(({ id, label }) => (
+                      <button key={id} onClick={() => setObBizType(id)}
+                        className={`p-3 rounded-xl border-2 text-xs font-semibold text-left transition cursor-pointer ${obBizType === id ? "border-emerald-500 bg-emerald-50 text-emerald-800" : "border-slate-100 text-slate-600 hover:border-slate-200"}`}>
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="flex gap-2">
+                    <button onClick={() => setOnboardStep(1)}
+                      className="flex-1 py-3 border border-slate-200 rounded-2xl text-sm font-bold text-slate-600 cursor-pointer hover:bg-slate-50 transition">
+                      Kembali
+                    </button>
+                    <button onClick={() => obBizType && setOnboardStep(3)} disabled={!obBizType}
+                      className="flex-1 py-3 bg-emerald-500 hover:bg-emerald-600 text-white rounded-2xl text-sm font-bold transition cursor-pointer disabled:opacity-40">
+                      Seterusnya
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Step 3: Done + first action */}
+              {onboardStep === 3 && (
+                <div className="space-y-4">
+                  <div>
+                    <div className="w-12 h-12 rounded-2xl bg-emerald-500 flex items-center justify-center shadow mb-3">
+                      <CheckCircle2 className="w-6 h-6 text-white" />
+                    </div>
+                    <h2 className="text-lg font-black text-slate-900">Semua Sedia!</h2>
+                    <p className="text-sm text-slate-500 mt-1">
+                      <strong className="text-slate-800">{obBizName}</strong> telah disediakan. Apa yang anda ingin buat dahulu?
+                    </p>
+                  </div>
+                  <div className="space-y-2">
+                    <button onClick={() => { finishOnboard(); setQuickAdd("INCOME"); }}
+                      className="w-full flex items-center gap-3 p-4 rounded-xl border-2 border-emerald-200 bg-emerald-50 cursor-pointer hover:border-emerald-400 transition">
+                      <TrendingUp className="w-5 h-5 text-emerald-500 shrink-0" />
+                      <div className="text-left">
+                        <p className="text-sm font-bold text-emerald-800">Rekod Pendapatan Pertama</p>
+                        <p className="text-[11px] text-emerald-600">Catat jualan atau pendapatan hari ini</p>
+                      </div>
+                    </button>
+                    <button onClick={() => { finishOnboard(); setQuickAdd("EXPENSE"); }}
+                      className="w-full flex items-center gap-3 p-4 rounded-xl border-2 border-rose-100 bg-rose-50 cursor-pointer hover:border-rose-300 transition">
+                      <TrendingDown className="w-5 h-5 text-rose-400 shrink-0" />
+                      <div className="text-left">
+                        <p className="text-sm font-bold text-rose-700">Rekod Perbelanjaan Pertama</p>
+                        <p className="text-[11px] text-rose-500">Catat kos atau perbelanjaan perniagaan</p>
+                      </div>
+                    </button>
+                    <button onClick={() => { finishOnboard(); sendChat("Helo MYKERANI! Saya baru mula. Boleh tolong terangkan apa yang awak boleh buat untuk perniagaan saya?"); }}
+                      className="w-full flex items-center gap-3 p-4 rounded-xl border-2 border-slate-100 cursor-pointer hover:border-slate-200 transition">
+                      <Brain className="w-5 h-5 text-indigo-400 shrink-0" />
+                      <div className="text-left">
+                        <p className="text-sm font-bold text-slate-700">Tanya AI Dahulu</p>
+                        <p className="text-[11px] text-slate-400">Ketahui apa yang MYKERANI boleh bantu</p>
+                      </div>
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
