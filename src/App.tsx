@@ -10,6 +10,7 @@ import { Guard } from "./components/Guard";
 import { HQConsoleShell } from "./components/HQConsoleShell";
 import { MyKeraniAppTabs } from "./components/MyKeraniAppTabs";
 import { StaffHomeScreen } from "./screens/StaffHomeScreen";
+import { OwnerDashboard } from "./screens/OwnerDashboard";
 import { FinancialRecordsProvider, useFinancials } from "./context/FinancialRecordsContext";
 import { FinancialRecordsConsole } from "./components/FinancialRecordsConsole";
 import { testSupabaseConnection, type SupabaseDiagnostics } from "./lib/supabase";
@@ -1109,10 +1110,18 @@ function MainDashboardContent() {
 
 function RoleRouter() {
   const { user } = useAuth();
+  const { activeTenant } = useTenant();
+
   if (user?.role === "STAFF" || user?.role === "VIEWER") {
     return <StaffHomeScreen />;
   }
-  return <MainDashboardContent />;
+
+  if (activeTenant?.category === "HQ" || user?.role === "HQ_ADMIN" || user?.role === "HQ_SUPPORT" || user?.role === "HQ_AUDITOR") {
+    return <MainDashboardContent />;
+  }
+
+  // TENANT_OWNER, TENANT_ADMIN, MANAGER → new Owner Dashboard
+  return <OwnerDashboard />;
 }
 
 export default function App() {
