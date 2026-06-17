@@ -134,6 +134,47 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState<typeof customers[0] | null>(null);
 
+  // ── Cipta Staf HQ ──
+  const [showCreateStaff, setShowCreateStaff] = useState(false);
+  const [staffEmail, setStaffEmail] = useState("");
+  const [staffName, setStaffName] = useState("");
+  const [staffCreating, setStaffCreating] = useState(false);
+  const [staffResult, setStaffResult] = useState<{ success: boolean; message: string; tempPassword?: string } | null>(null);
+
+  const handleCreateHQStaff = async () => {
+    if (!staffEmail.trim() || !staffName.trim()) return;
+    setStaffCreating(true);
+    setStaffResult(null);
+    try {
+      const { supabase } = await import("../lib/supabase");
+      const { data: sessionData } = await supabase!.auth.getSession();
+      const jwt = sessionData?.session?.access_token || "";
+      const res = await fetch("/api/admin/create-staff", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: staffEmail.trim(),
+          fullName: staffName.trim(),
+          role: "HQ_STAFF",
+          tenantId: "tenant-hq-0001",
+          callerJwt: jwt,
+        }),
+      });
+      const data = await res.json() as any;
+      if (data.success) {
+        setStaffResult({ success: true, message: data.message, tempPassword: data.tempPassword });
+        setStaffEmail("");
+        setStaffName("");
+      } else {
+        setStaffResult({ success: false, message: data.error || "Gagal cipta akaun." });
+      }
+    } catch (err: any) {
+      setStaffResult({ success: false, message: err?.message || "Ralat sambungan. Semak Railway server." });
+    } finally {
+      setStaffCreating(false);
+    }
+  };
+
   const handleRefresh = () => {
     setIsRefreshing(true);
     setTimeout(() => setIsRefreshing(false), 1200);
@@ -880,22 +921,76 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
               </div>
             </div>
 
-            {/* Operators */}
+            {/* Cipta Kakitangan HQ */}
             <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-4">
               <div className="flex items-center justify-between">
                 <h3 className="text-sm font-bold text-slate-900 flex items-center space-x-2">
                   <Users className="w-4 h-4 text-indigo-500" />
-                  <span>Operator HQ</span>
+                  <span>Kakitangan HQ</span>
                 </h3>
-                <button className="flex items-center space-x-1.5 px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition cursor-pointer">
+                <button
+                  onClick={() => { setShowCreateStaff(v => !v); setStaffResult(null); }}
+                  className="flex items-center space-x-1.5 px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition cursor-pointer"
+                >
                   <Plus className="w-3.5 h-3.5" />
-                  <span>Tambah Operator</span>
+                  <span>Cipta Akaun Staf</span>
                 </button>
               </div>
-              <div className="p-6 text-center bg-slate-50 rounded-xl">
-                <Users className="w-8 h-8 text-slate-300 mx-auto mb-2" />
-                <p className="text-xs text-slate-500">Hanya anda sebagai operator buat masa ini</p>
-              </div>
+
+              {showCreateStaff && (
+                <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-4 space-y-3">
+                  <p className="text-xs font-bold text-indigo-800">Cipta Akaun HQ_STAFF Baru</p>
+                  <div className="space-y-2">
+                    <input
+                      type="text"
+                      value={staffName}
+                      onChange={e => setStaffName(e.target.value)}
+                      placeholder="Nama penuh kakitangan"
+                      className="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-400 bg-white"
+                    />
+                    <input
+                      type="email"
+                      value={staffEmail}
+                      onChange={e => setStaffEmail(e.target.value)}
+                      placeholder="Email kakitangan (cth: ali@mykerani.my)"
+                      className="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-400 bg-white"
+                    />
+                    <div className="flex items-center space-x-2 px-3 py-2 bg-white border border-slate-200 rounded-xl">
+                      <Shield className="w-3.5 h-3.5 text-indigo-500" />
+                      <span className="text-xs font-semibold text-slate-700">Role: HQ_STAFF</span>
+                    </div>
+                  </div>
+                  <button
+                    onClick={handleCreateHQStaff}
+                    disabled={staffCreating || !staffEmail.trim() || !staffName.trim()}
+                    className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 text-white rounded-xl text-xs font-bold transition cursor-pointer"
+                  >
+                    {staffCreating ? "Mencipta akaun..." : "Cipta Akaun"}
+                  </button>
+                  {staffResult && (
+                    <div className={`rounded-xl p-3 text-xs space-y-1 ${staffResult.success ? "bg-emerald-50 border border-emerald-200" : "bg-rose-50 border border-rose-200"}`}>
+                      <p className={`font-bold ${staffResult.success ? "text-emerald-700" : "text-rose-700"}`}>
+                        {staffResult.success ? "✓ Berjaya!" : "✗ Gagal"}
+                      </p>
+                      <p className={staffResult.success ? "text-emerald-600" : "text-rose-600"}>{staffResult.message}</p>
+                      {staffResult.tempPassword && (
+                        <div className="mt-2 p-2 bg-white border border-emerald-200 rounded-lg">
+                          <p className="text-[10px] text-slate-500 mb-1">Kata Laluan Sementara (kongsi secara selamat):</p>
+                          <p className="font-mono font-bold text-slate-900 text-sm select-all">{staffResult.tempPassword}</p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {!showCreateStaff && (
+                <div className="p-4 bg-slate-50 rounded-xl text-center">
+                  <Users className="w-7 h-7 text-slate-300 mx-auto mb-2" />
+                  <p className="text-xs text-slate-500">Klik "Cipta Akaun Staf" untuk tambah kakitangan HQ</p>
+                  <p className="text-[10px] text-slate-400 mt-0.5">Staf akan dapat akses ke modul Pelanggan sahaja</p>
+                </div>
+              )}
             </div>
 
             {/* Platform Settings */}

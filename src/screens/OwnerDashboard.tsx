@@ -120,6 +120,47 @@ export function OwnerDashboard() {
   const [txSearch, setTxSearch] = useState("");
   const [showCompanySwitcher, setShowCompanySwitcher] = useState(false);
 
+  // ── Jemput Kakitangan ──
+  const [showInviteStaff, setShowInviteStaff] = useState(false);
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteName, setInviteName] = useState("");
+  const [inviting, setInviting] = useState(false);
+  const [inviteResult, setInviteResult] = useState<{ success: boolean; message: string; tempPassword?: string } | null>(null);
+
+  const handleInviteStaff = async () => {
+    if (!inviteEmail.trim() || !inviteName.trim()) return;
+    setInviting(true);
+    setInviteResult(null);
+    try {
+      const { supabase } = await import("../lib/supabase");
+      const { data: sessionData } = await supabase!.auth.getSession();
+      const jwt = sessionData?.session?.access_token || "";
+      const res = await fetch("/api/admin/create-staff", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: inviteEmail.trim(),
+          fullName: inviteName.trim(),
+          role: "TENANT_STAFF",
+          tenantId: user?.tenantId || "",
+          callerJwt: jwt,
+        }),
+      });
+      const data = await res.json() as any;
+      if (data.success) {
+        setInviteResult({ success: true, message: data.message, tempPassword: data.tempPassword });
+        setInviteEmail("");
+        setInviteName("");
+      } else {
+        setInviteResult({ success: false, message: data.error || "Gagal cipta akaun." });
+      }
+    } catch (err: any) {
+      setInviteResult({ success: false, message: err?.message || "Ralat sambungan. Semak Railway server." });
+    } finally {
+      setInviting(false);
+    }
+  };
+
   // ── Financial summary ───────────────────────────────────────────────────
   const wsId = activeWorkspace?.id;
   const myEvents = useMemo(() =>
@@ -661,10 +702,63 @@ export function OwnerDashboard() {
           <div className="space-y-4" id="owner_team_pane">
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-bold text-slate-900">Pasukan Saya</h2>
-              <button className="flex items-center space-x-1.5 px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition cursor-pointer shadow-sm">
+              <button
+                onClick={() => { setShowInviteStaff(v => !v); setInviteResult(null); }}
+                className="flex items-center space-x-1.5 px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition cursor-pointer shadow-sm"
+              >
                 <UserPlus className="w-3.5 h-3.5" /><span>Jemput Kakitangan</span>
               </button>
             </div>
+
+            {/* Form jemput staf */}
+            {showInviteStaff && (
+              <div className="bg-indigo-50 border border-indigo-100 rounded-2xl p-4 space-y-3">
+                <p className="text-xs font-bold text-indigo-800">Cipta Akaun Kakitangan Baru</p>
+                <div className="space-y-2">
+                  <input
+                    type="text"
+                    value={inviteName}
+                    onChange={e => setInviteName(e.target.value)}
+                    placeholder="Nama penuh kakitangan"
+                    className="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-400 bg-white"
+                  />
+                  <input
+                    type="email"
+                    value={inviteEmail}
+                    onChange={e => setInviteEmail(e.target.value)}
+                    placeholder="Email kakitangan"
+                    className="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-400 bg-white"
+                  />
+                  <div className="flex items-center space-x-2 px-3 py-2 bg-white border border-slate-200 rounded-xl">
+                    <UserPlus className="w-3.5 h-3.5 text-indigo-500" />
+                    <span className="text-xs font-semibold text-slate-700">Role: TENANT_STAFF</span>
+                  </div>
+                </div>
+                <button
+                  onClick={handleInviteStaff}
+                  disabled={inviting || !inviteEmail.trim() || !inviteName.trim()}
+                  className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 text-white rounded-xl text-xs font-bold transition cursor-pointer"
+                >
+                  {inviting ? "Mencipta akaun..." : "Cipta & Jemput"}
+                </button>
+                {inviteResult && (
+                  <div className={`rounded-xl p-3 text-xs space-y-1 ${inviteResult.success ? "bg-emerald-50 border border-emerald-200" : "bg-rose-50 border border-rose-200"}`}>
+                    <p className={`font-bold ${inviteResult.success ? "text-emerald-700" : "text-rose-700"}`}>
+                      {inviteResult.success ? "✓ Berjaya!" : "✗ Gagal"}
+                    </p>
+                    <p className={inviteResult.success ? "text-emerald-600" : "text-rose-600"}>{inviteResult.message}</p>
+                    {inviteResult.tempPassword && (
+                      <div className="mt-2 p-2 bg-white border border-emerald-200 rounded-lg">
+                        <p className="text-[10px] text-slate-500 mb-1">Kata Laluan Sementara (kongsi secara selamat):</p>
+                        <p className="font-mono font-bold text-slate-900 text-sm select-all">{inviteResult.tempPassword}</p>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Senarai ahli pasukan */}
             <div className="bg-white border border-slate-200 rounded-2xl p-5 space-y-4 shadow-sm">
               <div className="flex items-center space-x-4 p-4 bg-indigo-50 rounded-xl">
                 <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center text-white text-lg font-bold shadow">
@@ -676,13 +770,10 @@ export function OwnerDashboard() {
                   <span className="text-[10px] bg-indigo-100 text-indigo-700 font-bold px-2 py-0.5 rounded-full">Pemilik Syarikat</span>
                 </div>
               </div>
-              <div className="p-6 text-center bg-slate-50 rounded-xl">
-                <Users className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+              <div className="p-4 text-center bg-slate-50 rounded-xl">
+                <Users className="w-7 h-7 text-slate-300 mx-auto mb-2" />
                 <p className="text-xs text-slate-500">Belum ada kakitangan lagi</p>
-                <p className="text-[10px] text-slate-400 mt-1">Jemput kakitangan untuk bantu rekod transaksi</p>
-                <button className="mt-3 px-4 py-2 bg-indigo-600 text-white rounded-xl text-xs font-bold hover:bg-indigo-700 transition cursor-pointer">
-                  Jemput Kakitangan
-                </button>
+                <p className="text-[10px] text-slate-400 mt-0.5">Cipta akaun kakitangan untuk bantu rekod transaksi</p>
               </div>
             </div>
           </div>
