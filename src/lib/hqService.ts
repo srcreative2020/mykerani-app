@@ -158,3 +158,63 @@ export async function setCustomerStatus(tenantId: string, status: HqCustomer["st
   const { error } = await supabase.from("tenant_subscriptions").update({ status: dbStatus }).eq("tenant_id", tenantId);
   return !error;
 }
+
+// --- AI Router ---
+
+export interface AiRouterSettings {
+  strategy: "cheapest" | "balanced" | "quality" | "custom";
+  usdMyr: number;
+  planRoutes: { planId: string; providerId: string; modelId: string }[];
+}
+
+export interface AiProviderStatus {
+  provider: string;
+  enabled: boolean;
+  selectedModel: string | null;
+  hasKey: boolean;
+}
+
+export async function getAiRouterSettings(): Promise<AiRouterSettings | null> {
+  if (!isSupabaseConfigured() || !supabase) return null;
+  const { data, error } = await supabase.from("ai_router_settings").select("*").eq("id", "global").maybeSingle();
+  if (error || !data) return null;
+  return {
+    strategy: data.strategy,
+    usdMyr: Number(data.usd_myr) || 4.45,
+    planRoutes: data.plan_routes || [],
+  };
+}
+
+export async function saveAiRouterSettings(settings: AiRouterSettings): Promise<boolean> {
+  if (!isSupabaseConfigured() || !supabase) return false;
+  const { error } = await supabase.from("ai_router_settings").update({
+    strategy: settings.strategy,
+    usd_myr: settings.usdMyr,
+    plan_routes: settings.planRoutes,
+    updated_at: new Date().toISOString(),
+  }).eq("id", "global");
+  return !error;
+}
+
+export async function getAiProviderStatuses(): Promise<AiProviderStatus[]> {
+  if (!isSupabaseConfigured() || !supabase) return [];
+  const { data, error } = await supabase.rpc("get_ai_provider_status");
+  if (error || !data) return [];
+  return data.map((row: any) => ({
+    provider: row.provider,
+    enabled: row.enabled,
+    selectedModel: row.selected_model,
+    hasKey: row.has_key,
+  }));
+}
+
+export async function upsertAiProviderConfig(provider: string, enabled: boolean, apiKey: string | null, selectedModel: string): Promise<boolean> {
+  if (!isSupabaseConfigured() || !supabase) return false;
+  const { error } = await supabase.rpc("upsert_ai_provider_config", {
+    p_provider: provider,
+    p_enabled: enabled,
+    p_api_key: apiKey,
+    p_selected_model: selectedModel,
+  });
+  return !error;
+}
