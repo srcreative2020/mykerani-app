@@ -232,10 +232,10 @@ export function OwnerDashboard() {
   };
 
   const QUICK_PROMPTS = [
-    { label: "ðŸ’° Baki tunai saya?", q: "Berapa baki tunai saya sekarang?" },
-    { label: "ðŸ“Š Ringkasan bulan ini", q: "Ringkaskan kewangan saya bulan ini." },
-    { label: "ðŸ“‹ Bil tertunggak?", q: "Adakah ada bil yang perlu dibayar?" },
-    { label: "ðŸ“ˆ Pendapatan vs Perbelanjaan", q: "Bandingkan pendapatan dan perbelanjaan bulan ini." },
+    { label: “💰 Baki tunai saya?”, q: “Berapa baki tunai saya sekarang?” },
+    { label: “📊 Ringkasan bulan ini”, q: “Ringkaskan kewangan saya bulan ini.” },
+    { label: “📋 Bil tertunggak?”, q: “Adakah ada bil yang perlu dibayar?” },
+    { label: “📈 Pendapatan vs Perbelanjaan”, q: “Bandingkan pendapatan dan perbelanjaan bulan ini.” },
   ];
 
   return (
@@ -284,7 +284,7 @@ export function OwnerDashboard() {
               {firstName.charAt(0).toUpperCase()}
             </div>
             <span className="text-[11px] font-semibold text-slate-700 hidden sm:block">{firstName}</span>
-            <span className="text-[10px] text-slate-400 hidden sm:block">Â·</span>
+            <span className="text-[10px] text-slate-400 hidden sm:block">·</span>
             <span className="text-[10px] text-indigo-500 font-semibold hidden sm:block">Pemilik</span>
           </div>
           <button onClick={() => signOut()}
@@ -359,9 +359,9 @@ export function OwnerDashboard() {
             {/* Upload shortcuts */}
             <div className="px-4 pb-2 flex gap-2">
               {[
-                { label: "ðŸ“· Resit", desc: "RECEIPT" },
-                { label: "ðŸ“„ Invois", desc: "INVOICE" },
-                { label: "ðŸ¦ Penyata Bank", desc: "STATEMENT" },
+                { label: "📷 Resit", desc: "RECEIPT" },
+                { label: "📄 Invois", desc: "INVOICE" },
+                { label: "🏦 Penyata Bank", desc: "STATEMENT" },
               ].map(({ label }) => (
                 <button key={label} onClick={() => setActiveTab("documents")}
                   className="flex-1 py-2 bg-white border border-slate-200 rounded-xl text-xs font-semibold text-slate-600 hover:border-indigo-200 hover:bg-indigo-50 transition cursor-pointer shadow-sm">
@@ -392,7 +392,7 @@ export function OwnerDashboard() {
                 {[
                   { label: "+ Pendapatan", action: () => setQuickAdd("INCOME"), color: "text-emerald-600 bg-emerald-50 border-emerald-100" },
                   { label: "- Perbelanjaan", action: () => setQuickAdd("EXPENSE"), color: "text-rose-600 bg-rose-50 border-rose-100" },
-                  { label: "ðŸ“Š Dashboard", action: () => setActiveTab("dashboard"), color: "text-indigo-600 bg-indigo-50 border-indigo-100" },
+                  { label: "📊 Dashboard", action: () => setActiveTab("dashboard"), color: "text-indigo-600 bg-indigo-50 border-indigo-100" },
                 ].map(({ label, action, color }) => (
                   <button key={label} onClick={action}
                     className={`py-2 rounded-xl text-xs font-bold border transition cursor-pointer ${color}`}>
@@ -579,7 +579,7 @@ export function OwnerDashboard() {
                     </button>
                     {inviteResult && (
                       <div className={`rounded-xl p-3 text-xs ${inviteResult.success ? "bg-emerald-50 border border-emerald-200" : "bg-rose-50 border border-rose-200"}`}>
-                        <p className={`font-bold ${inviteResult.success ? "text-emerald-700" : "text-rose-700"}`}>{inviteResult.success ? "âœ“ Berjaya!" : "âœ— Gagal"}</p>
+                        <p className={`font-bold ${inviteResult.success ? "text-emerald-700" : "text-rose-700"}`}>{inviteResult.success ? "✓ Berjaya!" : "✗ Gagal"}</p>
                         <p className={inviteResult.success ? "text-emerald-600" : "text-rose-600"}>{inviteResult.message}</p>
                         {inviteResult.tempPassword && (
                           <div className="mt-2 p-2 bg-white border border-emerald-200 rounded-lg">
@@ -875,7 +875,7 @@ export function OwnerDashboard() {
                           <div className="p-3 bg-amber-50 border border-amber-100 rounded-xl flex items-start space-x-3">
                             <Clock className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
                             <div>
-                              <p className="text-xs font-bold text-amber-800">#{Date.now().toString().slice(-6)} â€” {ticketSubject}</p>
+                              <p className="text-xs font-bold text-amber-800">#{Date.now().toString().slice(-6)} — {ticketSubject}</p>
                               <p className="text-[11px] text-amber-600 mt-0.5">Status: Sedang diproses oleh HQ Staff</p>
                               <p className="text-[10px] text-amber-400 mt-1">Dihantar hari ini</p>
                             </div>
@@ -1004,7 +1004,7 @@ export function OwnerDashboard() {
                     <p className="text-sm font-bold text-slate-900">Sumber AI</p>
                   </div>
                   {([
-                    { id: "mykerani" as const, label: "Guna MYKERANI AI", desc: "AI rasmi MYKERANI â€” disyorkan" },
+                    { id: "mykerani" as const, label: "Guna MYKERANI AI", desc: "AI rasmi MYKERANI — disyorkan" },
                     { id: "own" as const,      label: "Guna AI Sendiri",  desc: "Sambung API AI anda sendiri" },
                   ] as const).map(({ id, label, desc }) => (
                     <button key={id} onClick={() => setResAI(id)}
