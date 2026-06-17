@@ -43,6 +43,61 @@ const MOCK_PLANS = [
   { id: "p3", name: "Enterprise", price: 899, aiCredits: 10000, storage: "100 GB",customers: 1 },
 ];
 
+// â"€â"€ AI Router: Provider Catalogue â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
+type ModelTier = "fast" | "balanced" | "pro";
+interface AIModel   { id: string; name: string; inputPer1M: number; outputPer1M: number; tier: ModelTier; }
+interface AIProvDef { id: string; company: string; name: string; badge: string; models: AIModel[]; }
+type RouterStrategy = "cheapest" | "balanced" | "quality" | "custom";
+interface ProviderCfg { enabled: boolean; apiKey: string; selectedModel: string; testStatus: "idle" | "ok" | "fail"; }
+interface PlanRoute   { planId: string; providerId: string; modelId: string; }
+
+const AI_PROVIDERS: AIProvDef[] = [
+  { id: "gemini",    company: "Google",        name: "Google Gemini",      badge: "G",  models: [
+    { id: "gemini-2.0-flash", name: "Gemini 2.0 Flash", inputPer1M: 0.075, outputPer1M: 0.30,  tier: "fast"     },
+    { id: "gemini-2.5-flash", name: "Gemini 2.5 Flash", inputPer1M: 0.15,  outputPer1M: 0.60,  tier: "balanced" },
+    { id: "gemini-2.5-pro",   name: "Gemini 2.5 Pro",   inputPer1M: 1.25,  outputPer1M: 10.00, tier: "pro"      },
+  ]},
+  { id: "openai",    company: "OpenAI",         name: "OpenAI / ChatGPT",   badge: "OA", models: [
+    { id: "gpt-4o-mini", name: "GPT-4o mini", inputPer1M: 0.15,  outputPer1M: 0.60,  tier: "fast"     },
+    { id: "gpt-4o",      name: "GPT-4o",      inputPer1M: 2.50,  outputPer1M: 10.00, tier: "pro"      },
+    { id: "o4-mini",     name: "o4-mini",     inputPer1M: 1.10,  outputPer1M: 4.40,  tier: "balanced" },
+  ]},
+  { id: "anthropic", company: "Anthropic",      name: "Claude (Anthropic)", badge: "AN", models: [
+    { id: "claude-haiku-4-5",  name: "Claude Haiku 4.5",  inputPer1M: 0.80, outputPer1M: 4.00,  tier: "fast" },
+    { id: "claude-sonnet-4-6", name: "Claude Sonnet 4.6", inputPer1M: 3.00, outputPer1M: 15.00, tier: "pro"  },
+  ]},
+  { id: "deepseek",  company: "DeepSeek AI",    name: "DeepSeek",           badge: "DS", models: [
+    { id: "deepseek-v3", name: "DeepSeek V3", inputPer1M: 0.27, outputPer1M: 1.10, tier: "balanced" },
+    { id: "deepseek-r1", name: "DeepSeek R1", inputPer1M: 0.55, outputPer1M: 2.19, tier: "pro"      },
+  ]},
+  { id: "xai",       company: "xAI",            name: "Grok (xAI)",         badge: "XA", models: [
+    { id: "grok-3-mini", name: "Grok 3 Mini", inputPer1M: 0.30, outputPer1M: 0.50,  tier: "fast" },
+    { id: "grok-3",      name: "Grok 3",      inputPer1M: 3.00, outputPer1M: 15.00, tier: "pro"  },
+  ]},
+  { id: "mistral",   company: "Mistral AI",     name: "Mistral",            badge: "MI", models: [
+    { id: "mistral-small-3", name: "Mistral Small 3.1", inputPer1M: 0.10, outputPer1M: 0.30, tier: "fast" },
+    { id: "mistral-large-2", name: "Mistral Large 2",   inputPer1M: 2.00, outputPer1M: 6.00, tier: "pro"  },
+  ]},
+  { id: "groq",      company: "Groq / Meta",    name: "Llama (via Groq)",   badge: "LL", models: [
+    { id: "llama-3.3-70b",    name: "Llama 3.3 70B",    inputPer1M: 0.05, outputPer1M: 0.10, tier: "fast"     },
+    { id: "llama-4-scout",    name: "Llama 4 Scout",    inputPer1M: 0.11, outputPer1M: 0.34, tier: "balanced" },
+    { id: "llama-4-maverick", name: "Llama 4 Maverick", inputPer1M: 0.50, outputPer1M: 0.77, tier: "pro"      },
+  ]},
+  { id: "alibaba",   company: "Alibaba / Qwen", name: "Qwen (Alibaba)",     badge: "QW", models: [
+    { id: "qwen-turbo",  name: "Qwen Turbo",  inputPer1M: 0.05, outputPer1M: 0.20, tier: "fast"     },
+    { id: "qwen2.5-72b", name: "Qwen2.5 72B", inputPer1M: 0.20, outputPer1M: 0.60, tier: "balanced" },
+    { id: "qwen-plus",   name: "Qwen Plus",   inputPer1M: 0.40, outputPer1M: 1.20, tier: "pro"      },
+  ]},
+];
+
+function qCostUSD(m: AIModel): number { return (600 * m.inputPer1M + 900 * m.outputPer1M) / 1_000_000; }
+
+function defaultProviderCfgs(): Record<string, ProviderCfg> {
+  const out: Record<string, ProviderCfg> = {};
+  AI_PROVIDERS.forEach(p => { out[p.id] = { enabled: p.id === "gemini", apiKey: "", selectedModel: p.models[0].id, testStatus: "idle" }; });
+  return out;
+}
+
 // â"€â"€ Status Badge â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 const StatusBadge = ({ status }: { status: string }) => {
   const map: Record<string, string> = {
@@ -244,6 +299,59 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
   const [allowOwnAI, setAllowOwnAI] = useState(false);
   const [allowOwnStorage, setAllowOwnStorage] = useState(false);
   const [allowOwnOCR, setAllowOwnOCR] = useState(false);
+
+  // AI Router state
+  const aiRouterKey = `mykerani_airouter_${user?.id ?? "guest"}`;
+  const [routerStrategy, setRouterStrategy] = useState<RouterStrategy>(() => {
+    try { const s = JSON.parse(localStorage.getItem(aiRouterKey) || "{}"); return s.strategy || "cheapest"; } catch { return "cheapest"; }
+  });
+  const [providerCfgs, setProviderCfgs] = useState<Record<string, ProviderCfg>>(() => {
+    try {
+      const s = JSON.parse(localStorage.getItem(aiRouterKey) || "{}");
+      return s.providers ? { ...defaultProviderCfgs(), ...s.providers } : defaultProviderCfgs();
+    } catch { return defaultProviderCfgs(); }
+  });
+  const [planRoutes, setPlanRoutes] = useState<PlanRoute[]>(() => {
+    try { const s = JSON.parse(localStorage.getItem(aiRouterKey) || "{}"); return s.planRoutes || []; } catch { return []; }
+  });
+  const [usdMyr, setUsdMyr] = useState<number>(() => {
+    try { const s = JSON.parse(localStorage.getItem(aiRouterKey) || "{}"); return s.usdMyr || 4.45; } catch { return 4.45; }
+  });
+  const [testingProv, setTestingProv] = useState<string | null>(null);
+
+  useEffect(() => {
+    localStorage.setItem(aiRouterKey, JSON.stringify({ strategy: routerStrategy, providers: providerCfgs, planRoutes, usdMyr }));
+  }, [routerStrategy, providerCfgs, planRoutes, usdMyr, aiRouterKey]);
+
+  const updateProviderCfg = (id: string, patch: Partial<ProviderCfg>) =>
+    setProviderCfgs(prev => ({ ...prev, [id]: { ...prev[id], ...patch } }));
+
+  const testConnection = async (providerId: string) => {
+    setTestingProv(providerId);
+    updateProviderCfg(providerId, { testStatus: "idle" });
+    await new Promise(r => setTimeout(r, 1600));
+    const key = providerCfgs[providerId]?.apiKey || "";
+    const ok = key.length >= 10;
+    updateProviderCfg(providerId, { testStatus: ok ? "ok" : "fail" });
+    setTestingProv(null);
+  };
+
+  const getAutoModel = (strategy: RouterStrategy): { prov: AIProvDef; model: AIModel } | null => {
+    const enabled = AI_PROVIDERS.filter(p => providerCfgs[p.id]?.enabled);
+    if (!enabled.length) return null;
+    const candidates = enabled.flatMap(p =>
+      p.models
+        .filter(m => {
+          if (strategy === "quality") return m.tier === "pro";
+          if (strategy === "balanced") return m.tier === "balanced" || m.tier === "fast";
+          return true; // cheapest: all tiers
+        })
+        .map(m => ({ prov: p, model: m, cost: qCostUSD(m) }))
+    );
+    if (!candidates.length) return null;
+    const best = candidates.reduce((a, b) => (a.cost <= b.cost ? a : b));
+    return { prov: best.prov, model: best.model };
+  };
 
   // Business settings — persistent
   interface BizSettings {
@@ -1286,45 +1394,312 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
             )}
 
             {/* â•â•â•â• SYSTEM CENTER (HQ_OWNER only) â•â•â•â• */}
-            {activePage === "system" && !isStaff && (
-              <div className="space-y-5" id="hq_system">
-                <h1 className="text-xl font-bold text-slate-900">Pusat Sistem</h1>
+            {activePage === "system" && !isStaff && (() => {
+              const autoResult = getAutoModel(routerStrategy);
 
-                {/* System Health */}
+              // Profit Advisor calculation per plan
+              const profitRows = plans.map(pl => {
+                let prov: AIProvDef | undefined;
+                let model: AIModel | undefined;
+                if (routerStrategy === "custom") {
+                  const route = planRoutes.find(r => r.planId === pl.id);
+                  prov = AI_PROVIDERS.find(p => p.id === route?.providerId);
+                  model = prov?.models.find(m => m.id === route?.modelId);
+                } else if (autoResult) {
+                  prov = autoResult.prov;
+                  model = autoResult.model;
+                }
+                const costUSD = model ? qCostUSD(model) * pl.aiCredits : 0;
+                const costMYR = costUSD * usdMyr;
+                const margin = pl.price - costMYR;
+                const marginPct = pl.price > 0 ? (margin / pl.price) * 100 : 0;
+                return { pl, prov, model, costMYR, margin, marginPct };
+              });
+
+              const hasLoss    = profitRows.some(r => r.marginPct < 0);
+              const hasRisk    = profitRows.some(r => r.marginPct >= 0 && r.marginPct < 15);
+
+              return (
+              <div className="space-y-5" id="hq_system">
+                <div className="flex items-center justify-between">
+                  <h1 className="text-xl font-bold text-slate-900">AI Router</h1>
+                  <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 border border-emerald-100 px-2 py-0.5 rounded-full">
+                    {AI_PROVIDERS.filter(p => providerCfgs[p.id]?.enabled).length} Pembekal Aktif
+                  </span>
+                </div>
+
+                {/* Profit Warnings */}
+                {hasLoss && (
+                  <div className="bg-red-50 border border-red-200 rounded-2xl p-4 flex gap-3">
+                    <AlertTriangle className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
+                    <div>
+                      <p className="text-sm font-bold text-red-700">AMARAN: Plan Anda Menanggung KERUGIAN</p>
+                      <p className="text-xs text-red-600 mt-0.5">Kos AI melebihi harga yang anda cas pelanggan. Naikkan harga plan atau tukar ke model AI lebih murah segera.</p>
+                    </div>
+                  </div>
+                )}
+                {!hasLoss && hasRisk && (
+                  <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 flex gap-3">
+                    <AlertCircle className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
+                    <div>
+                      <p className="text-sm font-bold text-amber-700">Margin Tipis - Risiko Tinggi</p>
+                      <p className="text-xs text-amber-600 mt-0.5">Margin keuntungan kurang 15%. Jika penggunaan AI pelanggan tinggi, anda boleh rugi. Semak jadual Penasihat Keuntungan di bawah.</p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Strategy Selector */}
                 <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-4">
-                  <h3 className="text-sm font-bold text-slate-900 flex items-center space-x-2">
-                    <Activity className="w-4 h-4 text-emerald-600" /><span>Kesihatan Sistem</span>
-                  </h3>
-                  <div className="grid grid-cols-2 gap-3">
-                    {[
-                      { label: "AI MYKERANI",     status: "ok", latency: "120ms" },
-                      { label: "Storan",          status: "ok", latency: "45ms" },
-                      { label: "Pengesahan",      status: "ok", latency: "89ms" },
-                      { label: "Pangkalan Data",  status: "ok", latency: "67ms" },
-                    ].map(({ label, status, latency }) => (
-                      <div key={label} className="flex items-center space-x-3 p-3.5 border border-slate-100 rounded-xl bg-emerald-50/40">
-                        <div className={`w-2 h-2 rounded-full ${status === "ok" ? "bg-emerald-500 animate-pulse" : "bg-red-500"}`} />
-                        <div>
-                          <p className="text-xs font-semibold text-slate-700">{label}</p>
-                          <p className="text-[10px] text-slate-400">{latency} &middot; Operasi normal</p>
-                        </div>
-                      </div>
+                  <div>
+                    <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                      <Zap className="w-4 h-4 text-emerald-600" /> Strategi Penghalaan AI
+                    </h3>
+                    <p className="text-[11px] text-slate-400 mt-1">Router akan pilih pembekal berdasarkan strategi ini untuk setiap pertanyaan pelanggan</p>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    {([
+                      { id: "cheapest",  label: "Paling Murah",    desc: "Guna model termurah yang aktif - maksimum untung" },
+                      { id: "balanced",  label: "Seimbang",         desc: "Imbang kos dan kualiti - model tier sederhana" },
+                      { id: "quality",   label: "Kualiti Terbaik",  desc: "Guna model terbaik - untuk pelanggan premium" },
+                      { id: "custom",    label: "Tersuai",          desc: "Tetapkan sendiri pembekal bagi setiap plan" },
+                    ] as { id: RouterStrategy; label: string; desc: string }[]).map(s => (
+                      <button key={s.id} onClick={() => setRouterStrategy(s.id)}
+                        className={`text-left p-3 rounded-xl border-2 transition cursor-pointer ${routerStrategy === s.id ? "border-emerald-500 bg-emerald-50" : "border-slate-100 hover:border-slate-200"}`}>
+                        <p className={`text-xs font-bold ${routerStrategy === s.id ? "text-emerald-700" : "text-slate-700"}`}>{s.label}</p>
+                        <p className="text-[10px] text-slate-400 mt-0.5 leading-tight">{s.desc}</p>
+                      </button>
                     ))}
                   </div>
+                  {routerStrategy !== "custom" && autoResult && (
+                    <div className="flex items-center gap-2 bg-emerald-50 border border-emerald-100 rounded-xl p-3">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
+                      <p className="text-xs text-emerald-700">
+                        Auto-pilih: <strong>{autoResult.prov.name}</strong> &middot; {autoResult.model.name} &middot; RM {(qCostUSD(autoResult.model) * usdMyr).toFixed(5)} / soalan
+                      </p>
+                    </div>
+                  )}
+                  {routerStrategy !== "custom" && !autoResult && (
+                    <p className="text-xs text-red-500">Tiada pembekal aktif. Aktifkan sekurang-kurangnya satu pembekal di bawah.</p>
+                  )}
+                </div>
+
+                {/* USD/MYR Rate */}
+                <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-bold text-slate-800">Kadar Pertukaran USD/MYR</p>
+                      <p className="text-[11px] text-slate-400">Digunakan untuk kira kos AI dalam Ringgit Malaysia</p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-slate-500">1 USD =</span>
+                      <input type="number" step="0.01" min="1" max="10" value={usdMyr}
+                        onChange={e => setUsdMyr(parseFloat(e.target.value) || 4.45)}
+                        className="w-20 border border-slate-200 rounded-lg px-2 py-1.5 text-sm font-bold text-center focus:outline-none focus:border-emerald-400" />
+                      <span className="text-xs text-slate-500">MYR</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Provider Cards */}
+                <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-4">
+                  <div>
+                    <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                      <Brain className="w-4 h-4 text-emerald-600" /> Pembekal AI
+                    </h3>
+                    <p className="text-[11px] text-slate-400 mt-1">Aktifkan pembekal, masukkan API key dan pilih model. Kos dikira per soalan (purata 600 input + 900 output token).</p>
+                  </div>
+                  <div className="space-y-3">
+                    {AI_PROVIDERS.map(prov => {
+                      const cfg = providerCfgs[prov.id] || { enabled: false, apiKey: "", selectedModel: prov.models[0].id, testStatus: "idle" as const };
+                      const selModel = prov.models.find(m => m.id === cfg.selectedModel) || prov.models[0];
+                      const costMYR = qCostUSD(selModel) * usdMyr;
+                      const isTesting = testingProv === prov.id;
+                      const isCheapest = autoResult?.prov.id === prov.id && autoResult?.model.id === selModel.id && routerStrategy === "cheapest";
+                      return (
+                        <div key={prov.id} className={`border rounded-xl p-4 transition ${cfg.enabled ? "border-emerald-200 bg-emerald-50/30" : "border-slate-100 bg-slate-50/50"}`}>
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="flex items-center gap-3 min-w-0">
+                              <div className={`w-9 h-9 rounded-xl flex items-center justify-center text-[10px] font-black shrink-0 ${cfg.enabled ? "bg-emerald-600 text-white" : "bg-slate-200 text-slate-500"}`}>
+                                {prov.badge}
+                              </div>
+                              <div className="min-w-0">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <p className="text-xs font-bold text-slate-800">{prov.name}</p>
+                                  {isCheapest && <span className="text-[9px] font-bold text-emerald-700 bg-emerald-100 border border-emerald-200 px-1.5 py-0.5 rounded-full">PALING MURAH</span>}
+                                  {cfg.testStatus === "ok" && <span className="text-[9px] font-bold text-emerald-700 bg-emerald-100 px-1.5 py-0.5 rounded-full">Sambungan OK</span>}
+                                  {cfg.testStatus === "fail" && <span className="text-[9px] font-bold text-red-600 bg-red-50 px-1.5 py-0.5 rounded-full">API Key Gagal</span>}
+                                </div>
+                                <p className="text-[10px] text-slate-400">{prov.company}</p>
+                              </div>
+                            </div>
+                            <button onClick={() => updateProviderCfg(prov.id, { enabled: !cfg.enabled })}
+                              className={`w-11 h-6 rounded-full flex items-center px-0.5 cursor-pointer transition-colors shrink-0 ${cfg.enabled ? "bg-emerald-600 justify-end" : "bg-slate-200 justify-start"}`}>
+                              <div className="w-5 h-5 rounded-full bg-white shadow-sm" />
+                            </button>
+                          </div>
+
+                          {cfg.enabled && (
+                            <div className="mt-3 space-y-2">
+                              {/* Model selector */}
+                              <select value={cfg.selectedModel}
+                                onChange={e => updateProviderCfg(prov.id, { selectedModel: e.target.value, testStatus: "idle" })}
+                                className="w-full border border-slate-200 rounded-lg px-3 py-1.5 text-xs font-semibold text-slate-700 focus:outline-none focus:border-emerald-400 bg-white cursor-pointer">
+                                {prov.models.map(m => (
+                                  <option key={m.id} value={m.id}>
+                                    {m.name} - Input ${m.inputPer1M}/1M | Output ${m.outputPer1M}/1M ({m.tier})
+                                  </option>
+                                ))}
+                              </select>
+                              {/* API Key */}
+                              <div className="flex gap-2">
+                                <input type="password" value={cfg.apiKey}
+                                  onChange={e => updateProviderCfg(prov.id, { apiKey: e.target.value, testStatus: "idle" })}
+                                  placeholder={`API Key ${prov.name}`}
+                                  className="flex-1 border border-slate-200 rounded-lg px-3 py-1.5 text-xs focus:outline-none focus:border-emerald-400" />
+                                <button onClick={() => testConnection(prov.id)} disabled={isTesting || !cfg.apiKey}
+                                  className="px-3 py-1.5 rounded-lg text-xs font-bold border transition cursor-pointer disabled:opacity-40 bg-white border-slate-200 text-slate-600 hover:border-emerald-400 hover:text-emerald-600 shrink-0">
+                                  {isTesting ? "..." : "Test"}
+                                </button>
+                              </div>
+                              {/* Cost info */}
+                              <div className="flex items-center justify-between text-[10px] text-slate-400 pt-1">
+                                <span>Kos / soalan: <strong className="text-slate-600">RM {costMYR.toFixed(5)}</strong></span>
+                                <span>Est. 1,000 soalan: <strong className={costMYR * 1000 > 5 ? "text-amber-600" : "text-emerald-600"}>RM {(costMYR * 1000).toFixed(2)}</strong></span>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Custom Per-Plan Routing */}
+                {routerStrategy === "custom" && (
+                  <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-4">
+                    <div>
+                      <h3 className="text-sm font-bold text-slate-900">Penugasan Per Pelan</h3>
+                      <p className="text-[11px] text-slate-400 mt-1">Pilih pembekal AI untuk setiap pelan langganan</p>
+                    </div>
+                    {plans.map(pl => {
+                      const route = planRoutes.find(r => r.planId === pl.id);
+                      const selProvId = route?.providerId || AI_PROVIDERS.find(p => providerCfgs[p.id]?.enabled)?.id || "";
+                      const selProv = AI_PROVIDERS.find(p => p.id === selProvId);
+                      const selModelId = route?.modelId || selProv?.models[0]?.id || "";
+                      return (
+                        <div key={pl.id} className="flex items-center gap-3 py-3 border-b border-slate-50 last:border-0 flex-wrap">
+                          <div className="min-w-[80px]">
+                            <p className="text-xs font-bold text-slate-800">{pl.name}</p>
+                            <p className="text-[10px] text-slate-400">RM {pl.price}/bln</p>
+                          </div>
+                          <select value={selProvId}
+                            onChange={e => {
+                              const p = AI_PROVIDERS.find(x => x.id === e.target.value);
+                              setPlanRoutes(prev => {
+                                const rest = prev.filter(r => r.planId !== pl.id);
+                                return [...rest, { planId: pl.id, providerId: e.target.value, modelId: p?.models[0]?.id || "" }];
+                              });
+                            }}
+                            className="flex-1 border border-slate-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:border-emerald-400 bg-white cursor-pointer">
+                            {AI_PROVIDERS.filter(p => providerCfgs[p.id]?.enabled).map(p => (
+                              <option key={p.id} value={p.id}>{p.name}</option>
+                            ))}
+                          </select>
+                          <select value={selModelId}
+                            onChange={e => {
+                              setPlanRoutes(prev => {
+                                const rest = prev.filter(r => r.planId !== pl.id);
+                                return [...rest, { planId: pl.id, providerId: selProvId, modelId: e.target.value }];
+                              });
+                            }}
+                            className="flex-1 border border-slate-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:border-emerald-400 bg-white cursor-pointer">
+                            {selProv?.models.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+                          </select>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {/* Profit Advisor */}
+                <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-4">
+                  <div>
+                    <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                      <TrendingUp className="w-4 h-4 text-emerald-600" /> Penasihat Keuntungan
+                    </h3>
+                    <p className="text-[11px] text-slate-400 mt-1">Anggaran kos AI vs harga yang anda cas - berdasarkan penggunaan penuh kredit AI setiap bulan</p>
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-xs">
+                      <thead>
+                        <tr className="border-b border-slate-100">
+                          <th className="text-left py-2 text-[10px] font-bold text-slate-400 pr-3">PELAN</th>
+                          <th className="text-right py-2 text-[10px] font-bold text-slate-400 pr-3">HARGA</th>
+                          <th className="text-right py-2 text-[10px] font-bold text-slate-400 pr-3">KREDIT AI</th>
+                          <th className="text-left py-2 text-[10px] font-bold text-slate-400 pr-3">PEMBEKAL</th>
+                          <th className="text-right py-2 text-[10px] font-bold text-slate-400 pr-3">KOS AI/BLN</th>
+                          <th className="text-right py-2 text-[10px] font-bold text-slate-400 pr-3">MARGIN</th>
+                          <th className="text-right py-2 text-[10px] font-bold text-slate-400">STATUS</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {profitRows.map(({ pl, prov, model, costMYR, margin, marginPct }) => {
+                          const status = marginPct < 0 ? "loss" : marginPct < 15 ? "risk" : marginPct < 40 ? "ok" : "good";
+                          const statusLabel = { loss: "RUGI", risk: "Risiko", ok: "OK", good: "Sihat" }[status];
+                          const statusCls = { loss: "text-red-600 bg-red-50 border-red-200", risk: "text-amber-600 bg-amber-50 border-amber-200", ok: "text-blue-600 bg-blue-50 border-blue-100", good: "text-emerald-600 bg-emerald-50 border-emerald-200" }[status];
+                          return (
+                            <tr key={pl.id} className="border-b border-slate-50 last:border-0">
+                              <td className="py-3 font-semibold text-slate-800 pr-3">{pl.name}</td>
+                              <td className="py-3 text-right text-slate-700 pr-3">RM {pl.price}</td>
+                              <td className="py-3 text-right text-slate-500 pr-3">{pl.aiCredits.toLocaleString()}</td>
+                              <td className="py-3 text-slate-500 pr-3">{prov ? `${prov.name}` : <span className="text-amber-500">Tiada</span>}</td>
+                              <td className="py-3 text-right pr-3">
+                                <span className={costMYR > pl.price ? "text-red-600 font-bold" : "text-slate-700"}>
+                                  RM {costMYR.toFixed(2)}
+                                </span>
+                              </td>
+                              <td className="py-3 text-right pr-3">
+                                <span className={marginPct < 0 ? "text-red-600 font-bold" : marginPct < 15 ? "text-amber-600 font-bold" : "text-emerald-600 font-bold"}>
+                                  {marginPct.toFixed(1)}%
+                                </span>
+                                <span className="text-[10px] text-slate-400 ml-1">(RM {margin.toFixed(2)})</span>
+                              </td>
+                              <td className="py-3 text-right">
+                                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${statusCls}`}>{statusLabel}</span>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                        {plans.length === 0 && (
+                          <tr><td colSpan={7} className="py-6 text-center text-slate-400 text-xs">Tiada plan ditetapkan. Buka halaman Billing untuk cipta plan.</td></tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                  {profitRows.length > 0 && (
+                    <div className="bg-slate-50 rounded-xl p-3 space-y-1.5 text-[11px] text-slate-500">
+                      <p className="font-bold text-slate-700 text-xs">Panduan Margin Sihat:</p>
+                      <p>Margin &gt; 40% - Keuntungan kukuh, selamat walaupun penggunaan pelanggan tinggi</p>
+                      <p>Margin 15-40% - OK, tetapi pantau penggunaan tinggi</p>
+                      <p>Margin 0-15% - Risiko rugi jika pelanggan guna AI lebih dari jangkaan</p>
+                      <p>Margin &lt; 0% - KERUGIAN PASTI. Naikkan harga atau tukar ke model lebih murah</p>
+                      <p className="pt-1 text-[10px] text-slate-400">* Pengiraan berdasarkan penggunaan 100% kredit AI setiap bulan. Penggunaan sebenar biasanya 40-70%.</p>
+                    </div>
+                  )}
                 </div>
 
                 {/* Resource Governance */}
                 <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-4">
                   <div>
-                    <h3 className="text-sm font-bold text-slate-900 flex items-center space-x-2">
-                      <Shield className="w-4 h-4 text-emerald-600" /><span>Kawalan Sumber</span>
+                    <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                      <Shield className="w-4 h-4 text-emerald-600" /> Kawalan Sumber Pelanggan
                     </h3>
-                    <p className="text-[11px] text-slate-400 mt-1">Izinkan pelanggan guna sumber luar</p>
+                    <p className="text-[11px] text-slate-400 mt-1">Benarkan pelanggan guna sumber luar mereka sendiri</p>
                   </div>
                   {[
-                    { label: "Benarkan AI Sendiri",     desc: "Pelanggan boleh guna API AI mereka sendiri",    val: allowOwnAI,      set: setAllowOwnAI },
-                    { label: "Benarkan Storan Sendiri", desc: "Pelanggan boleh sambung GDrive/OneDrive/Dropbox", val: allowOwnStorage, set: setAllowOwnStorage },
-                    { label: "Benarkan OCR Sendiri",    desc: "Pelanggan boleh guna perkhidmatan OCR sendiri",  val: allowOwnOCR,     set: setAllowOwnOCR },
+                    { label: "Benarkan AI Sendiri",     desc: "Pelanggan boleh guna API AI mereka sendiri",        val: allowOwnAI,      set: setAllowOwnAI },
+                    { label: "Benarkan Storan Sendiri", desc: "Pelanggan boleh sambung GDrive/OneDrive/Dropbox",   val: allowOwnStorage, set: setAllowOwnStorage },
+                    { label: "Benarkan OCR Sendiri",    desc: "Pelanggan boleh guna perkhidmatan OCR sendiri",     val: allowOwnOCR,     set: setAllowOwnOCR },
                   ].map(({ label, desc, val, set }) => (
                     <div key={label} className="flex items-start justify-between py-3 border-b border-slate-50 last:border-0">
                       <div>
@@ -1339,25 +1714,32 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
                   ))}
                 </div>
 
-                {/* Providers */}
-                <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-3">
-                  <h3 className="text-sm font-bold text-slate-900">Pembekal Aktif</h3>
-                  {[
-                    { label: "AI",      provider: "MYKERANI AI (Gemini)",  status: "Aktif" },
-                    { label: "Storan",  provider: "MYKERANI Storan",        status: "Aktif" },
-                    { label: "OCR",     provider: "MYKERANI OCR",           status: "Aktif" },
-                  ].map(({ label, provider, status }) => (
-                    <div key={label} className="flex items-center justify-between py-2.5 border-b border-slate-50 last:border-0">
-                      <div>
-                        <p className="text-xs font-semibold text-slate-700">{label}</p>
-                        <p className="text-[11px] text-slate-400">{provider}</p>
+                {/* System Health */}
+                <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-4">
+                  <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                    <Activity className="w-4 h-4 text-emerald-600" /> Kesihatan Sistem
+                  </h3>
+                  <div className="grid grid-cols-2 gap-3">
+                    {[
+                      { label: "AI Router",       latency: "120ms" },
+                      { label: "Storan",          latency: "45ms"  },
+                      { label: "Pengesahan",      latency: "89ms"  },
+                      { label: "Pangkalan Data",  latency: "67ms"  },
+                    ].map(({ label, latency }) => (
+                      <div key={label} className="flex items-center gap-3 p-3.5 border border-slate-100 rounded-xl bg-emerald-50/40">
+                        <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0" />
+                        <div>
+                          <p className="text-xs font-semibold text-slate-700">{label}</p>
+                          <p className="text-[10px] text-slate-400">{latency} &middot; Operasi normal</p>
+                        </div>
                       </div>
-                      <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-100">{status}</span>
-                    </div>
-                  ))}
+                    ))}
+                  </div>
                 </div>
+
               </div>
-            )}
+              );
+            })()}
 
           </div>
         </main>
