@@ -1123,26 +1123,63 @@ function RoleRouter() {
   return <OwnerDashboard />;
 }
 
+class AppErrorBoundary extends React.Component<
+  { children: React.ReactNode },
+  { hasError: boolean; message: string }
+> {
+  constructor(props: { children: React.ReactNode }) {
+    super(props);
+    this.state = { hasError: false, message: "" };
+  }
+  static getDerivedStateFromError(err: Error) {
+    return { hasError: true, message: err?.message || "Ralat tidak diketahui." };
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 p-8 gap-4">
+          <div className="w-12 h-12 rounded-2xl bg-rose-100 flex items-center justify-center">
+            <AlertTriangle className="w-6 h-6 text-rose-600" />
+          </div>
+          <div className="text-center max-w-md">
+            <h2 className="text-lg font-display font-bold text-slate-900 mb-1">Ralat Aplikasi</h2>
+            <p className="text-sm text-slate-500 mb-4">{this.state.message}</p>
+            <button
+              onClick={() => window.location.reload()}
+              className="px-5 py-2 bg-slate-900 text-white text-xs font-semibold rounded-xl hover:bg-slate-800 transition cursor-pointer"
+            >
+              Cuba Semula
+            </button>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 export default function App() {
   return (
-    <AuthProvider>
-      <Guard>
-        <TenantProvider>
-          <WorkspaceProvider>
-            <PermissionProvider>
-              <AuditProvider>
-                <StorageProvider>
-                  <FinancialRecordsProvider>
-                    <NotificationProvider>
-                      <RoleRouter />
-                    </NotificationProvider>
-                  </FinancialRecordsProvider>
-                </StorageProvider>
-              </AuditProvider>
-            </PermissionProvider>
-          </WorkspaceProvider>
-        </TenantProvider>
-      </Guard>
-    </AuthProvider>
+    <AppErrorBoundary>
+      <AuthProvider>
+        <Guard>
+          <TenantProvider>
+            <WorkspaceProvider>
+              <PermissionProvider>
+                <AuditProvider>
+                  <StorageProvider>
+                    <FinancialRecordsProvider>
+                      <NotificationProvider>
+                        <RoleRouter />
+                      </NotificationProvider>
+                    </FinancialRecordsProvider>
+                  </StorageProvider>
+                </AuditProvider>
+              </PermissionProvider>
+            </WorkspaceProvider>
+          </TenantProvider>
+        </Guard>
+      </AuthProvider>
+    </AppErrorBoundary>
   );
 }
