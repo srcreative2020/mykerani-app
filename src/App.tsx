@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, lazy, Suspense } from "react";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import { TenantProvider, useTenant } from "./context/TenantContext";
 import { WorkspaceProvider, useWorkspace } from "./context/WorkspaceContext";
@@ -7,12 +7,23 @@ import { AuditProvider, useAudit } from "./context/AuditContext";
 import { StorageProvider } from "./context/StorageContext";
 import { NotificationProvider } from "./context/NotificationContext";
 import { Guard } from "./components/Guard";
-import { HQConsoleShell } from "./components/HQConsoleShell";
-import { MyKeraniAppTabs } from "./components/MyKeraniAppTabs";
-import { StaffHomeScreen } from "./screens/StaffHomeScreen";
-import { OwnerDashboard } from "./screens/OwnerDashboard";
+import { Loader2 } from "lucide-react";
+
+// Lazy-load screens to isolate their module initialization into separate chunks,
+// preventing TDZ errors from complex packages (motion, supabase realtime, etc.)
+const HQConsoleShell = lazy(() => import("./components/HQConsoleShell").then(m => ({ default: m.HQConsoleShell })));
+const MyKeraniAppTabs = lazy(() => import("./components/MyKeraniAppTabs").then(m => ({ default: m.MyKeraniAppTabs })));
+const StaffHomeScreen = lazy(() => import("./screens/StaffHomeScreen").then(m => ({ default: m.StaffHomeScreen })));
+const OwnerDashboard = lazy(() => import("./screens/OwnerDashboard").then(m => ({ default: m.OwnerDashboard })));
+
+function LazyFallback() {
+  return (
+    <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+      <Loader2 className="w-6 h-6 text-slate-400 animate-spin" />
+    </div>
+  );
+}
 import { FinancialRecordsProvider, useFinancials } from "./context/FinancialRecordsContext";
-import { FinancialRecordsConsole } from "./components/FinancialRecordsConsole";
 import { testSupabaseConnection, type SupabaseDiagnostics } from "./lib/supabase";
 import { getDashboardSummary, type DashboardSummary } from "./lib/financialService";
 import { type TenantCategory } from "./types";
@@ -58,10 +69,6 @@ import {
   Folder,
   Settings,
 } from "lucide-react";
-
-import { AIFinancialAssistant } from "./components/AIFinancialAssistant";
-import { FinancialReportsAnalytics } from "./components/FinancialReportsAnalytics";
-import { FinancialEvidencePackageManager } from "./components/FinancialEvidencePackage";
 
 function MainDashboardContent() {
   const { user, signOut, isMockUser, toggleBypassAuth } = useAuth();
@@ -1112,15 +1119,15 @@ function RoleRouter() {
 
   // V1.0 Role Authority routing
   if (user?.role === "TENANT_STAFF") {
-    return <StaffHomeScreen />;
+    return <Suspense fallback={<LazyFallback />}><StaffHomeScreen /></Suspense>;
   }
 
   if (user?.role === "HQ_OWNER" || user?.role === "HQ_STAFF" || activeTenant?.category === "HQ") {
-    return <MainDashboardContent />;
+    return <Suspense fallback={<LazyFallback />}><MainDashboardContent /></Suspense>;
   }
 
   // TENANT_OWNER → Owner Business Dashboard
-  return <OwnerDashboard />;
+  return <Suspense fallback={<LazyFallback />}><OwnerDashboard /></Suspense>;
 }
 
 class AppErrorBoundary extends React.Component<
