@@ -10,6 +10,7 @@ import {
   User, Send, Star, Repeat, Archive,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
+import { useNotifications, buildHQNotifs, fmtNotifTime } from "../lib/notifications";
 
 interface HQConsoleShellProps {
   tenants: Tenant[];
@@ -304,6 +305,22 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
   const [inactiveDays, setInactiveDays] = useState(30);
   const [cleanupTenant, setCleanupTenant] = useState<string | null>(null);
 
+  // Notifications (HQ)
+  const notif = useNotifications(`hq_${user?.id || "guest"}`);
+  const [showNotifPanel, setShowNotifPanel] = useState(false);
+
+  useEffect(() => {
+    const totalUsed = customers.reduce((s, c) => {
+      try { const raw = localStorage.getItem(`mykerani_storage_quota_${c.id}`); return s + (raw ? JSON.parse(raw).usedBytes || 0 : 0); } catch { return s; }
+    }, 0);
+    const supabasePlan = 100 * 1024 * 1024 * 1024;
+    const frozenTenants   = customers.filter(c => { try { const r = localStorage.getItem(`mykerani_storage_quota_${c.id}`); return r && JSON.parse(r).isFrozen; } catch { return false; } }).map(c => c.name);
+    const inactiveTenants = customers.filter(c => { try { const r = localStorage.getItem(`mykerani_storage_quota_${c.id}`); if (!r) return false; const s = JSON.parse(r); return Math.floor((Date.now() - new Date(s.lastActiveAt || 0).getTime()) / 86400000) >= (s.inactiveDaysLimit || 30); } catch { return false; } }).map(c => c.name);
+    const highStorage     = customers.map(c => { try { const r = localStorage.getItem(`mykerani_storage_quota_${c.id}`); if (!r) return null; const s = JSON.parse(r); return { name: c.name, pct: s.usedBytes / s.quotaBytes }; } catch { return null; } }).filter((t): t is { name: string; pct: number } => !!t && t.pct >= 0.90);
+    const openTickets = allTickets.filter(t => t.status === "open" || t.status === "pending").length;
+    buildHQNotifs({ frozenTenants, inactiveTenants, highStorageTenants: highStorage, openTickets, supabasePct: totalUsed / supabasePlan, newCustomers: [] }).forEach(n => notif.push(n));
+  }, [customers.length, allTickets.length]);
+
   // AI Router state
   const aiRouterKey = `mykerani_airouter_${user?.id ?? "guest"}`;
   const [routerStrategy, setRouterStrategy] = useState<RouterStrategy>(() => {
@@ -579,11 +596,75 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
         </div>
         <div className="flex items-center gap-2">
           <span className="text-xs font-semibold" style={{color:"#2C5040"}}>{navItems.find(n => n.id === activePage)?.label}</span>
+          {/* Bell */}
+          <div className="relative">
+            <button onClick={() => setShowNotifPanel(p => !p)}
+              className="relative p-1.5 rounded-xl border border-slate-200 text-slate-400 hover:text-indigo-500 bg-white cursor-pointer transition">
+              <Bell className="w-3.5 h-3.5" />
+              {notif.unreadCount > 0 && (
+                <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center">
+                  {notif.unreadCount > 9 ? "9+" : notif.unreadCount}
+                </span>
+              )}
+            </button>
+          </div>
           <div className="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-bold" style={{background:"#5A9E7A"}}>
             {firstName.charAt(0).toUpperCase()}
           </div>
         </div>
       </header>
+
+      {/* HQ Notification Panel */}
+      {showNotifPanel && (
+        <div className="fixed inset-0 z-50" onClick={() => setShowNotifPanel(false)}>
+          <div className="absolute top-14 right-3 w-80 max-h-[75vh] bg-white rounded-2xl shadow-2xl border border-slate-200 flex flex-col overflow-hidden"
+            onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
+              <div className="flex items-center gap-2">
+                <p className="text-sm font-bold text-slate-900">Notifikasi HQ</p>
+                {notif.unreadCount > 0 && (
+                  <span className="text-[10px] font-bold text-red-600 bg-red-50 border border-red-200 px-1.5 py-0.5 rounded-full">{notif.unreadCount} baru</span>
+                )}
+              </div>
+              <button onClick={notif.markAllRead} className="text-[11px] text-indigo-500 font-semibold cursor-pointer hover:text-indigo-700">Tandai semua</button>
+            </div>
+            <div className="overflow-y-auto flex-1">
+              {notif.notifs.length === 0 ? (
+                <div className="py-10 text-center">
+                  <CheckCircle2 className="w-8 h-8 text-slate-200 mx-auto mb-2" />
+                  <p className="text-xs text-slate-400">Tiada notifikasi</p>
+                </div>
+              ) : (
+                notif.notifs.map(n => {
+                  const bar = n.severity === "critical" ? "bg-red-500" : n.severity === "warn" ? "bg-amber-400" : "bg-blue-400";
+                  const bg  = n.read ? "bg-white" : n.severity === "critical" ? "bg-red-50" : n.severity === "warn" ? "bg-amber-50/60" : "bg-blue-50/40";
+                  return (
+                    <div key={n.id} className={`flex gap-3 px-4 py-3 border-b border-slate-50 cursor-pointer hover:bg-slate-50 ${bg}`}
+                      onClick={() => { notif.markRead(n.id); setShowNotifPanel(false); if (n.action) setActivePage(n.action as any); }}>
+                      <div className={`w-1 rounded-full shrink-0 self-stretch ${bar}`} />
+                      <div className="flex-1 min-w-0 space-y-0.5">
+                        <div className="flex items-start justify-between gap-1">
+                          <p className={`text-xs font-bold ${n.read ? "text-slate-600" : "text-slate-900"}`}>{n.title}</p>
+                          <button onClick={e => { e.stopPropagation(); notif.dismiss(n.id); }} className="text-slate-300 hover:text-slate-500 cursor-pointer shrink-0">
+                            <X className="w-3 h-3" />
+                          </button>
+                        </div>
+                        <p className="text-[11px] text-slate-500 leading-snug">{n.body}</p>
+                        <p className="text-[10px] text-slate-400">{fmtNotifTime(n.at)}</p>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+            {notif.notifs.length > 0 && (
+              <div className="px-4 py-2.5 border-t border-slate-100 flex justify-end">
+                <button onClick={notif.clearAll} className="text-[11px] text-slate-400 cursor-pointer hover:text-slate-600">Padam semua</button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       <div className="flex flex-1 overflow-hidden">
         {/* Desktop sidebar */}
