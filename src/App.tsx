@@ -578,7 +578,7 @@ function MainDashboardContent() {
             <span>{createSuccessMsg || createWSSuccessMsg}</span>
           </div>
         )}
-        {activeTenant?.category === "HQ" ? (
+        {(user?.role === "HQ_OWNER" || user?.role === "HQ_STAFF" || activeTenant?.category === "HQ") ? (
           <HQConsoleShell
             tenants={tenants}
             workspaces={workspaces}

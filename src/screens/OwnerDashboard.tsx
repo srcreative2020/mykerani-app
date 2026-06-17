@@ -181,7 +181,7 @@ export function OwnerDashboard() {
   const expenseThisMonth = useMemo(() => myEvents.filter(e => e.type === "EXPENSE" && e.date.startsWith(thisMonth)).reduce((s, e) => s + e.amountMyr, 0), [myEvents, thisMonth]);
   const totalReceivable = useMemo(() => myEvents.filter(e => e.type === "RECEIVABLE" && !e.isCompleted).reduce((s, e) => s + e.amountMyr, 0), [myEvents]);
   const totalPayable = useMemo(() => myEvents.filter(e => e.type === "PAYABLE" && !e.isCompleted).reduce((s, e) => s + e.amountMyr, 0), [myEvents]);
-  const showOnboard = !onboardDone && !user?.email?.endsWith(".demo");
+  const showOnboard = !onboardDone && !user?.email?.endsWith(".demo") && user?.role === "TENANT_OWNER";
 
   // â"€â"€ Storage Quota â"€â"€
   const tenantId = activeTenant?.id || user?.id || "guest";
