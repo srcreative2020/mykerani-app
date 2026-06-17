@@ -32,7 +32,7 @@ const MOCK_CUSTOMERS = [
 ];
 
 const MOCK_TICKETS = [
-  { id: "T-001", customer: "Butik Raudah Enterprise",  subject: "Tidak boleh log masuk",     priority: "high",   status: "open",     summary: "Pengguna tidak dapat masuk sejak 2 hari lalu. AI mengesan isu kata laluan.",     assigned: "â€"" },
+  { id: "T-001", customer: "Butik Raudah Enterprise",  subject: "Tidak boleh log masuk",     priority: "high",   status: "open",     summary: "Pengguna tidak dapat masuk sejak 2 hari lalu. AI mengesan isu kata laluan.",     assigned: "-" },
   { id: "T-002", customer: "Syarikat Binaan Teguh MY", subject: "Resit tidak dapat dimuat naik", priority: "medium", status: "pending",  summary: "Saiz fail melebihi had. AI cadangkan kurangkan saiz atau naik taraf storan.", assigned: "Amir" },
   { id: "T-003", customer: "Ladang Hijau Organik",     subject: "Soalan tentang laporan P&L", priority: "low",    status: "resolved", summary: "AI telah menjawab soalan. Pengguna berpuas hati.",                                assigned: "Siti" },
 ];
@@ -447,7 +447,7 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
                 <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
                   <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
                     <h3 className="text-sm font-bold text-slate-900">{isStaff ? "Pelanggan Perlu Perhatian" : "Pelanggan Terkini"}</h3>
-                    <button onClick={() => setActivePage("customers")} className="text-xs text-emerald-700 font-semibold hover:text-emerald-900 cursor-pointer">Lihat semua â†'</button>
+                    <button onClick={() => setActivePage("customers")} className="text-xs text-emerald-700 font-semibold hover:text-emerald-900 cursor-pointer">Lihat semua -&gt;</button>
                   </div>
                   {customers.length === 0 ? (
                     <div className="p-10 text-center">
@@ -480,13 +480,13 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
                   <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
                     <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
                       <h3 className="text-sm font-bold text-slate-900">Kes Sokongan Terbuka</h3>
-                      <button onClick={() => setActivePage("support")} className="text-xs text-emerald-700 font-semibold hover:text-emerald-900 cursor-pointer">Urus â†'</button>
+                      <button onClick={() => setActivePage("support")} className="text-xs text-emerald-700 font-semibold hover:text-emerald-900 cursor-pointer">Urus -&gt;</button>
                     </div>
                     <div className="divide-y divide-slate-50">
                       {tickets.filter(t => t.status !== "resolved").map(t => (
                         <div key={t.id} className="px-5 py-4 space-y-1">
                           <div className="flex items-center justify-between">
-                            <p className="text-xs font-bold text-slate-800">{t.id} â€" {t.subject}</p>
+                            <p className="text-xs font-bold text-slate-800">{t.id} - {t.subject}</p>
                             <StatusBadge status={t.priority} />
                           </div>
                           <p className="text-xs text-slate-500">{t.customer}</p>
@@ -672,7 +672,7 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                   <MetricCard label="Jumlah Kredit AI"  value={totalAI.toLocaleString()}      sub="semua pelanggan bulan ini" icon={Zap}      color="amber" />
                   <MetricCard label="Jumlah Storan"     value={`${customers.reduce((s,c)=>s+c.storageGB,0).toFixed(1)} GB`} sub="digunakan" icon={HardDrive} color="slate" />
-                  <MetricCard label="OCR Digunakan"     value="â€""                              sub="belum diaktifkan"          icon={Brain}    color="violet" />
+                  <MetricCard label="OCR Digunakan"     value="-"                              sub="belum diaktifkan"          icon={Brain}    color="violet" />
                 </div>
 
                 {/* Top usage customers */}
@@ -837,11 +837,11 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
 
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                   <MetricCard label="Hasil Bulan Ini"  value={`RM ${totalMRR.toLocaleString()}`} icon={DollarSign} color="emerald" trend="up" />
-                  <MetricCard label="Kos AI"           value="RM â€""    sub="anggaran"   icon={Zap}        color="amber" />
-                  <MetricCard label="Kos Storan"       value="RM â€""    sub="anggaran"   icon={HardDrive}  color="slate" />
-                  <MetricCard label="Keuntungan Kasar" value="RM â€""    sub="anggaran"   icon={TrendingUp} color="teal" trend="up" />
+                  <MetricCard label="Kos AI"           value="RM -"    sub="anggaran"   icon={Zap}        color="amber" />
+                  <MetricCard label="Kos Storan"       value="RM -"    sub="anggaran"   icon={HardDrive}  color="slate" />
+                  <MetricCard label="Keuntungan Kasar" value="RM -"    sub="anggaran"   icon={TrendingUp} color="teal" trend="up" />
                   <MetricCard label="MRR"              value={`RM ${totalMRR.toLocaleString()}`} sub="Recurring Revenue" icon={RefreshCw} color="violet" />
-                  <MetricCard label="Kos OCR"          value="RM â€""    sub="anggaran"   icon={Brain}      color="slate" />
+                  <MetricCard label="Kos OCR"          value="RM -"    sub="anggaran"   icon={Brain}      color="slate" />
                 </div>
 
                 {/* Revenue by plan */}
@@ -911,7 +911,7 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
                       </button>
                       {staffResult && (
                         <div className={`rounded-xl p-3 text-xs ${staffResult.success ? "bg-emerald-50 border border-emerald-200" : "bg-red-50 border border-red-200"}`}>
-                          <p className={`font-bold ${staffResult.success ? "text-emerald-700" : "text-red-700"}`}>{staffResult.success ? "âœ" Berjaya!" : "âœ— Gagal"}</p>
+                          <p className={`font-bold ${staffResult.success ? "text-emerald-700" : "text-red-700"}`}>{staffResult.success ? "Berjaya!" : "Gagal"}</p>
                           <p className={staffResult.success ? "text-emerald-600" : "text-red-600"}>{staffResult.message}</p>
                           {staffResult.tempPassword && (
                             <div className="mt-2 p-2 bg-white border border-emerald-200 rounded-lg">
