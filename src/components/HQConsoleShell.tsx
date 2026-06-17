@@ -50,7 +50,7 @@ interface HQConsoleShellProps {
 
 type HQPage = "dashboard" | "customers" | "plans" | "usage" | "demos" | "revenue" | "settings";
 
-// ─── Mock data untuk placeholder visual ──────────────────────────────────────
+// ─── Mock data — HANYA untuk akaun .demo, tidak untuk user sebenar ───────────
 const MOCK_CUSTOMERS = [
   { id: "c1", name: "Kedai Makan Pak Ali Sdn Bhd", plan: "Starter", status: "active", companies: 2, lastActivity: "2 jam lalu", attention: false },
   { id: "c2", name: "Syarikat Binaan Teguh MY", plan: "Pro", status: "active", companies: 5, lastActivity: "1 hari lalu", attention: true },
@@ -118,33 +118,45 @@ const StatusBadge = ({ status }: { status: string }) => {
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
-  const { signOut } = useAuth();
+  const { signOut, isMockUser } = useAuth();
+
+  // Real users: data kosong — demo data hanya untuk akaun .demo
+  const customers = isMockUser ? MOCK_CUSTOMERS : [];
+  const plans     = isMockUser ? MOCK_PLANS     : [];
+  const demos     = isMockUser ? MOCK_DEMOS     : [];
+  const activity  = isMockUser ? MOCK_ACTIVITY  : [];
+
+  // HQ_STAFF: only Dashboard + Customers
+  const isStaff = user?.role === "HQ_STAFF";
+
   const [activePage, setActivePage] = useState<HQPage>("dashboard");
   const [searchQuery, setSearchQuery] = useState("");
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [selectedCustomer, setSelectedCustomer] = useState<typeof MOCK_CUSTOMERS[0] | null>(null);
+  const [selectedCustomer, setSelectedCustomer] = useState<typeof customers[0] | null>(null);
 
   const handleRefresh = () => {
     setIsRefreshing(true);
     setTimeout(() => setIsRefreshing(false), 1200);
   };
 
-  const attentionCount = MOCK_CUSTOMERS.filter(c => c.attention).length;
-  const activeCustomers = MOCK_CUSTOMERS.filter(c => c.status === "active").length;
-  const monthlyRevenue = MOCK_CUSTOMERS.reduce((sum, c) => {
-    const plan = MOCK_PLANS.find(p => p.name === c.plan);
+  const attentionCount = customers.filter(c => c.attention).length;
+  const activeCustomers = customers.filter(c => c.status === "active").length;
+  const monthlyRevenue = customers.reduce((sum, c) => {
+    const plan = plans.find(p => p.name === c.plan);
     return sum + (c.status === "active" ? (plan?.price || 0) : 0);
   }, 0);
 
-  const navItems: { id: HQPage; label: string; icon: React.ElementType; badge?: number }[] = [
-    { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
-    { id: "customers", label: "Pelanggan", icon: Users, badge: attentionCount > 0 ? attentionCount : undefined },
-    { id: "plans", label: "Plan", icon: CreditCard },
-    { id: "usage", label: "Penggunaan", icon: BarChart3 },
-    { id: "demos", label: "Demo", icon: PlayCircle },
-    { id: "revenue", label: "Hasil", icon: DollarSign },
-    { id: "settings", label: "Tetapan", icon: Settings },
+  // HQ_STAFF: Dashboard + Customers sahaja. HQ_OWNER: semua halaman.
+  const allNavItems: { id: HQPage; label: string; icon: React.ElementType; badge?: number; ownerOnly?: boolean }[] = [
+    { id: "dashboard", label: "Dashboard",   icon: LayoutDashboard },
+    { id: "customers", label: "Pelanggan",   icon: Users, badge: attentionCount > 0 ? attentionCount : undefined },
+    { id: "plans",     label: "Plan",        icon: CreditCard,  ownerOnly: true },
+    { id: "usage",     label: "Penggunaan",  icon: BarChart3,   ownerOnly: true },
+    { id: "demos",     label: "Demo",        icon: PlayCircle,  ownerOnly: true },
+    { id: "revenue",   label: "Hasil",       icon: DollarSign,  ownerOnly: true },
+    { id: "settings",  label: "Tetapan",     icon: Settings,    ownerOnly: true },
   ];
+  const navItems = isStaff ? allNavItems.filter(n => !n.ownerOnly) : allNavItems;
 
   return (
     <div className="flex flex-col md:flex-row min-h-screen md:min-h-[80vh] md:rounded-2xl md:overflow-hidden md:border md:border-slate-200 md:shadow-sm bg-white" id="hq_console_root">
@@ -274,7 +286,7 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
                   </div>
                 </div>
                 <p className="text-xl font-bold">{activeCustomers}</p>
-                <span className="text-[9px] text-emerald-100">drpd {MOCK_CUSTOMERS.length} jumlah</span>
+                <span className="text-[9px] text-emerald-100">drpd {customers.length} jumlah</span>
               </div>
 
               {/* Active Subscriptions */}
@@ -353,10 +365,10 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
                   </div>
                   <button onClick={() => setActivePage("demos")} className="text-[10px] text-indigo-500 font-semibold hover:text-indigo-700 cursor-pointer">Lihat semua</button>
                 </div>
-                <p className="text-2xl font-bold text-slate-900">{MOCK_DEMOS.length}</p>
-                <p className="text-xs text-slate-400 mb-3">{MOCK_DEMOS.filter(d => d.status === "active").length} aktif sekarang</p>
+                <p className="text-2xl font-bold text-slate-900">{demos.length}</p>
+                <p className="text-xs text-slate-400 mb-3">{demos.filter(d => d.status === "active").length} aktif sekarang</p>
                 <div className="space-y-1.5">
-                  {MOCK_DEMOS.slice(0, 2).map(d => (
+                  {demos.slice(0, 2).map(d => (
                     <div key={d.id} className="flex items-center justify-between">
                       <span className="text-[11px] text-slate-600 truncate max-w-[160px]">{d.name}</span>
                       <StatusBadge status={d.status} />
@@ -377,14 +389,14 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
                   </h3>
                   <button onClick={() => setActivePage("customers")} className="text-[10px] text-indigo-500 font-semibold hover:text-indigo-700 cursor-pointer">Lihat semua →</button>
                 </div>
-                {MOCK_CUSTOMERS.filter(c => c.attention).length === 0 ? (
+                {customers.filter(c => c.attention).length === 0 ? (
                   <div className="py-6 text-center">
                     <CheckCircle2 className="w-8 h-8 text-emerald-400 mx-auto mb-2" />
                     <p className="text-xs text-slate-500">Semua pelanggan baik</p>
                   </div>
                 ) : (
                   <div className="space-y-2">
-                    {MOCK_CUSTOMERS.filter(c => c.attention).map(c => (
+                    {customers.filter(c => c.attention).map(c => (
                       <div key={c.id} className="flex items-center justify-between p-3 bg-rose-50 border border-rose-100 rounded-xl">
                         <div>
                           <p className="text-xs font-semibold text-slate-800">{c.name}</p>
@@ -411,7 +423,7 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
                   </h3>
                 </div>
                 <div className="space-y-3">
-                  {MOCK_ACTIVITY.map(a => (
+                  {activity.map(a => (
                     <div key={a.id} className="flex items-start space-x-3">
                       <div className={`w-2 h-2 rounded-full mt-1.5 shrink-0 ${
                         a.color === "emerald" ? "bg-emerald-400" :
@@ -459,7 +471,7 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
             <div className="flex items-center justify-between">
               <div>
                 <h1 className="text-xl font-bold text-slate-900">Pelanggan</h1>
-                <p className="text-xs text-slate-500 mt-0.5">{MOCK_CUSTOMERS.length} pelanggan berdaftar</p>
+                <p className="text-xs text-slate-500 mt-0.5">{customers.length} pelanggan berdaftar</p>
               </div>
               <div className="flex items-center gap-2">
                 <button className="flex items-center space-x-2 px-4 py-2 bg-white border border-slate-200 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-50 transition cursor-pointer shadow-sm">
@@ -502,7 +514,7 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
                 <div className="col-span-1" />
               </div>
               <div className="divide-y divide-slate-100">
-                {MOCK_CUSTOMERS
+                {customers
                   .filter(c => c.name.toLowerCase().includes(searchQuery.toLowerCase()))
                   .map(c => (
                   <div key={c.id} className={`p-4 hover:bg-slate-50/80 transition ${c.attention ? "border-l-4 border-rose-400" : ""}`}>
@@ -559,7 +571,7 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
             <div className="flex items-center justify-between">
               <div>
                 <h1 className="text-xl font-bold text-slate-900">Plan Langganan</h1>
-                <p className="text-xs text-slate-500 mt-0.5">{MOCK_PLANS.length} plan aktif</p>
+                <p className="text-xs text-slate-500 mt-0.5">{plans.length} plan aktif</p>
               </div>
               <button className="flex items-center space-x-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 rounded-xl text-xs font-semibold text-white transition cursor-pointer shadow-sm">
                 <Plus className="w-3.5 h-3.5" />
@@ -568,7 +580,7 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-              {MOCK_PLANS.map(plan => {
+              {plans.map(plan => {
                 const gradients: Record<string, string> = {
                   emerald: "from-emerald-500 to-emerald-700",
                   indigo: "from-indigo-500 to-indigo-700",
@@ -706,7 +718,7 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
             <div className="flex items-center justify-between">
               <div>
                 <h1 className="text-xl font-bold text-slate-900">Akaun Demo</h1>
-                <p className="text-xs text-slate-500 mt-0.5">{MOCK_DEMOS.length} akaun demo · {MOCK_DEMOS.filter(d => d.status === "active").length} aktif</p>
+                <p className="text-xs text-slate-500 mt-0.5">{demos.length} akaun demo · {demos.filter(d => d.status === "active").length} aktif</p>
               </div>
               <button className="flex items-center space-x-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 rounded-xl text-xs font-semibold text-white transition cursor-pointer shadow-sm">
                 <Plus className="w-3.5 h-3.5" />
@@ -715,7 +727,7 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {MOCK_DEMOS.map(demo => (
+              {demos.map(demo => (
                 <div key={demo.id} className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm hover:shadow-md transition">
                   <div className="flex items-start justify-between mb-3">
                     <div className="flex items-center space-x-3">
@@ -785,8 +797,8 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
             <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
               <h3 className="text-sm font-bold text-slate-900 mb-4">Hasil Mengikut Plan</h3>
               <div className="space-y-3">
-                {MOCK_PLANS.map(plan => {
-                  const planRevenue = MOCK_CUSTOMERS
+                {plans.map(plan => {
+                  const planRevenue = customers
                     .filter(c => c.plan === plan.name && c.status === "active")
                     .length * plan.price;
                   const pct = monthlyRevenue > 0 ? (planRevenue / monthlyRevenue) * 100 : 0;
@@ -817,8 +829,8 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
                 <h3 className="text-sm font-bold text-slate-900">Hasil Mengikut Pelanggan</h3>
               </div>
               <div className="divide-y divide-slate-50">
-                {MOCK_CUSTOMERS.filter(c => c.status === "active").map(c => {
-                  const plan = MOCK_PLANS.find(p => p.name === c.plan);
+                {customers.filter(c => c.status === "active").map(c => {
+                  const plan = plans.find(p => p.name === c.plan);
                   return (
                     <div key={c.id} className="flex items-center justify-between px-5 py-3.5 hover:bg-slate-50 transition">
                       <div className="flex items-center space-x-3">
