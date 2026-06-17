@@ -670,7 +670,7 @@ async function startServer() {
       });
 
       const response = await ai.models.generateContent({
-        model: "gemini-3.5-flash",
+        model: "gemini-2.5-flash",
         contents: [
           {
             inlineData: {
@@ -735,6 +735,7 @@ async function startServer() {
       const errStr = error?.message || (typeof error === 'object' ? JSON.stringify(error) : String(error));
       const isBillingOrCreditIssue = /depleted|exhausted|billing|prepay|429|credit/i.test(errStr);
       
+      console.error("Gemini OCR call failed:", errStr);
       if (isBillingOrCreditIssue) {
         console.info("Gemini API key billing limits/credits reached. Smoothly transitioning to MYKERANI OCR Sandbox Simulator.");
       } else {
@@ -802,7 +803,7 @@ Instructions & Constraints:
 Provide your output precisely formatted in JS JSON matching the required schema. Ensure the response contains absolutely clean JSON without markdown code blocks outside of the JSON wrapper itself. If you output markdown formatting inside the fields, escape quotes correctly.`;
 
       const response = await ai.models.generateContent({
-        model: "gemini-3.5-flash",
+        model: "gemini-2.5-flash",
         contents: systemPrompt,
         config: {
           responseMimeType: "application/json",
@@ -872,6 +873,7 @@ Provide your output precisely formatted in JS JSON matching the required schema.
       const errStr = error?.message || (typeof error === 'object' ? JSON.stringify(error) : String(error));
       const isBillingOrCreditIssue = /depleted|exhausted|billing|prepay|429|credit/i.test(errStr);
       
+      console.error("Gemini Assistant call failed:", errStr);
       if (isBillingOrCreditIssue) {
         console.info("Gemini API key billing limits/credits reached. Smoothly transitioning to MYKERANI Assistant Sandbox Simulator.");
       } else {
