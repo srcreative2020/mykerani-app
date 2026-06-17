@@ -138,7 +138,6 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
   const { signOut, isMockUser } = useAuth();
 
   const isStaff = user?.role === "HQ_STAFF";
-  const tickets = isMockUser ? MOCK_TICKETS : [];
 
   // Customers — persistent for all users
   const customersKey = `mykerani_customers_${user?.id ?? "guest"}`;
@@ -246,13 +245,66 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
   const [allowOwnStorage, setAllowOwnStorage] = useState(false);
   const [allowOwnOCR, setAllowOwnOCR] = useState(false);
 
-  // Support ticket reply
-  const [replyTicket, setReplyTicket] = useState<string | null>(null);
+  // Tickets — persistent for all users
+  interface Ticket {
+    id: string;
+    customer: string;
+    email?: string;
+    subject: string;
+    priority: "high" | "medium" | "low";
+    status: "open" | "pending" | "resolved";
+    summary: string;
+    assigned: string;
+    createdAt: string;
+    replies: { id: string; author: string; text: string; at: string }[];
+  }
+  const ticketsKey = `mykerani_tickets_${user?.id ?? "guest"}`;
+  const [allTickets, setAllTickets] = useState<Ticket[]>(() => {
+    try {
+      const stored = localStorage.getItem(ticketsKey);
+      if (stored) return JSON.parse(stored);
+    } catch {}
+    return isMockUser ? MOCK_TICKETS.map(t => ({
+      ...t, email: "", createdAt: "2026-06-01",
+      replies: [] as { id: string; author: string; text: string; at: string }[]
+    })) : [];
+  });
+  useEffect(() => { localStorage.setItem(ticketsKey, JSON.stringify(allTickets)); }, [allTickets, ticketsKey]);
+
+  const [ticketFilter, setTicketFilter] = useState<"all" | "open" | "pending" | "resolved">("all");
+  const [showTicketModal, setShowTicketModal] = useState(false);
+  const [ticketForm, setTicketForm] = useState({ customer: "", email: "", subject: "", priority: "medium" as "high"|"medium"|"low", summary: "" });
+  const [expandedTicket, setExpandedTicket] = useState<string | null>(null);
   const [replyText, setReplyText] = useState("");
+
+  const saveTicket = () => {
+    if (!ticketForm.customer.trim() || !ticketForm.subject.trim()) return;
+    const t: Ticket = {
+      id: `T-${String(allTickets.length + 1).padStart(3, "0")}`,
+      customer: ticketForm.customer, email: ticketForm.email,
+      subject: ticketForm.subject, priority: ticketForm.priority,
+      status: "open", summary: ticketForm.summary || "Tiada ringkasan.",
+      assigned: "-", createdAt: new Date().toISOString().split("T")[0], replies: []
+    };
+    setAllTickets(prev => [t, ...prev]);
+    setTicketForm({ customer: "", email: "", subject: "", priority: "medium", summary: "" });
+    setShowTicketModal(false);
+  };
+  const resolveTicket = (id: string) => setAllTickets(prev => prev.map(t => t.id === id ? { ...t, status: "resolved" } : t));
+  const reopenTicket = (id: string) => setAllTickets(prev => prev.map(t => t.id === id ? { ...t, status: "open" } : t));
+  const sendReply = (id: string) => {
+    if (!replyText.trim()) return;
+    const reply = { id: `r-${Date.now()}`, author: user?.fullName || "HQ", text: replyText.trim(), at: new Date().toLocaleString("ms-MY") };
+    setAllTickets(prev => prev.map(t => t.id === id ? { ...t, status: "pending" as const, replies: [...t.replies, reply] } : t));
+    setReplyText("");
+  };
+  const assignTicket = (id: string, name: string) => setAllTickets(prev => prev.map(t => t.id === id ? { ...t, assigned: name } : t));
+
+  const filteredTickets = allTickets.filter(t => ticketFilter === "all" || t.status === ticketFilter);
 
   const totalMRR    = customers.reduce((s, c) => s + (c.status === "active" ? c.mrr : 0), 0);
   const activeCount = customers.filter(c => c.status === "active").length;
-  const openCases   = tickets.filter(t => t.status === "open" || t.status === "pending").length;
+  const openCases   = allTickets.filter(t => t.status === "open" || t.status === "pending").length;
   const totalAI     = customers.reduce((s, c) => s + c.aiUsage, 0);
 
   const handleCreateHQStaff = async () => {
@@ -476,14 +528,14 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
                 </div>
 
                 {/* Open support tickets */}
-                {tickets.length > 0 && (
+                {allTickets.length > 0 && (
                   <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
                     <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
                       <h3 className="text-sm font-bold text-slate-900">Kes Sokongan Terbuka</h3>
                       <button onClick={() => setActivePage("support")} className="text-xs text-emerald-700 font-semibold hover:text-emerald-900 cursor-pointer">Urus -&gt;</button>
                     </div>
                     <div className="divide-y divide-slate-50">
-                      {tickets.filter(t => t.status !== "resolved").map(t => (
+                      {allTickets.filter(t => t.status !== "resolved").map(t => (
                         <div key={t.id} className="px-5 py-4 space-y-1">
                           <div className="flex items-center justify-between">
                             <p className="text-xs font-bold text-slate-800">{t.id} - {t.subject}</p>
@@ -711,83 +763,127 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
             {/* â•â•â•â• SUPPORT â•â•â•â• */}
             {activePage === "support" && (
               <div className="space-y-4" id="hq_support">
-                <h1 className="text-xl font-bold text-slate-900">Sokongan Pelanggan</h1>
+                <div className="flex items-center justify-between">
+                  <h1 className="text-xl font-bold text-slate-900">Sokongan Pelanggan</h1>
+                  <button onClick={() => setShowTicketModal(true)}
+                    className="flex items-center gap-1.5 px-3 py-2 bg-emerald-700 text-white rounded-xl text-xs font-bold cursor-pointer hover:bg-emerald-800 transition">
+                    <Plus className="w-3.5 h-3.5" /><span>Tiket Baru</span>
+                  </button>
+                </div>
 
-                {/* Status filter tabs */}
-                <div className="flex gap-2">
-                  {["Semua", "Terbuka", "Dalam Proses", "Selesai"].map(f => (
-                    <button key={f} className={`px-3 py-1.5 rounded-xl text-xs font-bold cursor-pointer transition ${f === "Semua" ? "bg-emerald-700 text-white" : "bg-white border border-slate-200 text-slate-600 hover:border-emerald-300"}`}>
-                      {f}
+                {/* Stats */}
+                <div className="grid grid-cols-3 gap-3">
+                  <MetricCard label="Terbuka" value={allTickets.filter(t=>t.status==="open").length} icon={AlertCircle} color="red" />
+                  <MetricCard label="Dalam Proses" value={allTickets.filter(t=>t.status==="pending").length} icon={Clock} color="amber" />
+                  <MetricCard label="Selesai" value={allTickets.filter(t=>t.status==="resolved").length} icon={CheckCircle2} color="emerald" />
+                </div>
+
+                {/* Filter tabs */}
+                <div className="flex gap-2 flex-wrap">
+                  {([["all","Semua"],["open","Terbuka"],["pending","Dalam Proses"],["resolved","Selesai"]] as const).map(([val, label]) => (
+                    <button key={val} onClick={() => setTicketFilter(val)}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-bold cursor-pointer transition ${ticketFilter === val ? "bg-emerald-700 text-white" : "bg-white border border-slate-200 text-slate-600 hover:border-emerald-300"}`}>
+                      {label} {val !== "all" && `(${allTickets.filter(t=>t.status===val).length})`}
                     </button>
                   ))}
                 </div>
 
-                {tickets.length === 0 ? (
+                {filteredTickets.length === 0 ? (
                   <div className="bg-white border border-slate-200 rounded-2xl p-16 text-center shadow-sm">
                     <Headphones className="w-10 h-10 text-slate-200 mx-auto mb-3" />
-                    <p className="text-sm font-semibold text-slate-500">Tiada kes sokongan</p>
+                    <p className="text-sm font-semibold text-slate-500">Tiada tiket dalam kategori ini</p>
+                    <button onClick={() => setShowTicketModal(true)} className="mt-4 px-4 py-2 bg-emerald-700 text-white rounded-xl text-xs font-bold cursor-pointer hover:bg-emerald-800 transition">
+                      Buka Tiket Pertama
+                    </button>
                   </div>
                 ) : (
                   <div className="space-y-3">
-                    {tickets.map(t => (
-                      <div key={t.id} className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-3">
-                        <div className="flex items-start justify-between gap-3">
-                          <div>
-                            <div className="flex items-center space-x-2">
-                              <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full">{t.id}</span>
-                              <StatusBadge status={t.status} />
-                              <StatusBadge status={t.priority} />
+                    {filteredTickets.map(t => {
+                      const isExpanded = expandedTicket === t.id;
+                      return (
+                        <div key={t.id} className={`bg-white border rounded-2xl shadow-sm overflow-hidden ${t.status === "open" ? "border-red-100" : t.status === "pending" ? "border-amber-100" : "border-slate-200"}`}>
+                          {/* Header */}
+                          <div className="p-5 space-y-2">
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full">{t.id}</span>
+                                  <StatusBadge status={t.status} />
+                                  <StatusBadge status={t.priority} />
+                                  {t.replies.length > 0 && <span className="text-[9px] text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">{t.replies.length} balasan</span>}
+                                </div>
+                                <p className="text-sm font-bold text-slate-900 mt-1.5">{t.subject}</p>
+                                <p className="text-xs text-slate-500">{t.customer}{t.email ? ` - ${t.email}` : ""}</p>
+                              </div>
+                              <div className="text-right shrink-0 space-y-1">
+                                <p className="text-[10px] text-slate-400">{t.createdAt}</p>
+                                <p className="text-[10px] text-slate-400">Staf: {t.assigned}</p>
+                              </div>
                             </div>
-                            <p className="text-sm font-bold text-slate-900 mt-1.5">{t.subject}</p>
-                            <p className="text-xs text-slate-500">{t.customer}</p>
-                          </div>
-                          <span className="text-[11px] text-slate-400 shrink-0">Ditugaskan: {t.assigned}</span>
-                        </div>
 
-                        {/* AI Summary */}
-                        <div className="flex items-start space-x-2.5 p-3 bg-emerald-50 border border-emerald-100 rounded-xl">
-                          <Brain className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
-                          <div>
-                            <p className="text-[10px] font-bold text-emerald-700 mb-1">Ringkasan AI</p>
-                            <p className="text-xs text-emerald-800 leading-relaxed">{t.summary}</p>
-                          </div>
-                        </div>
+                            {/* Summary */}
+                            <div className="flex items-start gap-2.5 p-3 bg-emerald-50 border border-emerald-100 rounded-xl">
+                              <Brain className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                              <p className="text-xs text-emerald-800 leading-relaxed">{t.summary}</p>
+                            </div>
 
-                        {/* Reply form */}
-                        {replyTicket === t.id ? (
-                          <div className="space-y-2">
-                            <textarea value={replyText} onChange={e => setReplyText(e.target.value)}
-                              placeholder="Taip jawapan anda..."
-                              rows={3}
-                              className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-xs outline-none focus:border-emerald-400 bg-white resize-none" />
-                            <div className="flex gap-2">
-                              <button onClick={() => { setReplyTicket(null); setReplyText(""); }}
-                                className="flex-1 py-2 border border-slate-200 text-slate-600 rounded-xl text-xs font-bold cursor-pointer hover:bg-slate-50 transition">
-                                Batal
+                            {/* Actions */}
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <button onClick={() => { setExpandedTicket(isExpanded ? null : t.id); setReplyText(""); }}
+                                className="px-3 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs font-bold cursor-pointer transition">
+                                {isExpanded ? "Tutup" : "Balas"}
                               </button>
-                              <button className="flex-1 py-2 bg-emerald-700 text-white rounded-xl text-xs font-bold cursor-pointer hover:bg-emerald-800 transition">
-                                Hantar Jawapan
-                              </button>
+                              {t.status !== "resolved" ? (
+                                <button onClick={() => resolveTicket(t.id)}
+                                  className="px-3 py-1.5 bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-xl text-xs font-bold cursor-pointer hover:bg-emerald-100 transition">
+                                  Tandakan Selesai
+                                </button>
+                              ) : (
+                                <button onClick={() => reopenTicket(t.id)}
+                                  className="px-3 py-1.5 bg-slate-50 border border-slate-200 text-slate-600 rounded-xl text-xs font-bold cursor-pointer hover:bg-slate-100 transition">
+                                  Buka Semula
+                                </button>
+                              )}
                             </div>
                           </div>
-                        ) : (
-                          <div className="flex items-center gap-2">
-                            <button onClick={() => setReplyTicket(t.id)}
-                              className="px-3 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs font-bold cursor-pointer transition">
-                              Balas
-                            </button>
-                            <button className="px-3 py-2 border border-slate-200 text-slate-600 rounded-xl text-xs font-bold cursor-pointer hover:bg-slate-50 transition">
-                              Tugaskan
-                            </button>
-                            {t.status !== "resolved" && (
-                              <button className="px-3 py-2 bg-emerald-50 border border-emerald-100 text-emerald-700 rounded-xl text-xs font-bold cursor-pointer transition">
-                                Tandakan Selesai
-                              </button>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    ))}
+
+                          {/* Expanded replies */}
+                          {isExpanded && (
+                            <div className="border-t border-slate-100 bg-slate-50 p-4 space-y-3">
+                              {t.replies.length > 0 && (
+                                <div className="space-y-2">
+                                  {t.replies.map(r => (
+                                    <div key={r.id} className="bg-white border border-slate-200 rounded-xl px-4 py-3">
+                                      <div className="flex items-center justify-between mb-1">
+                                        <span className="text-[10px] font-bold text-emerald-700">{r.author}</span>
+                                        <span className="text-[10px] text-slate-400">{r.at}</span>
+                                      </div>
+                                      <p className="text-xs text-slate-700 leading-relaxed">{r.text}</p>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                              <div className="space-y-2">
+                                <textarea value={replyText} onChange={e => setReplyText(e.target.value)}
+                                  placeholder="Taip jawapan kepada pelanggan..."
+                                  rows={3}
+                                  className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-xs outline-none focus:border-emerald-400 bg-white resize-none" />
+                                <div className="flex gap-2">
+                                  <button onClick={() => { setExpandedTicket(null); setReplyText(""); }}
+                                    className="px-3 py-2 border border-slate-200 text-slate-600 rounded-xl text-xs font-bold cursor-pointer hover:bg-slate-50 transition">
+                                    Batal
+                                  </button>
+                                  <button onClick={() => sendReply(t.id)} disabled={!replyText.trim()}
+                                    className="flex-1 py-2 bg-emerald-700 text-white rounded-xl text-xs font-bold cursor-pointer hover:bg-emerald-800 transition disabled:opacity-40 flex items-center justify-center gap-1.5">
+                                    <Send className="w-3.5 h-3.5" />Hantar Jawapan
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
               </div>
@@ -1103,6 +1199,65 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
           </div>
         </main>
       </div>
+
+      {/* ── New Ticket Modal ── */}
+      {showTicketModal && (
+        <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-black/40 backdrop-blur-sm" onClick={() => setShowTicketModal(false)}>
+          <div className="w-full max-w-md bg-white rounded-t-3xl md:rounded-3xl shadow-2xl p-6 space-y-4" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between">
+              <h2 className="text-base font-bold text-slate-900">Buka Tiket Sokongan</h2>
+              <button onClick={() => setShowTicketModal(false)} className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-slate-100 cursor-pointer"><X className="w-4 h-4 text-slate-500" /></button>
+            </div>
+            <div className="space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-semibold text-slate-500 mb-1 block">Nama Pelanggan *</label>
+                  <input value={ticketForm.customer} onChange={e => setTicketForm(f => ({...f, customer: e.target.value}))}
+                    list="ticket-customers" placeholder="Nama syarikat"
+                    className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-emerald-400" />
+                  <datalist id="ticket-customers">
+                    {customers.map(c => <option key={c.id} value={c.name} />)}
+                  </datalist>
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-slate-500 mb-1 block">E-mel</label>
+                  <input type="email" value={ticketForm.email} onChange={e => setTicketForm(f => ({...f, email: e.target.value}))}
+                    placeholder="email@syarikat.com"
+                    className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-emerald-400" />
+                </div>
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-slate-500 mb-1 block">Subjek *</label>
+                <input value={ticketForm.subject} onChange={e => setTicketForm(f => ({...f, subject: e.target.value}))}
+                  placeholder="cth: Tidak boleh log masuk"
+                  className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-emerald-400" />
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-slate-500 mb-1 block">Keutamaan</label>
+                <select value={ticketForm.priority} onChange={e => setTicketForm(f => ({...f, priority: e.target.value as any}))}
+                  className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-emerald-400 bg-white">
+                  <option value="low">Rendah</option>
+                  <option value="medium">Sederhana</option>
+                  <option value="high">Tinggi</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-slate-500 mb-1 block">Ringkasan Masalah</label>
+                <textarea value={ticketForm.summary} onChange={e => setTicketForm(f => ({...f, summary: e.target.value}))}
+                  rows={3} placeholder="Terangkan masalah pelanggan..."
+                  className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-emerald-400 resize-none" />
+              </div>
+            </div>
+            <div className="flex gap-3 pt-1">
+              <button onClick={() => setShowTicketModal(false)} className="flex-1 py-3 border border-slate-200 rounded-2xl text-sm font-bold text-slate-500 cursor-pointer hover:bg-slate-50">Batal</button>
+              <button onClick={saveTicket} disabled={!ticketForm.customer.trim() || !ticketForm.subject.trim()}
+                className="flex-1 py-3 bg-emerald-700 text-white rounded-2xl text-sm font-bold cursor-pointer hover:bg-emerald-800 disabled:opacity-40">
+                Buka Tiket
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Customer Detail Panel ── */}
       {selectedCustomer && (
