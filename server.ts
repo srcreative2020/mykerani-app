@@ -761,8 +761,8 @@ async function startServer() {
         return res.status(400).json({ error: "Missing assistant query text." });
       }
 
-      const { provider, apiKey } = pickAiProvider();
-      if (!provider || !apiKey) {
+      const candidates = getAiProviderCandidates();
+      if (candidates.length === 0) {
         console.info("No AI provider API key found (checked OPENAI_API_KEY, GEMINI_API_KEY, ANTHROPIC_API_KEY). Directing to simulated workspace context analysis.");
         const fallbackResult = generateFallbackAssistantResponse(query, financialContext || {});
         return res.json(fallbackResult);
@@ -801,13 +801,28 @@ Provide your output precisely formatted as raw JSON matching exactly this shape,
 }
 If you output markdown formatting inside the fields, escape quotes correctly.`;
 
-      let parsedResponse: any;
-      if (provider === "gemini") {
-        parsedResponse = await callGeminiAssistant(apiKey, systemPrompt);
-      } else if (provider === "openai") {
-        parsedResponse = await callOpenAiAssistant(apiKey, systemPrompt);
-      } else {
-        parsedResponse = await callAnthropicAssistant(apiKey, systemPrompt);
+      // Try each configured provider in cheapest-first order, falling through to the
+      // next one if a call fails (quota/billing/outage), before giving up to the simulator.
+      let parsedResponse: any = null;
+      let lastErr: any = null;
+      for (const { provider, apiKey } of candidates) {
+        try {
+          if (provider === "gemini") {
+            parsedResponse = await callGeminiAssistant(apiKey, systemPrompt);
+          } else if (provider === "openai") {
+            parsedResponse = await callOpenAiAssistant(apiKey, systemPrompt);
+          } else {
+            parsedResponse = await callAnthropicAssistant(apiKey, systemPrompt);
+          }
+          break;
+        } catch (err: any) {
+          lastErr = err;
+          console.error(`AI provider "${provider}" failed, trying next candidate:`, err?.message || err);
+        }
+      }
+
+      if (!parsedResponse) {
+        throw lastErr || new Error("All configured AI providers failed");
       }
 
       return res.json(parsedResponse);
@@ -835,22 +850,40 @@ If you output markdown formatting inside the fields, escape quotes correctly.`;
     }
   });
 
-  // Decide which AI provider to use based on whichever API key is configured.
-  // AI_PROVIDER can force a specific choice; otherwise auto-detect by key presence.
-  function pickAiProvider(): { provider: "gemini" | "openai" | "anthropic" | null; apiKey: string | null } {
-    const keys: Record<string, string | undefined> = {
+  // MYKERANI AI Router: returns every configured provider (one with an API key set),
+  // ordered cheapest-first by default. Put as many provider keys as you like in the
+  // environment — the router tries the cheapest one first and falls through to the
+  // next on failure, so you only pay for the priciest provider when the cheaper
+  // ones are unavailable or out of quota.
+  //
+  // Override order with AI_PROVIDER_ORDER="openai,gemini,anthropic" (comma-separated),
+  // or pin a single provider with AI_PROVIDER="openai".
+  function getAiProviderCandidates(): { provider: "gemini" | "openai" | "anthropic"; apiKey: string }[] {
+    const keys: Record<"gemini" | "openai" | "anthropic", string | undefined> = {
       openai: process.env.OPENAI_API_KEY,
       gemini: process.env.GEMINI_API_KEY,
       anthropic: process.env.ANTHROPIC_API_KEY,
     };
+    const allProviders: ("gemini" | "openai" | "anthropic")[] = ["gemini", "openai", "anthropic"]; // cheapest-first default
+
     const forced = (process.env.AI_PROVIDER || "").toLowerCase();
-    if (forced && keys[forced]) {
-      return { provider: forced as "gemini" | "openai" | "anthropic", apiKey: keys[forced]! };
+    if (forced === "gemini" || forced === "openai" || forced === "anthropic") {
+      return keys[forced] ? [{ provider: forced, apiKey: keys[forced]! }] : [];
     }
-    for (const p of ["openai", "gemini", "anthropic"] as const) {
-      if (keys[p]) return { provider: p, apiKey: keys[p]! };
-    }
-    return { provider: null, apiKey: null };
+
+    const customOrder = (process.env.AI_PROVIDER_ORDER || "")
+      .toLowerCase()
+      .split(",")
+      .map(s => s.trim())
+      .filter((p): p is "gemini" | "openai" | "anthropic" => allProviders.includes(p as any));
+
+    const order = customOrder.length > 0
+      ? [...customOrder, ...allProviders.filter(p => !customOrder.includes(p))]
+      : allProviders;
+
+    return order
+      .filter(p => Boolean(keys[p]))
+      .map(p => ({ provider: p, apiKey: keys[p]! }));
   }
 
   async function callGeminiAssistant(apiKey: string, systemPrompt: string) {
