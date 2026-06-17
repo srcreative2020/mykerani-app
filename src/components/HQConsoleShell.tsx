@@ -1,4 +1,4 @@
-﻿import React, { useState } from "react";
+import React, { useState } from "react";
 import { type Tenant, type Workspace, type UserSessionProfile } from "../types";
 import {
   LayoutDashboard, Users, CreditCard, BarChart3, DollarSign, Settings,
@@ -18,7 +18,7 @@ interface HQConsoleShellProps {
   activeWorkspace: Workspace | null;
 }
 
-// HQ_OWNER pages: all 8
+// HQ_OWNER pages: 8 (Dashboard, Pelanggan, Pengebilan, Penggunaan, Sokongan, Hasil, Tetapan, Pusat Sistem)
 // HQ_STAFF pages: dashboard, customers, subscriptions, support
 type HQPage = "dashboard" | "customers" | "billing" | "usage" | "support" | "revenue" | "settings" | "system" | "subscriptions";
 
