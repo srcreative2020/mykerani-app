@@ -43,8 +43,17 @@ import { StorageSettingsConsole } from "./StorageSettingsConsole";
 import { NotificationCenterConsole } from "./NotificationCenterConsole";
 import { usePermission } from "../context/PermissionContext";
 import { Sparkles, Archive } from "lucide-react";
+import { type DashboardSummary } from "../lib/financialService";
 
-export const FinancialRecordsConsole: React.FC = () => {
+interface FinancialRecordsConsoleProps {
+  supabaseSummary?: DashboardSummary | null;
+  summaryLoading?: boolean;
+}
+
+export const FinancialRecordsConsole: React.FC<FinancialRecordsConsoleProps> = ({
+  supabaseSummary,
+  summaryLoading = false,
+}) => {
   const { activeWorkspace } = useWorkspace();
   const {
     financialEvents,
@@ -243,13 +252,17 @@ export const FinancialRecordsConsole: React.FC = () => {
   const [debtDesc, setDebtDesc] = useState("");
 
   // Quick summary analytics
-  const totalInflowMyr = financialEvents
+  const inMemoryInflow = financialEvents
     .filter(e => e.type === "INCOME" && e.isCompleted)
     .reduce((sum, e) => sum + e.amountMyr, 0);
 
-  const totalOutflowMyr = financialEvents
+  const inMemoryOutflow = financialEvents
     .filter(e => (e.type === "EXPENSE" || e.type === "DEBT") && e.isCompleted)
     .reduce((sum, e) => sum + e.amountMyr, 0);
+
+  const totalInflowMyr = (!summaryLoading && supabaseSummary) ? supabaseSummary.totalIncome : inMemoryInflow;
+  const totalOutflowMyr = (!summaryLoading && supabaseSummary) ? supabaseSummary.totalExpense : inMemoryOutflow;
+  const netBalanceMyr = (!summaryLoading && supabaseSummary) ? supabaseSummary.netBalance : (inMemoryInflow - inMemoryOutflow);
 
   const outstandingReceivablesMyr = financialEvents
     .filter(e => e.type === "RECEIVABLE" && !e.isCompleted)
