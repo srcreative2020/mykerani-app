@@ -11,6 +11,8 @@ import {
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { useNotifications, buildHQNotifs, fmtNotifTime } from "../lib/notifications";
+import { getAllWorkspacesStorageUsage, fmtBytes as fmtDocBytes } from "../lib/documentStorage";
+import { storageQuotaKey } from "../lib/storageQuota";
 
 interface HQConsoleShellProps {
   tenants: Tenant[];
@@ -304,6 +306,17 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
   // Storage monitor (HQ)
   const [inactiveDays, setInactiveDays] = useState(30);
   const [cleanupTenant, setCleanupTenant] = useState<string | null>(null);
+  const [realStorageData, setRealStorageData] = useState<{
+    workspace_id: string; workspace_name: string;
+    tenant_id: string; tenant_name: string;
+    total_bytes: number; file_count: number;
+  }[]>([]);
+  const [storageRefreshTick, setStorageRefreshTick] = useState(0);
+
+  // Fetch real storage usage from Supabase
+  useEffect(() => {
+    getAllWorkspacesStorageUsage().then(data => { if (data.length > 0) setRealStorageData(data); });
+  }, [storageRefreshTick]);
 
   // Notifications (HQ)
   const notif = useNotifications(`hq_${user?.id || "guest"}`);
@@ -1947,44 +1960,41 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
 
                 {/* HQ Storage Monitor */}
                 {(() => {
-                  const tenantViews = customers.map(c => {
-                    try {
-                      const raw = localStorage.getItem(`mykerani_storage_quota_${c.id}`);
-                      const s = raw ? JSON.parse(raw) : {};
-                      const quotaMap: Record<string, number> = { Starter: 5*1024*1024*1024, Pro: 25*1024*1024*1024, Enterprise: 100*1024*1024*1024 };
-                      const quota = quotaMap[c.plan] || quotaMap.Starter;
-                      const used  = s.usedBytes || Math.round(quota * (0.1 + Math.random() * 0.7));
-                      const pct   = used / quota;
-                      const lastActive = s.lastActiveAt || new Date(Date.now() - Math.random() * 60 * 86400000).toISOString();
-                      const daysSince  = Math.floor((Date.now() - new Date(lastActive).getTime()) / 86400000);
-                      const inactiveDays = s.inactiveDaysLimit || 30;
-                      return { id: c.id, name: c.name, plan: c.plan, used, quota, pct, isFrozen: s.isFrozen || false, frozenReason: s.frozenReason || "", lastActive, daysSince, isInactive: daysSince >= inactiveDays };
-                    } catch { return null; }
-                  }).filter(Boolean) as any[];
+                  const GB = 1_073_741_824;
+                  const supabasePlan = 100 * GB; // Supabase Pro 100GB
 
-                  const totalUsed = tenantViews.reduce((s: number, t: any) => s + t.used, 0);
-                  const supabasePlan = 100 * 1024 * 1024 * 1024; // Supabase Pro 100GB
+                  // Merge real Supabase data with customer list
+                  const tenantViews = customers.map(c => {
+                    const real = realStorageData.find(r => r.tenant_id === c.id);
+                    const quotaMap: Record<string, number> = { Starter: 5*GB, Pro: 25*GB, Enterprise: 100*GB };
+                    const quota = quotaMap[c.plan] || quotaMap.Starter;
+                    const used  = real ? Number(real.total_bytes) : 0;
+                    const fileCount = real ? Number(real.file_count) : 0;
+                    const pct   = used / quota;
+                    // Freeze settings still from localStorage (HQ config)
+                    const cfgRaw = localStorage.getItem(storageQuotaKey(c.id));
+                    const cfg = cfgRaw ? JSON.parse(cfgRaw) : {};
+                    const lastActive = cfg.lastActiveAt || new Date().toISOString();
+                    const daysSinceActive = Math.floor((Date.now() - new Date(lastActive).getTime()) / 86400000);
+                    return { id: c.id, name: c.name, plan: c.plan, used, quota, pct, fileCount, isFrozen: cfg.isFrozen || false, frozenReason: cfg.frozenReason || "", lastActive, daysSince: daysSinceActive, isInactive: daysSinceActive >= inactiveDays };
+                  });
+
+                  const totalUsed = tenantViews.reduce((s, t) => s + t.used, 0);
                   const supabasePct = totalUsed / supabasePlan;
 
-                  const fmt = (b: number) => b >= 1024*1024*1024 ? `${(b/1024/1024/1024).toFixed(1)} GB` : b >= 1024*1024 ? `${(b/1024/1024).toFixed(0)} MB` : `${Math.round(b/1024)} KB`;
-
-                  const doCleanup = (tenantId: string) => {
-                    const key = `mykerani_storage_quota_${tenantId}`;
-                    try {
-                      const raw = localStorage.getItem(key);
-                      if (raw) { const s = JSON.parse(raw); localStorage.setItem(key, JSON.stringify({ ...s, usedBytes: 0, lastActiveAt: new Date().toISOString() })); }
-                    } catch {}
-                    setCleanupTenant(null);
-                  };
-
                   const toggleFreeze = (tenantId: string, isFrozen: boolean) => {
-                    const key = `mykerani_storage_quota_${tenantId}`;
+                    const key = storageQuotaKey(tenantId);
                     try {
                       const raw = localStorage.getItem(key);
                       const s = raw ? JSON.parse(raw) : {};
                       localStorage.setItem(key, JSON.stringify({ ...s, isFrozen: !isFrozen, frozenReason: !isFrozen ? "hq_manual" : "" }));
-                      window.location.reload();
+                      setStorageRefreshTick(t => t + 1);
                     } catch {}
+                  };
+
+                  const doCleanup = (_tenantId: string) => {
+                    setCleanupTenant(null);
+                    setStorageRefreshTick(t => t + 1);
                   };
 
                   return (
@@ -1993,7 +2003,12 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
                       <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
                         <HardDrive className="w-4 h-4 text-emerald-600" /> Pemantauan Storan
                       </h3>
-                      <span className="text-[10px] text-slate-400">{fmt(totalUsed)} / {fmt(supabasePlan)} Supabase</span>
+                      <div className="flex items-center gap-2">
+                        <button onClick={() => setStorageRefreshTick(t => t + 1)} className="text-slate-300 hover:text-emerald-600 cursor-pointer" title="Refresh">
+                          <RefreshCw className="w-3.5 h-3.5" />
+                        </button>
+                        <span className="text-[10px] text-slate-400">{fmtDocBytes(totalUsed)} / {fmtDocBytes(supabasePlan)} Supabase</span>
+                      </div>
                     </div>
 
                     {/* Supabase HQ bar */}
@@ -2038,7 +2053,7 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
                                 {t.isFrozen && <span className="text-[9px] font-bold text-red-600 bg-red-100 px-1.5 py-0.5 rounded-full border border-red-200">BEKU</span>}
                                 {t.isInactive && !t.isFrozen && <span className="text-[9px] font-bold text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded-full border border-amber-200">Tidak Aktif {t.daysSince}h</span>}
                               </div>
-                              <p className="text-[10px] text-slate-400">{t.plan} &middot; {fmt(t.used)} / {fmt(t.quota)}</p>
+                              <p className="text-[10px] text-slate-400">{t.plan} &middot; {fmtDocBytes(t.used)} / {fmtDocBytes(t.quota)} &middot; {t.fileCount} fail</p>
                             </div>
                             <div className="flex gap-1.5 shrink-0">
                               {t.isInactive && (
