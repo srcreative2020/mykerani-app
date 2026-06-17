@@ -124,14 +124,16 @@ export const TenantProvider: React.FC<{ children: React.ReactNode }> = ({ childr
               });
             }
 
-            // Restore from localStorage setting, else auto-select HQ tenant for HQ roles
+            // Restore from localStorage setting, else auto-select HQ tenant for HQ roles.
+            // Real (non-mock) users must never default onto the injected DEMO tenant —
+            // it's only there so they can manually switch into the sales demo if they want.
             const isHqRole = user.role === "HQ_OWNER" || user.role === "HQ_STAFF";
             const lastSelectedId = localStorage.getItem(`mykerani_active_tenant_${user.id}`);
             let active = mappedTenants.find(t => t.id === lastSelectedId);
             if (!active) {
               active = isHqRole
                 ? mappedTenants.find(t => t.category === "HQ") || mappedTenants[0]
-                : mappedTenants[0];
+                : mappedTenants.find(t => t.category !== "HQ" && t.category !== "DEMO") || mappedTenants[0];
             }
 
             setState({
