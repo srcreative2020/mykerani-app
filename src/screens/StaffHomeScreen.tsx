@@ -206,10 +206,10 @@ export function StaffHomeScreen() {
   };
 
   const QUICK_PROMPTS = [
-    { label: "📋 Rekod hari ini", q: "Apakah rekod yang telah dimasukkan hari ini?" },
-    { label: "💸 Tambah perbelanjaan", action: () => { setAddDefaultType("EXPENSE"); setActiveTab("tambah"); } },
-    { label: "💰 Tambah pendapatan", action: () => { setAddDefaultType("INCOME"); setActiveTab("tambah"); } },
-    { label: "🔎 Muat naik resit", action: () => setActiveTab("muat_naik") },
+    { label: "Rekod hari ini", q: "Apakah rekod yang telah dimasukkan hari ini?" },
+    { label: "Tambah perbelanjaan", action: () => { setAddDefaultType("EXPENSE"); setActiveTab("tambah"); } },
+    { label: "Tambah pendapatan", action: () => { setAddDefaultType("INCOME"); setActiveTab("tambah"); } },
+    { label: "Muat naik resit", action: () => setActiveTab("muat_naik") },
   ];
 
   return (
@@ -335,9 +335,9 @@ export function StaffHomeScreen() {
             {/* Upload shortcuts */}
             <div className="px-4 pb-2 flex gap-2">
               {[
-                { label: "📷 Resit" },
-                { label: "📄 Invois" },
-                { label: "🏦 Penyata" },
+                { label: "Resit" },
+                { label: "Invois" },
+                { label: "Penyata" },
               ].map(({ label }) => (
                 <button key={label} onClick={() => setActiveTab("muat_naik")}
                   className="flex-1 py-2 bg-white border border-slate-200 rounded-xl text-xs font-semibold text-slate-600 hover:border-slate-400 hover:bg-slate-50 transition cursor-pointer shadow-sm">
@@ -420,9 +420,9 @@ export function StaffHomeScreen() {
 
             <div className="grid grid-cols-3 gap-3">
               {[
-                { label: "📷 Resit", icon: Receipt, bg: "bg-amber-50 text-amber-500 border-amber-100" },
-                { label: "📄 Invois", icon: FileSpreadsheet, bg: "bg-blue-50 text-blue-500 border-blue-100" },
-                { label: "🏦 Penyata", icon: Landmark, bg: "bg-violet-50 text-violet-500 border-violet-100" },
+                { label: "Resit", icon: Receipt, bg: "bg-amber-50 text-amber-500 border-amber-100" },
+                { label: "Invois", icon: FileSpreadsheet, bg: "bg-blue-50 text-blue-500 border-blue-100" },
+                { label: "Penyata", icon: Landmark, bg: "bg-violet-50 text-violet-500 border-violet-100" },
               ].map(({ label, icon: Icon, bg }) => (
                 <button key={label} className={`flex flex-col items-center space-y-2 p-4 bg-white border ${bg} rounded-2xl shadow-sm cursor-pointer hover:shadow-md transition`}>
                   <div className={`w-9 h-9 rounded-lg flex items-center justify-center ${bg}`}>

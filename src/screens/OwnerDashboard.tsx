@@ -232,10 +232,10 @@ export function OwnerDashboard() {
   };
 
   const QUICK_PROMPTS = [
-    { label: “💰 Baki tunai saya?”, q: “Berapa baki tunai saya sekarang?” },
-    { label: “📊 Ringkasan bulan ini”, q: “Ringkaskan kewangan saya bulan ini.” },
-    { label: “📋 Bil tertunggak?”, q: “Adakah ada bil yang perlu dibayar?” },
-    { label: “📈 Pendapatan vs Perbelanjaan”, q: “Bandingkan pendapatan dan perbelanjaan bulan ini.” },
+    { label: "Baki tunai saya?", q: "Berapa baki tunai saya sekarang?" },
+    { label: "Ringkasan bulan ini", q: "Ringkaskan kewangan saya bulan ini." },
+    { label: "Bil tertunggak?", q: "Adakah ada bil yang perlu dibayar?" },
+    { label: "Pendapatan vs Perbelanjaan", q: "Bandingkan pendapatan dan perbelanjaan bulan ini." },
   ];
 
   return (
@@ -359,9 +359,9 @@ export function OwnerDashboard() {
             {/* Upload shortcuts */}
             <div className="px-4 pb-2 flex gap-2">
               {[
-                { label: "📷 Resit", desc: "RECEIPT" },
-                { label: "📄 Invois", desc: "INVOICE" },
-                { label: "🏦 Penyata Bank", desc: "STATEMENT" },
+                { label: "Resit", desc: "RECEIPT" },
+                { label: "Invois", desc: "INVOICE" },
+                { label: "Penyata Bank", desc: "STATEMENT" },
               ].map(({ label }) => (
                 <button key={label} onClick={() => setActiveTab("documents")}
                   className="flex-1 py-2 bg-white border border-slate-200 rounded-xl text-xs font-semibold text-slate-600 hover:border-indigo-200 hover:bg-indigo-50 transition cursor-pointer shadow-sm">
@@ -392,7 +392,7 @@ export function OwnerDashboard() {
                 {[
                   { label: "+ Pendapatan", action: () => setQuickAdd("INCOME"), color: "text-emerald-600 bg-emerald-50 border-emerald-100" },
                   { label: "- Perbelanjaan", action: () => setQuickAdd("EXPENSE"), color: "text-rose-600 bg-rose-50 border-rose-100" },
-                  { label: "📊 Dashboard", action: () => setActiveTab("dashboard"), color: "text-indigo-600 bg-indigo-50 border-indigo-100" },
+                  { label: "Dashboard", action: () => setActiveTab("dashboard"), color: "text-indigo-600 bg-indigo-50 border-indigo-100" },
                 ].map(({ label, action, color }) => (
                   <button key={label} onClick={action}
                     className={`py-2 rounded-xl text-xs font-bold border transition cursor-pointer ${color}`}>
