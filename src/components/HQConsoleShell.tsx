@@ -1577,6 +1577,7 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
                         placeholder="Masukkan API key anda..."
                         className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-emerald-400 font-mono" />
                       <p className="text-[10px] text-slate-400 mt-1">API key disimpan secara selamat dan tidak dikongsi dengan pelanggan.</p>
+                      <p className="text-[10px] text-amber-600 mt-1 font-semibold">⚠️ Tetapan ini belum disambungkan ke server. Untuk aktifkan AI sebenar, tetapkan OPENAI_API_KEY / GEMINI_API_KEY / ANTHROPIC_API_KEY terus di environment variables server (Railway), bukan di sini.</p>
                     </div>
                   </div>
                   <button onClick={() => saveBizSettings({ aiProvider: bizSettings.aiProvider, aiModel: bizSettings.aiModel, aiApiKey: bizSettings.aiApiKey })}

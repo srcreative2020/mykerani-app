@@ -761,21 +761,12 @@ async function startServer() {
         return res.status(400).json({ error: "Missing assistant query text." });
       }
 
-      const apiKey = process.env.GEMINI_API_KEY;
-      if (!apiKey) {
-        console.info("GEMINI_API_KEY not found. Directing to simulated workspace context analysis.");
+      const { provider, apiKey } = pickAiProvider();
+      if (!provider || !apiKey) {
+        console.info("No AI provider API key found (checked OPENAI_API_KEY, GEMINI_API_KEY, ANTHROPIC_API_KEY). Directing to simulated workspace context analysis.");
         const fallbackResult = generateFallbackAssistantResponse(query, financialContext || {});
         return res.json(fallbackResult);
       }
-
-      const ai = new GoogleGenAI({
-        apiKey: apiKey,
-        httpOptions: {
-          headers: {
-            'User-Agent': 'aistudio-build',
-          }
-        }
-      });
 
       const systemPrompt = `You are MYKERANI AI Financial Assistant, a highly trained cognitive co-pilot. Your purpose is to analyze the active workspace financial data and provide Q&A answers, structured searches, analytical summaries, diagnostic health explanations, and evidence retrieval references.
 
@@ -800,84 +791,36 @@ Instructions & Constraints:
 - Return references ('linkedRecordIds' and 'linkedEvidenceIds') when queries touch specific events, bills, invoices, receipts, or attachments.
 - Return structured visual metrics in the 'highlights' object. Health Status must be EXCELLENT, STABLE, WARNING, or THREAT.
 
-Provide your output precisely formatted in JS JSON matching the required schema. Ensure the response contains absolutely clean JSON without markdown code blocks outside of the JSON wrapper itself. If you output markdown formatting inside the fields, escape quotes correctly.`;
+Provide your output precisely formatted as raw JSON matching exactly this shape, with no markdown code fences and no extra commentary outside the JSON object:
+{
+  "text": "string — Markdown-formatted advisory answer",
+  "suggestions": [{ "id": "string", "title": "string", "description": "string", "actionType": "LEARN_PATTERN", "payload": { "vendorName": "string", "category": "string", "recordType": "string", "confidenceScore": 0.0 } }],
+  "highlights": { "healthStatus": "EXCELLENT|STABLE|WARNING|THREAT", "estimatedRunwayDays": 0, "capitalEfficiencyScore": 0, "criticalActionRequired": "string" },
+  "linkedRecordIds": ["string"],
+  "linkedEvidenceIds": ["string"]
+}
+If you output markdown formatting inside the fields, escape quotes correctly.`;
 
-      const response = await ai.models.generateContent({
-        model: "gemini-2.5-flash",
-        contents: systemPrompt,
-        config: {
-          responseMimeType: "application/json",
-          responseSchema: {
-            type: Type.OBJECT,
-            properties: {
-              text: {
-                type: Type.STRING,
-                description: "Structured natural language advisory answer in beautiful Markdown."
-              },
-              suggestions: {
-                type: Type.ARRAY,
-                items: {
-                  type: Type.OBJECT,
-                  properties: {
-                    id: { type: Type.STRING },
-                    title: { type: Type.STRING },
-                    description: { type: Type.STRING },
-                    actionType: { type: Type.STRING, description: "LEARN_PATTERN" },
-                    payload: {
-                      type: Type.OBJECT,
-                      properties: {
-                        vendorName: { type: Type.STRING },
-                        category: { type: Type.STRING },
-                        recordType: { type: Type.STRING },
-                        confidenceScore: { type: Type.NUMBER }
-                      },
-                      required: ["vendorName", "category", "recordType", "confidenceScore"]
-                    }
-                  },
-                  required: ["id", "title", "description", "actionType", "payload"]
-                }
-              },
-              highlights: {
-                type: Type.OBJECT,
-                properties: {
-                  healthStatus: { type: Type.STRING, description: "EXCELLENT, STABLE, WARNING, or THREAT" },
-                  estimatedRunwayDays: { type: Type.NUMBER },
-                  capitalEfficiencyScore: { type: Type.NUMBER },
-                  criticalActionRequired: { type: Type.STRING }
-                },
-                required: ["healthStatus", "estimatedRunwayDays", "capitalEfficiencyScore", "criticalActionRequired"]
-              },
-              linkedRecordIds: {
-                type: Type.ARRAY,
-                items: { type: Type.STRING }
-              },
-              linkedEvidenceIds: {
-                type: Type.ARRAY,
-                items: { type: Type.STRING }
-              }
-            },
-            required: ["text", "suggestions", "highlights", "linkedRecordIds", "linkedEvidenceIds"]
-          }
-        }
-      });
-
-      const responseText = response.text;
-      if (!responseText) {
-        throw new Error("No response string returned from Gemini API");
+      let parsedResponse: any;
+      if (provider === "gemini") {
+        parsedResponse = await callGeminiAssistant(apiKey, systemPrompt);
+      } else if (provider === "openai") {
+        parsedResponse = await callOpenAiAssistant(apiKey, systemPrompt);
+      } else {
+        parsedResponse = await callAnthropicAssistant(apiKey, systemPrompt);
       }
 
-      const parsedResponse = JSON.parse(responseText);
       return res.json(parsedResponse);
 
     } catch (error: any) {
       const errStr = error?.message || (typeof error === 'object' ? JSON.stringify(error) : String(error));
       const isBillingOrCreditIssue = /depleted|exhausted|billing|prepay|429|credit/i.test(errStr);
-      
-      console.error("Gemini Assistant call failed:", errStr);
+
+      console.error("AI Assistant call failed:", errStr);
       if (isBillingOrCreditIssue) {
-        console.info("Gemini API key billing limits/credits reached. Smoothly transitioning to MYKERANI Assistant Sandbox Simulator.");
+        console.info("AI provider billing limits/credits reached. Smoothly transitioning to MYKERANI Assistant Sandbox Simulator.");
       } else {
-        console.info("Gemini Assistant query resolved seamlessly to robust local cognitive fallback.");
+        console.info("AI Assistant query resolved seamlessly to robust local cognitive fallback.");
       }
 
       const fallbackResult = generateFallbackAssistantResponse(req.body.query, req.body.financialContext || {});
@@ -891,6 +834,131 @@ Provide your output precisely formatted in JS JSON matching the required schema.
       });
     }
   });
+
+  // Decide which AI provider to use based on whichever API key is configured.
+  // AI_PROVIDER can force a specific choice; otherwise auto-detect by key presence.
+  function pickAiProvider(): { provider: "gemini" | "openai" | "anthropic" | null; apiKey: string | null } {
+    const keys: Record<string, string | undefined> = {
+      openai: process.env.OPENAI_API_KEY,
+      gemini: process.env.GEMINI_API_KEY,
+      anthropic: process.env.ANTHROPIC_API_KEY,
+    };
+    const forced = (process.env.AI_PROVIDER || "").toLowerCase();
+    if (forced && keys[forced]) {
+      return { provider: forced as "gemini" | "openai" | "anthropic", apiKey: keys[forced]! };
+    }
+    for (const p of ["openai", "gemini", "anthropic"] as const) {
+      if (keys[p]) return { provider: p, apiKey: keys[p]! };
+    }
+    return { provider: null, apiKey: null };
+  }
+
+  async function callGeminiAssistant(apiKey: string, systemPrompt: string) {
+    const ai = new GoogleGenAI({
+      apiKey,
+      httpOptions: { headers: { 'User-Agent': 'aistudio-build' } }
+    });
+    const response = await ai.models.generateContent({
+      model: "gemini-2.5-flash",
+      contents: systemPrompt,
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            text: { type: Type.STRING },
+            suggestions: {
+              type: Type.ARRAY,
+              items: {
+                type: Type.OBJECT,
+                properties: {
+                  id: { type: Type.STRING },
+                  title: { type: Type.STRING },
+                  description: { type: Type.STRING },
+                  actionType: { type: Type.STRING },
+                  payload: {
+                    type: Type.OBJECT,
+                    properties: {
+                      vendorName: { type: Type.STRING },
+                      category: { type: Type.STRING },
+                      recordType: { type: Type.STRING },
+                      confidenceScore: { type: Type.NUMBER }
+                    },
+                    required: ["vendorName", "category", "recordType", "confidenceScore"]
+                  }
+                },
+                required: ["id", "title", "description", "actionType", "payload"]
+              }
+            },
+            highlights: {
+              type: Type.OBJECT,
+              properties: {
+                healthStatus: { type: Type.STRING },
+                estimatedRunwayDays: { type: Type.NUMBER },
+                capitalEfficiencyScore: { type: Type.NUMBER },
+                criticalActionRequired: { type: Type.STRING }
+              },
+              required: ["healthStatus", "estimatedRunwayDays", "capitalEfficiencyScore", "criticalActionRequired"]
+            },
+            linkedRecordIds: { type: Type.ARRAY, items: { type: Type.STRING } },
+            linkedEvidenceIds: { type: Type.ARRAY, items: { type: Type.STRING } }
+          },
+          required: ["text", "suggestions", "highlights", "linkedRecordIds", "linkedEvidenceIds"]
+        }
+      }
+    });
+    const responseText = response.text;
+    if (!responseText) throw new Error("No response string returned from Gemini API");
+    return JSON.parse(responseText);
+  }
+
+  async function callOpenAiAssistant(apiKey: string, systemPrompt: string) {
+    const model = process.env.OPENAI_MODEL || "gpt-4o-mini";
+    const resp = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${apiKey}` },
+      body: JSON.stringify({
+        model,
+        messages: [{ role: "user", content: systemPrompt }],
+        response_format: { type: "json_object" },
+        temperature: 0.4,
+      }),
+    });
+    if (!resp.ok) {
+      const errBody = await resp.text();
+      throw new Error(`OpenAI API error ${resp.status}: ${errBody}`);
+    }
+    const data: any = await resp.json();
+    const content = data.choices?.[0]?.message?.content;
+    if (!content) throw new Error("No response content returned from OpenAI API");
+    return JSON.parse(content);
+  }
+
+  async function callAnthropicAssistant(apiKey: string, systemPrompt: string) {
+    const model = process.env.ANTHROPIC_MODEL || "claude-haiku-4-5-20251001";
+    const resp = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
+      },
+      body: JSON.stringify({
+        model,
+        max_tokens: 2048,
+        messages: [{ role: "user", content: systemPrompt }],
+      }),
+    });
+    if (!resp.ok) {
+      const errBody = await resp.text();
+      throw new Error(`Anthropic API error ${resp.status}: ${errBody}`);
+    }
+    const data: any = await resp.json();
+    const content = data.content?.[0]?.text;
+    if (!content) throw new Error("No response content returned from Anthropic API");
+    const jsonMatch = content.match(/\{[\s\S]*\}/);
+    return JSON.parse(jsonMatch ? jsonMatch[0] : content);
+  }
 
   // ANALYTICAL WORKSPACE COGNITIVE SIMULATOR FALLBACK
   function generateFallbackAssistantResponse(query: string, financialContext: any) {
