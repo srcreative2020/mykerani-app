@@ -1,43 +1,13 @@
 import React, { useState } from "react";
 import { type Tenant, type Workspace, type UserSessionProfile } from "../types";
 import {
-  LayoutDashboard,
-  Users,
-  CreditCard,
-  BarChart3,
-  PlayCircle,
-  DollarSign,
-  Settings,
-  TrendingUp,
-  TrendingDown,
-  AlertCircle,
-  CheckCircle2,
-  Clock,
-  Search,
-  Filter,
-  Plus,
-  RefreshCw,
-  Download,
-  MoreHorizontal,
-  ChevronRight,
-  Star,
-  Zap,
-  HardDrive,
-  Brain,
-  Building2,
-  UserCheck,
-  UserX,
-  Edit3,
-  Copy,
-  Archive,
-  RotateCcw,
-  Bell,
-  Globe,
-  Shield,
-  LogOut,
-  ArrowUpRight,
-  ArrowDownRight,
-  Sparkles,
+  LayoutDashboard, Users, CreditCard, BarChart3, DollarSign, Settings,
+  Headphones, Server, TrendingUp, TrendingDown, AlertCircle, CheckCircle2,
+  Clock, Search, Plus, RefreshCw, ChevronRight, Zap, HardDrive,
+  Brain, Building2, UserCheck, UserX, Edit3, Bell, Shield, LogOut,
+  ArrowUpRight, Menu, X, Activity, Package, Receipt, ToggleLeft,
+  ToggleRight, AlertTriangle, Circle, FileText, MessageSquare,
+  User, Send, Star, Repeat, Archive,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 
@@ -48,71 +18,86 @@ interface HQConsoleShellProps {
   activeWorkspace: Workspace | null;
 }
 
-type HQPage = "dashboard" | "customers" | "plans" | "usage" | "demos" | "revenue" | "settings";
+// HQ_OWNER pages: all 8
+// HQ_STAFF pages: dashboard, customers, subscriptions, support
+type HQPage = "dashboard" | "customers" | "billing" | "usage" | "support" | "revenue" | "settings" | "system" | "subscriptions";
 
-// ─── Mock data — HANYA untuk akaun .demo, tidak untuk user sebenar ───────────
+// ── Mock data (demo accounts only) ────────────────────────────────────────────
 const MOCK_CUSTOMERS = [
-  { id: "c1", name: "Kedai Makan Pak Ali Sdn Bhd", plan: "Starter", status: "active", companies: 2, lastActivity: "2 jam lalu", attention: false },
-  { id: "c2", name: "Syarikat Binaan Teguh MY", plan: "Pro", status: "active", companies: 5, lastActivity: "1 hari lalu", attention: true },
-  { id: "c3", name: "Butik Raudah Enterprise", plan: "Starter", status: "suspended", companies: 1, lastActivity: "5 hari lalu", attention: true },
-  { id: "c4", name: "TechVenture Solutions MY", plan: "Enterprise", status: "active", companies: 12, lastActivity: "3 jam lalu", attention: false },
-  { id: "c5", name: "Ladang Hijau Organik Sdn Bhd", plan: "Pro", status: "active", companies: 3, lastActivity: "Semalam", attention: false },
+  { id: "c1", name: "Kedai Makan Pak Ali Sdn Bhd",    plan: "Starter",    status: "active",    renewal: "15 Jul 2026", aiUsage: 45,  storageGB: 0.8, attention: false, mrr: 99 },
+  { id: "c2", name: "Syarikat Binaan Teguh MY",        plan: "Pro",        status: "active",    renewal: "3 Jul 2026",  aiUsage: 312, storageGB: 8.2, attention: true,  mrr: 299 },
+  { id: "c3", name: "Butik Raudah Enterprise",         plan: "Starter",    status: "suspended", renewal: "1 Jul 2026",  aiUsage: 12,  storageGB: 0.3, attention: true,  mrr: 0 },
+  { id: "c4", name: "TechVenture Solutions MY",        plan: "Enterprise", status: "active",    renewal: "28 Jul 2026", aiUsage: 891, storageGB: 42,  attention: false, mrr: 899 },
+  { id: "c5", name: "Ladang Hijau Organik Sdn Bhd",   plan: "Pro",        status: "active",    renewal: "10 Jul 2026", aiUsage: 178, storageGB: 5.1, attention: false, mrr: 299 },
+];
+
+const MOCK_TICKETS = [
+  { id: "T-001", customer: "Butik Raudah Enterprise",  subject: "Tidak boleh log masuk",     priority: "high",   status: "open",     summary: "Pengguna tidak dapat masuk sejak 2 hari lalu. AI mengesan isu kata laluan.",     assigned: "—" },
+  { id: "T-002", customer: "Syarikat Binaan Teguh MY", subject: "Resit tidak dapat dimuat naik", priority: "medium", status: "pending",  summary: "Saiz fail melebihi had. AI cadangkan kurangkan saiz atau naik taraf storan.", assigned: "Amir" },
+  { id: "T-003", customer: "Ladang Hijau Organik",     subject: "Soalan tentang laporan P&L", priority: "low",    status: "resolved", summary: "AI telah menjawab soalan. Pengguna berpuas hati.",                                assigned: "Siti" },
 ];
 
 const MOCK_PLANS = [
-  { id: "p1", name: "Starter", price: 99, credits: 500, storage: "5 GB", ai: "100 panggilan", customers: 8, color: "emerald" },
-  { id: "p2", name: "Pro", price: 299, credits: 2000, storage: "25 GB", ai: "500 panggilan", customers: 5, color: "indigo" },
-  { id: "p3", name: "Enterprise", price: 899, credits: 10000, storage: "100 GB", ai: "Tanpa had", customers: 2, color: "violet" },
+  { id: "p1", name: "Starter",    price: 99,  aiCredits: 500,   storage: "5 GB",  customers: 3 },
+  { id: "p2", name: "Pro",        price: 299, aiCredits: 2000,  storage: "25 GB", customers: 2 },
+  { id: "p3", name: "Enterprise", price: 899, aiCredits: 10000, storage: "100 GB",customers: 1 },
 ];
 
-const MOCK_DEMOS = [
-  { id: "d1", name: "Demo Restoran F&B", status: "active", lastActivity: "1 jam lalu" },
-  { id: "d2", name: "Demo Perniagaan Runcit", status: "active", lastActivity: "Semalam" },
-  { id: "d3", name: "Demo Kontraktor Binaan", status: "idle", lastActivity: "3 hari lalu" },
-  { id: "d4", name: "Demo Perkhidmatan Profesional", status: "active", lastActivity: "4 jam lalu" },
-];
-
-const MOCK_ACTIVITY = [
-  { id: "a1", type: "new_customer", text: "Pelanggan baru: TechVenture Solutions MY", time: "3 jam lalu", color: "emerald" },
-  { id: "a2", type: "attention", text: "Syarikat Binaan Teguh MY — kredit hampir habis", time: "5 jam lalu", color: "amber" },
-  { id: "a3", type: "payment", text: "Bayaran diterima: Pro Plan — RM 299", time: "Semalam", color: "indigo" },
-  { id: "a4", type: "suspended", text: "Akaun digantung: Butik Raudah Enterprise", time: "5 hari lalu", color: "rose" },
-  { id: "a5", type: "payment", text: "Bayaran diterima: Enterprise Plan — RM 899", time: "6 hari lalu", color: "indigo" },
-];
-
-// ─── Helpers ─────────────────────────────────────────────────────────────────
-const PlanBadge = ({ plan }: { plan: string }) => {
-  const colors: Record<string, string> = {
-    Starter: "bg-emerald-50 text-emerald-700 border-emerald-200",
-    Pro: "bg-indigo-50 text-indigo-700 border-indigo-200",
-    Enterprise: "bg-violet-50 text-violet-700 border-violet-200",
-    Demo: "bg-amber-50 text-amber-700 border-amber-200",
+// ── Status Badge ──────────────────────────────────────────────────────────────
+const StatusBadge = ({ status }: { status: string }) => {
+  const map: Record<string, string> = {
+    active: "bg-emerald-50 text-emerald-700 border-emerald-200",
+    suspended: "bg-red-50 text-red-600 border-red-200",
+    open: "bg-amber-50 text-amber-700 border-amber-200",
+    pending: "bg-blue-50 text-blue-700 border-blue-200",
+    resolved: "bg-slate-100 text-slate-500 border-slate-200",
+    high: "bg-red-50 text-red-600 border-red-200",
+    medium: "bg-amber-50 text-amber-700 border-amber-200",
+    low: "bg-slate-100 text-slate-500 border-slate-200",
+  };
+  const labels: Record<string, string> = {
+    active: "Aktif", suspended: "Digantung", open: "Terbuka", pending: "Dalam Proses",
+    resolved: "Selesai", high: "Tinggi", medium: "Sederhana", low: "Rendah",
   };
   return (
-    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${colors[plan] || "bg-slate-50 text-slate-600 border-slate-200"}`}>
-      {plan}
+    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold border ${map[status] || "bg-slate-100 text-slate-500 border-slate-200"}`}>
+      {labels[status] || status}
     </span>
   );
 };
 
-const StatusBadge = ({ status }: { status: string }) => {
-  if (status === "active") return (
-    <span className="flex items-center space-x-1 text-[10px] font-bold text-emerald-600">
-      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block animate-pulse" />
-      <span>Aktif</span>
-    </span>
-  );
-  if (status === "suspended") return (
-    <span className="flex items-center space-x-1 text-[10px] font-bold text-rose-500">
-      <span className="w-1.5 h-1.5 rounded-full bg-rose-500 inline-block" />
-      <span>Digantung</span>
-    </span>
-  );
+// ── Metric Card ───────────────────────────────────────────────────────────────
+const MetricCard = ({ label, value, sub, icon: Icon, color = "teal", trend }: {
+  label: string; value: string | number; sub?: string;
+  icon: React.ElementType; color?: "teal" | "emerald" | "red" | "amber" | "violet" | "slate";
+  trend?: "up" | "down" | "neutral";
+}) => {
+  const colors = {
+    teal:    { bg: "bg-teal-50",    icon: "text-teal-600",    border: "border-teal-100" },
+    emerald: { bg: "bg-emerald-50", icon: "text-emerald-600", border: "border-emerald-100" },
+    red:     { bg: "bg-red-50",     icon: "text-red-500",     border: "border-red-100" },
+    amber:   { bg: "bg-amber-50",   icon: "text-amber-600",   border: "border-amber-100" },
+    violet:  { bg: "bg-violet-50",  icon: "text-violet-600",  border: "border-violet-100" },
+    slate:   { bg: "bg-slate-50",   icon: "text-slate-500",   border: "border-slate-200" },
+  };
+  const c = colors[color];
   return (
-    <span className="flex items-center space-x-1 text-[10px] font-bold text-amber-500">
-      <span className="w-1.5 h-1.5 rounded-full bg-amber-400 inline-block" />
-      <span>Tidak aktif</span>
-    </span>
+    <div className={`bg-white rounded-2xl border ${c.border} p-4 shadow-sm flex items-start space-x-3`}>
+      <div className={`w-9 h-9 rounded-xl ${c.bg} flex items-center justify-center shrink-0`}>
+        <Icon className={`w-4.5 h-4.5 ${c.icon}`} />
+      </div>
+      <div className="min-w-0">
+        <p className="text-[11px] text-slate-400 font-medium">{label}</p>
+        <p className="text-xl font-bold text-slate-900 leading-tight">{value}</p>
+        {sub && <p className="text-[10px] text-slate-400 mt-0.5">{sub}</p>}
+      </div>
+      {trend && (
+        <div className="ml-auto shrink-0">
+          {trend === "up" && <TrendingUp className="w-4 h-4 text-emerald-500" />}
+          {trend === "down" && <TrendingDown className="w-4 h-4 text-red-400" />}
+        </div>
+      )}
+    </div>
   );
 };
 
@@ -120,26 +105,35 @@ const StatusBadge = ({ status }: { status: string }) => {
 export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
   const { signOut, isMockUser } = useAuth();
 
-  // Real users: data kosong — demo data hanya untuk akaun .demo
-  const customers = isMockUser ? MOCK_CUSTOMERS : [];
-  const plans     = isMockUser ? MOCK_PLANS     : [];
-  const demos     = isMockUser ? MOCK_DEMOS     : [];
-  const activity  = isMockUser ? MOCK_ACTIVITY  : [];
-
-  // HQ_STAFF: only Dashboard + Customers
   const isStaff = user?.role === "HQ_STAFF";
+  const customers = isMockUser ? MOCK_CUSTOMERS : [];
+  const tickets   = isMockUser ? MOCK_TICKETS   : [];
+  const plans     = isMockUser ? MOCK_PLANS     : [];
 
   const [activePage, setActivePage] = useState<HQPage>("dashboard");
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
-  const [isRefreshing, setIsRefreshing] = useState(false);
-  const [selectedCustomer, setSelectedCustomer] = useState<typeof customers[0] | null>(null);
 
-  // ── Cipta Staf HQ ──
+  // Cipta HQ Staff state
   const [showCreateStaff, setShowCreateStaff] = useState(false);
   const [staffEmail, setStaffEmail] = useState("");
   const [staffName, setStaffName] = useState("");
   const [staffCreating, setStaffCreating] = useState(false);
   const [staffResult, setStaffResult] = useState<{ success: boolean; message: string; tempPassword?: string } | null>(null);
+
+  // Resource toggles (HQ_OWNER)
+  const [allowOwnAI, setAllowOwnAI] = useState(false);
+  const [allowOwnStorage, setAllowOwnStorage] = useState(false);
+  const [allowOwnOCR, setAllowOwnOCR] = useState(false);
+
+  // Support ticket reply
+  const [replyTicket, setReplyTicket] = useState<string | null>(null);
+  const [replyText, setReplyText] = useState("");
+
+  const totalMRR    = customers.reduce((s, c) => s + c.mrr, 0);
+  const activeCount = customers.filter(c => c.status === "active").length;
+  const openCases   = tickets.filter(t => t.status === "open" || t.status === "pending").length;
+  const totalAI     = customers.reduce((s, c) => s + c.aiUsage, 0);
 
   const handleCreateHQStaff = async () => {
     if (!staffEmail.trim() || !staffName.trim()) return;
@@ -152,895 +146,747 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
       const res = await fetch("/api/admin/create-staff", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          email: staffEmail.trim(),
-          fullName: staffName.trim(),
-          role: "HQ_STAFF",
-          tenantId: "tenant-hq-0001",
-          callerJwt: jwt,
-        }),
+        body: JSON.stringify({ email: staffEmail.trim(), fullName: staffName.trim(), role: "HQ_STAFF", tenantId: "tenant-hq-0001", callerJwt: jwt }),
       });
       const data = await res.json() as any;
       if (data.success) {
         setStaffResult({ success: true, message: data.message, tempPassword: data.tempPassword });
-        setStaffEmail("");
-        setStaffName("");
+        setStaffEmail(""); setStaffName("");
       } else {
         setStaffResult({ success: false, message: data.error || "Gagal cipta akaun." });
       }
     } catch (err: any) {
-      setStaffResult({ success: false, message: err?.message || "Ralat sambungan. Semak Railway server." });
+      setStaffResult({ success: false, message: err?.message || "Ralat sambungan." });
     } finally {
       setStaffCreating(false);
     }
   };
 
-  const handleRefresh = () => {
-    setIsRefreshing(true);
-    setTimeout(() => setIsRefreshing(false), 1200);
-  };
-
-  const attentionCount = customers.filter(c => c.attention).length;
-  const activeCustomers = customers.filter(c => c.status === "active").length;
-  const monthlyRevenue = customers.reduce((sum, c) => {
-    const plan = plans.find(p => p.name === c.plan);
-    return sum + (c.status === "active" ? (plan?.price || 0) : 0);
-  }, 0);
-
-  // HQ_STAFF: Dashboard + Customers sahaja. HQ_OWNER: semua halaman.
-  const allNavItems: { id: HQPage; label: string; icon: React.ElementType; badge?: number; ownerOnly?: boolean }[] = [
-    { id: "dashboard", label: "Dashboard",   icon: LayoutDashboard },
-    { id: "customers", label: "Pelanggan",   icon: Users, badge: attentionCount > 0 ? attentionCount : undefined },
-    { id: "plans",     label: "Plan",        icon: CreditCard,  ownerOnly: true },
-    { id: "usage",     label: "Penggunaan",  icon: BarChart3,   ownerOnly: true },
-    { id: "demos",     label: "Demo",        icon: PlayCircle,  ownerOnly: true },
-    { id: "revenue",   label: "Hasil",       icon: DollarSign,  ownerOnly: true },
-    { id: "settings",  label: "Tetapan",     icon: Settings,    ownerOnly: true },
+  // ── Nav items ──
+  const ownerNav = [
+    { id: "dashboard" as HQPage,   label: "Dashboard",      icon: LayoutDashboard },
+    { id: "customers" as HQPage,   label: "Pelanggan",      icon: Users },
+    { id: "billing" as HQPage,     label: "Pengebilan",     icon: CreditCard },
+    { id: "usage" as HQPage,       label: "Penggunaan",     icon: Activity },
+    { id: "support" as HQPage,     label: "Sokongan",       icon: Headphones, badge: openCases },
+    { id: "revenue" as HQPage,     label: "Hasil",          icon: DollarSign },
+    { id: "settings" as HQPage,    label: "Tetapan",        icon: Settings },
+    { id: "system" as HQPage,      label: "Pusat Sistem",   icon: Server },
   ];
-  const navItems = isStaff ? allNavItems.filter(n => !n.ownerOnly) : allNavItems;
 
-  return (
-    <div className="flex flex-col md:flex-row min-h-screen md:min-h-[80vh] md:rounded-2xl md:overflow-hidden md:border md:border-slate-200 md:shadow-sm bg-white" id="hq_console_root">
+  const staffNav = [
+    { id: "dashboard" as HQPage,     label: "Dashboard",      icon: LayoutDashboard },
+    { id: "customers" as HQPage,     label: "Pelanggan",      icon: Users },
+    { id: "subscriptions" as HQPage, label: "Langganan",      icon: Repeat },
+    { id: "support" as HQPage,       label: "Sokongan",       icon: Headphones, badge: openCases },
+  ];
 
-      {/* ── MOBILE TOP BAR ── */}
-      <header className="md:hidden bg-slate-950 px-4 py-3 flex items-center justify-between sticky top-0 z-20" id="hq_mobile_header">
+  const navItems = isStaff ? staffNav : ownerNav;
+  const firstName = user?.fullName?.split(" ")[0] || "HQ";
+
+  // ── Sidebar ──
+  const Sidebar = ({ mobile }: { mobile?: boolean }) => (
+    <aside className={`${mobile ? "w-full" : "w-56"} flex flex-col h-full bg-white border-r border-slate-200`}>
+      {/* Logo */}
+      <div className="px-5 py-5 border-b border-slate-100">
         <div className="flex items-center space-x-2.5">
-          <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-rose-500 to-rose-700 flex items-center justify-center">
-            <Shield className="w-3.5 h-3.5 text-white" />
-          </div>
+          <div className="w-8 h-8 rounded-xl bg-teal-700 flex items-center justify-center text-white font-bold text-sm shadow-sm">MK</div>
           <div>
-            <p className="text-white font-bold text-sm leading-none">MYKERANI</p>
-            <p className="text-rose-400 text-[9px] font-semibold">HQ Control</p>
+            <p className="font-bold text-slate-900 text-sm leading-tight">MYKERANI</p>
+            <p className="text-[10px] text-slate-400">{isStaff ? "HQ Operasi" : "HQ Pentadbiran"}</p>
           </div>
         </div>
-        <div className="flex items-center space-x-2">
-          <div className="w-7 h-7 rounded-full bg-gradient-to-br from-rose-500 to-violet-600 flex items-center justify-center text-white text-xs font-bold">
-            {user?.fullName?.charAt(0).toUpperCase() || "H"}
+      </div>
+
+      {/* Nav */}
+      <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
+        {navItems.map(({ id, label, icon: Icon, badge }: any) => {
+          const active = activePage === id;
+          return (
+            <button key={id} onClick={() => { setActivePage(id); setSidebarOpen(false); }}
+              className={`w-full flex items-center space-x-3 px-3 py-2.5 rounded-xl text-sm font-medium transition cursor-pointer ${active ? "bg-teal-50 text-teal-800 font-semibold" : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"}`}>
+              <Icon className={`w-4 h-4 shrink-0 ${active ? "text-teal-700" : "text-slate-400"}`} />
+              <span className="flex-1 text-left">{label}</span>
+              {badge > 0 && (
+                <span className="bg-red-500 text-white text-[9px] font-bold rounded-full w-4 h-4 flex items-center justify-center shrink-0">{badge}</span>
+              )}
+              {active && <div className="w-1.5 h-1.5 rounded-full bg-teal-600 shrink-0" />}
+            </button>
+          );
+        })}
+      </nav>
+
+      {/* User footer */}
+      <div className="px-3 py-4 border-t border-slate-100">
+        <div className="flex items-center space-x-3 px-3 py-2.5 rounded-xl bg-slate-50">
+          <div className="w-7 h-7 rounded-full bg-teal-700 text-white flex items-center justify-center text-xs font-bold shrink-0">
+            {firstName.charAt(0).toUpperCase()}
           </div>
-          <button onClick={() => signOut()} className="p-1.5 text-slate-400 hover:text-rose-400 transition cursor-pointer">
-            <LogOut className="w-4 h-4" />
+          <div className="flex-1 min-w-0">
+            <p className="text-xs font-semibold text-slate-800 truncate">{user?.fullName || "HQ User"}</p>
+            <p className="text-[10px] text-slate-400">{isStaff ? "HQ_STAFF" : "HQ_OWNER"}</p>
+          </div>
+          <button onClick={() => signOut()} title="Log Keluar"
+            className="p-1 hover:bg-rose-50 hover:text-rose-500 text-slate-300 rounded-lg transition cursor-pointer">
+            <LogOut className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      </div>
+    </aside>
+  );
+
+  return (
+    <div className="h-screen flex flex-col bg-slate-50 overflow-hidden" id="hq_root">
+
+      {/* Mobile header */}
+      <header className="md:hidden bg-white border-b border-slate-200 px-4 py-3 flex items-center justify-between shrink-0">
+        <div className="flex items-center space-x-2.5">
+          <div className="w-7 h-7 rounded-lg bg-teal-700 flex items-center justify-center text-white font-bold text-xs">MK</div>
+          <span className="font-bold text-slate-900 text-sm">MYKERANI HQ</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-slate-500 font-medium">{navItems.find(n => n.id === activePage)?.label}</span>
+          <button onClick={() => setSidebarOpen(true)} className="p-1.5 rounded-lg hover:bg-slate-100 cursor-pointer">
+            <Menu className="w-5 h-5 text-slate-600" />
           </button>
         </div>
       </header>
 
-      {/* ── DESKTOP SIDEBAR ── */}
-      <aside className="hidden md:flex w-56 bg-slate-950 flex-col shrink-0" id="hq_sidebar">
-        {/* Brand */}
-        <div className="px-5 py-5 border-b border-slate-800">
-          <div className="flex items-center space-x-2.5">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-rose-500 to-rose-700 flex items-center justify-center shadow-md">
-              <Shield className="w-4 h-4 text-white" />
-            </div>
-            <div>
-              <p className="text-white font-bold text-sm tracking-tight leading-none">MYKERANI</p>
-              <p className="text-rose-400 text-[9px] font-semibold tracking-widest uppercase mt-0.5">HQ Control</p>
-            </div>
-          </div>
-        </div>
-
-        {/* Nav */}
-        <nav className="flex-1 px-3 py-4 space-y-0.5" id="hq_nav_desktop">
-          {navItems.map(({ id, label, icon: Icon, badge }) => (
-            <button
-              key={id}
-              onClick={() => setActivePage(id)}
-              className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-left transition cursor-pointer group ${
-                activePage === id
-                  ? "bg-white/10 text-white"
-                  : "text-slate-400 hover:text-white hover:bg-white/5"
-              }`}
-            >
-              <div className="flex items-center space-x-3">
-                <Icon className={`w-4 h-4 ${activePage === id ? "text-rose-400" : "text-slate-500 group-hover:text-slate-300"}`} />
-                <span className="text-xs font-semibold">{label}</span>
-              </div>
-              {badge !== undefined && (
-                <span className="w-5 h-5 rounded-full bg-rose-500 text-white text-[9px] font-bold flex items-center justify-center">
-                  {badge}
-                </span>
-              )}
-            </button>
-          ))}
-        </nav>
-
-        {/* User */}
-        <div className="px-3 py-4 border-t border-slate-800">
-          <div className="flex items-center space-x-2.5 px-2 py-2">
-            <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-rose-500 to-violet-600 flex items-center justify-center text-white text-xs font-bold shrink-0">
-              {user?.fullName?.charAt(0).toUpperCase() || "H"}
-            </div>
-            <div className="min-w-0 flex-1">
-              <p className="text-white text-[11px] font-semibold truncate">{user?.fullName || "HQ Admin"}</p>
-              <p className="text-slate-500 text-[9px]">Pentadbir Sistem</p>
-            </div>
-            <button onClick={() => signOut()} className="text-slate-500 hover:text-rose-400 transition cursor-pointer" title="Log Keluar">
-              <LogOut className="w-3.5 h-3.5" />
-            </button>
-          </div>
-        </div>
-      </aside>
-
-      {/* ── MAIN CONTENT ── */}
-      <main className="flex-1 bg-slate-50 overflow-auto pb-20 md:pb-0" id="hq_main">
-
-        {/* ════ DASHBOARD ════ */}
-        {activePage === "dashboard" && (
-          <div className="p-6 space-y-6" id="hq_dashboard">
-            {/* Header */}
-            <div className="flex items-center justify-between">
-              <div>
-                <h1 className="text-xl font-bold text-slate-900">Dashboard</h1>
-                <p className="text-xs text-slate-500 mt-0.5">Selamat datang, {user?.fullName?.split(" ")[0] || "HQ"}. Ini ringkasan platform anda hari ini.</p>
-              </div>
-              <button
-                onClick={handleRefresh}
-                className="flex items-center space-x-2 px-4 py-2 bg-white border border-slate-200 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-50 transition cursor-pointer shadow-sm"
-              >
-                <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? "animate-spin" : ""}`} />
-                <span>Refresh</span>
+      {/* Mobile sidebar drawer */}
+      {sidebarOpen && (
+        <div className="md:hidden fixed inset-0 z-50 flex">
+          <div className="absolute inset-0 bg-black/40" onClick={() => setSidebarOpen(false)} />
+          <div className="relative w-64 h-full z-10">
+            <div className="absolute top-3 right-3">
+              <button onClick={() => setSidebarOpen(false)} className="p-1.5 bg-white rounded-lg shadow cursor-pointer">
+                <X className="w-4 h-4 text-slate-500" />
               </button>
             </div>
+            <Sidebar mobile />
+          </div>
+        </div>
+      )}
 
-            {/* ── STAT CARDS ── */}
-            <div className="grid grid-cols-2 gap-4" id="hq_stat_cards">
-              {/* Monthly Revenue */}
-              <div className="bg-gradient-to-br from-indigo-600 to-indigo-800 rounded-2xl p-4 text-white shadow-lg shadow-indigo-200">
-                <div className="flex items-center justify-between mb-2">
-                  <p className="text-indigo-200 text-[9px] font-bold uppercase tracking-wider leading-tight">Hasil Bulanan</p>
-                  <div className="w-7 h-7 rounded-lg bg-white/10 flex items-center justify-center shrink-0">
-                    <DollarSign className="w-3.5 h-3.5 text-indigo-200" />
+      <div className="flex flex-1 overflow-hidden">
+        {/* Desktop sidebar */}
+        <div className="hidden md:flex">
+          <Sidebar />
+        </div>
+
+        {/* Main content */}
+        <main className="flex-1 overflow-y-auto" id="hq_main">
+          <div className="max-w-5xl mx-auto p-5 pb-10 space-y-5">
+
+            {/* ════ DASHBOARD ════ */}
+            {activePage === "dashboard" && (
+              <div className="space-y-5" id="hq_dashboard">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h1 className="text-xl font-bold text-slate-900">
+                      {isStaff ? `Selamat datang, ${firstName}` : "HQ Dashboard"}
+                    </h1>
+                    <p className="text-xs text-slate-400 mt-0.5">
+                      {new Date().toLocaleDateString("ms-MY", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
+                    </p>
                   </div>
+                  {!isStaff && (
+                    <button onClick={() => setActivePage("customers")}
+                      className="flex items-center space-x-1.5 px-4 py-2 bg-teal-700 hover:bg-teal-800 text-white rounded-xl text-xs font-bold transition cursor-pointer shadow-sm">
+                      <Plus className="w-3.5 h-3.5" /><span>Tambah Pelanggan</span>
+                    </button>
+                  )}
                 </div>
-                <p className="text-xl font-bold leading-tight">RM {monthlyRevenue.toLocaleString()}</p>
-                <div className="flex items-center space-x-1 mt-1">
-                  <ArrowUpRight className="w-3 h-3 text-emerald-300 shrink-0" />
-                  <span className="text-[9px] text-indigo-200">+12% bulan ini</span>
-                </div>
-              </div>
 
-              {/* Active Customers */}
-              <div className="bg-gradient-to-br from-emerald-500 to-emerald-700 rounded-2xl p-4 text-white shadow-lg shadow-emerald-200">
-                <div className="flex items-center justify-between mb-2">
-                  <p className="text-emerald-100 text-[9px] font-bold uppercase tracking-wider leading-tight">Pelanggan Aktif</p>
-                  <div className="w-7 h-7 rounded-lg bg-white/10 flex items-center justify-center shrink-0">
-                    <Users className="w-3.5 h-3.5 text-emerald-100" />
-                  </div>
-                </div>
-                <p className="text-xl font-bold">{activeCustomers}</p>
-                <span className="text-[9px] text-emerald-100">drpd {customers.length} jumlah</span>
-              </div>
-
-              {/* Active Subscriptions */}
-              <div className="bg-gradient-to-br from-violet-500 to-violet-700 rounded-2xl p-4 text-white shadow-lg shadow-violet-200">
-                <div className="flex items-center justify-between mb-2">
-                  <p className="text-violet-100 text-[9px] font-bold uppercase tracking-wider leading-tight">Langganan Aktif</p>
-                  <div className="w-7 h-7 rounded-lg bg-white/10 flex items-center justify-center shrink-0">
-                    <CreditCard className="w-3.5 h-3.5 text-violet-100" />
-                  </div>
-                </div>
-                <p className="text-xl font-bold">{activeCustomers}</p>
-                <span className="text-[9px] text-violet-100">Starter · Pro · Enterprise</span>
-              </div>
-
-              {/* Attention */}
-              <div className={`rounded-2xl p-4 text-white shadow-lg ${attentionCount > 0 ? "bg-gradient-to-br from-rose-500 to-rose-700 shadow-rose-200" : "bg-gradient-to-br from-slate-600 to-slate-800 shadow-slate-200"}`}>
-                <div className="flex items-center justify-between mb-2">
-                  <p className="text-rose-100 text-[9px] font-bold uppercase tracking-wider leading-tight">Perlu Perhatian</p>
-                  <div className="w-7 h-7 rounded-lg bg-white/10 flex items-center justify-center shrink-0">
-                    <AlertCircle className="w-3.5 h-3.5 text-rose-100" />
-                  </div>
-                </div>
-                <p className="text-xl font-bold">{attentionCount}</p>
-                <span className="text-[9px] text-rose-100">{attentionCount > 0 ? "perlu tindakan" : "semua baik"}</span>
-              </div>
-            </div>
-
-            {/* ── SECOND ROW CARDS ── */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {/* AI Usage */}
-              <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
-                <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center space-x-2">
-                    <div className="w-8 h-8 rounded-xl bg-amber-50 flex items-center justify-center">
-                      <Brain className="w-4 h-4 text-amber-500" />
-                    </div>
-                    <p className="text-xs font-bold text-slate-700">Penggunaan AI</p>
-                  </div>
-                  <span className="text-[10px] text-slate-400">Bulan ini</span>
-                </div>
-                <p className="text-2xl font-bold text-slate-900">2,847</p>
-                <p className="text-xs text-slate-400 mb-3">panggilan daripada 10,000</p>
-                <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
-                  <div className="bg-gradient-to-r from-amber-400 to-amber-500 h-2 rounded-full" style={{ width: "28.5%" }} />
-                </div>
-                <p className="text-[10px] text-slate-400 mt-1.5 text-right">28.5% digunakan</p>
-              </div>
-
-              {/* Storage */}
-              <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
-                <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center space-x-2">
-                    <div className="w-8 h-8 rounded-xl bg-blue-50 flex items-center justify-center">
-                      <HardDrive className="w-4 h-4 text-blue-500" />
-                    </div>
-                    <p className="text-xs font-bold text-slate-700">Storan</p>
-                  </div>
-                  <span className="text-[10px] text-slate-400">Semua pelanggan</span>
-                </div>
-                <p className="text-2xl font-bold text-slate-900">18.4 GB</p>
-                <p className="text-xs text-slate-400 mb-3">daripada 135 GB diperuntukkan</p>
-                <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
-                  <div className="bg-gradient-to-r from-blue-400 to-blue-500 h-2 rounded-full" style={{ width: "13.6%" }} />
-                </div>
-                <p className="text-[10px] text-slate-400 mt-1.5 text-right">13.6% digunakan</p>
-              </div>
-
-              {/* Demo Accounts */}
-              <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
-                <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center space-x-2">
-                    <div className="w-8 h-8 rounded-xl bg-violet-50 flex items-center justify-center">
-                      <PlayCircle className="w-4 h-4 text-violet-500" />
-                    </div>
-                    <p className="text-xs font-bold text-slate-700">Akaun Demo</p>
-                  </div>
-                  <button onClick={() => setActivePage("demos")} className="text-[10px] text-indigo-500 font-semibold hover:text-indigo-700 cursor-pointer">Lihat semua</button>
-                </div>
-                <p className="text-2xl font-bold text-slate-900">{demos.length}</p>
-                <p className="text-xs text-slate-400 mb-3">{demos.filter(d => d.status === "active").length} aktif sekarang</p>
-                <div className="space-y-1.5">
-                  {demos.slice(0, 2).map(d => (
-                    <div key={d.id} className="flex items-center justify-between">
-                      <span className="text-[11px] text-slate-600 truncate max-w-[160px]">{d.name}</span>
-                      <StatusBadge status={d.status} />
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            {/* ── BOTTOM ROW ── */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* Customers Requiring Attention */}
-              <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-sm font-bold text-slate-900 flex items-center space-x-2">
-                    <AlertCircle className="w-4 h-4 text-rose-500" />
-                    <span>Perlu Perhatian</span>
-                  </h3>
-                  <button onClick={() => setActivePage("customers")} className="text-[10px] text-indigo-500 font-semibold hover:text-indigo-700 cursor-pointer">Lihat semua →</button>
-                </div>
-                {customers.filter(c => c.attention).length === 0 ? (
-                  <div className="py-6 text-center">
-                    <CheckCircle2 className="w-8 h-8 text-emerald-400 mx-auto mb-2" />
-                    <p className="text-xs text-slate-500">Semua pelanggan baik</p>
+                {/* Owner metrics */}
+                {!isStaff ? (
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                    <MetricCard label="Pelanggan Aktif"   value={activeCount}           sub={`${customers.length} jumlah`}      icon={Users}    color="teal"    trend="up" />
+                    <MetricCard label="Hasil Bulanan"     value={`RM ${totalMRR.toLocaleString()}`} sub="MRR semasa"              icon={DollarSign} color="emerald" trend="up" />
+                    <MetricCard label="Kes Sokongan"      value={openCases}             sub="perlu tindakan"                    icon={Headphones} color="amber" />
+                    <MetricCard label="Penggunaan AI"     value={`${totalAI.toLocaleString()} kredit`} sub="bulan ini"          icon={Zap}      color="violet" />
+                    <MetricCard label="Storan Digunakan"  value={`${customers.reduce((s,c)=>s+c.storageGB,0).toFixed(1)} GB`} sub="jumlah" icon={HardDrive} color="slate" />
+                    <MetricCard label="Akun Perlu Perhatian" value={customers.filter(c=>c.attention).length} sub="semak segera" icon={AlertCircle} color="red" />
                   </div>
                 ) : (
-                  <div className="space-y-2">
-                    {customers.filter(c => c.attention).map(c => (
-                      <div key={c.id} className="flex items-center justify-between p-3 bg-rose-50 border border-rose-100 rounded-xl">
-                        <div>
-                          <p className="text-xs font-semibold text-slate-800">{c.name}</p>
-                          <p className="text-[10px] text-rose-500">Kredit hampir habis · {c.lastActivity}</p>
+                  <div className="grid grid-cols-2 gap-3">
+                    <MetricCard label="Pelanggan Aktif"    value={activeCount}  sub="memerlukan sokongan"     icon={Users}      color="teal" />
+                    <MetricCard label="Kes Terbuka"        value={openCases}    sub="perlu tindakan segera"   icon={Headphones} color="amber" />
+                    <MetricCard label="Perlu Aktifkan"     value={customers.filter(c=>c.status==="suspended").length} sub="akaun digantung" icon={UserCheck} color="red" />
+                    <MetricCard label="Perlu Perhatian"    value={customers.filter(c=>c.attention).length} sub="semak butiran" icon={AlertTriangle} color="violet" />
+                  </div>
+                )}
+
+                {/* Recent customers */}
+                <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+                  <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
+                    <h3 className="text-sm font-bold text-slate-900">{isStaff ? "Pelanggan Perlu Perhatian" : "Pelanggan Terkini"}</h3>
+                    <button onClick={() => setActivePage("customers")} className="text-xs text-teal-700 font-semibold hover:text-teal-900 cursor-pointer">Lihat semua →</button>
+                  </div>
+                  {customers.length === 0 ? (
+                    <div className="p-10 text-center">
+                      <Users className="w-8 h-8 text-slate-200 mx-auto mb-2" />
+                      <p className="text-xs text-slate-400">Tiada pelanggan lagi</p>
+                    </div>
+                  ) : (
+                    <div className="divide-y divide-slate-50">
+                      {(isStaff ? customers.filter(c => c.attention || c.status === "suspended") : customers).slice(0, 4).map(c => (
+                        <div key={c.id} className="px-5 py-3.5 flex items-center space-x-4 hover:bg-slate-50 transition">
+                          <div className="w-8 h-8 rounded-xl bg-teal-50 flex items-center justify-center text-teal-700 font-bold text-sm shrink-0">
+                            {c.name.charAt(0)}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-semibold text-slate-800 truncate">{c.name}</p>
+                            <p className="text-[11px] text-slate-400">{c.plan} · Perbaharui {c.renewal}</p>
+                          </div>
+                          <StatusBadge status={c.status} />
+                          <button onClick={() => setActivePage("customers")} className="text-slate-300 hover:text-teal-600 transition cursor-pointer">
+                            <ChevronRight className="w-4 h-4" />
+                          </button>
                         </div>
-                        <button
-                          onClick={() => { setSelectedCustomer(c); setActivePage("customers"); }}
-                          className="px-3 py-1 bg-rose-500 text-white rounded-lg text-[10px] font-bold hover:bg-rose-600 transition cursor-pointer"
-                        >
-                          Tindakan
-                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Open support tickets */}
+                {tickets.length > 0 && (
+                  <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+                    <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
+                      <h3 className="text-sm font-bold text-slate-900">Kes Sokongan Terbuka</h3>
+                      <button onClick={() => setActivePage("support")} className="text-xs text-teal-700 font-semibold hover:text-teal-900 cursor-pointer">Urus →</button>
+                    </div>
+                    <div className="divide-y divide-slate-50">
+                      {tickets.filter(t => t.status !== "resolved").map(t => (
+                        <div key={t.id} className="px-5 py-4 space-y-1">
+                          <div className="flex items-center justify-between">
+                            <p className="text-xs font-bold text-slate-800">{t.id} — {t.subject}</p>
+                            <StatusBadge status={t.priority} />
+                          </div>
+                          <p className="text-xs text-slate-500">{t.customer}</p>
+                          <p className="text-[11px] text-slate-400 bg-slate-50 rounded-lg px-3 py-2 border border-slate-100">
+                            🤖 AI: {t.summary}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Quick Actions */}
+                {!isStaff && (
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    {[
+                      { label: "Tambah Pelanggan", icon: Plus,       page: "customers" as HQPage,  color: "bg-teal-700 text-white" },
+                      { label: "Urus Sokongan",    icon: Headphones, page: "support" as HQPage,    color: "bg-white border border-slate-200 text-slate-700" },
+                      { label: "Semak Penggunaan", icon: Activity,   page: "usage" as HQPage,      color: "bg-white border border-slate-200 text-slate-700" },
+                      { label: "Urus Plan",        icon: Package,    page: "billing" as HQPage,    color: "bg-white border border-slate-200 text-slate-700" },
+                    ].map(({ label, icon: Icon, page, color }) => (
+                      <button key={label} onClick={() => setActivePage(page)}
+                        className={`flex items-center space-x-2 px-4 py-3 rounded-xl text-xs font-bold shadow-sm transition cursor-pointer ${color}`}>
+                        <Icon className="w-4 h-4 shrink-0" /><span>{label}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* ════ CUSTOMERS ════ */}
+            {activePage === "customers" && (
+              <div className="space-y-4" id="hq_customers">
+                <div className="flex items-center justify-between">
+                  <h1 className="text-xl font-bold text-slate-900">Pelanggan</h1>
+                  <div className="flex items-center gap-2">
+                    <div className="relative">
+                      <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                      <input type="text" value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
+                        placeholder="Cari pelanggan..."
+                        className="pl-8 pr-3 py-2 text-xs border border-slate-200 rounded-xl outline-none focus:border-teal-400 bg-white w-44" />
+                    </div>
+                    <button className="flex items-center space-x-1.5 px-3 py-2 bg-teal-700 hover:bg-teal-800 text-white rounded-xl text-xs font-bold transition cursor-pointer shadow-sm">
+                      <Plus className="w-3.5 h-3.5" /><span>Tambah</span>
+                    </button>
+                  </div>
+                </div>
+
+                {customers.length === 0 ? (
+                  <div className="bg-white border border-slate-200 rounded-2xl p-16 text-center shadow-sm">
+                    <Building2 className="w-10 h-10 text-slate-200 mx-auto mb-3" />
+                    <p className="text-sm font-semibold text-slate-500">Tiada pelanggan lagi</p>
+                    <p className="text-xs text-slate-400 mt-1">Pelanggan yang mendaftar akan muncul di sini</p>
+                    <button className="mt-4 px-5 py-2.5 bg-teal-700 text-white rounded-xl text-xs font-bold cursor-pointer hover:bg-teal-800 transition">
+                      Tambah Pelanggan Pertama
+                    </button>
+                  </div>
+                ) : (
+                  <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+                    {/* Table header */}
+                    <div className="grid grid-cols-12 px-5 py-3 bg-slate-50 border-b border-slate-100 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                      <div className="col-span-4">Pelanggan</div>
+                      <div className="col-span-2">Plan</div>
+                      <div className="col-span-2">Status</div>
+                      <div className="col-span-2 hidden md:block">Perbaharui</div>
+                      <div className="col-span-2">Tindakan</div>
+                    </div>
+                    {customers
+                      .filter(c => !searchQuery || c.name.toLowerCase().includes(searchQuery.toLowerCase()))
+                      .map(c => (
+                        <div key={c.id} className="grid grid-cols-12 px-5 py-4 border-b border-slate-50 hover:bg-slate-50 transition items-center">
+                          <div className="col-span-4 flex items-center space-x-3">
+                            <div className="w-8 h-8 rounded-xl bg-teal-50 text-teal-700 font-bold text-sm flex items-center justify-center shrink-0">
+                              {c.name.charAt(0)}
+                            </div>
+                            <div className="min-w-0">
+                              <p className="text-xs font-semibold text-slate-800 truncate">{c.name}</p>
+                              {c.attention && <span className="text-[9px] text-amber-600 font-bold bg-amber-50 px-1.5 py-0.5 rounded-full">Perlu Perhatian</span>}
+                            </div>
+                          </div>
+                          <div className="col-span-2">
+                            <span className="text-xs font-semibold text-slate-600">{c.plan}</span>
+                          </div>
+                          <div className="col-span-2">
+                            <StatusBadge status={c.status} />
+                          </div>
+                          <div className="col-span-2 hidden md:block">
+                            <span className="text-xs text-slate-500">{c.renewal}</span>
+                          </div>
+                          <div className="col-span-2 flex items-center gap-1.5">
+                            <button className="px-2.5 py-1.5 bg-teal-50 hover:bg-teal-100 text-teal-700 rounded-lg text-[10px] font-bold cursor-pointer transition">Buka</button>
+                            {c.status === "suspended" ? (
+                              <button className="px-2.5 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded-lg text-[10px] font-bold cursor-pointer transition">Aktif</button>
+                            ) : (
+                              <button className="px-2.5 py-1.5 bg-slate-50 hover:bg-red-50 text-slate-500 hover:text-red-600 rounded-lg text-[10px] font-bold cursor-pointer transition">Gantung</button>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* ════ BILLING (HQ_OWNER only) ════ */}
+            {activePage === "billing" && !isStaff && (
+              <div className="space-y-5" id="hq_billing">
+                <h1 className="text-xl font-bold text-slate-900">Pengebilan</h1>
+
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                  <MetricCard label="Hasil Bulan Ini"     value={`RM ${totalMRR.toLocaleString()}`} icon={DollarSign} color="emerald" trend="up" />
+                  <MetricCard label="Perbaharui Minggu Ini" value="2"                               icon={RefreshCw}  color="amber" />
+                  <MetricCard label="Akaun Tertunggak"    value="1"                                 icon={AlertCircle} color="red" />
+                </div>
+
+                {/* Plans */}
+                <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-sm font-bold text-slate-900">Plan Semasa</h3>
+                    <button className="flex items-center space-x-1 px-3 py-2 bg-teal-700 text-white rounded-xl text-xs font-bold cursor-pointer hover:bg-teal-800 transition">
+                      <Plus className="w-3.5 h-3.5" /><span>Cipta Plan</span>
+                    </button>
+                  </div>
+                  <div className="grid md:grid-cols-3 gap-3">
+                    {plans.map(p => (
+                      <div key={p.id} className="border border-slate-200 rounded-2xl p-4 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="font-bold text-slate-900">{p.name}</span>
+                          <span className="text-xs text-teal-700 font-bold bg-teal-50 px-2 py-0.5 rounded-full">{p.customers} pelanggan</span>
+                        </div>
+                        <p className="text-2xl font-bold text-slate-900">RM {p.price}<span className="text-xs text-slate-400 font-normal">/bln</span></p>
+                        <div className="text-[11px] text-slate-400 space-y-0.5">
+                          <p>AI: {p.aiCredits.toLocaleString()} kredit</p>
+                          <p>Storan: {p.storage}</p>
+                        </div>
+                        <div className="flex gap-2 pt-1">
+                          <button className="flex-1 py-1.5 border border-slate-200 rounded-lg text-[10px] font-bold text-slate-600 cursor-pointer hover:bg-slate-50 transition">Edit</button>
+                          <button className="flex-1 py-1.5 bg-teal-50 border border-teal-100 rounded-lg text-[10px] font-bold text-teal-700 cursor-pointer hover:bg-teal-100 transition">Paket Kredit</button>
+                        </div>
+                      </div>
+                    ))}
+                    {plans.length === 0 && (
+                      <div className="col-span-3 py-10 text-center">
+                        <Package className="w-8 h-8 text-slate-200 mx-auto mb-2" />
+                        <p className="text-xs text-slate-400">Tiada plan lagi</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Invoices */}
+                <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-3">
+                  <h3 className="text-sm font-bold text-slate-900">Invois Terkini</h3>
+                  <div className="text-center py-6">
+                    <Receipt className="w-7 h-7 text-slate-200 mx-auto mb-2" />
+                    <p className="text-xs text-slate-400">Tiada invois lagi</p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* ════ USAGE (HQ_OWNER only) ════ */}
+            {activePage === "usage" && !isStaff && (
+              <div className="space-y-5" id="hq_usage">
+                <h1 className="text-xl font-bold text-slate-900">Penggunaan Platform</h1>
+
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                  <MetricCard label="Jumlah Kredit AI"  value={totalAI.toLocaleString()}      sub="semua pelanggan bulan ini" icon={Zap}      color="amber" />
+                  <MetricCard label="Jumlah Storan"     value={`${customers.reduce((s,c)=>s+c.storageGB,0).toFixed(1)} GB`} sub="digunakan" icon={HardDrive} color="slate" />
+                  <MetricCard label="OCR Digunakan"     value="—"                              sub="belum diaktifkan"          icon={Brain}    color="violet" />
+                </div>
+
+                {/* Top usage customers */}
+                <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+                  <div className="px-5 py-4 border-b border-slate-100">
+                    <h3 className="text-sm font-bold text-slate-900">Pelanggan Penggunaan Tertinggi</h3>
+                    <p className="text-[11px] text-slate-400 mt-0.5">Pantau untuk elak kerugian kos</p>
+                  </div>
+                  {customers.length === 0 ? (
+                    <div className="p-8 text-center"><p className="text-xs text-slate-400">Tiada data penggunaan</p></div>
+                  ) : (
+                    <div className="divide-y divide-slate-50">
+                      {[...customers].sort((a, b) => b.aiUsage - a.aiUsage).map(c => (
+                        <div key={c.id} className="px-5 py-3.5 flex items-center space-x-4">
+                          <div className="w-7 h-7 rounded-lg bg-teal-50 text-teal-700 font-bold text-xs flex items-center justify-center shrink-0">
+                            {c.name.charAt(0)}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs font-semibold text-slate-800 truncate">{c.name}</p>
+                            <div className="mt-1 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                              <div className="h-full bg-amber-400 rounded-full" style={{ width: `${Math.min((c.aiUsage / 1000) * 100, 100)}%` }} />
+                            </div>
+                          </div>
+                          <div className="text-right shrink-0">
+                            <p className="text-xs font-bold text-slate-700">{c.aiUsage} kredit</p>
+                            <p className="text-[10px] text-slate-400">{c.storageGB} GB storan</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* ════ SUPPORT ════ */}
+            {activePage === "support" && (
+              <div className="space-y-4" id="hq_support">
+                <h1 className="text-xl font-bold text-slate-900">Sokongan Pelanggan</h1>
+
+                {/* Status filter tabs */}
+                <div className="flex gap-2">
+                  {["Semua", "Terbuka", "Dalam Proses", "Selesai"].map(f => (
+                    <button key={f} className={`px-3 py-1.5 rounded-xl text-xs font-bold cursor-pointer transition ${f === "Semua" ? "bg-teal-700 text-white" : "bg-white border border-slate-200 text-slate-600 hover:border-teal-300"}`}>
+                      {f}
+                    </button>
+                  ))}
+                </div>
+
+                {tickets.length === 0 ? (
+                  <div className="bg-white border border-slate-200 rounded-2xl p-16 text-center shadow-sm">
+                    <Headphones className="w-10 h-10 text-slate-200 mx-auto mb-3" />
+                    <p className="text-sm font-semibold text-slate-500">Tiada kes sokongan</p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {tickets.map(t => (
+                      <div key={t.id} className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-3">
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <div className="flex items-center space-x-2">
+                              <span className="text-[10px] font-bold text-teal-700 bg-teal-50 px-2 py-0.5 rounded-full">{t.id}</span>
+                              <StatusBadge status={t.status} />
+                              <StatusBadge status={t.priority} />
+                            </div>
+                            <p className="text-sm font-bold text-slate-900 mt-1.5">{t.subject}</p>
+                            <p className="text-xs text-slate-500">{t.customer}</p>
+                          </div>
+                          <span className="text-[11px] text-slate-400 shrink-0">Ditugaskan: {t.assigned}</span>
+                        </div>
+
+                        {/* AI Summary */}
+                        <div className="flex items-start space-x-2.5 p-3 bg-teal-50 border border-teal-100 rounded-xl">
+                          <Brain className="w-4 h-4 text-teal-600 shrink-0 mt-0.5" />
+                          <div>
+                            <p className="text-[10px] font-bold text-teal-700 mb-1">Ringkasan AI</p>
+                            <p className="text-xs text-teal-800 leading-relaxed">{t.summary}</p>
+                          </div>
+                        </div>
+
+                        {/* Reply form */}
+                        {replyTicket === t.id ? (
+                          <div className="space-y-2">
+                            <textarea value={replyText} onChange={e => setReplyText(e.target.value)}
+                              placeholder="Taip jawapan anda..."
+                              rows={3}
+                              className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-xs outline-none focus:border-teal-400 bg-white resize-none" />
+                            <div className="flex gap-2">
+                              <button onClick={() => { setReplyTicket(null); setReplyText(""); }}
+                                className="flex-1 py-2 border border-slate-200 text-slate-600 rounded-xl text-xs font-bold cursor-pointer hover:bg-slate-50 transition">
+                                Batal
+                              </button>
+                              <button className="flex-1 py-2 bg-teal-700 text-white rounded-xl text-xs font-bold cursor-pointer hover:bg-teal-800 transition">
+                                Hantar Jawapan
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-2">
+                            <button onClick={() => setReplyTicket(t.id)}
+                              className="px-3 py-2 bg-teal-700 hover:bg-teal-800 text-white rounded-xl text-xs font-bold cursor-pointer transition">
+                              Balas
+                            </button>
+                            <button className="px-3 py-2 border border-slate-200 text-slate-600 rounded-xl text-xs font-bold cursor-pointer hover:bg-slate-50 transition">
+                              Tugaskan
+                            </button>
+                            {t.status !== "resolved" && (
+                              <button className="px-3 py-2 bg-emerald-50 border border-emerald-100 text-emerald-700 rounded-xl text-xs font-bold cursor-pointer transition">
+                                Tandakan Selesai
+                              </button>
+                            )}
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>
                 )}
               </div>
+            )}
 
-              {/* Recent Activity */}
-              <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-sm font-bold text-slate-900 flex items-center space-x-2">
-                    <Clock className="w-4 h-4 text-slate-400" />
-                    <span>Aktiviti Terkini</span>
-                  </h3>
+            {/* ════ SUBSCRIPTIONS (HQ_STAFF only) ════ */}
+            {activePage === "subscriptions" && isStaff && (
+              <div className="space-y-4" id="hq_subscriptions">
+                <h1 className="text-xl font-bold text-slate-900">Langganan</h1>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <MetricCard label="Perbaharui Minggu Ini" value="2"           icon={RefreshCw}  color="amber" />
+                  <MetricCard label="Akaun Digantung"       value={customers.filter(c=>c.status==="suspended").length} icon={UserX} color="red" />
                 </div>
-                <div className="space-y-3">
-                  {activity.map(a => (
-                    <div key={a.id} className="flex items-start space-x-3">
-                      <div className={`w-2 h-2 rounded-full mt-1.5 shrink-0 ${
-                        a.color === "emerald" ? "bg-emerald-400" :
-                        a.color === "amber" ? "bg-amber-400" :
-                        a.color === "rose" ? "bg-rose-400" : "bg-indigo-400"
-                      }`} />
-                      <div>
-                        <p className="text-xs text-slate-700">{a.text}</p>
-                        <p className="text-[10px] text-slate-400 mt-0.5">{a.time}</p>
+
+                <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+                  <div className="px-5 py-4 border-b border-slate-100">
+                    <h3 className="text-sm font-bold text-slate-900">Semua Langganan</h3>
+                  </div>
+                  {customers.length === 0 ? (
+                    <div className="p-10 text-center"><p className="text-xs text-slate-400">Tiada langganan</p></div>
+                  ) : (
+                    <div className="divide-y divide-slate-50">
+                      {customers.map(c => (
+                        <div key={c.id} className="px-5 py-4 flex items-center space-x-4">
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-semibold text-slate-800 truncate">{c.name}</p>
+                            <p className="text-[11px] text-slate-400">{c.plan} · Perbaharui {c.renewal}</p>
+                          </div>
+                          <StatusBadge status={c.status} />
+                          <div className="flex gap-1.5">
+                            <button className="px-2.5 py-1.5 bg-teal-50 text-teal-700 rounded-lg text-[10px] font-bold cursor-pointer hover:bg-teal-100 transition">Perbaharui</button>
+                            <button className="px-2.5 py-1.5 bg-slate-50 text-slate-600 rounded-lg text-[10px] font-bold cursor-pointer hover:bg-slate-100 transition">Naik Taraf</button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* ════ REVENUE (HQ_OWNER only) ════ */}
+            {activePage === "revenue" && !isStaff && (
+              <div className="space-y-5" id="hq_revenue">
+                <h1 className="text-xl font-bold text-slate-900">Hasil & Keuntungan</h1>
+
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                  <MetricCard label="Hasil Bulan Ini"  value={`RM ${totalMRR.toLocaleString()}`} icon={DollarSign} color="emerald" trend="up" />
+                  <MetricCard label="Kos AI"           value="RM —"    sub="anggaran"   icon={Zap}        color="amber" />
+                  <MetricCard label="Kos Storan"       value="RM —"    sub="anggaran"   icon={HardDrive}  color="slate" />
+                  <MetricCard label="Keuntungan Kasar" value="RM —"    sub="anggaran"   icon={TrendingUp} color="teal" trend="up" />
+                  <MetricCard label="MRR"              value={`RM ${totalMRR.toLocaleString()}`} sub="Recurring Revenue" icon={RefreshCw} color="violet" />
+                  <MetricCard label="Kos OCR"          value="RM —"    sub="anggaran"   icon={Brain}      color="slate" />
+                </div>
+
+                {/* Revenue by plan */}
+                <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-4">
+                  <h3 className="text-sm font-bold text-slate-900">Hasil Mengikut Plan</h3>
+                  {plans.map(p => {
+                    const rev = customers.filter(c => c.plan === p.name && c.status === "active").length * p.price;
+                    return (
+                      <div key={p.id} className="flex items-center space-x-4">
+                        <span className="text-xs font-semibold text-slate-700 w-24 shrink-0">{p.name}</span>
+                        <div className="flex-1 h-2 bg-slate-100 rounded-full overflow-hidden">
+                          <div className="h-full bg-teal-500 rounded-full" style={{ width: `${totalMRR > 0 ? (rev/totalMRR)*100 : 0}%` }} />
+                        </div>
+                        <span className="text-xs font-bold text-slate-800 w-20 text-right shrink-0">RM {rev.toLocaleString()}</span>
+                      </div>
+                    );
+                  })}
+                  {plans.length === 0 && <p className="text-xs text-slate-400 text-center py-4">Tiada data lagi</p>}
+                </div>
+              </div>
+            )}
+
+            {/* ════ SETTINGS (HQ_OWNER only) ════ */}
+            {activePage === "settings" && !isStaff && (
+              <div className="space-y-5" id="hq_settings">
+                <h1 className="text-xl font-bold text-slate-900">Tetapan</h1>
+
+                {/* HQ Profile */}
+                <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-4">
+                  <h3 className="text-sm font-bold text-slate-900 flex items-center space-x-2">
+                    <Shield className="w-4 h-4 text-teal-600" /><span>Profil HQ</span>
+                  </h3>
+                  <div className="flex items-center space-x-4 p-4 bg-teal-50 rounded-xl border border-teal-100">
+                    <div className="w-12 h-12 rounded-2xl bg-teal-700 text-white flex items-center justify-center text-xl font-bold shadow">
+                      {user?.fullName?.charAt(0).toUpperCase() || "H"}
+                    </div>
+                    <div>
+                      <p className="font-bold text-slate-900">{user?.fullName || "HQ Owner"}</p>
+                      <p className="text-xs text-slate-500">{user?.email}</p>
+                      <span className="text-[10px] bg-teal-100 text-teal-800 font-bold px-2 py-0.5 rounded-full">HQ_OWNER</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* HQ Staff */}
+                <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-sm font-bold text-slate-900 flex items-center space-x-2">
+                      <Users className="w-4 h-4 text-teal-600" /><span>Kakitangan HQ</span>
+                    </h3>
+                    <button onClick={() => { setShowCreateStaff(v => !v); setStaffResult(null); }}
+                      className="flex items-center space-x-1.5 px-3 py-2 bg-teal-700 hover:bg-teal-800 text-white rounded-xl text-xs font-bold cursor-pointer transition">
+                      <Plus className="w-3.5 h-3.5" /><span>Tambah Staf</span>
+                    </button>
+                  </div>
+
+                  {showCreateStaff && (
+                    <div className="bg-teal-50 border border-teal-100 rounded-xl p-4 space-y-3">
+                      <p className="text-xs font-bold text-teal-800">Cipta Akaun HQ_STAFF</p>
+                      <input type="text" value={staffName} onChange={e => setStaffName(e.target.value)} placeholder="Nama penuh"
+                        className="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl focus:outline-none focus:border-teal-400 bg-white" />
+                      <input type="email" value={staffEmail} onChange={e => setStaffEmail(e.target.value)} placeholder="Email kakitangan"
+                        className="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl focus:outline-none focus:border-teal-400 bg-white" />
+                      <button onClick={handleCreateHQStaff} disabled={staffCreating || !staffEmail.trim() || !staffName.trim()}
+                        className="w-full py-2.5 bg-teal-700 hover:bg-teal-800 disabled:bg-slate-300 text-white rounded-xl text-xs font-bold cursor-pointer transition">
+                        {staffCreating ? "Mencipta..." : "Cipta Akaun"}
+                      </button>
+                      {staffResult && (
+                        <div className={`rounded-xl p-3 text-xs ${staffResult.success ? "bg-emerald-50 border border-emerald-200" : "bg-red-50 border border-red-200"}`}>
+                          <p className={`font-bold ${staffResult.success ? "text-emerald-700" : "text-red-700"}`}>{staffResult.success ? "✓ Berjaya!" : "✗ Gagal"}</p>
+                          <p className={staffResult.success ? "text-emerald-600" : "text-red-600"}>{staffResult.message}</p>
+                          {staffResult.tempPassword && (
+                            <div className="mt-2 p-2 bg-white border border-emerald-200 rounded-lg">
+                              <p className="text-[10px] text-slate-500 mb-0.5">Kata Laluan Sementara:</p>
+                              <p className="font-mono font-bold text-slate-900 select-all">{staffResult.tempPassword}</p>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  <div className="text-center py-4 bg-slate-50 rounded-xl">
+                    <Users className="w-6 h-6 text-slate-200 mx-auto mb-1" />
+                    <p className="text-xs text-slate-400">Hanya anda sebagai pentadbir HQ</p>
+                  </div>
+                </div>
+
+                {/* Notifications */}
+                <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-3">
+                  <h3 className="text-sm font-bold text-slate-900 flex items-center space-x-2">
+                    <Bell className="w-4 h-4 text-teal-600" /><span>Pemberitahuan</span>
+                  </h3>
+                  {[
+                    { label: "Pelanggan baru mendaftar",  on: true },
+                    { label: "Perbaharuan akan tamat",     on: true },
+                    { label: "Kes sokongan baharu",        on: true },
+                    { label: "Penggunaan tinggi dikesan",  on: false },
+                  ].map(({ label, on }) => (
+                    <div key={label} className="flex items-center justify-between py-2 border-b border-slate-50 last:border-0">
+                      <span className="text-xs text-slate-700">{label}</span>
+                      <div className={`w-9 h-5 rounded-full flex items-center px-0.5 cursor-pointer transition ${on ? "bg-teal-600 justify-end" : "bg-slate-200 justify-start"}`}>
+                        <div className="w-4 h-4 rounded-full bg-white shadow-sm" />
                       </div>
                     </div>
                   ))}
                 </div>
               </div>
-            </div>
-
-            {/* ── QUICK ACTIONS ── */}
-            <div className="bg-gradient-to-r from-slate-900 to-indigo-950 rounded-2xl p-5">
-              <p className="text-white font-bold text-sm mb-4">Tindakan Pantas</p>
-              <div className="flex flex-wrap gap-2">
-                {[
-                  { label: "Lihat Pelanggan", page: "customers" as HQPage, icon: Users, color: "bg-white/10 hover:bg-white/15" },
-                  { label: "Urus Plan", page: "plans" as HQPage, icon: CreditCard, color: "bg-indigo-600/40 hover:bg-indigo-600/60" },
-                  { label: "Semak Penggunaan", page: "usage" as HQPage, icon: BarChart3, color: "bg-white/10 hover:bg-white/15" },
-                  { label: "Buka Demo", page: "demos" as HQPage, icon: PlayCircle, color: "bg-white/10 hover:bg-white/15" },
-                  { label: "Lihat Hasil", page: "revenue" as HQPage, icon: DollarSign, color: "bg-white/10 hover:bg-white/15" },
-                ].map(({ label, page, icon: Icon, color }) => (
-                  <button
-                    key={page}
-                    onClick={() => setActivePage(page)}
-                    className={`flex items-center space-x-2 px-4 py-2.5 ${color} text-white rounded-xl text-xs font-semibold transition cursor-pointer`}
-                  >
-                    <Icon className="w-3.5 h-3.5" />
-                    <span>{label}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* ════ CUSTOMERS ════ */}
-        {activePage === "customers" && (
-          <div className="p-6 space-y-5" id="hq_customers">
-            <div className="flex items-center justify-between">
-              <div>
-                <h1 className="text-xl font-bold text-slate-900">Pelanggan</h1>
-                <p className="text-xs text-slate-500 mt-0.5">{customers.length} pelanggan berdaftar</p>
-              </div>
-              <div className="flex items-center gap-2">
-                <button className="flex items-center space-x-2 px-4 py-2 bg-white border border-slate-200 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-50 transition cursor-pointer shadow-sm">
-                  <Download className="w-3.5 h-3.5" />
-                  <span>Eksport</span>
-                </button>
-                <button className="flex items-center space-x-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 rounded-xl text-xs font-semibold text-white transition cursor-pointer shadow-sm">
-                  <Plus className="w-3.5 h-3.5" />
-                  <span>Tambah Pelanggan</span>
-                </button>
-              </div>
-            </div>
-
-            {/* Search + Filter */}
-            <div className="flex gap-2">
-              <div className="relative flex-1">
-                <Search className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" />
-                <input
-                  type="text"
-                  placeholder="Cari pelanggan..."
-                  value={searchQuery}
-                  onChange={e => setSearchQuery(e.target.value)}
-                  className="w-full pl-9 pr-4 py-2 bg-white border border-slate-200 rounded-xl text-xs focus:outline-none focus:border-indigo-400 shadow-sm"
-                />
-              </div>
-              <button className="flex items-center space-x-2 px-4 py-2 bg-white border border-slate-200 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-50 transition cursor-pointer shadow-sm">
-                <Filter className="w-3.5 h-3.5" />
-                <span>Filter</span>
-              </button>
-            </div>
-
-            {/* Customers List — mobile card, desktop table */}
-            <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
-              {/* Desktop header */}
-              <div className="hidden md:grid grid-cols-12 px-5 py-3 bg-slate-50 border-b border-slate-100 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                <div className="col-span-5">Nama Pelanggan</div>
-                <div className="col-span-2">Plan</div>
-                <div className="col-span-2">Status</div>
-                <div className="col-span-2">Aktiviti</div>
-                <div className="col-span-1" />
-              </div>
-              <div className="divide-y divide-slate-100">
-                {customers
-                  .filter(c => c.name.toLowerCase().includes(searchQuery.toLowerCase()))
-                  .map(c => (
-                  <div key={c.id} className={`p-4 hover:bg-slate-50/80 transition ${c.attention ? "border-l-4 border-rose-400" : ""}`}>
-                    {/* Mobile layout */}
-                    <div className="flex items-start justify-between md:hidden">
-                      <div className="flex items-center space-x-3 flex-1 min-w-0">
-                        <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-indigo-100 to-violet-100 flex items-center justify-center shrink-0">
-                          <span className="text-indigo-700 font-bold text-sm">{c.name.charAt(0)}</span>
-                        </div>
-                        <div className="min-w-0">
-                          <p className="text-xs font-semibold text-slate-900 truncate">{c.name}</p>
-                          <div className="flex items-center space-x-2 mt-1">
-                            <PlanBadge plan={c.plan} />
-                            <StatusBadge status={c.status} />
-                          </div>
-                          {c.attention && <p className="text-[10px] text-rose-500 mt-0.5 flex items-center space-x-1"><AlertCircle className="w-3 h-3 shrink-0" /><span>Perlu perhatian</span></p>}
-                        </div>
-                      </div>
-                      <div className="text-right shrink-0 ml-2">
-                        <p className="text-[10px] text-slate-400">{c.lastActivity}</p>
-                        <p className="text-[10px] text-slate-500 mt-0.5">{c.companies} syarikat</p>
-                      </div>
-                    </div>
-                    {/* Desktop layout */}
-                    <div className="hidden md:grid grid-cols-12 items-center">
-                      <div className="col-span-5 flex items-center space-x-3">
-                        <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-indigo-100 to-violet-100 flex items-center justify-center shrink-0">
-                          <span className="text-indigo-700 font-bold text-xs">{c.name.charAt(0)}</span>
-                        </div>
-                        <div>
-                          <p className="text-xs font-semibold text-slate-900">{c.name}</p>
-                          {c.attention && <p className="text-[10px] text-rose-500 flex items-center space-x-1"><AlertCircle className="w-3 h-3" /><span>Perlu perhatian</span></p>}
-                        </div>
-                      </div>
-                      <div className="col-span-2"><PlanBadge plan={c.plan} /></div>
-                      <div className="col-span-2"><StatusBadge status={c.status} /></div>
-                      <div className="col-span-2 text-[11px] text-slate-400">{c.lastActivity}</div>
-                      <div className="col-span-1 flex justify-end">
-                        <button className="p-1.5 rounded-lg hover:bg-slate-100 transition cursor-pointer text-slate-400 hover:text-indigo-600">
-                          <ChevronRight className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* ════ PLANS ════ */}
-        {activePage === "plans" && (
-          <div className="p-6 space-y-5" id="hq_plans">
-            <div className="flex items-center justify-between">
-              <div>
-                <h1 className="text-xl font-bold text-slate-900">Plan Langganan</h1>
-                <p className="text-xs text-slate-500 mt-0.5">{plans.length} plan aktif</p>
-              </div>
-              <button className="flex items-center space-x-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 rounded-xl text-xs font-semibold text-white transition cursor-pointer shadow-sm">
-                <Plus className="w-3.5 h-3.5" />
-                <span>Tambah Plan</span>
-              </button>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-              {plans.map(plan => {
-                const gradients: Record<string, string> = {
-                  emerald: "from-emerald-500 to-emerald-700",
-                  indigo: "from-indigo-500 to-indigo-700",
-                  violet: "from-violet-500 to-violet-700",
-                };
-                const borders: Record<string, string> = {
-                  emerald: "border-emerald-200",
-                  indigo: "border-indigo-200",
-                  violet: "border-violet-200",
-                };
-                return (
-                  <div key={plan.id} className={`bg-white border ${borders[plan.color]} rounded-2xl overflow-hidden shadow-sm`}>
-                    <div className={`bg-gradient-to-br ${gradients[plan.color]} p-5 text-white`}>
-                      <p className="text-xs font-bold opacity-80 uppercase tracking-wider mb-1">{plan.name}</p>
-                      <p className="text-3xl font-bold">RM {plan.price}</p>
-                      <p className="text-xs opacity-70">/ bulan</p>
-                    </div>
-                    <div className="p-5 space-y-3">
-                      <div className="flex items-center justify-between text-xs">
-                        <span className="text-slate-500">Kredit AI</span>
-                        <span className="font-semibold text-slate-800">{plan.ai}</span>
-                      </div>
-                      <div className="flex items-center justify-between text-xs">
-                        <span className="text-slate-500">Storan</span>
-                        <span className="font-semibold text-slate-800">{plan.storage}</span>
-                      </div>
-                      <div className="flex items-center justify-between text-xs">
-                        <span className="text-slate-500">Pelanggan Aktif</span>
-                        <span className="font-bold text-slate-900">{plan.customers} pelanggan</span>
-                      </div>
-                      <div className="border-t border-slate-100 pt-3 flex gap-2">
-                        <button className="flex-1 py-2 border border-slate-200 rounded-xl text-[10px] font-bold text-slate-600 hover:bg-slate-50 transition cursor-pointer flex items-center justify-center space-x-1">
-                          <Edit3 className="w-3 h-3" /><span>Edit</span>
-                        </button>
-                        <button className="flex-1 py-2 border border-slate-200 rounded-xl text-[10px] font-bold text-slate-600 hover:bg-slate-50 transition cursor-pointer flex items-center justify-center space-x-1">
-                          <Copy className="w-3 h-3" /><span>Duplikat</span>
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
-
-        {/* ════ USAGE ════ */}
-        {activePage === "usage" && (
-          <div className="p-6 space-y-5" id="hq_usage">
-            <div className="flex items-center justify-between">
-              <div>
-                <h1 className="text-xl font-bold text-slate-900">Penggunaan Platform</h1>
-                <p className="text-xs text-slate-500 mt-0.5">Pantau penggunaan sumber semua pelanggan</p>
-              </div>
-              <div className="flex gap-2">
-                <button className="flex items-center space-x-2 px-4 py-2 bg-white border border-slate-200 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-50 transition cursor-pointer shadow-sm">
-                  <Filter className="w-3.5 h-3.5" />
-                  <span>Filter</span>
-                </button>
-                <button className="flex items-center space-x-2 px-4 py-2 bg-white border border-slate-200 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-50 transition cursor-pointer shadow-sm">
-                  <Download className="w-3.5 h-3.5" />
-                  <span>Eksport</span>
-                </button>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {[
-                { label: "Penggunaan AI", value: "2,847", max: "10,000", pct: 28.5, icon: Brain, color: "amber", unit: "panggilan" },
-                { label: "Penggunaan OCR", value: "412", max: "2,000", pct: 20.6, icon: Sparkles, color: "violet", unit: "dokumen" },
-                { label: "Storan Digunakan", value: "18.4 GB", max: "135 GB", pct: 13.6, icon: HardDrive, color: "blue", unit: "" },
-              ].map(({ label, value, max, pct, icon: Icon, color, unit }) => (
-                <div key={label} className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
-                  <div className="flex items-center space-x-3 mb-4">
-                    <div className={`w-9 h-9 rounded-xl bg-${color}-50 flex items-center justify-center`}>
-                      <Icon className={`w-4.5 h-4.5 text-${color}-500`} />
-                    </div>
-                    <p className="text-xs font-bold text-slate-700">{label}</p>
-                  </div>
-                  <p className="text-2xl font-bold text-slate-900">{value}</p>
-                  <p className="text-[10px] text-slate-400 mb-3">daripada {max} {unit}</p>
-                  <div className="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden">
-                    <div className={`bg-${color}-400 h-2.5 rounded-full`} style={{ width: `${pct}%` }} />
-                  </div>
-                  <p className="text-[10px] text-slate-400 mt-1.5 text-right">{pct}% digunakan</p>
-                </div>
-              ))}
-            </div>
-
-            {/* High Usage Table */}
-            <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
-              <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
-                <h3 className="text-sm font-bold text-slate-900">Pelanggan Penggunaan Tinggi</h3>
-                <button className="text-xs text-indigo-500 font-semibold hover:text-indigo-700 cursor-pointer">Lihat semua</button>
-              </div>
-              <div className="grid grid-cols-12 px-5 py-3 bg-slate-50 border-b border-slate-100 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                <div className="col-span-4">Pelanggan</div>
-                <div className="col-span-2">Plan</div>
-                <div className="col-span-3">Penggunaan AI</div>
-                <div className="col-span-3">Storan</div>
-              </div>
-              {[
-                { name: "TechVenture Solutions MY", plan: "Enterprise", ai: 92, storage: 78 },
-                { name: "Syarikat Binaan Teguh MY", plan: "Pro", ai: 78, storage: 45 },
-                { name: "Kedai Makan Pak Ali Sdn Bhd", plan: "Starter", ai: 65, storage: 30 },
-              ].map((c, i) => (
-                <div key={i} className="grid grid-cols-12 px-5 py-3.5 items-center border-b border-slate-50 hover:bg-slate-50 transition">
-                  <div className="col-span-4 text-xs font-semibold text-slate-800">{c.name}</div>
-                  <div className="col-span-2"><PlanBadge plan={c.plan} /></div>
-                  <div className="col-span-3">
-                    <div className="flex items-center space-x-2">
-                      <div className="flex-1 bg-slate-100 h-1.5 rounded-full overflow-hidden">
-                        <div className={`h-1.5 rounded-full ${c.ai > 80 ? "bg-rose-400" : "bg-amber-400"}`} style={{ width: `${c.ai}%` }} />
-                      </div>
-                      <span className="text-[10px] text-slate-500 w-8">{c.ai}%</span>
-                    </div>
-                  </div>
-                  <div className="col-span-3">
-                    <div className="flex items-center space-x-2">
-                      <div className="flex-1 bg-slate-100 h-1.5 rounded-full overflow-hidden">
-                        <div className="bg-blue-400 h-1.5 rounded-full" style={{ width: `${c.storage}%` }} />
-                      </div>
-                      <span className="text-[10px] text-slate-500 w-8">{c.storage}%</span>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* ════ DEMOS ════ */}
-        {activePage === "demos" && (
-          <div className="p-6 space-y-5" id="hq_demos">
-            <div className="flex items-center justify-between">
-              <div>
-                <h1 className="text-xl font-bold text-slate-900">Akaun Demo</h1>
-                <p className="text-xs text-slate-500 mt-0.5">{demos.length} akaun demo · {demos.filter(d => d.status === "active").length} aktif</p>
-              </div>
-              <button className="flex items-center space-x-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 rounded-xl text-xs font-semibold text-white transition cursor-pointer shadow-sm">
-                <Plus className="w-3.5 h-3.5" />
-                <span>Cipta Demo</span>
-              </button>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {demos.map(demo => (
-                <div key={demo.id} className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm hover:shadow-md transition">
-                  <div className="flex items-start justify-between mb-3">
-                    <div className="flex items-center space-x-3">
-                      <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-violet-100 to-indigo-100 flex items-center justify-center">
-                        <PlayCircle className="w-5 h-5 text-violet-500" />
-                      </div>
-                      <div>
-                        <p className="text-sm font-bold text-slate-900">{demo.name}</p>
-                        <p className="text-[10px] text-slate-400">Aktiviti terakhir: {demo.lastActivity}</p>
-                      </div>
-                    </div>
-                    <StatusBadge status={demo.status} />
-                  </div>
-                  <div className="flex gap-2 mt-4">
-                    <button className="flex-1 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-xl text-[10px] font-bold transition cursor-pointer flex items-center justify-center space-x-1">
-                      <PlayCircle className="w-3 h-3" /><span>Buka</span>
-                    </button>
-                    <button className="flex-1 py-2 bg-slate-50 hover:bg-slate-100 text-slate-600 rounded-xl text-[10px] font-bold transition cursor-pointer flex items-center justify-center space-x-1">
-                      <RotateCcw className="w-3 h-3" /><span>Reset</span>
-                    </button>
-                    <button className="flex-1 py-2 bg-slate-50 hover:bg-slate-100 text-slate-600 rounded-xl text-[10px] font-bold transition cursor-pointer flex items-center justify-center space-x-1">
-                      <Edit3 className="w-3 h-3" /><span>Nama</span>
-                    </button>
-                    <button className="py-2 px-3 bg-slate-50 hover:bg-rose-50 text-slate-400 hover:text-rose-400 rounded-xl text-[10px] font-bold transition cursor-pointer">
-                      <Archive className="w-3 h-3" />
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* ════ REVENUE ════ */}
-        {activePage === "revenue" && (
-          <div className="p-6 space-y-5" id="hq_revenue">
-            <div className="flex items-center justify-between">
-              <div>
-                <h1 className="text-xl font-bold text-slate-900">Hasil Perniagaan</h1>
-                <p className="text-xs text-slate-500 mt-0.5">Prestasi kewangan platform MYKERANI</p>
-              </div>
-              <button className="flex items-center space-x-2 px-4 py-2 bg-white border border-slate-200 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-50 transition cursor-pointer shadow-sm">
-                <Download className="w-3.5 h-3.5" />
-                <span>Eksport Laporan</span>
-              </button>
-            </div>
-
-            {/* Revenue KPIs */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {[
-                { label: "Hasil Bulanan (MRR)", value: `RM ${monthlyRevenue.toLocaleString()}`, trend: "+12%", up: true, color: "indigo" },
-                { label: "Jangkaan Tahunan (ARR)", value: `RM ${(monthlyRevenue * 12).toLocaleString()}`, trend: "+12%", up: true, color: "violet" },
-                { label: "Purata Per Pelanggan", value: `RM ${activeCustomers > 0 ? Math.round(monthlyRevenue / activeCustomers).toLocaleString() : 0}`, trend: "+5%", up: true, color: "emerald" },
-              ].map(({ label, value, trend, up, color }) => (
-                <div key={label} className={`bg-gradient-to-br from-${color}-50 to-${color}-100 border border-${color}-200 rounded-2xl p-5`}>
-                  <p className={`text-[10px] font-bold text-${color}-600 uppercase tracking-wider mb-2`}>{label}</p>
-                  <p className="text-2xl font-bold text-slate-900">{value}</p>
-                  <div className="flex items-center space-x-1 mt-1">
-                    {up ? <ArrowUpRight className="w-3 h-3 text-emerald-500" /> : <ArrowDownRight className="w-3 h-3 text-rose-500" />}
-                    <span className={`text-[10px] font-semibold ${up ? "text-emerald-600" : "text-rose-500"}`}>{trend} bulan lalu</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            {/* Revenue by Plan */}
-            <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
-              <h3 className="text-sm font-bold text-slate-900 mb-4">Hasil Mengikut Plan</h3>
-              <div className="space-y-3">
-                {plans.map(plan => {
-                  const planRevenue = customers
-                    .filter(c => c.plan === plan.name && c.status === "active")
-                    .length * plan.price;
-                  const pct = monthlyRevenue > 0 ? (planRevenue / monthlyRevenue) * 100 : 0;
-                  const colors: Record<string, string> = { emerald: "bg-emerald-400", indigo: "bg-indigo-500", violet: "bg-violet-500" };
-                  return (
-                    <div key={plan.id} className="flex items-center space-x-4">
-                      <div className="w-20 shrink-0">
-                        <PlanBadge plan={plan.name} />
-                      </div>
-                      <div className="flex-1">
-                        <div className="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden">
-                          <div className={`${colors[plan.color]} h-2.5 rounded-full transition-all`} style={{ width: `${pct}%` }} />
-                        </div>
-                      </div>
-                      <div className="w-24 text-right">
-                        <span className="text-xs font-bold text-slate-800">RM {planRevenue.toLocaleString()}</span>
-                        <span className="text-[10px] text-slate-400 ml-1">({pct.toFixed(0)}%)</span>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Revenue by Customer */}
-            <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
-              <div className="px-5 py-4 border-b border-slate-100">
-                <h3 className="text-sm font-bold text-slate-900">Hasil Mengikut Pelanggan</h3>
-              </div>
-              <div className="divide-y divide-slate-50">
-                {customers.filter(c => c.status === "active").map(c => {
-                  const plan = plans.find(p => p.name === c.plan);
-                  return (
-                    <div key={c.id} className="flex items-center justify-between px-5 py-3.5 hover:bg-slate-50 transition">
-                      <div className="flex items-center space-x-3">
-                        <div className="w-7 h-7 rounded-lg bg-indigo-50 flex items-center justify-center">
-                          <span className="text-indigo-700 font-bold text-xs">{c.name.charAt(0)}</span>
-                        </div>
-                        <p className="text-xs font-semibold text-slate-800">{c.name}</p>
-                      </div>
-                      <div className="flex items-center space-x-3">
-                        <PlanBadge plan={c.plan} />
-                        <span className="text-xs font-bold text-slate-900">RM {(plan?.price || 0).toLocaleString()}</span>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* ════ SETTINGS ════ */}
-        {activePage === "settings" && (
-          <div className="p-6 space-y-5" id="hq_settings">
-            <div>
-              <h1 className="text-xl font-bold text-slate-900">Tetapan</h1>
-              <p className="text-xs text-slate-500 mt-0.5">Urus profil HQ dan konfigurasi platform</p>
-            </div>
-
-            {/* HQ Profile */}
-            <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-4">
-              <h3 className="text-sm font-bold text-slate-900 flex items-center space-x-2">
-                <Shield className="w-4 h-4 text-rose-500" />
-                <span>Profil HQ</span>
-              </h3>
-              <div className="flex items-center space-x-4 p-4 bg-slate-50 rounded-xl">
-                <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-rose-500 to-violet-600 flex items-center justify-center text-white text-xl font-bold shadow">
-                  {user?.fullName?.charAt(0).toUpperCase() || "H"}
-                </div>
-                <div>
-                  <p className="font-bold text-slate-900">{user?.fullName || "HQ Admin"}</p>
-                  <p className="text-xs text-slate-500">{user?.email}</p>
-                  <span className="text-[10px] bg-rose-100 text-rose-700 font-bold px-2 py-0.5 rounded-full">Pentadbir Sistem HQ</span>
-                </div>
-                <button className="ml-auto px-4 py-2 border border-slate-200 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100 transition cursor-pointer">
-                  Edit Profil
-                </button>
-              </div>
-            </div>
-
-            {/* Cipta Kakitangan HQ */}
-            <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-4">
-              <div className="flex items-center justify-between">
-                <h3 className="text-sm font-bold text-slate-900 flex items-center space-x-2">
-                  <Users className="w-4 h-4 text-indigo-500" />
-                  <span>Kakitangan HQ</span>
-                </h3>
-                <button
-                  onClick={() => { setShowCreateStaff(v => !v); setStaffResult(null); }}
-                  className="flex items-center space-x-1.5 px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition cursor-pointer"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  <span>Cipta Akaun Staf</span>
-                </button>
-              </div>
-
-              {showCreateStaff && (
-                <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-4 space-y-3">
-                  <p className="text-xs font-bold text-indigo-800">Cipta Akaun HQ_STAFF Baru</p>
-                  <div className="space-y-2">
-                    <input
-                      type="text"
-                      value={staffName}
-                      onChange={e => setStaffName(e.target.value)}
-                      placeholder="Nama penuh kakitangan"
-                      className="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-400 bg-white"
-                    />
-                    <input
-                      type="email"
-                      value={staffEmail}
-                      onChange={e => setStaffEmail(e.target.value)}
-                      placeholder="Email kakitangan (cth: ali@mykerani.my)"
-                      className="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-400 bg-white"
-                    />
-                    <div className="flex items-center space-x-2 px-3 py-2 bg-white border border-slate-200 rounded-xl">
-                      <Shield className="w-3.5 h-3.5 text-indigo-500" />
-                      <span className="text-xs font-semibold text-slate-700">Role: HQ_STAFF</span>
-                    </div>
-                  </div>
-                  <button
-                    onClick={handleCreateHQStaff}
-                    disabled={staffCreating || !staffEmail.trim() || !staffName.trim()}
-                    className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 text-white rounded-xl text-xs font-bold transition cursor-pointer"
-                  >
-                    {staffCreating ? "Mencipta akaun..." : "Cipta Akaun"}
-                  </button>
-                  {staffResult && (
-                    <div className={`rounded-xl p-3 text-xs space-y-1 ${staffResult.success ? "bg-emerald-50 border border-emerald-200" : "bg-rose-50 border border-rose-200"}`}>
-                      <p className={`font-bold ${staffResult.success ? "text-emerald-700" : "text-rose-700"}`}>
-                        {staffResult.success ? "✓ Berjaya!" : "✗ Gagal"}
-                      </p>
-                      <p className={staffResult.success ? "text-emerald-600" : "text-rose-600"}>{staffResult.message}</p>
-                      {staffResult.tempPassword && (
-                        <div className="mt-2 p-2 bg-white border border-emerald-200 rounded-lg">
-                          <p className="text-[10px] text-slate-500 mb-1">Kata Laluan Sementara (kongsi secara selamat):</p>
-                          <p className="font-mono font-bold text-slate-900 text-sm select-all">{staffResult.tempPassword}</p>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {!showCreateStaff && (
-                <div className="p-4 bg-slate-50 rounded-xl text-center">
-                  <Users className="w-7 h-7 text-slate-300 mx-auto mb-2" />
-                  <p className="text-xs text-slate-500">Klik "Cipta Akaun Staf" untuk tambah kakitangan HQ</p>
-                  <p className="text-[10px] text-slate-400 mt-0.5">Staf akan dapat akses ke modul Pelanggan sahaja</p>
-                </div>
-              )}
-            </div>
-
-            {/* Platform Settings */}
-            <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-4">
-              <h3 className="text-sm font-bold text-slate-900 flex items-center space-x-2">
-                <Globe className="w-4 h-4 text-slate-400" />
-                <span>Tetapan Platform</span>
-              </h3>
-              <div className="space-y-3">
-                {[
-                  { label: "Nama Platform", value: "MYKERANI" },
-                  { label: "Mata Wang Lalai", value: "MYR (Ringgit Malaysia)" },
-                  { label: "Zon Masa", value: "Asia/Kuala_Lumpur (UTC+8)" },
-                  { label: "Bahasa Lalai", value: "Bahasa Melayu" },
-                ].map(({ label, value }) => (
-                  <div key={label} className="flex items-center justify-between py-3 border-b border-slate-50">
-                    <span className="text-xs text-slate-500">{label}</span>
-                    <span className="text-xs font-semibold text-slate-800">{value}</span>
-                  </div>
-                ))}
-              </div>
-              <button className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition cursor-pointer">
-                Simpan Tetapan
-              </button>
-            </div>
-          </div>
-        )}
-
-      </main>
-
-      {/* ── MOBILE BOTTOM NAV ── */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-slate-950 border-t border-slate-800 z-20 px-1 py-2 flex items-center justify-around" id="hq_bottom_nav">
-        {navItems.map(({ id, label, icon: Icon, badge }) => (
-          <button
-            key={id}
-            onClick={() => setActivePage(id)}
-            className={`flex flex-col items-center px-2 py-1 rounded-xl transition cursor-pointer relative ${
-              activePage === id ? "text-rose-400" : "text-slate-500"
-            }`}
-          >
-            <Icon className="w-5 h-5" />
-            <span className="text-[9px] font-semibold mt-0.5">{label}</span>
-            {badge !== undefined && (
-              <span className="absolute -top-0.5 -right-0.5 w-4 h-4 rounded-full bg-rose-500 text-white text-[8px] font-bold flex items-center justify-center">
-                {badge}
-              </span>
             )}
-          </button>
-        ))}
-      </nav>
+
+            {/* ════ SYSTEM CENTER (HQ_OWNER only) ════ */}
+            {activePage === "system" && !isStaff && (
+              <div className="space-y-5" id="hq_system">
+                <h1 className="text-xl font-bold text-slate-900">Pusat Sistem</h1>
+
+                {/* System Health */}
+                <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-4">
+                  <h3 className="text-sm font-bold text-slate-900 flex items-center space-x-2">
+                    <Activity className="w-4 h-4 text-teal-600" /><span>Kesihatan Sistem</span>
+                  </h3>
+                  <div className="grid grid-cols-2 gap-3">
+                    {[
+                      { label: "AI MYKERANI",     status: "ok", latency: "120ms" },
+                      { label: "Storan",          status: "ok", latency: "45ms" },
+                      { label: "Pengesahan",      status: "ok", latency: "89ms" },
+                      { label: "Pangkalan Data",  status: "ok", latency: "67ms" },
+                    ].map(({ label, status, latency }) => (
+                      <div key={label} className="flex items-center space-x-3 p-3.5 border border-slate-100 rounded-xl bg-slate-50">
+                        <div className={`w-2 h-2 rounded-full ${status === "ok" ? "bg-emerald-500 animate-pulse" : "bg-red-500"}`} />
+                        <div>
+                          <p className="text-xs font-semibold text-slate-700">{label}</p>
+                          <p className="text-[10px] text-slate-400">{latency} · Operasi normal</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Resource Governance */}
+                <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-4">
+                  <div>
+                    <h3 className="text-sm font-bold text-slate-900 flex items-center space-x-2">
+                      <Shield className="w-4 h-4 text-teal-600" /><span>Kawalan Sumber</span>
+                    </h3>
+                    <p className="text-[11px] text-slate-400 mt-1">Izinkan pelanggan guna sumber luar</p>
+                  </div>
+                  {[
+                    { label: "Benarkan AI Sendiri",     desc: "Pelanggan boleh guna API AI mereka sendiri",    val: allowOwnAI,      set: setAllowOwnAI },
+                    { label: "Benarkan Storan Sendiri", desc: "Pelanggan boleh sambung GDrive/OneDrive/Dropbox", val: allowOwnStorage, set: setAllowOwnStorage },
+                    { label: "Benarkan OCR Sendiri",    desc: "Pelanggan boleh guna perkhidmatan OCR sendiri",  val: allowOwnOCR,     set: setAllowOwnOCR },
+                  ].map(({ label, desc, val, set }) => (
+                    <div key={label} className="flex items-start justify-between py-3 border-b border-slate-50 last:border-0">
+                      <div>
+                        <p className="text-xs font-semibold text-slate-800">{label}</p>
+                        <p className="text-[11px] text-slate-400">{desc}</p>
+                      </div>
+                      <button onClick={() => set(!val)}
+                        className={`w-11 h-6 rounded-full flex items-center px-0.5 cursor-pointer transition-colors ${val ? "bg-teal-600 justify-end" : "bg-slate-200 justify-start"}`}>
+                        <div className="w-5 h-5 rounded-full bg-white shadow-sm transition-all" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Providers */}
+                <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-3">
+                  <h3 className="text-sm font-bold text-slate-900">Pembekal Aktif</h3>
+                  {[
+                    { label: "AI",      provider: "MYKERANI AI (Gemini)",  status: "Aktif" },
+                    { label: "Storan",  provider: "MYKERANI Storan",        status: "Aktif" },
+                    { label: "OCR",     provider: "MYKERANI OCR",           status: "Aktif" },
+                  ].map(({ label, provider, status }) => (
+                    <div key={label} className="flex items-center justify-between py-2.5 border-b border-slate-50 last:border-0">
+                      <div>
+                        <p className="text-xs font-semibold text-slate-700">{label}</p>
+                        <p className="text-[11px] text-slate-400">{provider}</p>
+                      </div>
+                      <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-100">{status}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+          </div>
+        </main>
+      </div>
     </div>
   );
 };
