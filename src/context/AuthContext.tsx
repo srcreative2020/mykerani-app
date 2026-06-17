@@ -2,6 +2,14 @@ import React, { createContext, useContext, useState, useEffect } from "react";
 import { supabase, isSupabaseConfigured } from "../lib/supabase";
 import { type UserSessionProfile, type AuthState, type UserRole } from "../types";
 
+// Akaun demo yang dibenarkan untuk presentation/sales — hanya aktif bila user
+// ketap butang secara eksplisit. Tidak boleh auto-login dari localStorage.
+const DEMO_ACCOUNTS: Record<string, { role: UserRole; fullName: string; tenantId: string }> = {
+  "hq@mykerani.demo":    { role: "HQ_ADMIN",      fullName: "HQ Operator",   tenantId: "tenant-hq-0001" },
+  "owner@mykerani.demo": { role: "TENANT_ADMIN",   fullName: "Tenant Owner",  tenantId: "tenant-demo-8bit" },
+  "staff@mykerani.demo": { role: "STAFF",           fullName: "Staff Account", tenantId: "tenant-demo-8bit" },
+};
+
 interface AuthContextType extends AuthState {
   signIn: (email: string, password: string) => Promise<void>;
   signUp: (email: string, password: string, fullName: string, initialRole?: UserRole) => Promise<void>;
@@ -90,6 +98,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const signIn = async (email: string, password: string) => {
     setState(prev => ({ ...prev, loading: true, error: null }));
 
+    const cleanEmail = email.trim().toLowerCase();
+
+    // Demo accounts — sesi mock dibuat HANYA apabila user ketap butang secara eksplisit.
+    // Tiada auto-login. Tiada simpanan ke localStorage.
+    const demoAccount = DEMO_ACCOUNTS[cleanEmail];
+    if (demoAccount) {
+      const mockProfile: UserSessionProfile = {
+        id: `demo-${cleanEmail.split("@")[0]}`,
+        email: cleanEmail,
+        fullName: demoAccount.fullName,
+        role: demoAccount.role,
+        tenantId: demoAccount.tenantId,
+      };
+      setState({ user: mockProfile, loading: false, error: null, isMockUser: true });
+      return;
+    }
+
+    // User sebenar — wajib melalui Supabase Auth
     if (!isSupabaseConfigured() || !supabase) {
       setState(prev => ({
         ...prev,
@@ -101,12 +127,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     try {
       const { data, error } = await supabase.auth.signInWithPassword({
-        email: email.trim().toLowerCase(),
+        email: cleanEmail,
         password,
       });
 
       if (error) {
-        // Tunjuk error sebenar — JANGAN bagi masuk
         setState(prev => ({
           ...prev,
           loading: false,
@@ -202,12 +227,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const signOut = async () => {
     setState(prev => ({ ...prev, loading: true }));
 
-    if (supabase) {
+    // Hanya panggil Supabase signOut untuk user sebenar (bukan demo)
+    if (supabase && !state.isMockUser) {
       await supabase.auth.signOut();
     }
 
-    localStorage.removeItem("mykerani_mock_user");
-    localStorage.removeItem("mykerani_auth_bypass");
     setState({ user: null, loading: false, error: null, isMockUser: false });
   };
 
