@@ -69,7 +69,8 @@ export const TenantProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         
         if (!active && tenantList.length > 0) {
           // Fallback based on user context
-          if (user.role === "HQ_ADMIN") {
+          const isHqRole = user.role === "HQ_ADMIN" || user.role === "HQ_SUPPORT" || user.role === "HQ_AUDITOR";
+          if (isHqRole) {
             active = tenantList.find(t => t.category === "HQ") || tenantList[0];
           } else {
             active = tenantList.find(t => t.category !== "HQ") || tenantList[0];
@@ -124,9 +125,15 @@ export const TenantProvider: React.FC<{ children: React.ReactNode }> = ({ childr
               });
             }
 
-            // Restore from localStorage setting
+            // Restore from localStorage setting, else auto-select HQ tenant for HQ roles
+            const isHqRole = user.role === "HQ_ADMIN" || user.role === "HQ_SUPPORT" || user.role === "HQ_AUDITOR";
             const lastSelectedId = localStorage.getItem(`mykerani_active_tenant_${user.id}`);
-            let active = mappedTenants.find(t => t.id === lastSelectedId) || mappedTenants[0];
+            let active = mappedTenants.find(t => t.id === lastSelectedId);
+            if (!active) {
+              active = isHqRole
+                ? mappedTenants.find(t => t.category === "HQ") || mappedTenants[0]
+                : mappedTenants[0];
+            }
 
             setState({
               tenants: mappedTenants,
@@ -136,12 +143,13 @@ export const TenantProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             });
           } else {
             // Create a default tenant since none exists
+            const isHqRole = user.role === "HQ_ADMIN" || user.role === "HQ_SUPPORT" || user.role === "HQ_AUDITOR";
             const defaultName = `${user.fullName || "Operator"}'s Venture`;
             const { data: newTenant, error: createError } = await supabase
               .from("tenants")
               .insert({
                 name: defaultName,
-                category: user.role === "HQ_ADMIN" ? "HQ" : "USER",
+                category: isHqRole ? "HQ" : "USER",
               })
               .select()
               .single();
