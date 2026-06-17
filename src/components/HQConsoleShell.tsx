@@ -13,6 +13,8 @@ import { useAuth } from "../context/AuthContext";
 import { useNotifications, buildHQNotifs, fmtNotifTime } from "../lib/notifications";
 import { getAllWorkspacesStorageUsage, fmtBytes as fmtDocBytes } from "../lib/documentStorage";
 import { storageQuotaKey } from "../lib/storageQuota";
+import { isSupabaseConfigured } from "../lib/supabase";
+import * as hqService from "../lib/hqService";
 
 interface HQConsoleShellProps {
   tenants: Tenant[];
@@ -196,10 +198,12 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
   const { signOut, isMockUser } = useAuth();
 
   const isStaff = user?.role === "HQ_STAFF";
+  const useRealData = isSupabaseConfigured() && !isMockUser;
 
-  // Customers — persistent for all users
+  // Customers — Supabase-backed for real HQ users, localStorage demo for mock users
   const customersKey = `mykerani_customers_${user?.id ?? "guest"}`;
   const [customers, setCustomers] = useState<Customer[]>(() => {
+    if (useRealData) return [];
     try {
       const stored = localStorage.getItem(customersKey);
       if (stored) return JSON.parse(stored);
@@ -208,11 +212,20 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
       ? MOCK_CUSTOMERS.map(c => ({ ...c, email: `${c.id}@demo.my`, phone: "", joinedAt: "2026-01-01", notes: "" }))
       : [];
   });
-  useEffect(() => { localStorage.setItem(customersKey, JSON.stringify(customers)); }, [customers, customersKey]);
+  const [customersLoading, setCustomersLoading] = useState(useRealData);
 
-  // Plans — persistent for all users
+  const reloadCustomers = () => {
+    if (!useRealData) return;
+    setCustomersLoading(true);
+    hqService.getCustomers().then(data => { setCustomers(data); setCustomersLoading(false); });
+  };
+  useEffect(() => { reloadCustomers(); }, [useRealData]);
+  useEffect(() => { if (!useRealData) localStorage.setItem(customersKey, JSON.stringify(customers)); }, [customers, customersKey, useRealData]);
+
+  // Plans — Supabase-backed for real HQ users, localStorage demo for mock users
   const plansKey = `mykerani_plans_${user?.id ?? "guest"}`;
   const [plans, setPlans] = useState<Plan[]>(() => {
+    if (useRealData) return [];
     try {
       const stored = localStorage.getItem(plansKey);
       if (stored) return JSON.parse(stored);
@@ -221,7 +234,15 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
       ? MOCK_PLANS.map(p => ({ ...p, storageGB: parseInt(p.storage), maxUsers: 10 }))
       : [];
   });
-  useEffect(() => { localStorage.setItem(plansKey, JSON.stringify(plans)); }, [plans, plansKey]);
+  const [plansLoading, setPlansLoading] = useState(useRealData);
+
+  const reloadPlans = () => {
+    if (!useRealData) return;
+    setPlansLoading(true);
+    hqService.getPlans().then(data => { setPlans(data); setPlansLoading(false); });
+  };
+  useEffect(() => { reloadPlans(); }, [useRealData]);
+  useEffect(() => { if (!useRealData) localStorage.setItem(plansKey, JSON.stringify(plans)); }, [plans, plansKey, useRealData]);
 
   // Plan modal state
   const [showPlanModal, setShowPlanModal] = useState(false);
@@ -231,16 +252,24 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
 
   const openCreatePlan = () => { setPlanForm(BLANK_PLAN); setEditingPlan(null); setShowPlanModal(true); };
   const openEditPlan = (p: Plan) => { setPlanForm({ name: p.name, price: p.price, aiCredits: p.aiCredits, storageGB: p.storageGB, maxUsers: p.maxUsers, featured: p.featured }); setEditingPlan(p); setShowPlanModal(true); };
-  const savePlan = () => {
+  const savePlan = async () => {
     if (!planForm.name.trim()) return;
-    if (editingPlan) {
+    if (useRealData) {
+      if (editingPlan) await hqService.updatePlan(editingPlan.id, planForm);
+      else await hqService.createPlan(planForm);
+      reloadPlans();
+    } else if (editingPlan) {
       setPlans(prev => prev.map(p => p.id === editingPlan.id ? { ...planForm, id: editingPlan.id } : p));
     } else {
       setPlans(prev => [...prev, { ...planForm, id: `plan-${Date.now()}` }]);
     }
     setShowPlanModal(false);
   };
-  const deletePlan = (id: string) => { setPlans(prev => prev.filter(p => p.id !== id)); setDeletingPlanId(null); };
+  const deletePlan = async (id: string) => {
+    if (useRealData) { await hqService.deletePlan(id); reloadPlans(); }
+    else setPlans(prev => prev.filter(p => p.id !== id));
+    setDeletingPlanId(null);
+  };
 
   // Customer modal & detail state
   const [showCustomerModal, setShowCustomerModal] = useState(false);
@@ -261,12 +290,20 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
     setSelectedCustomer(null);
     setShowCustomerModal(true);
   };
-  const saveCustomer = () => {
+  const saveCustomer = async () => {
     if (!customerForm.name.trim() || !customerForm.email.trim()) return;
     const planObj = plans.find(p => p.name === customerForm.plan);
     const mrr = planObj?.price ?? 0;
     const renewal = customerForm.renewal || new Date(Date.now() + 30 * 86400000).toLocaleDateString("ms-MY", { day:"numeric", month:"short", year:"numeric" });
-    if (editingCustomer) {
+    if (useRealData) {
+      if (editingCustomer) {
+        await hqService.upsertCustomerSubscription(editingCustomer.id, customerForm.plan, customerForm.status, plans);
+      } else {
+        const tenant = await hqService.createCustomerTenant(customerForm.name);
+        if (tenant) await hqService.upsertCustomerSubscription(tenant.id, customerForm.plan, customerForm.status, plans);
+      }
+      reloadCustomers();
+    } else if (editingCustomer) {
       setCustomers(prev => prev.map(c => c.id === editingCustomer.id
         ? { ...c, ...customerForm, renewal, mrr }
         : c));
@@ -277,12 +314,20 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
     }
     setShowCustomerModal(false);
   };
-  const toggleStatus = (id: string) => {
+  const toggleStatus = async (id: string) => {
+    const target = customers.find(c => c.id === id);
+    const nextStatus = target?.status === "active" ? "suspended" : "active";
+    if (useRealData) {
+      await hqService.setCustomerStatus(id, nextStatus);
+      reloadCustomers();
+      return;
+    }
     setCustomers(prev => prev.map(c => c.id === id ? { ...c, status: c.status === "active" ? "suspended" : "active" } : c));
     setSelectedCustomer(prev => prev?.id === id ? { ...prev, status: prev.status === "active" ? "suspended" : "active" } : prev);
   };
-  const deleteCustomer = (id: string) => {
-    setCustomers(prev => prev.filter(c => c.id !== id));
+  const deleteCustomer = async (id: string) => {
+    if (useRealData) { await hqService.deleteCustomerTenant(id); reloadCustomers(); }
+    else setCustomers(prev => prev.filter(c => c.id !== id));
     setDeletingCustomerId(null);
     setSelectedCustomer(null);
   };
@@ -968,7 +1013,12 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
                   </div>
                 </div>
 
-                {customers.length === 0 ? (
+                {customersLoading ? (
+                  <div className="bg-white border border-slate-200 rounded-2xl p-16 text-center shadow-sm">
+                    <RefreshCw className="w-6 h-6 text-slate-300 mx-auto mb-3 animate-spin" />
+                    <p className="text-sm font-semibold text-slate-400">Memuatkan pelanggan...</p>
+                  </div>
+                ) : customers.length === 0 ? (
                   <div className="bg-white border border-slate-200 rounded-2xl p-16 text-center shadow-sm">
                     <Building2 className="w-10 h-10 text-slate-200 mx-auto mb-3" />
                     <p className="text-sm font-semibold text-slate-500">Tiada pelanggan lagi</p>
