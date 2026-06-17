@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+﻿import React, { useState, useEffect } from "react";
 import { type Tenant, type Workspace, type UserSessionProfile } from "../types";
 import {
   LayoutDashboard, Users, CreditCard, BarChart3, DollarSign, Settings,
@@ -18,7 +18,7 @@ interface HQConsoleShellProps {
   activeWorkspace: Workspace | null;
 }
 
-// HQ_OWNER pages: 8 (Dashboard, Pelanggan, Pengebilan, Penggunaan, Sokongan, Hasil, Tetapan, Pusat Sistem)
+// HQ_OWNER pages: all 8
 // HQ_STAFF pages: dashboard, customers, subscriptions, support
 type HQPage = "dashboard" | "customers" | "billing" | "usage" | "support" | "revenue" | "settings" | "system" | "subscriptions";
 
@@ -101,14 +101,61 @@ const MetricCard = ({ label, value, sub, icon: Icon, color = "teal", trend }: {
   );
 };
 
+// â”€â”€ Plan type â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+interface Plan {
+  id: string;
+  name: string;
+  price: number;
+  aiCredits: number;
+  storageGB: number;
+  maxUsers: number;
+  featured?: boolean;
+}
+
+const BLANK_PLAN: Omit<Plan, “id”> = { name: “”, price: 0, aiCredits: 500, storageGB: 5, maxUsers: 3, featured: false };
+
 // â”€â”€â”€ Main Component â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
   const { signOut, isMockUser } = useAuth();
 
-  const isStaff = user?.role === "HQ_STAFF";
+  const isStaff = user?.role === “HQ_STAFF”;
   const customers = isMockUser ? MOCK_CUSTOMERS : [];
   const tickets   = isMockUser ? MOCK_TICKETS   : [];
-  const plans     = isMockUser ? MOCK_PLANS     : [];
+
+  // Plans — persistent for all users (mock seeds on first load)
+  const plansKey = `mykerani_plans_${user?.id ?? “guest”}`;
+  const [plans, setPlans] = useState<Plan[]>(() => {
+    try {
+      const stored = localStorage.getItem(plansKey);
+      if (stored) return JSON.parse(stored);
+    } catch {}
+    return isMockUser
+      ? MOCK_PLANS.map(p => ({ ...p, storageGB: parseInt(p.storage), maxUsers: 10 }))
+      : [];
+  });
+
+  useEffect(() => {
+    localStorage.setItem(plansKey, JSON.stringify(plans));
+  }, [plans, plansKey]);
+
+  // Plan modal state
+  const [showPlanModal, setShowPlanModal] = useState(false);
+  const [editingPlan, setEditingPlan] = useState<Plan | null>(null);
+  const [planForm, setPlanForm] = useState<Omit<Plan, “id”>>(BLANK_PLAN);
+  const [deletingPlanId, setDeletingPlanId] = useState<string | null>(null);
+
+  const openCreatePlan = () => { setPlanForm(BLANK_PLAN); setEditingPlan(null); setShowPlanModal(true); };
+  const openEditPlan = (p: Plan) => { setPlanForm({ name: p.name, price: p.price, aiCredits: p.aiCredits, storageGB: p.storageGB, maxUsers: p.maxUsers, featured: p.featured }); setEditingPlan(p); setShowPlanModal(true); };
+  const savePlan = () => {
+    if (!planForm.name.trim()) return;
+    if (editingPlan) {
+      setPlans(prev => prev.map(p => p.id === editingPlan.id ? { ...planForm, id: editingPlan.id } : p));
+    } else {
+      setPlans(prev => [...prev, { ...planForm, id: `plan-${Date.now()}` }]);
+    }
+    setShowPlanModal(false);
+  };
+  const deletePlan = (id: string) => { setPlans(prev => prev.filter(p => p.id !== id)); setDeletingPlanId(null); };
 
   const [activePage, setActivePage] = useState<HQPage>("dashboard");
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -486,33 +533,46 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
                 {/* Plans */}
                 <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-4">
                   <div className="flex items-center justify-between">
-                    <h3 className="text-sm font-bold text-slate-900">Plan Semasa</h3>
-                    <button className="flex items-center space-x-1 px-3 py-2 bg-emerald-700 text-white rounded-xl text-xs font-bold cursor-pointer hover:bg-emerald-800 transition">
+                    <h3 className="text-sm font-bold text-slate-900">Plan Langganan</h3>
+                    <button onClick={openCreatePlan} className="flex items-center space-x-1 px-3 py-2 bg-emerald-700 text-white rounded-xl text-xs font-bold cursor-pointer hover:bg-emerald-800 transition">
                       <Plus className="w-3.5 h-3.5" /><span>Cipta Plan</span>
                     </button>
                   </div>
                   <div className="grid md:grid-cols-3 gap-3">
-                    {plans.map(p => (
-                      <div key={p.id} className="border border-slate-200 rounded-2xl p-4 space-y-2">
-                        <div className="flex items-center justify-between">
-                          <span className="font-bold text-slate-900">{p.name}</span>
-                          <span className="text-xs text-emerald-700 font-bold bg-emerald-50 px-2 py-0.5 rounded-full">{p.customers} pelanggan</span>
+                    {plans.map(p => {
+                      const activeCount = customers.filter(c => c.plan === p.name && c.status === "active").length;
+                      return (
+                        <div key={p.id} className={`border rounded-2xl p-4 space-y-2 relative ${p.featured ? "border-emerald-300 bg-emerald-50/30" : "border-slate-200 bg-white"}`}>
+                          {p.featured && <span className="absolute top-3 right-3 text-[9px] font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full">Popular</span>}
+                          <div className="flex items-center justify-between pr-14">
+                            <span className="font-bold text-slate-900">{p.name}</span>
+                          </div>
+                          <p className="text-2xl font-bold text-slate-900">RM {p.price.toLocaleString()}<span className="text-xs text-slate-400 font-normal">/bln</span></p>
+                          <div className="text-[11px] text-slate-400 space-y-0.5">
+                            <p>AI: {p.aiCredits.toLocaleString()} kredit/bln</p>
+                            <p>Storan: {p.storageGB} GB</p>
+                            <p>Pengguna: sehingga {p.maxUsers}</p>
+                            {isMockUser && <p className="text-emerald-600 font-semibold">{activeCount} pelanggan aktif</p>}
+                          </div>
+                          <div className="flex gap-2 pt-1">
+                            <button onClick={() => openEditPlan(p)} className="flex-1 py-1.5 border border-slate-200 rounded-lg text-[10px] font-bold text-slate-600 cursor-pointer hover:bg-slate-50 transition flex items-center justify-center gap-1">
+                              <Edit3 className="w-3 h-3" />Edit
+                            </button>
+                            <button onClick={() => setDeletingPlanId(p.id)} className="py-1.5 px-3 border border-red-100 rounded-lg text-[10px] font-bold text-red-400 cursor-pointer hover:bg-red-50 transition">
+                              Padam
+                            </button>
+                          </div>
                         </div>
-                        <p className="text-2xl font-bold text-slate-900">RM {p.price}<span className="text-xs text-slate-400 font-normal">/bln</span></p>
-                        <div className="text-[11px] text-slate-400 space-y-0.5">
-                          <p>AI: {p.aiCredits.toLocaleString()} kredit</p>
-                          <p>Storan: {p.storage}</p>
-                        </div>
-                        <div className="flex gap-2 pt-1">
-                          <button className="flex-1 py-1.5 border border-slate-200 rounded-lg text-[10px] font-bold text-slate-600 cursor-pointer hover:bg-slate-50 transition">Edit</button>
-                          <button className="flex-1 py-1.5 bg-emerald-50 border border-emerald-100 rounded-lg text-[10px] font-bold text-emerald-700 cursor-pointer hover:bg-emerald-100 transition">Paket Kredit</button>
-                        </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                     {plans.length === 0 && (
-                      <div className="col-span-3 py-10 text-center">
-                        <Package className="w-8 h-8 text-slate-200 mx-auto mb-2" />
-                        <p className="text-xs text-slate-400">Tiada plan lagi</p>
+                      <div className="col-span-3 py-12 text-center">
+                        <Package className="w-10 h-10 text-slate-200 mx-auto mb-3" />
+                        <p className="text-sm font-semibold text-slate-400">Tiada plan lagi</p>
+                        <p className="text-xs text-slate-300 mt-1">Klik "Cipta Plan" untuk mulakan</p>
+                        <button onClick={openCreatePlan} className="mt-4 px-4 py-2 bg-emerald-700 text-white text-xs font-bold rounded-xl cursor-pointer hover:bg-emerald-800 transition">
+                          Cipta Plan Pertama
+                        </button>
                       </div>
                     )}
                   </div>
@@ -894,6 +954,85 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
           </div>
         </main>
       </div>
+
+      {/* ── Plan Create/Edit Modal ── */}
+      {showPlanModal && (
+        <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-black/40 backdrop-blur-sm" onClick={() => setShowPlanModal(false)}>
+          <div className="w-full max-w-md bg-white rounded-t-3xl md:rounded-3xl shadow-2xl p-6 space-y-4" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between">
+              <h2 className="text-base font-bold text-slate-900">{editingPlan ? "Edit Plan" : "Cipta Plan Baru"}</h2>
+              <button onClick={() => setShowPlanModal(false)} className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-slate-100 cursor-pointer"><X className="w-4 h-4 text-slate-500" /></button>
+            </div>
+
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs font-semibold text-slate-500 mb-1 block">Nama Plan *</label>
+                <input value={planForm.name} onChange={e => setPlanForm(f => ({...f, name: e.target.value}))}
+                  placeholder="cth: Starter, Pro, Enterprise"
+                  className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100" />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-semibold text-slate-500 mb-1 block">Harga (RM/bln) *</label>
+                  <input type="number" min={0} value={planForm.price} onChange={e => setPlanForm(f => ({...f, price: Number(e.target.value)}))}
+                    className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100" />
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-slate-500 mb-1 block">Kredit AI/bln</label>
+                  <input type="number" min={0} value={planForm.aiCredits} onChange={e => setPlanForm(f => ({...f, aiCredits: Number(e.target.value)}))}
+                    className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100" />
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-slate-500 mb-1 block">Storan (GB)</label>
+                  <input type="number" min={1} value={planForm.storageGB} onChange={e => setPlanForm(f => ({...f, storageGB: Number(e.target.value)}))}
+                    className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100" />
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-slate-500 mb-1 block">Maks Pengguna</label>
+                  <input type="number" min={1} value={planForm.maxUsers} onChange={e => setPlanForm(f => ({...f, maxUsers: Number(e.target.value)}))}
+                    className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100" />
+                </div>
+              </div>
+
+              <label className="flex items-center gap-2 cursor-pointer select-none">
+                <input type="checkbox" checked={!!planForm.featured} onChange={e => setPlanForm(f => ({...f, featured: e.target.checked}))}
+                  className="w-4 h-4 rounded accent-emerald-600" />
+                <span className="text-xs font-semibold text-slate-600">Tandai sebagai plan popular</span>
+              </label>
+            </div>
+
+            <div className="flex gap-3 pt-2">
+              <button onClick={() => setShowPlanModal(false)} className="flex-1 py-3 border border-slate-200 rounded-2xl text-sm font-bold text-slate-500 cursor-pointer hover:bg-slate-50 transition">
+                Batal
+              </button>
+              <button onClick={savePlan} disabled={!planForm.name.trim()}
+                className="flex-1 py-3 bg-emerald-700 text-white rounded-2xl text-sm font-bold cursor-pointer hover:bg-emerald-800 transition disabled:opacity-40 disabled:cursor-not-allowed">
+                {editingPlan ? "Simpan Perubahan" : "Cipta Plan"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Delete Plan Confirmation ── */}
+      {deletingPlanId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm" onClick={() => setDeletingPlanId(null)}>
+          <div className="w-80 bg-white rounded-3xl shadow-2xl p-6 space-y-4 mx-4" onClick={e => e.stopPropagation()}>
+            <div className="w-12 h-12 bg-red-50 rounded-2xl flex items-center justify-center mx-auto">
+              <AlertTriangle className="w-6 h-6 text-red-500" />
+            </div>
+            <div className="text-center space-y-1">
+              <h3 className="font-bold text-slate-900">Padam Plan?</h3>
+              <p className="text-xs text-slate-400">Plan yang dipadam tidak boleh dipulihkan. Pelanggan sedia ada tidak terjejas.</p>
+            </div>
+            <div className="flex gap-3">
+              <button onClick={() => setDeletingPlanId(null)} className="flex-1 py-2.5 border border-slate-200 rounded-xl text-sm font-bold text-slate-500 cursor-pointer hover:bg-slate-50">Batal</button>
+              <button onClick={() => deletePlan(deletingPlanId)} className="flex-1 py-2.5 bg-red-500 text-white rounded-xl text-sm font-bold cursor-pointer hover:bg-red-600">Padam</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Mobile Bottom Nav ── */}
       {(() => {
