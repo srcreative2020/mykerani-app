@@ -322,6 +322,31 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
   const notif = useNotifications(`hq_${user?.id || "guest"}`);
   const [showNotifPanel, setShowNotifPanel] = useState(false);
 
+  // Tickets — persistent for all users (deklarasi di sini supaya boleh dipakai dalam useEffect bawah)
+  interface Ticket {
+    id: string;
+    customer: string;
+    email?: string;
+    subject: string;
+    priority: "high" | "medium" | "low";
+    status: "open" | "pending" | "resolved";
+    summary: string;
+    assigned: string;
+    createdAt: string;
+    replies: { id: string; author: string; text: string; at: string }[];
+  }
+  const ticketsKey = `mykerani_tickets_${user?.id ?? "guest"}`;
+  const [allTickets, setAllTickets] = useState<Ticket[]>(() => {
+    try {
+      const stored = localStorage.getItem(ticketsKey);
+      if (stored) return JSON.parse(stored);
+    } catch {}
+    return isMockUser ? MOCK_TICKETS.map(t => ({
+      ...t, email: "", createdAt: "2026-06-01",
+      replies: [] as { id: string; author: string; text: string; at: string }[]
+    })) : [];
+  });
+
   useEffect(() => {
     const totalUsed = customers.reduce((s, c) => {
       try { const raw = localStorage.getItem(`mykerani_storage_quota_${c.id}`); return s + (raw ? JSON.parse(raw).usedBytes || 0 : 0); } catch { return s; }
@@ -414,30 +439,6 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
     setTimeout(() => setSettingsSaved(false), 2000);
   };
 
-  // Tickets — persistent for all users
-  interface Ticket {
-    id: string;
-    customer: string;
-    email?: string;
-    subject: string;
-    priority: "high" | "medium" | "low";
-    status: "open" | "pending" | "resolved";
-    summary: string;
-    assigned: string;
-    createdAt: string;
-    replies: { id: string; author: string; text: string; at: string }[];
-  }
-  const ticketsKey = `mykerani_tickets_${user?.id ?? "guest"}`;
-  const [allTickets, setAllTickets] = useState<Ticket[]>(() => {
-    try {
-      const stored = localStorage.getItem(ticketsKey);
-      if (stored) return JSON.parse(stored);
-    } catch {}
-    return isMockUser ? MOCK_TICKETS.map(t => ({
-      ...t, email: "", createdAt: "2026-06-01",
-      replies: [] as { id: string; author: string; text: string; at: string }[]
-    })) : [];
-  });
   useEffect(() => { localStorage.setItem(ticketsKey, JSON.stringify(allTickets)); }, [allTickets, ticketsKey]);
 
   const [ticketFilter, setTicketFilter] = useState<"all" | "open" | "pending" | "resolved">("all");
