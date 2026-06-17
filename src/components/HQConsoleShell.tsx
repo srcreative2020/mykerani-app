@@ -45,12 +45,11 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({
   const [syncStatus, setSyncStatus] = useState("SYNCHRONIZED");
   const [isSyncing, setIsSyncing] = useState(false);
 
-  // Statistics calculation
-  const totalTenants = tenants.length;
-  // Fallback default calculation: sum of workspaces, including any default mock lists
-  const totalWorkspaces = workspaces.length + 8; // Including isolated staging system records
-  const totalUsersCount = 1248; // Simulated aggregate company workforce across APAC
-  const totalDemoAccountsCount = tenants.filter(t => t.category === "DEMO").length + 4; // Mapped preset demos + customizable environments
+  // Statistics — data sebenar sahaja
+  const totalTenants = tenants.filter(t => t.category !== "HQ" && t.category !== "DEMO").length;
+  const totalWorkspaces = workspaces.length;
+  const totalUsersCount = 0; // Akan diisi bila users table disambung
+  const totalDemoAccountsCount = tenants.filter(t => t.category === "DEMO").length;
 
   const handleManualSync = () => {
     setIsSyncing(true);
@@ -224,14 +223,13 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({
               {/* Status Log */}
               <div className="bg-slate-900 text-slate-100 rounded-xl p-5 font-mono text-xs space-y-2.5">
                 <div className="flex items-center justify-between border-b border-slate-800 pb-1.5">
-                  <span className="text-rose-400 font-bold">[SYSTEM ADMINISTRATIVE TELEMETRY]</span>
+                  <span className="text-rose-400 font-bold">LOG SISTEM</span>
                   <span className="text-[10px] bg-slate-800 px-2 py-0.5 rounded text-slate-400 font-bold">{syncStatus}</span>
                 </div>
                 <div className="space-y-1 text-[11px] leading-relaxed text-slate-300">
-                  <p className="text-slate-500">2026-06-11 12:59:19 [AUDIT] Handshake initialized...</p>
-                  <p className="text-slate-300 font-semibold text-emerald-400">● MAPPED 4 DEMO COVARYING WORSPACE MATRICES</p>
-                  <p className="text-slate-400">● TENANT LEVEL POLICIES APPLIED FOR ALL 4 ENTITIES</p>
-                  <p className="text-slate-500">2026-06-11 13:00:23 [RLS] isolated schema pipeline verified</p>
+                  <p className="text-emerald-400">● Sistem aktif dan berjalan</p>
+                  <p className="text-slate-400">● Mata wang: MYR (RM) sahaja</p>
+                  <p className="text-slate-500">● Log aktiviti akan muncul di sini</p>
                 </div>
               </div>
             </div>
@@ -336,19 +334,8 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({
                   <div>RESOURCE ALLOCATION TYPE</div>
                   <div className="text-right">CREDIT MYR</div>
                 </div>
-                <div className="divide-y divide-slate-100 bg-white">
-                  <div className="px-4 py-3 grid grid-cols-4 font-sans text-slate-700">
-                    <div className="font-mono text-slate-400">2026-06-11</div>
-                    <div className="font-semibold text-slate-900">Spanner DB Node APAC</div>
-                    <div><span className="bg-slate-100 px-2 py-0.5 rounded text-[9px] font-mono text-slate-600 font-bold">SPEND_REFILL</span></div>
-                    <div className="text-right font-mono font-bold text-emerald-600">+ RM 50,000.00</div>
-                  </div>
-                  <div className="px-4 py-3 grid grid-cols-4 font-sans text-slate-700">
-                    <div className="font-mono text-slate-400">2026-06-05</div>
-                    <div className="font-semibold text-slate-900">API Ingress Router</div>
-                    <div><span className="bg-slate-100 px-2 py-0.5 rounded text-[9px] font-mono text-slate-600 font-bold">QUOTA_REPASS</span></div>
-                    <div className="text-right font-mono font-bold text-emerald-600">+ RM 22,500.00</div>
-                  </div>
+                <div className="bg-white px-4 py-8 text-center text-slate-400 text-xs">
+                  Tiada rekod lagi
                 </div>
               </div>
             </div>
@@ -441,19 +428,8 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({
                   <div>SEATS UTILIZED</div>
                   <div className="text-right">NEXT RENEWAL DATE</div>
                 </div>
-                <div className="divide-y divide-slate-100 bg-white">
-                  <div className="px-4 py-3 grid grid-cols-4 font-sans text-slate-700">
-                    <div className="font-semibold text-slate-900">Apex Engineering & Consulting MY</div>
-                    <div><span className="bg-green-50 text-green-700 border border-green-200 px-2 py-0.5 rounded text-[9px] font-mono font-bold">SME_STANDARD</span></div>
-                    <div className="font-mono">8 / 15 seats occupied</div>
-                    <div className="text-right font-mono text-slate-500">2026-07-11</div>
-                  </div>
-                  <div className="px-4 py-3 grid grid-cols-4 font-sans text-slate-700">
-                    <div className="font-semibold text-slate-900">MYKERANI Presentation & Demo Hub</div>
-                    <div><span className="bg-amber-50 text-amber-700 border border-amber-200 px-2 py-0.5 rounded text-[9px] font-mono font-bold">SALES_DEMO</span></div>
-                    <div className="font-mono">Unlimited seats</div>
-                    <div className="text-right font-mono text-slate-500">Permanent Sandbox</div>
-                  </div>
+                <div className="bg-white px-4 py-8 text-center text-slate-400 text-xs">
+                  Tiada pelanggan berdaftar lagi
                 </div>
               </div>
             </div>
