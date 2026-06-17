@@ -677,118 +677,264 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
           <div className="max-w-5xl mx-auto p-4 md:p-5 pb-28 md:pb-10 space-y-4 md:space-y-5">
 
             {/* â•â•â•â• DASHBOARD â•â•â•â• */}
-            {activePage === "dashboard" && (
+            {activePage === "dashboard" && (() => {
+              // â"€â"€ Intelligence computations â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
+              const mrrAtRisk    = customers.filter(c => c.status === "suspended").reduce((s, c) => s + c.mrr, 0);
+              const arr          = totalMRR * 12;
+              const growthRate   = 0.05;
+              const forecast     = [1, 2, 3].map(m => Math.round(totalMRR * Math.pow(1 + growthRate, m)));
+              const revenueScore = totalMRR === 0 ? 0 : Math.min(100, Math.round((totalMRR / (totalMRR + mrrAtRisk + 1)) * 100));
+
+              // Upsell targets: active customers using >75% AI credits or storage
+              const upsellTargets = customers
+                .filter(c => c.status === "active")
+                .map(c => {
+                  const plan   = plans.find(p => p.name === c.plan);
+                  const aiPct  = plan && plan.aiCredits > 0 ? c.aiUsage / plan.aiCredits : 0;
+                  const stPct  = (() => { try { const r = localStorage.getItem(`mykerani_storage_quota_${c.id}`); if (!r) return 0; const s = JSON.parse(r); return s.usedBytes / s.quotaBytes; } catch { return 0; } })();
+                  const score  = Math.max(aiPct, stPct);
+                  const reason = aiPct >= stPct ? `AI ${Math.round(aiPct*100)}% digunakan` : `Storan ${Math.round(stPct*100)}% digunakan`;
+                  const nextPlan = plans.find(p => p.price > (plan?.price || 0));
+                  return { ...c, aiPct, stPct, score, reason, nextPlan };
+                })
+                .filter(c => c.score >= 0.75)
+                .sort((a, b) => b.score - a.score);
+
+              // Churn risks
+              const churnRisks = customers
+                .filter(c => c.status === "suspended" || c.attention || allTickets.some(t => t.customer === c.name && t.status !== "resolved"))
+                .map(c => ({
+                  ...c,
+                  riskLevel: c.status === "suspended" ? "high" : "medium" as "high"|"medium",
+                  riskReason: c.status === "suspended" ? "Digantung - tiada bayaran" : c.attention ? "Perlu perhatian" : "Tiket sokongan terbuka",
+                  potentialLoss: c.mrr,
+                }))
+                .sort((a, b) => (b.riskLevel === "high" ? 1 : 0) - (a.riskLevel === "high" ? 1 : 0));
+
+              // Today's briefing items
+              const briefing: { icon: string; text: string; action: () => void; urgent: boolean }[] = [];
+              if (openCases > 0) briefing.push({ icon: "S", text: `${openCases} tiket sokongan menunggu respons`, action: () => setActivePage("support"), urgent: true });
+              if (churnRisks.filter(r => r.riskLevel === "high").length > 0) briefing.push({ icon: "!", text: `${churnRisks.filter(r=>r.riskLevel==="high").length} pelanggan digantung - RM ${mrrAtRisk} MRR terancam`, action: () => setActivePage("customers"), urgent: true });
+              if (upsellTargets.length > 0) briefing.push({ icon: "U", text: `${upsellTargets.length} peluang upsell - potensi RM ${upsellTargets.reduce((s,c)=>s+(c.nextPlan?.price||0)-(c.mrr),0)}/bln tambahan`, action: () => {}, urgent: false });
+              if (briefing.length === 0) briefing.push({ icon: "OK", text: "Semua baik! Tiada tindakan segera diperlukan.", action: () => {}, urgent: false });
+
+              return (
               <div className="space-y-5" id="hq_dashboard">
+
+                {/* Header */}
                 <div className="flex items-center justify-between">
                   <div>
-                    <h1 className="text-xl font-bold text-slate-900">
-                      {isStaff ? `Selamat datang, ${firstName}` : "HQ Dashboard"}
-                    </h1>
-                    <p className="text-xs text-slate-400 mt-0.5">
-                      {new Date().toLocaleDateString("ms-MY", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
-                    </p>
+                    <h1 className="text-xl font-bold text-slate-900">{isStaff ? `Selamat datang, ${firstName}` : "Command Center"}</h1>
+                    <p className="text-xs text-slate-400 mt-0.5">{new Date().toLocaleDateString("ms-MY",{weekday:"long",day:"numeric",month:"long",year:"numeric"})}</p>
                   </div>
                   {!isStaff && (
-                    <button onClick={() => setActivePage("customers")}
-                      className="flex items-center space-x-1.5 px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs font-bold transition cursor-pointer shadow-sm">
-                      <Plus className="w-3.5 h-3.5" /><span>Tambah Pelanggan</span>
+                    <button onClick={() => { setActivePage("customers"); openAddCustomer(); }}
+                      className="flex items-center gap-1.5 px-3 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs font-bold transition cursor-pointer shadow-sm">
+                      <Plus className="w-3.5 h-3.5" /> Tambah Pelanggan
                     </button>
                   )}
                 </div>
 
-                {/* Owner metrics */}
-                {!isStaff ? (
-                  <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                    <MetricCard label="Pelanggan Aktif"   value={activeCount}           sub={`${customers.length} jumlah`}      icon={Users}    color="teal"    trend="up" />
-                    <MetricCard label="Hasil Bulanan"     value={`RM ${totalMRR.toLocaleString()}`} sub="MRR semasa"              icon={DollarSign} color="emerald" trend="up" />
-                    <MetricCard label="Kes Sokongan"      value={openCases}             sub="perlu tindakan"                    icon={Headphones} color="amber" />
-                    <MetricCard label="Penggunaan AI"     value={`${totalAI.toLocaleString()} kredit`} sub="bulan ini"          icon={Zap}      color="violet" />
-                    <MetricCard label="Storan Digunakan"  value={`${customers.reduce((s,c)=>s+c.storageGB,0).toFixed(1)} GB`} sub="jumlah" icon={HardDrive} color="slate" />
-                    <MetricCard label="Akun Perlu Perhatian" value={customers.filter(c=>c.attention).length} sub="semak segera" icon={AlertCircle} color="red" />
-                  </div>
-                ) : (
+                {/* Morning Briefing */}
+                <div className="bg-slate-900 rounded-2xl p-4 space-y-3">
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Briefing Hari Ini</p>
+                  {briefing.map((b, i) => (
+                    <button key={i} onClick={b.action}
+                      className={`w-full flex items-center gap-3 text-left cursor-pointer group ${b.action.toString().includes("setActivePage") ? "hover:opacity-80" : ""}`}>
+                      <div className={`w-6 h-6 rounded-lg flex items-center justify-center text-[9px] font-black shrink-0 ${b.urgent ? "bg-red-500 text-white" : "bg-emerald-600 text-white"}`}>
+                        {b.icon}
+                      </div>
+                      <p className={`text-xs ${b.urgent ? "text-white font-semibold" : "text-slate-300"}`}>{b.text}</p>
+                      {b.action.toString().includes("setActivePage") && <ChevronRight className="w-3 h-3 text-slate-500 shrink-0 ml-auto group-hover:text-slate-300" />}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Revenue Health */}
+                {!isStaff && (
                   <div className="grid grid-cols-2 gap-3">
-                    <MetricCard label="Pelanggan Aktif"    value={activeCount}  sub="memerlukan sokongan"     icon={Users}      color="teal" />
-                    <MetricCard label="Kes Terbuka"        value={openCases}    sub="perlu tindakan segera"   icon={Headphones} color="amber" />
-                    <MetricCard label="Perlu Aktifkan"     value={customers.filter(c=>c.status==="suspended").length} sub="akaun digantung" icon={UserCheck} color="red" />
-                    <MetricCard label="Perlu Perhatian"    value={customers.filter(c=>c.attention).length} sub="semak butiran" icon={AlertTriangle} color="violet" />
+                    {/* MRR card */}
+                    <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 col-span-2 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Kesihatan Hasil</p>
+                        <div className="flex items-center gap-1.5">
+                          <div className={`w-2 h-2 rounded-full ${revenueScore >= 80 ? "bg-emerald-500" : revenueScore >= 50 ? "bg-amber-500" : "bg-red-500"}`} />
+                          <span className={`text-xs font-bold ${revenueScore >= 80 ? "text-emerald-600" : revenueScore >= 50 ? "text-amber-600" : "text-red-600"}`}>
+                            Skor {revenueScore}/100
+                          </span>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-3 gap-3 text-center">
+                        <div>
+                          <p className="text-[10px] text-slate-400">MRR Semasa</p>
+                          <p className="text-lg font-black text-slate-900">RM {totalMRR.toLocaleString()}</p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] text-slate-400">MRR Terancam</p>
+                          <p className={`text-lg font-black ${mrrAtRisk > 0 ? "text-red-500" : "text-slate-300"}`}>RM {mrrAtRisk.toLocaleString()}</p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] text-slate-400">ARR Tahunan</p>
+                          <p className="text-lg font-black text-slate-900">RM {arr.toLocaleString()}</p>
+                        </div>
+                      </div>
+                      {/* 3-month forecast */}
+                      <div className="border-t border-slate-50 pt-3">
+                        <p className="text-[10px] text-slate-400 mb-2">Ramalan MRR (5% pertumbuhan/bln)</p>
+                        <div className="grid grid-cols-3 gap-2">
+                          {forecast.map((v, i) => {
+                            const maxV = Math.max(...forecast, totalMRR, 1);
+                            const h = Math.max(8, Math.round((v / maxV) * 48));
+                            return (
+                              <div key={i} className="flex flex-col items-center gap-1">
+                                <p className="text-[10px] font-bold text-emerald-700">RM {v.toLocaleString()}</p>
+                                <div className="w-full bg-emerald-100 rounded-lg overflow-hidden" style={{height:"48px"}}>
+                                  <div className="w-full bg-emerald-500 rounded-lg transition-all" style={{height:`${h}px`, marginTop:`${48-h}px`}} />
+                                </div>
+                                <p className="text-[9px] text-slate-400">Bln +{i+1}</p>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </div>
+
+                    <MetricCard label="Pelanggan Aktif"  value={activeCount}  sub={`${customers.length} jumlah`}   icon={Users}      color="teal"   trend="up" />
+                    <MetricCard label="Kes Sokongan"     value={openCases}    sub="perlu tindakan"                  icon={Headphones} color="amber" />
                   </div>
                 )}
 
-                {/* Recent customers */}
-                <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-                  <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
-                    <h3 className="text-sm font-bold text-slate-900">{isStaff ? "Pelanggan Perlu Perhatian" : "Pelanggan Terkini"}</h3>
-                    <button onClick={() => setActivePage("customers")} className="text-xs text-emerald-700 font-semibold hover:text-emerald-900 cursor-pointer">Lihat semua -&gt;</button>
+                {/* Staff metrics */}
+                {isStaff && (
+                  <div className="grid grid-cols-2 gap-3">
+                    <MetricCard label="Pelanggan Aktif"   value={activeCount}  sub="memerlukan sokongan"   icon={Users}      color="teal" />
+                    <MetricCard label="Kes Terbuka"       value={openCases}    sub="perlu tindakan segera" icon={Headphones} color="amber" />
+                    <MetricCard label="Perlu Aktifkan"    value={customers.filter(c=>c.status==="suspended").length} sub="akaun digantung" icon={UserCheck} color="red" />
+                    <MetricCard label="Perlu Perhatian"   value={customers.filter(c=>c.attention).length}  sub="semak butiran" icon={AlertTriangle} color="violet" />
                   </div>
-                  {customers.length === 0 ? (
-                    <div className="p-10 text-center">
-                      <Users className="w-8 h-8 text-slate-200 mx-auto mb-2" />
-                      <p className="text-xs text-slate-400">Tiada pelanggan lagi</p>
+                )}
+
+                {/* Upsell Radar */}
+                {!isStaff && upsellTargets.length > 0 && (
+                  <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+                    <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
+                      <div>
+                        <h3 className="text-sm font-bold text-slate-900">Radar Upsell</h3>
+                        <p className="text-[11px] text-slate-400 mt-0.5">Pelanggan hampir had - peluang naik taraf plan</p>
+                      </div>
+                      <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">{upsellTargets.length} peluang</span>
                     </div>
-                  ) : (
                     <div className="divide-y divide-slate-50">
-                      {(isStaff ? customers.filter(c => c.attention || c.status === "suspended") : customers).slice(0, 4).map(c => (
-                        <div key={c.id} className="px-5 py-3.5 flex items-center space-x-4 hover:bg-slate-50 transition">
-                          <div className="w-8 h-8 rounded-xl bg-emerald-50 flex items-center justify-center text-emerald-700 font-bold text-sm shrink-0">
+                      {upsellTargets.slice(0, 5).map(c => (
+                        <div key={c.id} className="px-5 py-3.5 flex items-center gap-4">
+                          <div className="w-8 h-8 rounded-xl bg-amber-50 flex items-center justify-center text-amber-700 font-bold text-sm shrink-0">
                             {c.name.charAt(0)}
                           </div>
                           <div className="flex-1 min-w-0">
-                            <p className="text-sm font-semibold text-slate-800 truncate">{c.name}</p>
-                            <p className="text-[11px] text-slate-400">{c.plan} &middot; Perbaharui {c.renewal || "-"}</p>
+                            <p className="text-xs font-bold text-slate-800 truncate">{c.name}</p>
+                            <div className="flex items-center gap-2 mt-0.5">
+                              <span className="text-[10px] text-slate-400">{c.plan}</span>
+                              <span className="text-[10px] font-semibold text-amber-600">{c.reason}</span>
+                            </div>
+                            <div className="h-1 bg-slate-100 rounded-full mt-1.5 overflow-hidden">
+                              <div className={`h-full rounded-full ${c.score >= 0.95 ? "bg-red-500" : "bg-amber-400"}`} style={{width:`${Math.min(c.score*100,100)}%`}} />
+                            </div>
                           </div>
-                          <StatusBadge status={c.status} />
-                          <button onClick={() => setActivePage("customers")} className="text-slate-300 hover:text-emerald-600 transition cursor-pointer">
+                          {c.nextPlan && (
+                            <div className="text-right shrink-0">
+                              <p className="text-[10px] text-slate-400">Naik ke</p>
+                              <p className="text-xs font-bold text-emerald-700">{c.nextPlan.name}</p>
+                              <p className="text-[10px] text-slate-500">+RM {c.nextPlan.price - c.mrr}/bln</p>
+                            </div>
+                          )}
+                          <button onClick={() => setActivePage("customers")}
+                            className="shrink-0 px-3 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white text-[10px] font-bold rounded-lg cursor-pointer transition">
+                            Hubungi
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Churn Risk */}
+                {!isStaff && churnRisks.length > 0 && (
+                  <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+                    <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
+                      <div>
+                        <h3 className="text-sm font-bold text-slate-900">Risiko Churn</h3>
+                        <p className="text-[11px] text-slate-400 mt-0.5">Pelanggan berisiko berhenti - ambil tindakan sekarang</p>
+                      </div>
+                      <span className="text-[10px] font-bold text-red-600 bg-red-50 border border-red-200 px-2 py-0.5 rounded-full">
+                        RM {mrrAtRisk.toLocaleString()} terancam
+                      </span>
+                    </div>
+                    <div className="divide-y divide-slate-50">
+                      {churnRisks.slice(0, 4).map(c => (
+                        <div key={c.id} className={`px-5 py-3.5 flex items-center gap-4 ${c.riskLevel === "high" ? "bg-red-50/30" : ""}`}>
+                          <div className={`w-8 h-8 rounded-xl flex items-center justify-center font-bold text-sm shrink-0 ${c.riskLevel === "high" ? "bg-red-100 text-red-600" : "bg-amber-50 text-amber-600"}`}>
+                            {c.name.charAt(0)}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs font-bold text-slate-800 truncate">{c.name}</p>
+                            <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                              <span className="text-[10px] text-slate-400">{c.plan} &middot; RM {c.mrr}/bln</span>
+                              <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${c.riskLevel === "high" ? "text-red-600 bg-red-50" : "text-amber-600 bg-amber-50"}`}>{c.riskReason}</span>
+                            </div>
+                          </div>
+                          <button onClick={() => setActivePage("customers")}
+                            className={`shrink-0 px-3 py-1.5 text-[10px] font-bold rounded-lg cursor-pointer transition border ${c.riskLevel === "high" ? "bg-red-500 text-white hover:bg-red-600 border-red-500" : "bg-white text-slate-600 hover:bg-slate-50 border-slate-200"}`}>
+                            {c.riskLevel === "high" ? "Aktifkan" : "Semak"}
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Open tickets */}
+                {allTickets.filter(t => t.status !== "resolved").length > 0 && (
+                  <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+                    <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
+                      <h3 className="text-sm font-bold text-slate-900">Tiket Sokongan Terbuka</h3>
+                      <button onClick={() => setActivePage("support")} className="text-xs text-emerald-700 font-semibold cursor-pointer hover:text-emerald-900">Urus -&gt;</button>
+                    </div>
+                    <div className="divide-y divide-slate-50">
+                      {allTickets.filter(t => t.status !== "resolved").slice(0, 3).map(t => (
+                        <div key={t.id} className="px-5 py-3 flex items-start gap-3">
+                          <StatusBadge status={t.priority} />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs font-bold text-slate-800">{t.subject}</p>
+                            <p className="text-[11px] text-slate-400">{t.customer}</p>
+                          </div>
+                          <button onClick={() => setActivePage("support")} className="text-slate-300 hover:text-emerald-600 cursor-pointer shrink-0">
                             <ChevronRight className="w-4 h-4" />
                           </button>
                         </div>
                       ))}
                     </div>
-                  )}
-                </div>
-
-                {/* Open support tickets */}
-                {allTickets.length > 0 && (
-                  <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-                    <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
-                      <h3 className="text-sm font-bold text-slate-900">Kes Sokongan Terbuka</h3>
-                      <button onClick={() => setActivePage("support")} className="text-xs text-emerald-700 font-semibold hover:text-emerald-900 cursor-pointer">Urus -&gt;</button>
-                    </div>
-                    <div className="divide-y divide-slate-50">
-                      {allTickets.filter(t => t.status !== "resolved").map(t => (
-                        <div key={t.id} className="px-5 py-4 space-y-1">
-                          <div className="flex items-center justify-between">
-                            <p className="text-xs font-bold text-slate-800">{t.id} - {t.subject}</p>
-                            <StatusBadge status={t.priority} />
-                          </div>
-                          <p className="text-xs text-slate-500">{t.customer}</p>
-                          <p className="text-[11px] text-slate-400 bg-slate-50 rounded-lg px-3 py-2 border border-slate-100">
-                            AI: {t.summary}
-                          </p>
-                        </div>
-                      ))}
-                    </div>
                   </div>
                 )}
 
-                {/* Quick Actions */}
+                {/* Quick actions */}
                 {!isStaff && (
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                     {[
-                      { label: "Tambah Pelanggan", icon: Plus,       page: "customers" as HQPage,  color: "bg-emerald-700 text-white" },
-                      { label: "Urus Sokongan",    icon: Headphones, page: "support" as HQPage,    color: "bg-white border border-slate-200 text-slate-700" },
-                      { label: "Semak Penggunaan", icon: Activity,   page: "usage" as HQPage,      color: "bg-white border border-slate-200 text-slate-700" },
-                      { label: "Urus Plan",        icon: Package,    page: "billing" as HQPage,    color: "bg-white border border-slate-200 text-slate-700" },
-                    ].map(({ label, icon: Icon, page, color }) => (
-                      <button key={label} onClick={() => { setActivePage(page); if (label === "Tambah Pelanggan") openAddCustomer(); }}
-                        className={`flex items-center space-x-2 px-4 py-3 rounded-xl text-xs font-bold shadow-sm transition cursor-pointer ${color}`}>
+                      { label: "Tambah Pelanggan", icon: Plus,       action: () => { setActivePage("customers"); openAddCustomer(); }, color: "bg-emerald-700 text-white" },
+                      { label: "Urus Sokongan",    icon: Headphones, action: () => setActivePage("support"),    color: "bg-white border border-slate-200 text-slate-700" },
+                      { label: "Lihat Revenue",    icon: TrendingUp, action: () => setActivePage("revenue"),    color: "bg-white border border-slate-200 text-slate-700" },
+                      { label: "AI Router",        icon: Zap,        action: () => setActivePage("system"),     color: "bg-white border border-slate-200 text-slate-700" },
+                    ].map(({ label, icon: Icon, action, color }) => (
+                      <button key={label} onClick={action}
+                        className={`flex items-center gap-2 px-4 py-3 rounded-xl text-xs font-bold shadow-sm transition cursor-pointer ${color}`}>
                         <Icon className="w-4 h-4 shrink-0" /><span>{label}</span>
                       </button>
                     ))}
                   </div>
                 )}
               </div>
-            )}
+              );
+            })()}
 
             {/* â•â•â•â• CUSTOMERS â•â•â•â• */}
             {activePage === "customers" && (
