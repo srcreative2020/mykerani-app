@@ -304,14 +304,71 @@ export function OwnerDashboard() {
             {/* Conversation area */}
             <div className="flex-1 overflow-y-auto px-4 pt-4 pb-2 space-y-4" id="owner_chat_area">
 
-              {/* Welcome â€" shown only if no messages */}
+              {/* Welcome + Financial Snapshot â€" shown only if no messages */}
               {chatMessages.length === 0 && (
-                <div className="flex flex-col items-center justify-center py-8 space-y-2 text-center">
-                  <div className="w-14 h-14 rounded-2xl bg-slate-900 flex items-center justify-center shadow-lg mb-1">
-                    <Brain className="w-7 h-7 text-white" />
+                <div className="space-y-4 pt-2">
+                  {/* Greeting */}
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-2xl bg-slate-900 flex items-center justify-center shadow shrink-0">
+                      <Brain className="w-5 h-5 text-white" />
+                    </div>
+                    <div>
+                      <h2 className="text-base font-bold text-slate-900">{greeting}, {firstName}</h2>
+                      <p className="text-xs text-slate-400">{now.toLocaleDateString("ms-MY", { weekday:"long", day:"numeric", month:"long" })}</p>
+                    </div>
                   </div>
-                  <h2 className="text-xl font-bold text-slate-900">{greeting}, {firstName}</h2>
-                  <p className="text-sm text-slate-500 max-w-xs">Apa yang anda ingin MYKERANI bantu hari ini?</p>
+
+                  {/* Financial Snapshot */}
+                  {myEvents.length > 0 ? (
+                    <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm space-y-3">
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Ringkasan Bulan Ini</p>
+                      <div className="grid grid-cols-3 gap-2">
+                        <div className="text-center">
+                          <p className="text-[10px] text-slate-400 mb-0.5">Masuk</p>
+                          <p className="text-sm font-bold text-emerald-600">RM {incomeThisMonth.toLocaleString("ms-MY",{minimumFractionDigits:0})}</p>
+                        </div>
+                        <div className="text-center border-x border-slate-100">
+                          <p className="text-[10px] text-slate-400 mb-0.5">Keluar</p>
+                          <p className="text-sm font-bold text-rose-500">RM {expenseThisMonth.toLocaleString("ms-MY",{minimumFractionDigits:0})}</p>
+                        </div>
+                        <div className="text-center">
+                          <p className="text-[10px] text-slate-400 mb-0.5">Bersih</p>
+                          <p className={`text-sm font-bold ${(incomeThisMonth-expenseThisMonth)>=0?"text-slate-800":"text-rose-500"}`}>
+                            {(incomeThisMonth-expenseThisMonth)>=0?"+":"-"}RM {Math.abs(incomeThisMonth-expenseThisMonth).toLocaleString("ms-MY",{minimumFractionDigits:0})}
+                          </p>
+                        </div>
+                      </div>
+                      {/* Recent 3 transactions */}
+                      {myEvents.length > 0 && (
+                        <div className="space-y-1.5 pt-1 border-t border-slate-100">
+                          {myEvents.slice(-3).reverse().map(ev => (
+                            <div key={ev.id} className="flex items-center justify-between">
+                              <div className="flex items-center gap-2 min-w-0">
+                                <div className={`w-5 h-5 rounded-lg flex items-center justify-center shrink-0 ${ev.type==="INCOME"?"bg-emerald-50":"bg-rose-50"}`}>
+                                  {ev.type==="INCOME"?<TrendingUp className="w-3 h-3 text-emerald-500"/>:<TrendingDown className="w-3 h-3 text-rose-400"/>}
+                                </div>
+                                <p className="text-[11px] text-slate-600 truncate">{ev.partyName||ev.categoryName}</p>
+                              </div>
+                              <span className={`text-[11px] font-bold shrink-0 ${ev.type==="INCOME"?"text-emerald-600":"text-rose-500"}`}>
+                                {ev.type==="INCOME"?"+":"-"}RM {ev.amountMyr.toFixed(2)}
+                              </span>
+                            </div>
+                          ))}
+                          <button onClick={()=>setActiveTab("dashboard")} className="text-[10px] text-indigo-500 font-semibold w-full text-right cursor-pointer hover:underline">
+                            Lihat semua -&gt;
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="bg-white border border-dashed border-slate-200 rounded-2xl p-5 text-center space-y-2">
+                      <Wallet className="w-8 h-8 text-slate-200 mx-auto" />
+                      <p className="text-xs font-semibold text-slate-500">Belum ada rekod kewangan</p>
+                      <p className="text-[11px] text-slate-400">Beritahu MYKERANI atau gunakan butang di bawah untuk tambah rekod pertama anda.</p>
+                    </div>
+                  )}
+
+                  <p className="text-xs text-slate-400 text-center">Tanya saya apa sahaja tentang kewangan anda</p>
                 </div>
               )}
 
