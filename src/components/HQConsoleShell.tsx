@@ -53,7 +53,7 @@ type ModelTier = "fast" | "balanced" | "pro";
 interface AIModel   { id: string; name: string; inputPer1M: number; outputPer1M: number; tier: ModelTier; }
 interface AIProvDef { id: string; company: string; name: string; badge: string; models: AIModel[]; }
 type RouterStrategy = "cheapest" | "balanced" | "quality" | "custom";
-interface ProviderCfg { enabled: boolean; apiKey: string; selectedModel: string; testStatus: "idle" | "ok" | "fail"; }
+interface ProviderCfg { enabled: boolean; apiKey: string; hasKey: boolean; selectedModel: string; testStatus: "idle" | "ok" | "fail"; }
 interface PlanRoute   { planId: string; providerId: string; modelId: string; }
 
 const AI_PROVIDERS: AIProvDef[] = [
@@ -99,7 +99,7 @@ function qCostUSD(m: AIModel): number { return (600 * m.inputPer1M + 900 * m.out
 
 function defaultProviderCfgs(): Record<string, ProviderCfg> {
   const out: Record<string, ProviderCfg> = {};
-  AI_PROVIDERS.forEach(p => { out[p.id] = { enabled: p.id === "gemini", apiKey: "", selectedModel: p.models[0].id, testStatus: "idle" }; });
+  AI_PROVIDERS.forEach(p => { out[p.id] = { enabled: p.id === "gemini", apiKey: "", hasKey: false, selectedModel: p.models[0].id, testStatus: "idle" }; });
   return out;
 }
 
@@ -407,35 +407,85 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
   // AI Router state
   const aiRouterKey = `mykerani_airouter_${user?.id ?? "guest"}`;
   const [routerStrategy, setRouterStrategy] = useState<RouterStrategy>(() => {
+    if (useRealData) return "cheapest";
     try { const s = JSON.parse(localStorage.getItem(aiRouterKey) || "{}"); return s.strategy || "cheapest"; } catch { return "cheapest"; }
   });
   const [providerCfgs, setProviderCfgs] = useState<Record<string, ProviderCfg>>(() => {
+    if (useRealData) return defaultProviderCfgs();
     try {
       const s = JSON.parse(localStorage.getItem(aiRouterKey) || "{}");
       return s.providers ? { ...defaultProviderCfgs(), ...s.providers } : defaultProviderCfgs();
     } catch { return defaultProviderCfgs(); }
   });
   const [planRoutes, setPlanRoutes] = useState<PlanRoute[]>(() => {
+    if (useRealData) return [];
     try { const s = JSON.parse(localStorage.getItem(aiRouterKey) || "{}"); return s.planRoutes || []; } catch { return []; }
   });
   const [usdMyr, setUsdMyr] = useState<number>(() => {
+    if (useRealData) return 4.45;
     try { const s = JSON.parse(localStorage.getItem(aiRouterKey) || "{}"); return s.usdMyr || 4.45; } catch { return 4.45; }
   });
   const [testingProv, setTestingProv] = useState<string | null>(null);
+  const [aiRouterLoaded, setAiRouterLoaded] = useState(!useRealData);
+
+  // Load real AI Router config from Supabase (source of truth for the whole app's AI behavior)
+  useEffect(() => {
+    if (!useRealData) return;
+    let cancelled = false;
+    (async () => {
+      const [settings, statuses] = await Promise.all([hqService.getAiRouterSettings(), hqService.getAiProviderStatuses()]);
+      if (cancelled) return;
+      if (settings) {
+        setRouterStrategy(settings.strategy);
+        setUsdMyr(settings.usdMyr);
+        setPlanRoutes(settings.planRoutes);
+      }
+      if (statuses.length > 0) {
+        setProviderCfgs(prev => {
+          const next = { ...defaultProviderCfgs() };
+          statuses.forEach(s => {
+            next[s.provider] = {
+              enabled: s.enabled,
+              apiKey: "",
+              hasKey: s.hasKey,
+              selectedModel: s.selectedModel || next[s.provider]?.selectedModel || AI_PROVIDERS.find(p => p.id === s.provider)?.models[0].id || "",
+              testStatus: "idle",
+            };
+          });
+          return next;
+        });
+      }
+      setAiRouterLoaded(true);
+    })();
+    return () => { cancelled = true; };
+  }, [useRealData]);
 
   useEffect(() => {
+    if (useRealData) return;
     localStorage.setItem(aiRouterKey, JSON.stringify({ strategy: routerStrategy, providers: providerCfgs, planRoutes, usdMyr }));
-  }, [routerStrategy, providerCfgs, planRoutes, usdMyr, aiRouterKey]);
+  }, [routerStrategy, providerCfgs, planRoutes, usdMyr, aiRouterKey, useRealData]);
 
-  const updateProviderCfg = (id: string, patch: Partial<ProviderCfg>) =>
+  // Persist non-secret strategy/exchange-rate/plan-route settings to Supabase
+  useEffect(() => {
+    if (!useRealData || !aiRouterLoaded) return;
+    hqService.saveAiRouterSettings({ strategy: routerStrategy, usdMyr, planRoutes });
+  }, [useRealData, aiRouterLoaded, routerStrategy, usdMyr, planRoutes]);
+
+  const updateProviderCfg = (id: string, patch: Partial<ProviderCfg>) => {
     setProviderCfgs(prev => ({ ...prev, [id]: { ...prev[id], ...patch } }));
+    if (useRealData) {
+      const merged = { ...(providerCfgs[id] || defaultProviderCfgs()[id]), ...patch };
+      const apiKeyToSave = patch.apiKey ? patch.apiKey : (merged.apiKey || null);
+      hqService.upsertAiProviderConfig(id, merged.enabled, apiKeyToSave, merged.selectedModel);
+    }
+  };
 
   const testConnection = async (providerId: string) => {
     setTestingProv(providerId);
     updateProviderCfg(providerId, { testStatus: "idle" });
     await new Promise(r => setTimeout(r, 1600));
-    const key = providerCfgs[providerId]?.apiKey || "";
-    const ok = key.length >= 10;
+    const cfg = providerCfgs[providerId];
+    const ok = Boolean(cfg?.apiKey ? cfg.apiKey.length >= 10 : cfg?.hasKey);
     updateProviderCfg(providerId, { testStatus: ok ? "ok" : "fail" });
     setTestingProv(null);
   };
@@ -1577,7 +1627,7 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
                         placeholder="Masukkan API key anda..."
                         className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-emerald-400 font-mono" />
                       <p className="text-[10px] text-slate-400 mt-1">API key disimpan secara selamat dan tidak dikongsi dengan pelanggan.</p>
-                      <p className="text-[10px] text-amber-600 mt-1 font-semibold">⚠️ Tetapan ini belum disambungkan ke server. Untuk aktifkan AI sebenar, tetapkan OPENAI_API_KEY / GEMINI_API_KEY / ANTHROPIC_API_KEY terus di environment variables server (Railway), bukan di sini.</p>
+                      <p className="text-[10px] text-amber-600 mt-1 font-semibold">⚠️ Untuk mengaktifkan pembekal AI sebenar, gunakan panel "Pusat Sistem &rarr; AI Router" — tetapan tersebut yang digunakan oleh seluruh sistem MyKerani.</p>
                     </div>
                   </div>
                   <button onClick={() => saveBizSettings({ aiProvider: bizSettings.aiProvider, aiModel: bizSettings.aiModel, aiApiKey: bizSettings.aiApiKey })}
@@ -1850,9 +1900,9 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
                               <div className="flex gap-2">
                                 <input type="password" value={cfg.apiKey}
                                   onChange={e => updateProviderCfg(prov.id, { apiKey: e.target.value, testStatus: "idle" })}
-                                  placeholder={`API Key ${prov.name}`}
+                                  placeholder={cfg.hasKey ? "API key tersimpan (masukkan baru untuk tukar)" : `API Key ${prov.name}`}
                                   className="flex-1 border border-slate-200 rounded-lg px-3 py-1.5 text-xs focus:outline-none focus:border-emerald-400" />
-                                <button onClick={() => testConnection(prov.id)} disabled={isTesting || !cfg.apiKey}
+                                <button onClick={() => testConnection(prov.id)} disabled={isTesting || (!cfg.apiKey && !cfg.hasKey)}
                                   className="px-3 py-1.5 rounded-lg text-xs font-bold border transition cursor-pointer disabled:opacity-40 bg-white border-slate-200 text-slate-600 hover:border-emerald-400 hover:text-emerald-600 shrink-0">
                                   {isTesting ? "..." : "Test"}
                                 </button>

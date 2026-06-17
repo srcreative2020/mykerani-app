@@ -761,9 +761,9 @@ async function startServer() {
         return res.status(400).json({ error: "Missing assistant query text." });
       }
 
-      const candidates = getAiProviderCandidates();
+      const candidates = await getAiProviderCandidates();
       if (candidates.length === 0) {
-        console.info("No AI provider API key found (checked OPENAI_API_KEY, GEMINI_API_KEY, ANTHROPIC_API_KEY). Directing to simulated workspace context analysis.");
+        console.info("No AI provider configured (checked HQ Console AI Router settings, then OPENAI_API_KEY/GEMINI_API_KEY/ANTHROPIC_API_KEY env vars). Directing to simulated workspace context analysis.");
         const fallbackResult = generateFallbackAssistantResponse(query, financialContext || {});
         return res.json(fallbackResult);
       }
@@ -805,19 +805,13 @@ If you output markdown formatting inside the fields, escape quotes correctly.`;
       // next one if a call fails (quota/billing/outage), before giving up to the simulator.
       let parsedResponse: any = null;
       let lastErr: any = null;
-      for (const { provider, apiKey } of candidates) {
+      for (const candidate of candidates) {
         try {
-          if (provider === "gemini") {
-            parsedResponse = await callGeminiAssistant(apiKey, systemPrompt);
-          } else if (provider === "openai") {
-            parsedResponse = await callOpenAiAssistant(apiKey, systemPrompt);
-          } else {
-            parsedResponse = await callAnthropicAssistant(apiKey, systemPrompt);
-          }
+          parsedResponse = await callAiProvider(candidate, systemPrompt);
           break;
         } catch (err: any) {
           lastErr = err;
-          console.error(`AI provider "${provider}" failed, trying next candidate:`, err?.message || err);
+          console.error(`AI provider "${candidate.provider}" failed, trying next candidate:`, err?.message || err);
         }
       }
 
@@ -850,49 +844,180 @@ If you output markdown formatting inside the fields, escape quotes correctly.`;
     }
   });
 
-  // MYKERANI AI Router: returns every configured provider (one with an API key set),
-  // ordered cheapest-first by default. Put as many provider keys as you like in the
-  // environment — the router tries the cheapest one first and falls through to the
-  // next on failure, so you only pay for the priciest provider when the cheaper
-  // ones are unavailable or out of quota.
-  //
-  // Override order with AI_PROVIDER_ORDER="openai,gemini,anthropic" (comma-separated),
-  // or pin a single provider with AI_PROVIDER="openai".
-  function getAiProviderCandidates(): { provider: "gemini" | "openai" | "anthropic"; apiKey: string }[] {
-    const keys: Record<"gemini" | "openai" | "anthropic", string | undefined> = {
+  // ── MYKERANI AI Router ──────────────────────────────────────────────────
+  // Provider catalogue mirrored from the HQ Console "AI Router" UI
+  // (src/components/HQConsoleShell.tsx AI_PROVIDERS) so cost-based ordering
+  // here matches what HQ sees. OpenAI-compatible providers share one caller
+  // since they all expose the same /chat/completions REST shape.
+  type AiProviderId = "gemini" | "openai" | "anthropic" | "deepseek" | "xai" | "mistral" | "groq" | "alibaba";
+  interface AiCandidate { provider: AiProviderId; apiKey: string; model: string; costUsd: number; }
+
+  const OPENAI_COMPATIBLE_BASE_URLS: Record<string, string> = {
+    openai: "https://api.openai.com/v1",
+    deepseek: "https://api.deepseek.com/v1",
+    xai: "https://api.x.ai/v1",
+    mistral: "https://api.mistral.ai/v1",
+    groq: "https://api.groq.com/openai/v1",
+    alibaba: "https://dashscope-intl.aliyuncs.com/compatible-mode/v1",
+  };
+
+  const MODEL_CATALOGUE: Record<AiProviderId, { id: string; inputPer1M: number; outputPer1M: number; tier: "fast" | "balanced" | "pro" }[]> = {
+    gemini: [
+      { id: "gemini-2.0-flash", inputPer1M: 0.075, outputPer1M: 0.30, tier: "fast" },
+      { id: "gemini-2.5-flash", inputPer1M: 0.15, outputPer1M: 0.60, tier: "balanced" },
+      { id: "gemini-2.5-pro", inputPer1M: 1.25, outputPer1M: 10.00, tier: "pro" },
+    ],
+    openai: [
+      { id: "gpt-4o-mini", inputPer1M: 0.15, outputPer1M: 0.60, tier: "fast" },
+      { id: "o4-mini", inputPer1M: 1.10, outputPer1M: 4.40, tier: "balanced" },
+      { id: "gpt-4o", inputPer1M: 2.50, outputPer1M: 10.00, tier: "pro" },
+    ],
+    anthropic: [
+      { id: "claude-haiku-4-5", inputPer1M: 0.80, outputPer1M: 4.00, tier: "fast" },
+      { id: "claude-sonnet-4-6", inputPer1M: 3.00, outputPer1M: 15.00, tier: "pro" },
+    ],
+    deepseek: [
+      { id: "deepseek-v3", inputPer1M: 0.27, outputPer1M: 1.10, tier: "balanced" },
+      { id: "deepseek-r1", inputPer1M: 0.55, outputPer1M: 2.19, tier: "pro" },
+    ],
+    xai: [
+      { id: "grok-3-mini", inputPer1M: 0.30, outputPer1M: 0.50, tier: "fast" },
+      { id: "grok-3", inputPer1M: 3.00, outputPer1M: 15.00, tier: "pro" },
+    ],
+    mistral: [
+      { id: "mistral-small-3", inputPer1M: 0.10, outputPer1M: 0.30, tier: "fast" },
+      { id: "mistral-large-2", inputPer1M: 2.00, outputPer1M: 6.00, tier: "pro" },
+    ],
+    groq: [
+      { id: "llama-3.3-70b", inputPer1M: 0.05, outputPer1M: 0.10, tier: "fast" },
+      { id: "llama-4-scout", inputPer1M: 0.11, outputPer1M: 0.34, tier: "balanced" },
+      { id: "llama-4-maverick", inputPer1M: 0.50, outputPer1M: 0.77, tier: "pro" },
+    ],
+    alibaba: [
+      { id: "qwen-turbo", inputPer1M: 0.05, outputPer1M: 0.20, tier: "fast" },
+      { id: "qwen2.5-72b", inputPer1M: 0.20, outputPer1M: 0.60, tier: "balanced" },
+      { id: "qwen-plus", inputPer1M: 0.40, outputPer1M: 1.20, tier: "pro" },
+    ],
+  };
+
+  function modelCostUsd(provider: AiProviderId, modelId: string | null): number {
+    const models = MODEL_CATALOGUE[provider];
+    const m = models.find(x => x.id === modelId) || models[0];
+    return (600 * m.inputPer1M + 900 * m.outputPer1M) / 1_000_000;
+  }
+
+  function modelTier(provider: AiProviderId, modelId: string | null): "fast" | "balanced" | "pro" {
+    const models = MODEL_CATALOGUE[provider];
+    return (models.find(x => x.id === modelId) || models[0]).tier;
+  }
+
+  // Fetch the HQ-configured AI Router settings + provider keys directly from
+  // Supabase using the service-role key (bypasses RLS — this table is locked
+  // to all client roles on purpose, only the server may read real key values).
+  async function fetchDbAiConfig(): Promise<{ strategy: string; configs: { provider: AiProviderId; enabled: boolean; apiKey: string; model: string | null }[] } | null> {
+    const supabaseUrl = process.env.VITE_SUPABASE_URL;
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    if (!supabaseUrl || !serviceRoleKey) return null;
+
+    try {
+      const headers = { apikey: serviceRoleKey, Authorization: `Bearer ${serviceRoleKey}` };
+      const [settingsRes, configsRes] = await Promise.all([
+        fetch(`${supabaseUrl}/rest/v1/ai_router_settings?id=eq.global&select=strategy`, { headers }),
+        fetch(`${supabaseUrl}/rest/v1/ai_provider_configs?select=provider,enabled,api_key,selected_model`, { headers }),
+      ]);
+      if (!settingsRes.ok || !configsRes.ok) return null;
+
+      const settingsRows: any[] = await settingsRes.json();
+      const configRows: any[] = await configsRes.json();
+      const strategy = settingsRows[0]?.strategy || "cheapest";
+
+      const configs = configRows
+        .filter(r => r.enabled && r.api_key)
+        .map(r => ({ provider: r.provider as AiProviderId, enabled: true, apiKey: r.api_key as string, model: r.selected_model as string | null }));
+
+      return { strategy, configs };
+    } catch (err) {
+      console.error("Failed to fetch AI Router config from Supabase:", err);
+      return null;
+    }
+  }
+
+  // Builds the ordered candidate list to try, cheapest-first by default (or per
+  // the HQ-selected strategy: balanced prefers mid-tier models, quality prefers
+  // top-tier models). Falls back to environment variables when the HQ Console
+  // AI Router hasn't been configured in Supabase yet (e.g. local/self-hosted dev).
+  async function getAiProviderCandidates(): Promise<AiCandidate[]> {
+    const dbConfig = await fetchDbAiConfig();
+
+    if (dbConfig && dbConfig.configs.length > 0) {
+      let candidates: AiCandidate[] = dbConfig.configs.map(c => ({
+        provider: c.provider,
+        apiKey: c.apiKey,
+        model: c.model || MODEL_CATALOGUE[c.provider][0].id,
+        costUsd: modelCostUsd(c.provider, c.model),
+      }));
+
+      if (dbConfig.strategy === "quality") {
+        candidates = candidates.filter(c => modelTier(c.provider, c.model) === "pro")
+          .concat(candidates.filter(c => modelTier(c.provider, c.model) !== "pro"));
+      } else if (dbConfig.strategy === "balanced") {
+        candidates = candidates.filter(c => modelTier(c.provider, c.model) !== "pro")
+          .concat(candidates.filter(c => modelTier(c.provider, c.model) === "pro"));
+      }
+      // "cheapest" and "custom" (no per-request plan context yet) both sort by raw cost.
+      candidates.sort((a, b) => a.costUsd - b.costUsd);
+      return candidates;
+    }
+
+    // Fallback: environment-variable based config (Gemini/OpenAI/Anthropic only).
+    const envKeys: Record<"gemini" | "openai" | "anthropic", string | undefined> = {
       openai: process.env.OPENAI_API_KEY,
       gemini: process.env.GEMINI_API_KEY,
       anthropic: process.env.ANTHROPIC_API_KEY,
     };
-    const allProviders: ("gemini" | "openai" | "anthropic")[] = ["gemini", "openai", "anthropic"]; // cheapest-first default
-
+    const allProviders: ("gemini" | "openai" | "anthropic")[] = ["gemini", "openai", "anthropic"];
     const forced = (process.env.AI_PROVIDER || "").toLowerCase();
     if (forced === "gemini" || forced === "openai" || forced === "anthropic") {
-      return keys[forced] ? [{ provider: forced, apiKey: keys[forced]! }] : [];
+      return envKeys[forced]
+        ? [{ provider: forced, apiKey: envKeys[forced]!, model: MODEL_CATALOGUE[forced][0].id, costUsd: 0 }]
+        : [];
     }
-
     const customOrder = (process.env.AI_PROVIDER_ORDER || "")
-      .toLowerCase()
-      .split(",")
-      .map(s => s.trim())
+      .toLowerCase().split(",").map(s => s.trim())
       .filter((p): p is "gemini" | "openai" | "anthropic" => allProviders.includes(p as any));
-
     const order = customOrder.length > 0
       ? [...customOrder, ...allProviders.filter(p => !customOrder.includes(p))]
       : allProviders;
-
     return order
-      .filter(p => Boolean(keys[p]))
-      .map(p => ({ provider: p, apiKey: keys[p]! }));
+      .filter(p => Boolean(envKeys[p]))
+      .map(p => ({ provider: p, apiKey: envKeys[p]!, model: process.env[`${p.toUpperCase()}_MODEL`] || MODEL_CATALOGUE[p][0].id, costUsd: 0 }));
   }
 
-  async function callGeminiAssistant(apiKey: string, systemPrompt: string) {
+  function parseJsonLoose(content: string): any {
+    try { return JSON.parse(content); } catch {}
+    const m = content.match(/\{[\s\S]*\}/);
+    if (m) return JSON.parse(m[0]);
+    throw new Error("Could not parse JSON from AI response");
+  }
+
+  async function callAiProvider(candidate: AiCandidate, systemPrompt: string): Promise<any> {
+    if (candidate.provider === "gemini") {
+      return callGeminiAssistant(candidate.apiKey, candidate.model, systemPrompt);
+    }
+    if (candidate.provider === "anthropic") {
+      return callAnthropicAssistant(candidate.apiKey, candidate.model, systemPrompt);
+    }
+    const baseUrl = OPENAI_COMPATIBLE_BASE_URLS[candidate.provider];
+    return callOpenAiCompatibleAssistant(baseUrl, candidate.apiKey, candidate.model, systemPrompt);
+  }
+
+  async function callGeminiAssistant(apiKey: string, model: string, systemPrompt: string) {
     const ai = new GoogleGenAI({
       apiKey,
       httpOptions: { headers: { 'User-Agent': 'aistudio-build' } }
     });
     const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
+      model,
       contents: systemPrompt,
       config: {
         responseMimeType: "application/json",
@@ -945,9 +1070,8 @@ If you output markdown formatting inside the fields, escape quotes correctly.`;
     return JSON.parse(responseText);
   }
 
-  async function callOpenAiAssistant(apiKey: string, systemPrompt: string) {
-    const model = process.env.OPENAI_MODEL || "gpt-4o-mini";
-    const resp = await fetch("https://api.openai.com/v1/chat/completions", {
+  async function callOpenAiCompatibleAssistant(baseUrl: string, apiKey: string, model: string, systemPrompt: string) {
+    const resp = await fetch(`${baseUrl}/chat/completions`, {
       method: "POST",
       headers: { "Content-Type": "application/json", "Authorization": `Bearer ${apiKey}` },
       body: JSON.stringify({
@@ -959,16 +1083,15 @@ If you output markdown formatting inside the fields, escape quotes correctly.`;
     });
     if (!resp.ok) {
       const errBody = await resp.text();
-      throw new Error(`OpenAI API error ${resp.status}: ${errBody}`);
+      throw new Error(`AI provider API error ${resp.status}: ${errBody}`);
     }
     const data: any = await resp.json();
     const content = data.choices?.[0]?.message?.content;
-    if (!content) throw new Error("No response content returned from OpenAI API");
-    return JSON.parse(content);
+    if (!content) throw new Error("No response content returned from AI provider API");
+    return parseJsonLoose(content);
   }
 
-  async function callAnthropicAssistant(apiKey: string, systemPrompt: string) {
-    const model = process.env.ANTHROPIC_MODEL || "claude-haiku-4-5-20251001";
+  async function callAnthropicAssistant(apiKey: string, model: string, systemPrompt: string) {
     const resp = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: {
@@ -989,8 +1112,7 @@ If you output markdown formatting inside the fields, escape quotes correctly.`;
     const data: any = await resp.json();
     const content = data.content?.[0]?.text;
     if (!content) throw new Error("No response content returned from Anthropic API");
-    const jsonMatch = content.match(/\{[\s\S]*\}/);
-    return JSON.parse(jsonMatch ? jsonMatch[0] : content);
+    return parseJsonLoose(content);
   }
 
   // ANALYTICAL WORKSPACE COGNITIVE SIMULATOR FALLBACK
