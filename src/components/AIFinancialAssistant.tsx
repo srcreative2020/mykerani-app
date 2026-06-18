@@ -24,10 +24,14 @@ interface AISuggestion {
   description: string;
   actionType: string;
   payload: {
-    vendorName: string;
-    category: string;
-    recordType: string;
-    confidenceScore: number;
+    vendorName?: string;
+    category?: string;
+    recordType?: string;
+    confidenceScore?: number;
+    transactionType?: "INCOME" | "EXPENSE" | "DEBT" | "RECEIVABLE" | "COMMITMENT";
+    amount?: number;
+    date?: string;
+    relatedParty?: string;
   };
 }
 
@@ -42,7 +46,10 @@ interface ChatMessage {
   id: string;
   sender: "user" | "assistant";
   text: string;
+  suggestions?: AISuggestion[];
 }
+
+type SuggestionStatus = "pending" | "confirmed" | "rejected";
 
 interface AIFinancialAssistantProps {
   onTriggerUpload?: (type: "RECEIPT" | "INVOICE" | "STATEMENT") => void;
@@ -57,7 +64,10 @@ export const AIFinancialAssistant: React.FC<AIFinancialAssistantProps> = ({ onTr
     financialCommitments,
     financialEvidencePackages,
     ocrLearnedPatterns,
-    learnOcrPattern
+    learnOcrPattern,
+    addFinancialEvent,
+    addDebtRecord,
+    addFinancialCommitment
   } = useFinancials();
 
   const { activeTenant } = useTenant();
@@ -68,6 +78,11 @@ export const AIFinancialAssistant: React.FC<AIFinancialAssistantProps> = ({ onTr
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [suggestionStatus, setSuggestionStatus] = useState<Record<string, SuggestionStatus>>({});
+  const [editingSuggestionId, setEditingSuggestionId] = useState<string | null>(null);
+  const [editDraft, setEditDraft] = useState<{ amount: string; category: string; relatedParty: string; date: string }>({
+    amount: "", category: "", relatedParty: "", date: ""
+  });
   
   // Start with the specific requested welcome message
   const [chatHistory, setChatHistory] = useState<ChatMessage[]>([
@@ -147,7 +162,10 @@ export const AIFinancialAssistant: React.FC<AIFinancialAssistantProps> = ({ onTr
         .replace(/tenant/gi, "syarikat");
 
       const systemMessageId = `assist-${Date.now()}`;
-      setChatHistory(prev => [...prev, { id: systemMessageId, sender: "assistant", text: cleanText }]);
+      const transactionSuggestions: AISuggestion[] = Array.isArray(data.suggestions)
+        ? data.suggestions.filter((s: AISuggestion) => s.actionType === "CONFIRM_TRANSACTION")
+        : [];
+      setChatHistory(prev => [...prev, { id: systemMessageId, sender: "assistant", text: cleanText, suggestions: transactionSuggestions }]);
     } catch (err: any) {
       console.error(err);
       const isKnownAdvisory = /disekat oleh pentadbir HQ|Kredit AI syarikat anda/.test(err?.message || "");
@@ -171,6 +189,112 @@ export const AIFinancialAssistant: React.FC<AIFinancialAssistantProps> = ({ onTr
     if (!query.trim()) return;
     executeAgentQuery(query);
     setQuery("");
+  };
+
+  // Module 3 (Confirmation Engine) + Module 4 (Auto Recording) + Module 5 (Learning):
+  // a CONFIRM_TRANSACTION suggestion never writes a record by itself — it is only
+  // finalized once the user explicitly presses Confirm here (optionally after Edit).
+  const handleRejectSuggestion = (id: string) => {
+    setSuggestionStatus(prev => ({ ...prev, [id]: "rejected" }));
+  };
+
+  const handleStartEdit = (s: AISuggestion) => {
+    setEditingSuggestionId(s.id);
+    setEditDraft({
+      amount: String(s.payload.amount ?? ""),
+      category: s.payload.category || "",
+      relatedParty: s.payload.relatedParty || "",
+      date: s.payload.date || new Date().toISOString().split("T")[0]
+    });
+  };
+
+  const handleConfirmSuggestion = async (s: AISuggestion, edited?: typeof editDraft) => {
+    if (!activeWorkspace || suggestionStatus[s.id] === "confirmed") return;
+    const transactionType = s.payload.transactionType;
+    const amount = Number(edited ? edited.amount : s.payload.amount) || 0;
+    const category = (edited ? edited.category : s.payload.category) || "Lain-lain";
+    const relatedParty = (edited ? edited.relatedParty : s.payload.relatedParty) || "Tidak Dinyatakan";
+    const date = (edited ? edited.date : s.payload.date) || new Date().toISOString().split("T")[0];
+    const confidenceScore = s.payload.confidenceScore ?? 0.7;
+
+    try {
+      if (transactionType === "INCOME" || transactionType === "EXPENSE") {
+        addFinancialEvent({
+          workspaceId: activeWorkspace.id,
+          type: transactionType,
+          categoryName: category,
+          amountMyr: amount,
+          partyName: relatedParty,
+          date,
+          referenceNumber: `AI-${s.id}`,
+          description: `Direkodkan melalui pengesahan cadangan Kerani AI: ${s.title}`,
+          isCompleted: true
+        });
+      } else if (transactionType === "DEBT") {
+        addDebtRecord({
+          workspaceId: activeWorkspace.id,
+          creditorName: relatedParty,
+          borrowedDate: date,
+          totalAmountMyr: amount,
+          repaidAmountMyr: 0,
+          status: "ACTIVE",
+          description: `Direkodkan melalui pengesahan cadangan Kerani AI: ${s.title}`
+        });
+      } else if (transactionType === "RECEIVABLE") {
+        addFinancialEvent({
+          workspaceId: activeWorkspace.id,
+          type: "RECEIVABLE",
+          categoryName: category,
+          amountMyr: amount,
+          partyName: relatedParty,
+          date,
+          referenceNumber: `AI-${s.id}`,
+          description: `Direkodkan melalui pengesahan cadangan Kerani AI: ${s.title}`,
+          isCompleted: false
+        });
+      } else if (transactionType === "COMMITMENT") {
+        addFinancialCommitment({
+          workspaceId: activeWorkspace.id,
+          description: `Direkodkan melalui pengesahan cadangan Kerani AI: ${s.title}`,
+          obligeeName: relatedParty,
+          amountPerIntervalMyr: amount,
+          recurrence: "MONTHLY",
+          startDate: date,
+          isActive: true,
+          status: "ACTIVE"
+        });
+      } else {
+        return;
+      }
+
+      // Module 5: improve future suggestions for this party/category — never creates a record.
+      learnOcrPattern({
+        workspaceId: activeWorkspace.id,
+        vendorName: relatedParty,
+        category,
+        recordType: transactionType === "COMMITMENT" ? "EXPENSE" : transactionType,
+        confidenceScore
+      });
+
+      if (activeTenant?.id && user?.id) {
+        const { logEvent } = await import("../lib/eventLog");
+        logEvent({
+          tenantId: activeTenant.id,
+          workspaceId: activeWorkspace.id,
+          userId: user.id,
+          userEmail: user.email,
+          userRole: user.role,
+          eventType: "AI_ANALYSIS",
+          description: `User confirmed AI-suggested ${transactionType} transaction: ${s.title}`,
+          metadata: { suggestionId: s.id, transactionType, amount, category, relatedParty }
+        });
+      }
+
+      setSuggestionStatus(prev => ({ ...prev, [s.id]: "confirmed" }));
+      setEditingSuggestionId(null);
+    } catch (err) {
+      console.error("Failed to confirm AI suggestion:", err);
+    }
   };
 
   // Human-friendly suggested questions
@@ -224,6 +348,45 @@ export const AIFinancialAssistant: React.FC<AIFinancialAssistantProps> = ({ onTr
             </div>
           );
         })}
+
+        {chatHistory.map((item) => (item.suggestions || []).map((s) => {
+          const status = suggestionStatus[s.id] || "pending";
+          if (status === "rejected") return null;
+          return (
+            <div key={s.id} className="self-start max-w-[85%] ml-11 p-3.5 bg-amber-50 border border-amber-200 rounded-2xl text-xs space-y-2">
+              <div className="font-bold text-amber-900">{s.title}</div>
+              <div className="text-amber-800">{s.description}</div>
+              <div className="text-amber-700 font-mono">
+                {s.payload.transactionType} • RM{Number(s.payload.amount || 0).toFixed(2)} • {s.payload.relatedParty} • {s.payload.date}
+              </div>
+
+              {status === "confirmed" && (
+                <div className="text-emerald-700 font-bold">✅ Disahkan & direkodkan.</div>
+              )}
+
+              {status === "pending" && editingSuggestionId !== s.id && (
+                <div className="flex gap-2 pt-1">
+                  <button type="button" onClick={() => handleConfirmSuggestion(s)} className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-semibold">Sahkan (Confirm)</button>
+                  <button type="button" onClick={() => handleStartEdit(s)} className="px-3 py-1.5 rounded-lg bg-slate-200 hover:bg-slate-300 text-slate-800 font-semibold">Edit</button>
+                  <button type="button" onClick={() => handleRejectSuggestion(s.id)} className="px-3 py-1.5 rounded-lg bg-rose-100 hover:bg-rose-200 text-rose-700 font-semibold">Tolak (Reject)</button>
+                </div>
+              )}
+
+              {status === "pending" && editingSuggestionId === s.id && (
+                <div className="space-y-1.5 pt-1">
+                  <input value={editDraft.amount} onChange={e => setEditDraft(d => ({ ...d, amount: e.target.value }))} placeholder="Amount (RM)" className="w-full px-2 py-1 rounded border border-amber-300 text-xs" />
+                  <input value={editDraft.category} onChange={e => setEditDraft(d => ({ ...d, category: e.target.value }))} placeholder="Category" className="w-full px-2 py-1 rounded border border-amber-300 text-xs" />
+                  <input value={editDraft.relatedParty} onChange={e => setEditDraft(d => ({ ...d, relatedParty: e.target.value }))} placeholder="Related Party" className="w-full px-2 py-1 rounded border border-amber-300 text-xs" />
+                  <input value={editDraft.date} onChange={e => setEditDraft(d => ({ ...d, date: e.target.value }))} type="date" className="w-full px-2 py-1 rounded border border-amber-300 text-xs" />
+                  <div className="flex gap-2 pt-1">
+                    <button type="button" onClick={() => handleConfirmSuggestion(s, editDraft)} className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-semibold">Sahkan Perubahan</button>
+                    <button type="button" onClick={() => setEditingSuggestionId(null)} className="px-3 py-1.5 rounded-lg bg-slate-200 hover:bg-slate-300 text-slate-800 font-semibold">Batal</button>
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        }))}
 
         {/* Loading Indicator */}
         {loading && (

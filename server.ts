@@ -622,6 +622,9 @@ async function startServer() {
       if (await isUserSuspended(userId)) {
         return res.status(403).json({ error: "Akaun anda telah disekat oleh pentadbir HQ. Sila hubungi sokongan." });
       }
+      if (!(await consumeResourceCredit(tenantId, workspaceId, "OCR", `OCR analysis: ${fileName || "document"}`))) {
+        return res.status(402).json({ error: "Kredit OCR anda telah habis. Sila beli tambahan kredit atau naik taraf pelan anda." });
+      }
 
       const access = await verifyTenantAccess(req, tenantId, workspaceId);
       if (!access.ok) {
@@ -652,7 +655,31 @@ async function startServer() {
         base64Data = match[2];
       }
 
-      const ocrPrompt = `Analyze this financial document (type: ${documentType}, filename: ${fileName}) and extract its structured details. If certain fields like Document Number or Merchant Name are not explicitly clear, use your reasoning intelligence to deduct the most accurate values from the visual context.
+      const isInvoice = documentType === "INVOICE";
+      const isStatement = documentType === "STATEMENT";
+
+      const invoiceFields = isInvoice
+        ? `,
+  "supplierName": "string — the vendor/supplier issuing this invoice",
+  "invoiceNumber": "string — the invoice number",
+  "invoiceDate": "string — YYYY-MM-DD",
+  "dueDate": "string — YYYY-MM-DD payment due date"`
+        : "";
+
+      const statementFields = isStatement
+        ? `,
+  "transactions": [{ "date": "YYYY-MM-DD", "description": "string", "amount": 0, "type": "CREDIT|DEBIT", "suggestedCategory": "string", "confidenceScore": 0.0 }]`
+        : "";
+
+      const ocrPrompt = `Analyze this financial document (type: ${documentType}, filename: ${fileName}) and extract its structured details. If certain fields like Document Number or Merchant Name are not explicitly clear, use your reasoning intelligence to deduct the most accurate values from the visual context.${
+        isStatement
+          ? " This is a BANK STATEMENT — it may contain multiple pages and multiple individual transactions; extract EVERY transaction line you can identify into the 'transactions' array (CREDIT = money in, DEBIT = money out)."
+          : ""
+      }${
+        isInvoice
+          ? " This is an INVOICE — extract the supplier name, invoice number, invoice date, and due date in addition to the generic fields."
+          : ""
+      }
 
 Provide your output precisely formatted as raw JSON matching exactly this shape, with no markdown code fences and no extra commentary outside the JSON object:
 {
@@ -663,7 +690,7 @@ Provide your output precisely formatted as raw JSON matching exactly this shape,
   "currency": "string — three-letter currency code e.g. MYR, USD, EUR, SGD",
   "suggestedCategory": "string — e.g. Travel, Software, Utilities, Meals, Office Supplies, Advertising, Services",
   "confidenceScore": 0.0,
-  "rawExtractedText": "string — short snippet summarizing what this document represents"
+  "rawExtractedText": "string — short snippet summarizing what this document represents"${invoiceFields}${statementFields}
 }`;
 
       let parsedResult: any = null;
@@ -720,6 +747,9 @@ Provide your output precisely formatted as raw JSON matching exactly this shape,
       if (await isUserSuspended(userId)) {
         return res.status(403).json({ error: "Akaun anda telah disekat oleh pentadbir HQ. Sila hubungi sokongan." });
       }
+      if (!(await consumeResourceCredit(financialContext?.activeTenant?.id, financialContext?.activeWorkspace?.id, "AI", "AI assistant query"))) {
+        return res.status(402).json({ error: "Kredit AI anda telah habis. Sila beli tambahan kredit atau naik taraf pelan anda." });
+      }
 
       const candidates = await getAiProviderCandidates();
       if (candidates.length === 0) {
@@ -766,16 +796,22 @@ Instructions & Constraints:
 - AI is strictly advisory. Your recommendations should prioritize safety, financial health, liquidity, and double-entry accuracy.
 - Return references ('linkedRecordIds' and 'linkedEvidenceIds') when queries touch specific events, bills, invoices, receipts, or attachments.
 - Return structured visual metrics in the 'highlights' object. Health Status must be EXCELLENT, STABLE, WARNING, or THREAT.
+- FINANCIAL INTENT DETECTION: if the user's query describes a real-world financial transaction (in Malay or English) rather than a question, detect it and populate 'financialIntent'. Examples: "Pelanggan bayar RM500" / "Customer paid RM500" -> INCOME; "Saya isi minyak RM50" / "Filled petrol RM50" -> EXPENSE; "Saya hutang pembekal RM300" / "Borrowed RM1000 from Ali" -> DEBT; "Customer owes RM500" / "Pelanggan berhutang RM500" -> RECEIVABLE; "Rental RM1200 monthly" / "Sewa RM1200 sebulan" -> COMMITMENT. If no transaction is described, set "detected": false and leave the other financialIntent fields null.
+- When financialIntent.detected is true, you MUST ALSO add exactly one suggestion to the 'suggestions' array with "actionType": "CONFIRM_TRANSACTION" whose payload carries the structured transaction fields below. This is a SUGGESTION ONLY — you never write the record yourself; the user must explicitly Confirm (optionally after editing) before anything is saved. Default "date" to today (${new Date().toISOString().split("T")[0]}) if the user didn't state one.
 
 Provide your output precisely formatted as raw JSON matching exactly this shape, with no markdown code fences and no extra commentary outside the JSON object:
 {
   "text": "string — Markdown-formatted advisory answer",
-  "suggestions": [{ "id": "string", "title": "string", "description": "string", "actionType": "LEARN_PATTERN", "payload": { "vendorName": "string", "category": "string", "recordType": "string", "confidenceScore": 0.0 } }],
+  "financialIntent": { "detected": false, "type": "INCOME|EXPENSE|DEBT|RECEIVABLE|COMMITMENT|null", "amount": 0, "relatedParty": "string|null", "rawText": "string" },
+  "suggestions": [
+    { "id": "string", "title": "string", "description": "string", "actionType": "LEARN_PATTERN", "payload": { "vendorName": "string", "category": "string", "recordType": "string", "confidenceScore": 0.0 } },
+    { "id": "string", "title": "string", "description": "string", "actionType": "CONFIRM_TRANSACTION", "payload": { "transactionType": "INCOME|EXPENSE|DEBT|RECEIVABLE|COMMITMENT", "category": "string", "amount": 0, "date": "YYYY-MM-DD", "relatedParty": "string", "confidenceScore": 0.0 } }
+  ],
   "highlights": { "healthStatus": "EXCELLENT|STABLE|WARNING|THREAT", "estimatedRunwayDays": 0, "capitalEfficiencyScore": 0, "criticalActionRequired": "string" },
   "linkedRecordIds": ["string"],
   "linkedEvidenceIds": ["string"]
 }
-If you output markdown formatting inside the fields, escape quotes correctly.`;
+Only include a "CONFIRM_TRANSACTION" suggestion entry when financialIntent.detected is true. If you output markdown formatting inside the fields, escape quotes correctly.`;
 
       // Try each configured provider in cheapest-first order, falling through to the
       // next one if a call fails (quota/billing/outage), before giving up to the simulator.
@@ -968,6 +1004,34 @@ If you output markdown formatting inside the fields, escape quotes correctly.`;
       });
     } catch (err) {
       console.error("Failed to write event log for AI usage:", err);
+    }
+  }
+
+  // Resource Governance Layer enforcement: debits one credit from the tenant's
+  // workspace wallet (resource_wallets, via consume_resource_credit RPC) before
+  // an AI/OCR call is allowed to proceed. Internal HQ tenants are exempt inside
+  // the RPC itself. Returns false if the wallet has insufficient balance.
+  async function consumeResourceCredit(tenantId: string | undefined | null, workspaceId: string | undefined | null, creditType: "AI" | "OCR", description: string): Promise<boolean> {
+    if (!tenantId || !workspaceId) return true;
+    const supabaseUrl = process.env.VITE_SUPABASE_URL;
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    if (!supabaseUrl || !serviceRoleKey) return true;
+    try {
+      const resp = await fetch(`${supabaseUrl}/rest/v1/rpc/consume_resource_credit`, {
+        method: "POST",
+        headers: {
+          apikey: serviceRoleKey,
+          Authorization: `Bearer ${serviceRoleKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ p_tenant_id: tenantId, p_workspace_id: workspaceId, p_credit_type: creditType, p_amount: 1, p_description: description }),
+      });
+      if (!resp.ok) return true;
+      const result = await resp.json();
+      return result === true;
+    } catch (err) {
+      console.error(`Failed to consume ${creditType} resource credit:`, err);
+      return true;
     }
   }
 
