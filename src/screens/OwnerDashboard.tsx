@@ -18,6 +18,7 @@ import { FinancialEvidencePackageManager } from "../components/FinancialEvidence
 import { FinancialReportsAnalytics } from "../components/FinancialReportsAnalytics";
 import { StorageBar } from "../components/StorageBar";
 import { useStorageQuota, PLAN_QUOTAS, GB } from "../lib/storageQuota";
+import { useAiCredits } from "../lib/aiCredits";
 import { useNotifications, buildTenantNotifs, fmtNotifTime } from "../lib/notifications";
 import {
   uploadDocument, listDocuments, deleteDocument, getDocumentUrl,
@@ -186,6 +187,7 @@ export function OwnerDashboard() {
   // â"€â"€ Storage Quota â"€â"€
   const tenantId = activeTenant?.id || user?.id || "guest";
   const storageQuota = useStorageQuota(tenantId, wsId || undefined);
+  const aiCredits = useAiCredits(tenantId);
   const [showAddonModal, setShowAddonModal] = useState(false);
 
   // â"€â"€ Document upload state â"€â"€
@@ -255,13 +257,13 @@ export function OwnerDashboard() {
       storagePct: storageQuota.pctUsed,
       isFrozen: storageQuota.isFrozen,
       frozenReason: storageQuota.frozenReason,
-      aiCreditsUsed: 47,
-      aiCreditsTotal: 500,
+      aiCreditsUsed: aiCredits.used,
+      aiCreditsTotal: aiCredits.total,
       renewalDaysLeft: 29,
       hasOpenTicket: false,
     };
     buildTenantNotifs(ctx).forEach(n => notif.push(n));
-  }, [storageQuota.warnLevel, storageQuota.isFrozen]);
+  }, [storageQuota.warnLevel, storageQuota.isFrozen, aiCredits.used, aiCredits.total]);
 
   useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [chatMessages, chatLoading]);
   useEffect(() => { supportEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [supportMessages, supportLoading]);
@@ -1278,17 +1280,17 @@ export function OwnerDashboard() {
                       <Zap className="w-4 h-4 text-amber-500" />
                       <p className="text-sm font-bold text-slate-900">Kredit AI</p>
                     </div>
-                    <span className="text-xs text-slate-400">Paket Starter</span>
+                    <span className="text-xs text-slate-400">Paket {aiCredits.planName}</span>
                   </div>
                   <div className="space-y-1">
                     <div className="flex justify-between text-xs">
                       <span className="text-slate-500">Digunakan</span>
-                      <span className="font-semibold text-slate-800">47 / 500 kredit</span>
+                      <span className="font-semibold text-slate-800">{aiCredits.used} / {aiCredits.total} kredit</span>
                     </div>
                     <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
-                      <div className="h-full bg-amber-400 rounded-full" style={{ width: "9.4%" }} />
+                      <div className="h-full bg-amber-400 rounded-full" style={{ width: `${Math.min(100, (aiCredits.used / Math.max(1, aiCredits.total)) * 100)}%` }} />
                     </div>
-                    <p className="text-[10px] text-slate-400">453 kredit berbaki</p>
+                    <p className="text-[10px] text-slate-400">{Math.max(0, aiCredits.total - aiCredits.used)} kredit berbaki</p>
                   </div>
                   <div className="grid grid-cols-2 gap-2">
                     <button className="py-2.5 bg-amber-50 border border-amber-100 text-amber-700 rounded-xl text-xs font-bold cursor-pointer hover:bg-amber-100 transition">Beli Kredit</button>

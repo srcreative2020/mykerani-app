@@ -173,7 +173,9 @@ export const OCREngineConsole: React.FC = () => {
         body: JSON.stringify({
           fileDataUrl,
           fileName: file.name,
-          documentType
+          documentType,
+          tenantId: activeWorkspace?.tenantId,
+          workspaceId: activeWorkspace?.id
         })
       });
 

@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { getStorageUsage } from "./documentStorage";
+import { supabase, isSupabaseConfigured } from "./supabase";
 
 // ── Constants ──────────────────────────────────────────────────────────────
 export const GB = 1_073_741_824;
@@ -103,6 +104,24 @@ export function useStorageQuota(tenantId: string, workspaceId?: string): Storage
   const [fileCount, setFileCount] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
   const [tick, setTick] = useState(0);
+  const [realFrozen, setRealFrozen] = useState<{ isFrozen: boolean; frozenReason: string } | null>(null);
+
+  // Real, HQ-enforced freeze state from Supabase — a freeze set by HQ must
+  // actually block this tenant's uploads, not just live in HQ's own browser.
+  const uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  useEffect(() => {
+    if (!isSupabaseConfigured() || !supabase || !tenantId || !uuidRe.test(tenantId)) {
+      setRealFrozen(null);
+      return;
+    }
+    let cancelled = false;
+    supabase.from("workspace_storage_state").select("is_frozen, frozen_reason").eq("tenant_id", tenantId).maybeSingle().then(({ data }) => {
+      if (cancelled) return;
+      setRealFrozen(data ? { isFrozen: data.is_frozen, frozenReason: data.frozen_reason || "" } : { isFrozen: false, frozenReason: "" });
+    });
+    supabase.rpc("touch_tenant_active", { p_tenant_id: tenantId });
+    return () => { cancelled = true; };
+  }, [tenantId, tick]);
 
   // Persist quota settings (not usage — usage comes from Supabase)
   useEffect(() => {
@@ -144,13 +163,15 @@ export function useStorageQuota(tenantId: string, workspaceId?: string): Storage
 
   const refresh = useCallback(() => setTick(t => t + 1), []);
 
+  const isFrozen  = realFrozen ? realFrozen.isFrozen : state.isFrozen;
+  const frozenReason = (realFrozen ? realFrozen.frozenReason : state.frozenReason) as StorageQuotaState["frozenReason"];
   const pctUsed   = state.quotaBytes > 0 ? usedBytes / state.quotaBytes : 0;
   const usedGB    = usedBytes / GB;
   const quotaGB   = state.quotaBytes / GB;
-  const canUpload = !state.isFrozen && pctUsed < FREEZE_PCT;
+  const canUpload = !isFrozen && pctUsed < FREEZE_PCT;
 
   const warnLevel: StorageQuotaHook["warnLevel"] =
-    state.isFrozen      ? "frozen"
+    isFrozen      ? "frozen"
     : pctUsed >= FREEZE_PCT  ? "red"
     : pctUsed >= WARN_ORANGE ? "orange"
     : pctUsed >= WARN_YELLOW ? "yellow"
@@ -187,6 +208,7 @@ export function useStorageQuota(tenantId: string, workspaceId?: string): Storage
   return {
     ...state,
     usedBytes,
+    isFrozen, frozenReason,
     pctUsed, usedGB, quotaGB, canUpload, warnLevel,
     fileCount, isLoading, refresh,
     setQuota, applyAddon, freeze, unfreeze, setInactiveDaysLimit, touchActive,
