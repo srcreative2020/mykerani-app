@@ -1746,6 +1746,33 @@ If you output markdown formatting inside the fields, escape quotes correctly.`;
           }
         });
     }
+
+    // Renewal Framework: pg_cron is unavailable on this Supabase project, so
+    // subscription renewals (process_due_subscription_renewals) are driven by
+    // this interval instead of a native DB scheduler.
+    const supabaseUrl = process.env.VITE_SUPABASE_URL;
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    if (supabaseUrl && serviceRoleKey) {
+      const runDueRenewals = async () => {
+        try {
+          const resp = await fetch(`${supabaseUrl}/rest/v1/rpc/process_due_subscription_renewals`, {
+            method: "POST",
+            headers: { apikey: serviceRoleKey, Authorization: `Bearer ${serviceRoleKey}`, "Content-Type": "application/json" },
+            body: "{}",
+          });
+          if (resp.ok) {
+            const count = await resp.json();
+            if (count > 0) console.log(`🔄 Subscription renewal sweep processed ${count} tenant(s).`);
+          } else {
+            console.error("Subscription renewal sweep failed:", resp.status, await resp.text());
+          }
+        } catch (err) {
+          console.error("Subscription renewal sweep error:", err);
+        }
+      };
+      runDueRenewals();
+      setInterval(runDueRenewals, 60 * 60 * 1000);
+    }
   });
 }
 

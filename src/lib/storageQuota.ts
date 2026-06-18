@@ -123,22 +123,20 @@ export function useStorageQuota(tenantId: string, workspaceId?: string): Storage
     return () => { cancelled = true; };
   }, [tenantId, tick]);
 
-  // Real, HQ-configurable storage quota from the tenant's subscription plan
-  // (subscription_plans.storage_credits_allowance_mb) — quotas must never be
-  // hardcoded per the Configuration Rule. Only overrides quotaBytes when a
-  // real plan is found; otherwise the local default/manual quota stands.
+  // Real quota comes from resource_wallets.storage_limit_bytes — the entitlement
+  // single source of truth (reflects plan allowance plus any topups/HQ
+  // adjustments/downgrade clamping) — falling back to localStorage if no
+  // workspace wallet exists.
   useEffect(() => {
-    if (!isSupabaseConfigured() || !supabase || !tenantId || !uuidRe.test(tenantId)) return;
+    if (!isSupabaseConfigured() || !supabase || !workspaceId || !uuidRe.test(workspaceId)) return;
     let cancelled = false;
-    supabase.from("tenant_subscriptions").select("plan_id").eq("tenant_id", tenantId).maybeSingle().then(async ({ data: sub }) => {
-      if (cancelled || !sub?.plan_id) return;
-      const { data: plan } = await supabase!.from("subscription_plans").select("storage_credits_allowance_mb").eq("id", sub.plan_id).maybeSingle();
-      if (cancelled || !plan?.storage_credits_allowance_mb) return;
-      const planQuotaBytes = Number(plan.storage_credits_allowance_mb) * MB;
-      setState(prev => prev.quotaBytes === planQuotaBytes ? prev : { ...prev, quotaBytes: planQuotaBytes });
+    supabase.from("resource_wallets").select("storage_limit_bytes").eq("workspace_id", workspaceId).maybeSingle().then(({ data }) => {
+      if (cancelled || !data) return;
+      const bytes = Number(data.storage_limit_bytes);
+      if (bytes > 0) setState(prev => prev.quotaBytes === bytes ? prev : { ...prev, quotaBytes: bytes });
     });
     return () => { cancelled = true; };
-  }, [tenantId]);
+  }, [workspaceId, tick]);
 
   // Persist quota settings (not usage — usage comes from Supabase)
   useEffect(() => {
