@@ -5,9 +5,15 @@ export interface HqPlan {
   name: string;
   price: number;
   aiCredits: number;
+  ocrCredits: number;
   storageGB: number;
   maxUsers: number;
   featured?: boolean;
+  features: string[];
+  limitations: string[];
+  isTrial: boolean;
+  trialDays: number;
+  isCustomPricing: boolean;
 }
 
 export interface HqCustomer {
@@ -41,10 +47,28 @@ export async function getPlans(): Promise<HqPlan[]> {
     name: row.name,
     price: Number(row.monthly_price_myr) || 0,
     aiCredits: Number(row.ai_credits_allowance) || 0,
+    ocrCredits: Number(row.ocr_credits_allowance) || 0,
     storageGB: Math.round((Number(row.storage_credits_allowance_mb) || 0) / 1024),
     maxUsers: row.features?.maxUsers ?? 3,
     featured: row.features?.featured ?? false,
+    features: row.features?.featureList ?? [],
+    limitations: row.features?.limitations ?? [],
+    isTrial: row.features?.isTrial ?? false,
+    trialDays: row.features?.trialDays ?? 0,
+    isCustomPricing: row.features?.isCustomPricing ?? false,
   }));
+}
+
+function buildFeaturesJson(plan: Omit<HqPlan, "id">) {
+  return {
+    maxUsers: plan.maxUsers,
+    featured: plan.featured ?? false,
+    featureList: plan.features ?? [],
+    limitations: plan.limitations ?? [],
+    isTrial: plan.isTrial ?? false,
+    trialDays: plan.trialDays ?? 0,
+    isCustomPricing: plan.isCustomPricing ?? false,
+  };
 }
 
 export async function createPlan(plan: Omit<HqPlan, "id">): Promise<HqPlan | null> {
@@ -54,11 +78,12 @@ export async function createPlan(plan: Omit<HqPlan, "id">): Promise<HqPlan | nul
     monthly_price_myr: plan.price,
     annual_price_myr: plan.price * 12,
     ai_credits_allowance: plan.aiCredits,
+    ocr_credits_allowance: plan.ocrCredits,
     storage_credits_allowance_mb: plan.storageGB * 1024,
-    features: { maxUsers: plan.maxUsers, featured: plan.featured ?? false },
+    features: buildFeaturesJson(plan),
   }).select().single();
   if (error || !data) return null;
-  return { id: data.id, name: data.name, price: plan.price, aiCredits: plan.aiCredits, storageGB: plan.storageGB, maxUsers: plan.maxUsers, featured: plan.featured };
+  return { id: data.id, ...plan };
 }
 
 export async function updatePlan(id: string, plan: Omit<HqPlan, "id">): Promise<boolean> {
@@ -68,8 +93,9 @@ export async function updatePlan(id: string, plan: Omit<HqPlan, "id">): Promise<
     monthly_price_myr: plan.price,
     annual_price_myr: plan.price * 12,
     ai_credits_allowance: plan.aiCredits,
+    ocr_credits_allowance: plan.ocrCredits,
     storage_credits_allowance_mb: plan.storageGB * 1024,
-    features: { maxUsers: plan.maxUsers, featured: plan.featured ?? false },
+    features: buildFeaturesJson(plan),
   }).eq("id", id);
   return !error;
 }
