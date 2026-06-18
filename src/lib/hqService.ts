@@ -150,17 +150,10 @@ export async function upsertCustomerSubscription(tenantId: string, planName: str
   const plan = plans.find(p => p.name === planName);
   if (!plan) return false;
   const dbStatus = status === "active" ? "active" : status === "pending" ? "trialing" : "suspended";
-  const { data: existing } = await supabase.from("tenant_subscriptions").select("id").eq("tenant_id", tenantId).maybeSingle();
-  if (existing) {
-    const { error } = await supabase.from("tenant_subscriptions").update({ plan_id: plan.id, status: dbStatus }).eq("id", existing.id);
-    return !error;
-  }
-  const periodEnd = new Date(Date.now() + 30 * 86400000).toISOString();
-  const { error } = await supabase.from("tenant_subscriptions").insert({
-    tenant_id: tenantId, plan_id: plan.id, status: dbStatus,
-    current_period_start: new Date().toISOString(), current_period_end: periodEnd,
+  const { data, error } = await supabase.rpc("change_subscription_plan", {
+    p_tenant_id: tenantId, p_new_plan_id: plan.id, p_status: dbStatus,
   });
-  return !error;
+  return !error && data === true;
 }
 
 export async function setCustomerStatus(tenantId: string, status: HqCustomer["status"]): Promise<boolean> {

@@ -123,6 +123,19 @@ export function useStorageQuota(tenantId: string, workspaceId?: string): Storage
     return () => { cancelled = true; };
   }, [tenantId, tick]);
 
+  // Real quota comes from resource_wallets.storage_limit_bytes — the entitlement
+  // single source of truth — falling back to localStorage if no workspace wallet exists.
+  useEffect(() => {
+    if (!isSupabaseConfigured() || !supabase || !workspaceId || !uuidRe.test(workspaceId)) return;
+    let cancelled = false;
+    supabase.from("resource_wallets").select("storage_limit_bytes").eq("workspace_id", workspaceId).maybeSingle().then(({ data }) => {
+      if (cancelled || !data) return;
+      const bytes = Number(data.storage_limit_bytes);
+      if (bytes > 0) setState(prev => prev.quotaBytes === bytes ? prev : { ...prev, quotaBytes: bytes });
+    });
+    return () => { cancelled = true; };
+  }, [workspaceId, tick]);
+
   // Persist quota settings (not usage — usage comes from Supabase)
   useEffect(() => {
     if (!tenantId) return;

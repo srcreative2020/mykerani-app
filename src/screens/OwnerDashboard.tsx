@@ -192,7 +192,7 @@ export function OwnerDashboard() {
   // â"€â"€ Storage Quota â"€â"€
   const tenantId = activeTenant?.id || user?.id || "guest";
   const storageQuota = useStorageQuota(tenantId, wsId || undefined);
-  const aiCredits = useAiCredits(tenantId);
+  const aiCredits = useAiCredits(tenantId, wsId || undefined);
   const [showAddonModal, setShowAddonModal] = useState(false);
 
   // ── Subscription plan + payment (real, Supabase-backed) ──

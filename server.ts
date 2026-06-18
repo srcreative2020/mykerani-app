@@ -645,6 +645,9 @@ async function startServer() {
       if (await isUserSuspended(userId)) {
         return res.status(403).json({ error: "Akaun anda telah disekat oleh pentadbir HQ. Sila hubungi sokongan." });
       }
+      if (!(await consumeResourceCredit(tenantId, workspaceId, "OCR", `OCR analysis: ${fileName || "document"}`))) {
+        return res.status(402).json({ error: "Kredit OCR anda telah habis. Sila beli tambahan kredit atau naik taraf pelan anda." });
+      }
 
       const candidates = await getAiProviderCandidates();
       if (candidates.length === 0) {
@@ -729,6 +732,9 @@ Provide your output precisely formatted as raw JSON matching exactly this shape,
       }
       if (await isUserSuspended(userId)) {
         return res.status(403).json({ error: "Akaun anda telah disekat oleh pentadbir HQ. Sila hubungi sokongan." });
+      }
+      if (!(await consumeResourceCredit(financialContext?.activeTenant?.id, financialContext?.activeWorkspace?.id, "AI", "AI assistant query"))) {
+        return res.status(402).json({ error: "Kredit AI anda telah habis. Sila beli tambahan kredit atau naik taraf pelan anda." });
       }
 
       const candidates = await getAiProviderCandidates();
@@ -937,6 +943,34 @@ If you output markdown formatting inside the fields, escape quotes correctly.`;
       });
     } catch (err) {
       console.error("Failed to log AI usage:", err);
+    }
+  }
+
+  // Resource Governance Layer enforcement: debits one credit from the tenant's
+  // workspace wallet (resource_wallets, via consume_resource_credit RPC) before
+  // an AI/OCR call is allowed to proceed. Internal HQ tenants are exempt inside
+  // the RPC itself. Returns false if the wallet has insufficient balance.
+  async function consumeResourceCredit(tenantId: string | undefined | null, workspaceId: string | undefined | null, creditType: "AI" | "OCR", description: string): Promise<boolean> {
+    if (!tenantId || !workspaceId) return true;
+    const supabaseUrl = process.env.VITE_SUPABASE_URL;
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    if (!supabaseUrl || !serviceRoleKey) return true;
+    try {
+      const resp = await fetch(`${supabaseUrl}/rest/v1/rpc/consume_resource_credit`, {
+        method: "POST",
+        headers: {
+          apikey: serviceRoleKey,
+          Authorization: `Bearer ${serviceRoleKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ p_tenant_id: tenantId, p_workspace_id: workspaceId, p_credit_type: creditType, p_amount: 1, p_description: description }),
+      });
+      if (!resp.ok) return true;
+      const result = await resp.json();
+      return result === true;
+    } catch (err) {
+      console.error(`Failed to consume ${creditType} resource credit:`, err);
+      return true;
     }
   }
 
@@ -1578,6 +1612,33 @@ If you output markdown formatting inside the fields, escape quotes correctly.`;
             console.log("Auto-migration detailed logs:\n", logs.join("\n"));
           }
         });
+    }
+
+    // Renewal Framework: pg_cron is unavailable on this Supabase project, so
+    // subscription renewals (process_due_subscription_renewals) are driven by
+    // this interval instead of a native DB scheduler.
+    const supabaseUrl = process.env.VITE_SUPABASE_URL;
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    if (supabaseUrl && serviceRoleKey) {
+      const runDueRenewals = async () => {
+        try {
+          const resp = await fetch(`${supabaseUrl}/rest/v1/rpc/process_due_subscription_renewals`, {
+            method: "POST",
+            headers: { apikey: serviceRoleKey, Authorization: `Bearer ${serviceRoleKey}`, "Content-Type": "application/json" },
+            body: "{}",
+          });
+          if (resp.ok) {
+            const count = await resp.json();
+            if (count > 0) console.log(`🔄 Subscription renewal sweep processed ${count} tenant(s).`);
+          } else {
+            console.error("Subscription renewal sweep failed:", resp.status, await resp.text());
+          }
+        } catch (err) {
+          console.error("Subscription renewal sweep error:", err);
+        }
+      };
+      runDueRenewals();
+      setInterval(runDueRenewals, 60 * 60 * 1000);
     }
   });
 }
