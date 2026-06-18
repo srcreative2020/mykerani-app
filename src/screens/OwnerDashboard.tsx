@@ -47,7 +47,7 @@ interface ChatSuggestion {
   description: string;
   actionType: string;
   payload: {
-    transactionType?: "INCOME" | "EXPENSE" | "DEBT" | "RECEIVABLE" | "COMMITMENT";
+    transactionType?: "INCOME" | "EXPENSE" | "DEBT" | "RECEIVABLE" | "PAYABLE" | "COMMITMENT";
     category?: string;
     amount?: number;
     date?: string;
@@ -72,6 +72,7 @@ const TRANSACTION_TYPE_LABEL_MS: Record<string, string> = {
   EXPENSE: "Perbelanjaan",
   DEBT: "Hutang",
   RECEIVABLE: "Belum Terima",
+  PAYABLE: "Belum Bayar",
   COMMITMENT: "Komitmen",
 };
 
@@ -574,6 +575,18 @@ export function OwnerDashboard() {
       addFinancialEvent({
         workspaceId: activeWorkspace.id,
         type: "RECEIVABLE",
+        categoryName: category,
+        amountMyr: amount,
+        partyName: relatedParty,
+        date,
+        referenceNumber: `AI-${s.id}`,
+        description: `Direkodkan melalui pengesahan cadangan Kerani AI: ${s.title}`,
+        isCompleted: false,
+      });
+    } else if (transactionType === "PAYABLE") {
+      addFinancialEvent({
+        workspaceId: activeWorkspace.id,
+        type: "PAYABLE",
         categoryName: category,
         amountMyr: amount,
         partyName: relatedParty,
