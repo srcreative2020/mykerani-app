@@ -752,8 +752,21 @@ Provide your output precisely formatted as raw JSON matching exactly this shape,
       }
 
       const candidates = await getAiProviderCandidates();
+      // TEMP RUNTIME VERIFICATION LOGGING — remove after diagnosis.
+      console.info("[AI_ROUTER_DEBUG]", JSON.stringify({
+        candidateCount: candidates.length,
+        candidateProviders: candidates.map(c => `${c.provider}:${c.model}`),
+        dbConfigReachable: Boolean(process.env.VITE_SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY),
+        envFallbackKeysPresent: {
+          gemini: Boolean(process.env.GEMINI_API_KEY),
+          openai: Boolean(process.env.OPENAI_API_KEY),
+          anthropic: Boolean(process.env.ANTHROPIC_API_KEY),
+        },
+        forcedProvider: process.env.AI_PROVIDER || null,
+        providerOrder: process.env.AI_PROVIDER_ORDER || null,
+      }));
       if (candidates.length === 0) {
-        console.info("No AI provider configured (checked HQ Console AI Router settings, then OPENAI_API_KEY/GEMINI_API_KEY/ANTHROPIC_API_KEY env vars). Directing to simulated workspace context analysis.");
+        console.info("[AI_ROUTER_DEBUG] fallbackTriggerReason=NO_CANDIDATES — checked HQ Console AI Router settings (ai_router_settings/ai_provider_configs via SUPABASE_SERVICE_ROLE_KEY), then OPENAI_API_KEY/GEMINI_API_KEY/ANTHROPIC_API_KEY env vars. Directing to simulated workspace context analysis.");
         const fallbackResult = generateFallbackAssistantResponse(query, financialContext || {});
         return res.json(fallbackResult);
       }
@@ -830,8 +843,17 @@ Only include a "CONFIRM_TRANSACTION" suggestion entry when financialIntent.detec
       }
 
       if (!parsedResponse) {
+        console.info("[AI_ROUTER_DEBUG] fallbackTriggerReason=ALL_CANDIDATES_FAILED", lastErr?.message || lastErr);
         throw lastErr || new Error("All configured AI providers failed");
       }
+
+      console.info("[AI_ROUTER_DEBUG]", JSON.stringify({
+        finalProviderUsed: usedCandidate!.provider,
+        finalModelUsed: usedCandidate!.model,
+        financialIntentPresent: Boolean(parsedResponse?.financialIntent),
+        financialIntentDetected: parsedResponse?.financialIntent?.detected ?? null,
+        confirmTransactionSuggestionPresent: Array.isArray(parsedResponse?.suggestions) && parsedResponse.suggestions.some((s: any) => s.actionType === "CONFIRM_TRANSACTION"),
+      }));
 
       logAiUsage(financialContext?.activeTenant?.id, financialContext?.activeWorkspace?.id, userId, "assistant", usedCandidate!.provider, usedCandidate!.model);
 
