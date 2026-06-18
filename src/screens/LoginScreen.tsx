@@ -67,10 +67,15 @@ const DEMO_USERS = [
   },
 ];
 
-export default function LoginScreen() {
+interface LoginScreenProps {
+  initialMode?: "login" | "signup";
+  onBack?: () => void;
+}
+
+export default function LoginScreen({ initialMode = "login", onBack }: LoginScreenProps) {
   const { signIn, signUp, resetPassword, error, clearError } = useAuth();
 
-  const [isSignUpMode, setIsSignUpMode] = useState(false);
+  const [isSignUpMode, setIsSignUpMode] = useState(initialMode === "signup");
   const [isForgotMode, setIsForgotMode] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -158,6 +163,16 @@ export default function LoginScreen() {
         className="w-full max-w-md bg-white border border-slate-200/80 rounded-3xl p-6 md:p-8 shadow-[0_8px_30px_rgb(0,0,0,0.04)] space-y-6"
         id="login_card_wrapper"
       >
+        {onBack && (
+          <button
+            type="button"
+            onClick={onBack}
+            className="text-xs text-slate-400 hover:text-slate-700 transition cursor-pointer flex items-center gap-1"
+            id="back_to_landing_btn"
+          >
+            ← Kembali ke Laman Utama
+          </button>
+        )}
         {/* Branding */}
         <div className="flex flex-col items-center text-center space-y-3" id="login_branding_header">
           <div className="w-14 h-14 rounded-2xl bg-slate-900 flex items-center justify-center shadow-lg">

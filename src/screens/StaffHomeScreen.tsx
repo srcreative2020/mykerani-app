@@ -150,9 +150,10 @@ export function StaffHomeScreen() {
     setSupportMessages(prev => [...prev, { id: `u-${Date.now()}`, sender: "user", text: q }]);
     setSupportLoading(true);
     try {
+      const { getAuthHeader } = await import("../lib/supabase");
       const res = await fetch("/api/ai/assistant", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...(await getAuthHeader()) },
         body: JSON.stringify({ query: `[SOKONGAN MYKERANI] ${q}`, financialContext: { activeTenant, activeWorkspace, financialEvents }, userId: user?.id }),
       });
       const data = await res.json() as any;
@@ -171,9 +172,10 @@ export function StaffHomeScreen() {
     setChatMessages(prev => [...prev, { id: `u-${Date.now()}`, sender: "user", text: q }]);
     setChatLoading(true);
     try {
+      const { getAuthHeader } = await import("../lib/supabase");
       const res = await fetch("/api/ai/assistant", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...(await getAuthHeader()) },
         body: JSON.stringify({
           query: q,
           financialContext: { activeTenant, activeWorkspace, financialEvents },

@@ -107,9 +107,10 @@ export const AIFinancialAssistant: React.FC<AIFinancialAssistantProps> = ({ onTr
         ocrLearnedPatterns
       };
 
+      const { getAuthHeader } = await import("../lib/supabase");
       const res = await fetch("/api/ai/assistant", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...(await getAuthHeader()) },
         body: JSON.stringify({
           query: queryText,
           financialContext,
@@ -120,6 +121,10 @@ export const AIFinancialAssistant: React.FC<AIFinancialAssistantProps> = ({ onTr
       if (res.status === 403) {
         const errBody = await res.json().catch(() => ({}));
         throw new Error(errBody.error || "Akaun anda telah disekat oleh pentadbir HQ.");
+      }
+      if (res.status === 402) {
+        const errBody = await res.json().catch(() => ({}));
+        throw new Error(errBody.error || "Kredit AI syarikat anda telah digunakan sepenuhnya. Sila naik taraf pelan.");
       }
       if (!res.ok) {
         throw new Error(`HTTP state: ${res.status}`);
@@ -145,12 +150,15 @@ export const AIFinancialAssistant: React.FC<AIFinancialAssistantProps> = ({ onTr
       setChatHistory(prev => [...prev, { id: systemMessageId, sender: "assistant", text: cleanText }]);
     } catch (err: any) {
       console.error(err);
+      const isKnownAdvisory = /disekat oleh pentadbir HQ|Kredit AI syarikat anda/.test(err?.message || "");
       setChatHistory(prev => [
         ...prev,
         {
           id: `err-${Date.now()}`,
           sender: "assistant",
-          text: "Minta maaf, talian pembantu pintar terputus sebentar. Sila cuba lagi."
+          text: isKnownAdvisory
+            ? err.message
+            : "Minta maaf, talian pembantu pintar terputus sebentar. Sila cuba lagi."
         }
       ]);
     } finally {

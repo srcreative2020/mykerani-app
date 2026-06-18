@@ -218,7 +218,7 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       throw new Error("Active Tenant session is required to initialize client workspaces.");
     }
 
-    const role = user?.role || "VIEWER";
+    const role = user?.role || "TENANT_STAFF";
     if (["TENANT_STAFF"].includes(role)) {
       throw new Error(`Access Denied: Your system actor role (${role}) is restricted from constructing new workspaces.`);
     }

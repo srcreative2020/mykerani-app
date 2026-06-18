@@ -4,6 +4,7 @@ import { useWorkspace } from "../context/WorkspaceContext";
 import { useAuth } from "../context/AuthContext";
 import { usePermission } from "../context/PermissionContext";
 import { useAudit } from "../context/AuditContext";
+import { logEvent } from "../lib/eventLog";
 import { 
   FileText, 
   UploadCloud, 
@@ -169,9 +170,10 @@ export const OCREngineConsole: React.FC = () => {
       setTimeout(() => setAnalysisStep("Invoking multi-modal OCR processor..."), 1000);
       setTimeout(() => setAnalysisStep("Extracting key signatures & merchant indexes..."), 2200);
 
+      const { getAuthHeader } = await import("../lib/supabase");
       const response = await fetch("/api/ocr/analyze", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...(await getAuthHeader()) },
         body: JSON.stringify({
           fileDataUrl,
           fileName: file.name,
@@ -184,7 +186,17 @@ export const OCREngineConsole: React.FC = () => {
 
       if (response.status === 403) {
         const errBody = await response.json().catch(() => ({}));
-        throw new Error(errBody.error || "Akaun anda telah disekat oleh pentadbir HQ.");
+        setErrorText(errBody.error || "Akaun anda telah disekat oleh pentadbir HQ.");
+        setIsAnalyzing(false);
+        setAnalysisStep("");
+        return;
+      }
+      if (response.status === 402) {
+        const errBody = await response.json().catch(() => ({}));
+        setErrorText(errBody.error || "Kredit OCR syarikat anda telah digunakan sepenuhnya. Sila naik taraf pelan.");
+        setIsAnalyzing(false);
+        setAnalysisStep("");
+        return;
       }
       if (!response.ok) {
         throw new Error(`Extraction service returned HTTP code ${response.status}`);
@@ -360,6 +372,15 @@ export const OCREngineConsole: React.FC = () => {
         oldValue: null,
         newValue: freshEvent
       });
+
+      if (user) {
+        logEvent({
+          tenantId: user.tenantId, workspaceId: activeWorkspace.id, userId: user.id,
+          userEmail: user.email, userRole: user.role, eventType: "OCR_PROCESS",
+          description: `Processed OCR document for ${reviewedMerchantName} (${documentType})`,
+          metadata: { documentType, merchantName: reviewedMerchantName, amountMyr: reviewedAmount },
+        });
+      }
 
       // 5. TRIGGER OCR LEARNING CORE OBJECTIVE
       learnOcrPattern({

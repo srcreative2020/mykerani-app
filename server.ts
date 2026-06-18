@@ -86,46 +86,10 @@ async function startServer() {
         logs.push(`⚠️ Code: storage schema lookup skipped or deferred: ${String(e)}.`);
       }
 
-      // Step A: Parse and execute Core Architecture schemas from DATABASE_ARCHITECTURE_V1_2.md
-      logs.push("📂 Extracting core database schema from DATABASE_ARCHITECTURE_V1_2.md...");
-      const markdownPath = path.join(process.cwd(), "DATABASE_ARCHITECTURE_V1_2.md");
-      let coreSql = "";
-      if (fs.existsSync(markdownPath)) {
-        const markdown = fs.readFileSync(markdownPath, "utf-8");
-        const regex = /```sql\s+([\s\S]*?)\s*```/g;
-        let match;
-        while ((match = regex.exec(markdown)) !== null) {
-          coreSql += match[1] + "\n\n";
-        }
-      }
-
-      if (coreSql.trim()) {
-        logs.push("🛠️ Executing Core Table Schema Architecture (Applying Idempotent Wrappers)...");
-        // Make standard types idempotent
-        let sanitizedSql = coreSql;
-        sanitizedSql = sanitizedSql.replace(
-          /CREATE TYPE\s+(\w+)\s+AS\s+ENUM\s*\(([\s\S]*?)\);/gi,
-          (match, p1, p2) => {
-            return `DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = '${p1}') THEN CREATE TYPE ${p1} AS ENUM (${p2}); END IF; END $$;`;
-          }
-        );
-        // Make tables idempotent
-        sanitizedSql = sanitizedSql.replace(/CREATE TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?(\w+)/gi, "CREATE TABLE IF NOT EXISTS $1");
-        // Make indexes idempotent
-        sanitizedSql = sanitizedSql.replace(/CREATE INDEX\s+(?:IF\s+NOT\s+EXISTS\s+)?(\w+)/gi, "CREATE INDEX IF NOT EXISTS $1");
-        sanitizedSql = sanitizedSql.replace(/CREATE UNIQUE INDEX\s+(?:IF\s+NOT\s+EXISTS\s+)?(\w+)/gi, "CREATE UNIQUE INDEX IF NOT EXISTS $1");
-        // Make policies idempotent
-        sanitizedSql = sanitizedSql.replace(/CREATE POLICY\s+("?\w+"?)\s+ON\s+("?[\w.]+"?)/gi, "DROP POLICY IF EXISTS $1 ON $2; CREATE POLICY $1 ON $2");
-        // Make triggers idempotent
-        sanitizedSql = sanitizedSql.replace(/CREATE TRIGGER\s+("?\w+"?)/gi, "CREATE OR REPLACE TRIGGER $1");
-
-        await client.query(sanitizedSql);
-        logs.push("✅ Core layout tables & constraints initialized successfully.");
-      } else {
-        logs.push("⚠️ Warning: No core SQL schema blocks could be extracted from DATABASE_ARCHITECTURE_V1_2.md.");
-      }
-
-      // Step B: Loop and execute other migrations in chronological order
+      // Loop and execute migrations in chronological order. Core architecture
+      // schema now lives in supabase/migrations/20260601000000_core_architecture_foundation.sql
+      // (Supabase migrations are the single source of truth — see CLAUDE.md Priority 4).
+      // DATABASE_ARCHITECTURE_V1_2.md remains as documentation only and is no longer parsed here.
       const migrationsDir = path.join(process.cwd(), "supabase", "migrations");
       let migrationFiles: string[] = [];
       if (fs.existsSync(migrationsDir)) {
@@ -204,6 +168,10 @@ async function startServer() {
 
   // endpoint to fetch database connection, tables, buckets and migrations status
   app.post("/api/admin/db/status", async (req, res) => {
+    const hqAuth = await requireHqRole(req, ["HQ_OWNER", "HQ_STAFF"]);
+    if (!hqAuth.ok) {
+      return res.status(403).json({ errorMessage: "Akses ditolak. Hanya kakitangan HQ yang sah boleh menyemak status pangkalan data." });
+    }
     const { dbPassword } = req.body;
     const projectRef = getProjectRef();
     
@@ -296,6 +264,10 @@ async function startServer() {
 
   // endpoint to programmatically execute schema setup and SQL migrations against Supabase
   app.post("/api/admin/db/initialize", async (req, res) => {
+    const hqAuth = await requireHqRole(req, ["HQ_OWNER"]);
+    if (!hqAuth.ok) {
+      return res.status(403).json({ success: false, errorMessage: "Akses ditolak. Hanya HQ Pemilik boleh menjalankan migrasi pangkalan data." });
+    }
     const { dbPassword } = req.body;
     const { success, logs, errorMessage } = await runDatabaseInitialization(dbPassword, true);
     res.json({ success, logs, errorMessage });
@@ -303,6 +275,10 @@ async function startServer() {
 
   // End-to-end Verification and Production Readiness Analyzer (Task 5 & 6)
   app.post("/api/admin/db/verify", async (req, res) => {
+    const hqAuth = await requireHqRole(req, ["HQ_OWNER"]);
+    if (!hqAuth.ok) {
+      return res.status(403).json({ success: false, errorMessage: "Akses ditolak. Hanya HQ Pemilik boleh menjalankan ujian pengesahan pangkalan data." });
+    }
     const { dbPassword } = req.body;
     let client: any = null;
     
@@ -558,7 +534,7 @@ async function startServer() {
   // ── CREATE STAFF ACCOUNT (Admin only) ─────────────────────────────────────
   app.post("/api/admin/create-staff", async (req, res) => {
     try {
-      const { email, fullName, role, tenantId, callerJwt } = req.body;
+      const { email, fullName, role } = req.body;
 
       if (!email || !fullName || !role) {
         return res.status(400).json({ success: false, error: "Email, nama, dan role diperlukan." });
@@ -576,21 +552,22 @@ async function startServer() {
         return res.status(503).json({ success: false, error: "Sistem belum dikonfigurasi. Sila tambah SUPABASE_SERVICE_ROLE_KEY dalam Railway." });
       }
 
-      // Verify caller JWT — pastikan caller adalah HQ_OWNER atau TENANT_OWNER
-      if (callerJwt) {
-        const verifyRes = await fetch(`${supabaseUrl}/auth/v1/user`, {
-          headers: { "Authorization": `Bearer ${callerJwt}`, "apikey": process.env.VITE_SUPABASE_ANON_KEY || "" }
-        });
-        if (!verifyRes.ok) {
-          return res.status(401).json({ success: false, error: "Sesi tidak sah. Sila log masuk semula." });
-        }
-        const callerData = await verifyRes.json() as any;
-        const callerRole = callerData?.user_metadata?.role || callerData?.role;
-        const allowed = ["HQ_OWNER", "TENANT_OWNER"];
-        if (!allowed.includes(callerRole)) {
-          return res.status(403).json({ success: false, error: "Hanya HQ Pemilik atau Pemilik Syarikat boleh cipta akaun staf." });
-        }
+      // Caller identity (role + tenant) is always resolved server-side from
+      // their session bearer token — never trusted from the request body.
+      const caller = await resolveCallerIdentity(req);
+      if (!caller.ok) {
+        return res.status(401).json({ success: false, error: "Sesi tidak sah. Sila log masuk semula." });
       }
+      if (role === "HQ_STAFF" && caller.role !== "HQ_OWNER") {
+        return res.status(403).json({ success: false, error: "Hanya HQ Pemilik boleh cipta akaun HQ Staf." });
+      }
+      if (role === "TENANT_STAFF" && caller.role !== "TENANT_OWNER" && caller.role !== "HQ_OWNER") {
+        return res.status(403).json({ success: false, error: "Hanya Pemilik Syarikat boleh cipta akaun staf syarikat." });
+      }
+      // A tenant owner can only create staff inside their own tenant — the
+      // tenantId always comes from the caller's verified session, never
+      // from the request body, so it cannot be spoofed to another tenant.
+      const newStaffTenantId = role === "TENANT_STAFF" ? (caller.tenantId || "") : "";
 
       // Generate temporary password
       const tempPassword = `MyKerani@${Math.random().toString(36).slice(2, 8).toUpperCase()}${Date.now().toString().slice(-4)}!`;
@@ -610,7 +587,7 @@ async function startServer() {
           user_metadata: {
             fullName,
             role,
-            tenantId: tenantId || "",
+            tenantId: newStaffTenantId,
           }
         })
       });
@@ -649,11 +626,24 @@ async function startServer() {
         return res.status(402).json({ error: "Kredit OCR anda telah habis. Sila beli tambahan kredit atau naik taraf pelan anda." });
       }
 
+      const access = await verifyTenantAccess(req, tenantId, workspaceId);
+      if (!access.ok) {
+        return res.status(403).json({ error: "Sesi tidak sah atau tidak mempunyai akses kepada syarikat ini." });
+      }
+
       const candidates = await getAiProviderCandidates();
       if (candidates.length === 0) {
         console.info("No AI provider configured (checked HQ Console AI Router settings, then OPENAI_API_KEY/GEMINI_API_KEY/ANTHROPIC_API_KEY env vars). Using realistic sandbox OCR fallback.");
         const mockResult = generateMockOcr(fileName, documentType);
         return res.json(mockResult);
+      }
+
+      const hasCredit = await consumeResourceCredit(tenantId, workspaceId, "OCR", `OCR analyze: ${fileName || "document"}`);
+      if (!hasCredit) {
+        return res.status(402).json({
+          error: "Kredit OCR syarikat anda telah digunakan sepenuhnya untuk tempoh semasa. Sila naik taraf pelan atau tunggu pembaharuan bulanan.",
+          code: "OCR_CREDITS_EXHAUSTED",
+        });
       }
 
       // Process fileDataUrl. Format: data:<mimeType>;base64,<base64Data>
@@ -742,6 +732,22 @@ Provide your output precisely formatted as raw JSON matching exactly this shape,
         console.info("No AI provider configured (checked HQ Console AI Router settings, then OPENAI_API_KEY/GEMINI_API_KEY/ANTHROPIC_API_KEY env vars). Directing to simulated workspace context analysis.");
         const fallbackResult = generateFallbackAssistantResponse(query, financialContext || {});
         return res.json(fallbackResult);
+      }
+
+      const tenantId = financialContext?.activeTenant?.id;
+      const workspaceId = financialContext?.activeWorkspace?.id;
+
+      const access = await verifyTenantAccess(req, tenantId, workspaceId);
+      if (!access.ok) {
+        return res.status(403).json({ error: "Sesi tidak sah atau tidak mempunyai akses kepada syarikat ini." });
+      }
+
+      const hasCredit = await consumeResourceCredit(tenantId, workspaceId, "AI", `AI assistant query: ${String(query).slice(0, 80)}`);
+      if (!hasCredit) {
+        return res.status(402).json({
+          error: "Kredit AI syarikat anda telah digunakan sepenuhnya untuk tempoh semasa. Sila naik taraf pelan atau tunggu pembaharuan bulanan.",
+          code: "AI_CREDITS_EXHAUSTED",
+        });
       }
 
       const systemPrompt = `You are MYKERANI AI Financial Assistant, a highly trained cognitive co-pilot. Your purpose is to analyze the active workspace financial data and provide Q&A answers, structured searches, analytical summaries, diagnostic health explanations, and evidence retrieval references.
@@ -944,6 +950,31 @@ If you output markdown formatting inside the fields, escape quotes correctly.`;
     } catch (err) {
       console.error("Failed to log AI usage:", err);
     }
+
+    // Mirror into the generic event_logs ledger (separate from ai_usage_log,
+    // which is billing-detail-specific) so AI/OCR calls show up alongside
+    // login/upload/export/etc. for monitoring, analytics, and troubleshooting.
+    try {
+      await fetch(`${supabaseUrl}/rest/v1/event_logs`, {
+        method: "POST",
+        headers: {
+          apikey: serviceRoleKey,
+          Authorization: `Bearer ${serviceRoleKey}`,
+          "Content-Type": "application/json",
+          Prefer: "return=minimal",
+        },
+        body: JSON.stringify({
+          tenant_id: tenantId,
+          workspace_id: workspaceId || null,
+          user_id: userId || null,
+          event_type: feature === "ocr" ? "OCR_PROCESS" : "AI_ANALYSIS",
+          description: `${feature === "ocr" ? "OCR document processed" : "AI analysis call"} via ${provider}/${model}`,
+          metadata: { provider, model, feature },
+        }),
+      });
+    } catch (err) {
+      console.error("Failed to write event log for AI usage:", err);
+    }
   }
 
   // Resource Governance Layer enforcement: debits one credit from the tenant's
@@ -992,6 +1023,137 @@ If you output markdown formatting inside the fields, escape quotes correctly.`;
     } catch (err) {
       console.error("Failed to check user suspension state:", err);
       return false;
+    }
+  }
+
+  // Verifies the caller's Supabase session token actually belongs to the
+  // tenant/workspace it claims in the request body. Frontend filtering is
+  // not security — without this, any client could pass another tenant's
+  // tenantId/workspaceId and drain or misattribute that tenant's AI/OCR
+  // credit wallet (Constitution: Multi Tenant Rule — "Backend validation
+  // is mandatory").
+  // Resolves the caller's identity (user id, tenant id, role) strictly from
+  // their Supabase session bearer token + the user_role_assignments table —
+  // never from anything the client put in the request body. This is the
+  // single source of truth for "who is calling" used by every endpoint
+  // below (Constitution: Multi Tenant Rule — "tenant identity must come
+  // from the authenticated session, not the request body").
+  async function resolveCallerIdentity(req: any): Promise<{ ok: boolean; userId?: string; tenantId?: string; role?: string }> {
+    const supabaseUrl = process.env.VITE_SUPABASE_URL;
+    const anonKey = process.env.VITE_SUPABASE_ANON_KEY;
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    if (!supabaseUrl || !anonKey || !serviceRoleKey) return { ok: true }; // local/self-hosted dev without DB
+
+    const authHeader = req.headers?.authorization || "";
+    const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : "";
+    if (!token) return { ok: false };
+
+    try {
+      const userResp = await fetch(`${supabaseUrl}/auth/v1/user`, {
+        headers: { apikey: anonKey, Authorization: `Bearer ${token}` },
+      });
+      if (!userResp.ok) return { ok: false };
+      const userData = await userResp.json() as any;
+      const userId = userData?.id;
+      if (!userId) return { ok: false };
+
+      const roleResp = await fetch(
+        `${supabaseUrl}/rest/v1/user_role_assignments?user_id=eq.${userId}&select=tenant_id,role`,
+        { headers: { apikey: serviceRoleKey, Authorization: `Bearer ${serviceRoleKey}` } }
+      );
+      if (!roleResp.ok) return { ok: false };
+      const roleRows: any[] = await roleResp.json();
+      const tenantId = roleRows[0]?.tenant_id;
+      const role = roleRows[0]?.role;
+      if (!tenantId || !role) return { ok: false };
+
+      return { ok: true, userId, tenantId, role };
+    } catch (err) {
+      console.error("Failed to resolve caller identity:", err);
+      return { ok: false };
+    }
+  }
+
+  // Verifies the caller's authenticated tenant/workspace membership.
+  // Returns the *authoritative* tenantId/userId/role resolved server-side
+  // from the session — callers should use the returned values, not the
+  // claimed ones, for any downstream DB writes.
+  async function verifyTenantAccess(
+    req: any,
+    claimedTenantId: string | undefined | null,
+    claimedWorkspaceId: string | undefined | null
+  ): Promise<{ ok: boolean; userId?: string; tenantId?: string; role?: string }> {
+    const identity = await resolveCallerIdentity(req);
+    if (!identity.ok) return { ok: false };
+    // Dev fallback (no Supabase configured) has no tenantId to compare against.
+    if (!identity.tenantId) return identity;
+    if (claimedTenantId && identity.tenantId !== claimedTenantId) return { ok: false };
+
+    if (claimedWorkspaceId) {
+      const supabaseUrl = process.env.VITE_SUPABASE_URL;
+      const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+      try {
+        const wsResp = await fetch(
+          `${supabaseUrl}/rest/v1/workspaces?id=eq.${claimedWorkspaceId}&select=tenant_id`,
+          { headers: { apikey: serviceRoleKey!, Authorization: `Bearer ${serviceRoleKey}` } }
+        );
+        if (!wsResp.ok) return { ok: false };
+        const wsRows: any[] = await wsResp.json();
+        if (wsRows[0]?.tenant_id !== identity.tenantId) return { ok: false };
+      } catch (err) {
+        console.error("Failed to verify workspace ownership:", err);
+        return { ok: false };
+      }
+    }
+
+    return identity;
+  }
+
+  // Gate for HQ-only operations (DB administration, schema migrations).
+  // Rejects unless the caller's session resolves to one of allowedRoles —
+  // a raw dbPassword in the request body is never treated as authorization.
+  async function requireHqRole(req: any, allowedRoles: string[]): Promise<{ ok: boolean; userId?: string; role?: string }> {
+    const identity = await resolveCallerIdentity(req);
+    if (!identity.ok) return { ok: false };
+    if (!identity.role) return identity; // dev fallback, no Supabase configured
+    if (!allowedRoles.includes(identity.role)) return { ok: false };
+    return identity;
+  }
+
+  // Atomically checks and deducts one credit of the given type from the
+  // workspace's resource_wallets balance via the consume_resource_credit RPC
+  // (SECURITY DEFINER, service_role-only). Returns false if the wallet has
+  // insufficient balance — callers must not call a paid AI provider in that
+  // case. Fails open (returns true) if Supabase isn't configured or the
+  // tenant/workspace id is missing, matching this project's existing
+  // best-effort posture for local/self-hosted dev without a DB.
+  async function consumeResourceCredit(
+    tenantId: string | undefined | null,
+    workspaceId: string | undefined | null,
+    creditType: "AI" | "OCR",
+    description: string
+  ): Promise<boolean> {
+    if (!tenantId || !workspaceId) return true;
+    const supabaseUrl = process.env.VITE_SUPABASE_URL;
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    if (!supabaseUrl || !serviceRoleKey) return true;
+    try {
+      const resp = await fetch(`${supabaseUrl}/rest/v1/rpc/consume_resource_credit`, {
+        method: "POST",
+        headers: { apikey: serviceRoleKey, Authorization: `Bearer ${serviceRoleKey}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          p_tenant_id: tenantId,
+          p_workspace_id: workspaceId,
+          p_credit_type: creditType,
+          p_amount: 1,
+          p_description: description,
+        }),
+      });
+      if (!resp.ok) return true;
+      return Boolean(await resp.json());
+    } catch (err) {
+      console.error("Failed to check/consume resource credit:", err);
+      return true;
     }
   }
 
@@ -1047,6 +1209,11 @@ If you output markdown formatting inside the fields, escape quotes correctly.`;
       const { transactionId, tenantId, planId, amountMyr } = req.body || {};
       if (!transactionId || !tenantId || !planId || !amountMyr) {
         return res.status(400).json({ error: "Maklumat pembayaran tidak lengkap." });
+      }
+
+      const access = await verifyTenantAccess(req, tenantId, null);
+      if (!access.ok) {
+        return res.status(403).json({ error: "Sesi tidak sah atau tidak mempunyai akses kepada syarikat ini." });
       }
 
       const settings = await fetchPaymentGatewaySettings();

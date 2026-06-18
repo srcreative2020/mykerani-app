@@ -124,7 +124,9 @@ export function useStorageQuota(tenantId: string, workspaceId?: string): Storage
   }, [tenantId, tick]);
 
   // Real quota comes from resource_wallets.storage_limit_bytes — the entitlement
-  // single source of truth — falling back to localStorage if no workspace wallet exists.
+  // single source of truth (reflects plan allowance plus any topups/HQ
+  // adjustments/downgrade clamping) — falling back to localStorage if no
+  // workspace wallet exists.
   useEffect(() => {
     if (!isSupabaseConfigured() || !supabase || !workspaceId || !uuidRe.test(workspaceId)) return;
     let cancelled = false;
