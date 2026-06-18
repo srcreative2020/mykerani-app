@@ -1374,22 +1374,32 @@ Only include a "CONFIRM_TRANSACTION" suggestion entry when financialIntent.detec
       return candidates;
     }
 
-    // Fallback: environment-variable based config (Gemini/OpenAI/Anthropic only).
-    const envKeys: Record<"gemini" | "openai" | "anthropic", string | undefined> = {
+    // Fallback: environment-variable based config. Covers every provider in
+    // MODEL_CATALOGUE (not just Gemini/OpenAI/Anthropic) so a provider enabled
+    // in the DB (e.g. DeepSeek) but unreachable via fetchDbAiConfig() (missing
+    // VITE_SUPABASE_URL/SUPABASE_SERVICE_ROLE_KEY) can still be picked up from
+    // a directly-set env var on the host.
+    const allProviders = Object.keys(MODEL_CATALOGUE) as AiProviderId[];
+    const envKeys: Record<AiProviderId, string | undefined> = {
       openai: process.env.OPENAI_API_KEY,
       gemini: process.env.GEMINI_API_KEY,
       anthropic: process.env.ANTHROPIC_API_KEY,
+      deepseek: process.env.DEEPSEEK_API_KEY,
+      xai: process.env.XAI_API_KEY,
+      mistral: process.env.MISTRAL_API_KEY,
+      groq: process.env.GROQ_API_KEY,
+      alibaba: process.env.ALIBABA_API_KEY,
     };
-    const allProviders: ("gemini" | "openai" | "anthropic")[] = ["gemini", "openai", "anthropic"];
     const forced = (process.env.AI_PROVIDER || "").toLowerCase();
-    if (forced === "gemini" || forced === "openai" || forced === "anthropic") {
-      return envKeys[forced]
-        ? [{ provider: forced, apiKey: envKeys[forced]!, model: MODEL_CATALOGUE[forced][0].id, costUsd: 0 }]
+    if (allProviders.includes(forced as AiProviderId)) {
+      const p = forced as AiProviderId;
+      return envKeys[p]
+        ? [{ provider: p, apiKey: envKeys[p]!, model: MODEL_CATALOGUE[p][0].id, costUsd: 0 }]
         : [];
     }
     const customOrder = (process.env.AI_PROVIDER_ORDER || "")
       .toLowerCase().split(",").map(s => s.trim())
-      .filter((p): p is "gemini" | "openai" | "anthropic" => allProviders.includes(p as any));
+      .filter((p): p is AiProviderId => allProviders.includes(p as AiProviderId));
     const order = customOrder.length > 0
       ? [...customOrder, ...allProviders.filter(p => !customOrder.includes(p))]
       : allProviders;
