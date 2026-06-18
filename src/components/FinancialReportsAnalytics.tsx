@@ -41,9 +41,9 @@ export const FinancialReportsAnalytics: React.FC = () => {
     financialEvidencePackages,
   } = useFinancials();
 
-  // Active Report Selection state: 7 reports
+  // Active Report Selection state: 8 reports
   const [selectedReport, setSelectedReport] = useState<
-    "summary" | "cashflow" | "receivables_aging" | "payables_aging" | "commitments" | "health" | "tax_readiness"
+    "summary" | "cashflow" | "receivables_aging" | "payables_aging" | "commitments" | "health" | "tax_readiness" | "bank_readiness"
   >("summary");
 
   const [businessProfile, setBusinessProfile] = useState<BusinessProfile>(EMPTY_BUSINESS_PROFILE);
@@ -393,6 +393,92 @@ export const FinancialReportsAnalytics: React.FC = () => {
     return { checks, passedCount, totalChecks: checks.length, scorePct, scoreGrade, scoreColor, incomeEvidencePct, expenseEvidencePct, categorizedPct, coveragePct };
   }, [financialEvents, financialEvidencePackages, businessProfile, baseDate]);
 
+  // Bank/Financing Readiness checklist — a generic, bank-agnostic
+  // creditworthiness checklist computed from existing solvency, liquidity,
+  // collections and debt-repayment data. Real banks vary in exact criteria,
+  // so this surfaces the underlying signals lenders commonly check rather
+  // than a single institution's rule set.
+  const bankReadiness = useMemo(() => {
+    const incomeRecords = financialEvents.filter(e => e.type === "INCOME");
+    const monthsWithIncome = new Set(incomeRecords.map(e => e.date?.slice(0, 7)).filter(Boolean));
+    const monthKeys: string[] = [];
+    for (let i = 0; i < 6; i++) {
+      const d = new Date(baseDate.getFullYear(), baseDate.getMonth() - i, 1);
+      monthKeys.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
+    }
+    const incomeMonthsCovered = monthKeys.filter(m => monthsWithIncome.has(m)).length;
+    const incomeConsistencyPct = (incomeMonthsCovered / monthKeys.length) * 100;
+
+    const overdueDebts = debtRecords.filter(d =>
+      d.status === "ACTIVE" &&
+      d.repaymentDueDate &&
+      new Date(d.repaymentDueDate).getTime() < baseDate.getTime() &&
+      d.repaidAmountMyr < d.totalAmountMyr
+    );
+
+    const checks = [
+      {
+        id: "registration",
+        label: "No. Pendaftaran Perniagaan Direkodkan",
+        pass: Boolean(businessProfile.registrationNo && businessProfile.registrationNo.trim()),
+        detail: businessProfile.registrationNo
+          ? `No. pendaftaran: ${businessProfile.registrationNo}`
+          : "Sila lengkapkan No. Pendaftaran Perniagaan dalam Profil Kewangan AI — biasanya diperlukan dalam permohonan pembiayaan.",
+      },
+      {
+        id: "solvency",
+        label: "Nisbah Aset/Liabiliti Sihat",
+        pass: healthScoring.solvencyRatio >= 1.5,
+        detail: `Nisbah solvensi semasa: ${healthScoring.solvencyRatio.toFixed(2)}x (gred: ${healthScoring.solvencyGrade}). Kebanyakan pemberi pinjaman mahukan sekurang-kurangnya 1.5x.`,
+      },
+      {
+        id: "runway",
+        label: "Penampan Mudah Tunai Mencukupi",
+        pass: healthScoring.runwayMonths >= 3,
+        detail: healthScoring.runwayMonths === 999
+          ? "Tiada komitmen bulanan aktif direkodkan — tidak boleh dinilai sepenuhnya."
+          : `Penampan kelangsungan semasa: ${healthScoring.runwayMonths.toFixed(1)} bulan. Disasarkan sekurang-kurangnya 3 bulan.`,
+      },
+      {
+        id: "debt_repayment",
+        label: "Tiada Hutang Tertunggak Lewat Bayar",
+        pass: overdueDebts.length === 0,
+        detail: overdueDebts.length === 0
+          ? "Tiada rekod hutang yang melepasi tarikh matang tanpa dibayar penuh."
+          : `${overdueDebts.length} rekod hutang telah melepasi tarikh matang tanpa dibayar penuh — ini menjejaskan rekod pembayaran kredit anda.`,
+      },
+      {
+        id: "receivables_quality",
+        label: "Kutipan Piutang Lancar (Tiada Lapuk >60 Hari)",
+        pass: receivablesAgingData.b61_plus === 0,
+        detail: receivablesAgingData.b61_plus === 0
+          ? "Tiada baki piutang lapuk melebihi 60 hari."
+          : `RM ${receivablesAgingData.b61_plus.toLocaleString()} piutang telah lapuk melebihi 60 hari — pemberi pinjaman melihat ini sebagai risiko aliran tunai.`,
+      },
+      {
+        id: "income_consistency",
+        label: "Pendapatan Konsisten (6 Bulan Lepas)",
+        pass: incomeConsistencyPct >= 80,
+        detail: `${incomeMonthsCovered}/${monthKeys.length} bulan dalam tempoh 6 bulan lepas mempunyai sekurang-kurangnya satu rekod pendapatan.`,
+      },
+    ];
+
+    const passedCount = checks.filter(c => c.pass).length;
+    const scorePct = (passedCount / checks.length) * 100;
+
+    let scoreGrade = "Sedia";
+    let scoreColor = "text-emerald-600 bg-emerald-50 border-emerald-150";
+    if (scorePct < 50) {
+      scoreGrade = "Belum Sedia";
+      scoreColor = "text-rose-600 bg-rose-50 border-rose-150";
+    } else if (scorePct < 85) {
+      scoreGrade = "Sebahagian Sedia";
+      scoreColor = "text-amber-600 bg-amber-50 border-amber-100";
+    }
+
+    return { checks, passedCount, totalChecks: checks.length, scorePct, scoreGrade, scoreColor };
+  }, [financialEvents, debtRecords, receivablesAgingData, healthScoring, businessProfile, baseDate]);
+
   // Build the export dataset for the currently selected report
   const exportDataset = useMemo((): { columns: ExportColumn[]; rows: Record<string, unknown>[]; title: string } => {
     const eventColumns: ExportColumn[] = [
@@ -454,6 +540,11 @@ export const FinancialReportsAnalytics: React.FC = () => {
         const rows = taxReadiness.checks.map(c => ({ label: c.label, status: c.pass ? "Lulus" : "Belum Lulus", detail: c.detail }));
         return { columns, rows, title: "Laporan Kesediaan Cukai LHDN" };
       }
+      case "bank_readiness": {
+        const columns: ExportColumn[] = [{ key: "label", label: "Pemeriksaan" }, { key: "status", label: "Status" }, { key: "detail", label: "Butiran" }];
+        const rows = bankReadiness.checks.map(c => ({ label: c.label, status: c.pass ? "Lulus" : "Belum Lulus", detail: c.detail }));
+        return { columns, rows, title: "Laporan Kesediaan Pembiayaan/Pinjaman" };
+      }
       default: {
         const columns: ExportColumn[] = [{ key: "metric", label: "Metrik" }, { key: "value", label: "Nilai (RM)" }];
         const rows = [
@@ -470,7 +561,7 @@ export const FinancialReportsAnalytics: React.FC = () => {
   }, [
     selectedReport, financialEvents, receivablesAgingData, payablesAgingData, commitmentBurnData,
     healthScoring, totalLiquidAssets, totalReceivables, totalPayables, totalDebts, aggregateAssets, aggregateLiabilities,
-    taxReadiness,
+    taxReadiness, bankReadiness,
   ]);
 
   const exportFilenameBase = `MyKerani_${activeWorkspace.name}_${selectedReport}_${new Date().toISOString().slice(0, 10)}`.replace(/\s+/g, "_");
@@ -674,6 +765,21 @@ export const FinancialReportsAnalytics: React.FC = () => {
             </div>
           </button>
 
+          <button
+            onClick={() => { setSelectedReport("bank_readiness"); setSearchTerm(""); }}
+            className={`w-full text-left px-3.5 py-3 rounded-xl text-xs font-semibold flex items-center justify-between transition border ${
+              selectedReport === "bank_readiness"
+                ? "bg-slate-950 border-slate-950 text-white shadow-xs"
+                : "bg-white border-slate-200 text-slate-700 hover:bg-slate-50 hover:text-slate-950"
+            }`}
+            id="nav_report_bank_readiness"
+          >
+            <div className="flex items-center space-x-2">
+              <Building2 className="w-4 h-4 text-cyan-600" />
+              <span>8. Kesediaan Pembiayaan/Pinjaman</span>
+            </div>
+          </button>
+
           <div className="p-4 bg-indigo-50 rounded-xl space-y-2.5 mt-4 border border-indigo-100">
             <span className="text-[10px] font-mono uppercase bg-indigo-100 text-indigo-800 px-1.5 py-0.5 rounded font-bold">
               Nota Kedaulatan Data
@@ -700,6 +806,7 @@ export const FinancialReportsAnalytics: React.FC = () => {
               {selectedReport === "commitments" && "5. Laporan Inventori Komitmen Operasional & Kontrak"}
               {selectedReport === "health" && "6. Skor Kesihatan Syarikat & Ramalan Jangka Kelangsungan"}
               {selectedReport === "tax_readiness" && "7. Senarai Semak Kesediaan Cukai LHDN"}
+              {selectedReport === "bank_readiness" && "8. Senarai Semak Kesediaan Pembiayaan/Pinjaman"}
             </h3>
             <p className="text-xs text-slate-500 mt-0.5 font-sans">
               Sektor perakaunan pintar bertauliah dari platform MYKERANI.
@@ -1581,6 +1688,55 @@ export const FinancialReportsAnalytics: React.FC = () => {
               <div className="p-4 bg-slate-50 rounded-xl border border-slate-200">
                 <p className="text-[11px] text-slate-500 leading-relaxed font-sans">
                   Senarai semak ini adalah panduan kesediaan dalaman MYKERANI dan bukan nasihat percukaian rasmi. Sila rujuk akauntan bertauliah atau LHDN sebelum penyerahan cukai sebenar.
+                </p>
+              </div>
+
+            </div>
+          )}
+
+          {/* Report 8: Bank/Financing Readiness */}
+          {selectedReport === "bank_readiness" && (
+            <div className="space-y-6 animate-fade-in" id="report_bank_readiness_view">
+
+              <div className={`p-5 rounded-2xl border-2 space-y-2 ${bankReadiness.scoreColor}`}>
+                <div className="flex justify-between items-center border-b border-white/20 pb-2">
+                  <span className="text-[10px] font-mono font-bold uppercase tracking-wide">
+                    Skor Kesediaan Pembiayaan/Pinjaman
+                  </span>
+                  <span className="text-xs font-mono font-bold">{bankReadiness.passedCount}/{bankReadiness.totalChecks} Pemeriksaan Lulus</span>
+                </div>
+                <p className="text-2xl font-mono font-bold tracking-tight mt-0.5">
+                  {bankReadiness.scorePct.toFixed(0)}%
+                </p>
+                <p className="text-[11px] font-sans mt-1 opacity-90 leading-relaxed">
+                  Status: <strong>{bankReadiness.scoreGrade}</strong>. Skor ini dikira daripada nisbah solvensi, penampan mudah tunai, rekod pembayaran hutang dan kutipan piutang sebenar anda. Kriteria sebenar berbeza mengikut bank/institusi — ini adalah panduan signal umum, bukan kelulusan rasmi.
+                </p>
+              </div>
+
+              <div className="space-y-3">
+                <h4 className="font-display font-semibold text-xs text-slate-900 uppercase tracking-widest">
+                  Senarai Semak Terperinci
+                </h4>
+                <div className="divide-y divide-slate-100 border border-slate-200 rounded-2xl overflow-hidden text-xs">
+                  {bankReadiness.checks.map(c => (
+                    <div key={c.id} className="p-4 flex items-start space-x-3.5">
+                      {c.pass ? (
+                        <ShieldCheck className="w-5 h-5 text-emerald-600 flex-shrink-0 mt-0.5" />
+                      ) : (
+                        <AlertCircle className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" />
+                      )}
+                      <div className="space-y-1">
+                        <span className="font-bold text-slate-805 block">{c.label}</span>
+                        <p className={`leading-relaxed font-sans ${c.pass ? "text-slate-505" : "text-amber-700"}`}>{c.detail}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="p-4 bg-slate-50 rounded-xl border border-slate-200">
+                <p className="text-[11px] text-slate-500 leading-relaxed font-sans">
+                  Senarai semak ini adalah panduan kesediaan dalaman MYKERANI berdasarkan signal kewangan umum dan bukan kelulusan atau nasihat pembiayaan rasmi. Setiap bank/institusi mempunyai kriteria sendiri — sila rujuk pegawai pembiayaan untuk penilaian sebenar.
                 </p>
               </div>
 
