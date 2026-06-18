@@ -22,6 +22,7 @@ import {
   Activity
 } from "lucide-react";
 import { type FinancialEvent, type FinancialCommitment } from "../types";
+import { exportToCSV, exportToExcel, exportToJSON, exportToPDF, type ExportColumn } from "../lib/exportUtils";
 
 export const FinancialReportsAnalytics: React.FC = () => {
   const { activeWorkspace } = useWorkspace();
@@ -291,9 +292,88 @@ export const FinancialReportsAnalytics: React.FC = () => {
     };
   }, [aggregateAssets, aggregateLiabilities, totalLiquidAssets, totalPayables, commitmentBurnData]);
 
-  // Simulate Export Trigger
-  const handleExport = (reportName: string) => {
-    alert(`Laporan [${reportName.toUpperCase()}] sedia dipindah-keluar. Workspace isolation disahkan dan integrity hash ditandatangani secara digital.`);
+  // Build the export dataset for the currently selected report
+  const exportDataset = useMemo((): { columns: ExportColumn[]; rows: Record<string, unknown>[]; title: string } => {
+    const eventColumns: ExportColumn[] = [
+      { key: "date", label: "Tarikh" },
+      { key: "partyName", label: "Pihak" },
+      { key: "categoryName", label: "Kategori" },
+      { key: "amountMyr", label: "Jumlah (RM)" },
+      { key: "referenceNumber", label: "No. Rujukan" },
+      { key: "description", label: "Catatan" },
+      { key: "isCompleted", label: "Status" },
+    ];
+    const eventRows = (events: FinancialEvent[]) =>
+      events.map(e => ({ ...e, isCompleted: e.isCompleted ? "Selesai" : "Belum Selesai" }));
+
+    switch (selectedReport) {
+      case "receivables_aging": {
+        const all = [
+          ...receivablesAgingData.currentList,
+          ...receivablesAgingData.b1_30List,
+          ...receivablesAgingData.b31_60List,
+          ...receivablesAgingData.b61_plusList,
+        ];
+        return { columns: eventColumns, rows: eventRows(all), title: "Laporan Umur Belum Terima" };
+      }
+      case "payables_aging": {
+        const all = [
+          ...payablesAgingData.currentList,
+          ...payablesAgingData.b1_30List,
+          ...payablesAgingData.b31_60List,
+          ...payablesAgingData.b61_plusList,
+        ];
+        return { columns: eventColumns, rows: eventRows(all), title: "Laporan Umur Belum Bayar" };
+      }
+      case "commitments": {
+        const columns: ExportColumn[] = [
+          { key: "description", label: "Penerangan" },
+          { key: "obligeeName", label: "Pihak" },
+          { key: "amountPerIntervalMyr", label: "Jumlah/Selang (RM)" },
+          { key: "recurrence", label: "Kekerapan" },
+          { key: "monthlyContribution", label: "Sumbangan Bulanan (RM)" },
+          { key: "startDate", label: "Tarikh Mula" },
+          { key: "status", label: "Status" },
+        ];
+        return { columns, rows: commitmentBurnData.items as unknown as Record<string, unknown>[], title: "Laporan Komitmen Kewangan" };
+      }
+      case "cashflow":
+        return { columns: eventColumns, rows: eventRows(financialEvents), title: "Laporan Aliran Tunai" };
+      case "health": {
+        const columns: ExportColumn[] = [{ key: "metric", label: "Metrik" }, { key: "value", label: "Nilai" }, { key: "grade", label: "Gred" }];
+        const rows = [
+          { metric: "Nisbah Solvensi", value: healthScoring.solvencyRatio.toFixed(2), grade: healthScoring.solvencyGrade },
+          { metric: "Nisbah Cepat", value: healthScoring.quickRatio.toFixed(2), grade: healthScoring.quickGrade },
+          { metric: "Tempoh Survival (Bulan)", value: healthScoring.runwayMonths.toFixed(1), grade: healthScoring.runwayGrade },
+        ];
+        return { columns, rows, title: "Laporan Kesihatan Kewangan" };
+      }
+      default: {
+        const columns: ExportColumn[] = [{ key: "metric", label: "Metrik" }, { key: "value", label: "Nilai (RM)" }];
+        const rows = [
+          { metric: "Jumlah Aset Cair", value: totalLiquidAssets },
+          { metric: "Jumlah Belum Terima", value: totalReceivables },
+          { metric: "Jumlah Belum Bayar", value: totalPayables },
+          { metric: "Jumlah Hutang", value: totalDebts },
+          { metric: "Jumlah Aset", value: aggregateAssets },
+          { metric: "Jumlah Liabiliti", value: aggregateLiabilities },
+        ];
+        return { columns, rows, title: "Ringkasan Kewangan" };
+      }
+    }
+  }, [
+    selectedReport, financialEvents, receivablesAgingData, payablesAgingData, commitmentBurnData,
+    healthScoring, totalLiquidAssets, totalReceivables, totalPayables, totalDebts, aggregateAssets, aggregateLiabilities,
+  ]);
+
+  const exportFilenameBase = `MyKerani_${activeWorkspace.name}_${selectedReport}_${new Date().toISOString().slice(0, 10)}`.replace(/\s+/g, "_");
+
+  const handleExport = (format: "csv" | "excel" | "pdf" | "json") => {
+    const { columns, rows, title } = exportDataset;
+    if (format === "csv") exportToCSV(rows, columns, `${exportFilenameBase}.csv`);
+    if (format === "excel") exportToExcel(rows, columns, `${exportFilenameBase}.xls`);
+    if (format === "pdf") exportToPDF(rows, columns, `${exportFilenameBase}.pdf`, title);
+    if (format === "json") exportToJSON(rows, `${exportFilenameBase}.json`, { workspace: activeWorkspace.name, report: selectedReport, generatedAt: new Date().toISOString() });
   };
 
   const handlePrint = () => {
@@ -323,12 +403,36 @@ export const FinancialReportsAnalytics: React.FC = () => {
             Cetak Laporan
           </button>
           <button
-            onClick={() => handleExport(selectedReport)}
+            onClick={() => handleExport("csv")}
             className="px-3 py-1.5 border border-slate-300 hover:border-slate-400 bg-white hover:bg-slate-50 text-slate-700 rounded-lg text-xs font-medium flex items-center transition cursor-pointer"
             id="btn_export_csv"
           >
             <Download className="w-3.5 h-3.5 mr-1.5 text-slate-500" />
-            Ekspor CSV
+            CSV
+          </button>
+          <button
+            onClick={() => handleExport("excel")}
+            className="px-3 py-1.5 border border-slate-300 hover:border-slate-400 bg-white hover:bg-slate-50 text-slate-700 rounded-lg text-xs font-medium flex items-center transition cursor-pointer"
+            id="btn_export_excel"
+          >
+            <Download className="w-3.5 h-3.5 mr-1.5 text-slate-500" />
+            Excel
+          </button>
+          <button
+            onClick={() => handleExport("pdf")}
+            className="px-3 py-1.5 border border-slate-300 hover:border-slate-400 bg-white hover:bg-slate-50 text-slate-700 rounded-lg text-xs font-medium flex items-center transition cursor-pointer"
+            id="btn_export_pdf"
+          >
+            <Download className="w-3.5 h-3.5 mr-1.5 text-slate-500" />
+            PDF
+          </button>
+          <button
+            onClick={() => handleExport("json")}
+            className="px-3 py-1.5 border border-slate-300 hover:border-slate-400 bg-white hover:bg-slate-50 text-slate-700 rounded-lg text-xs font-medium flex items-center transition cursor-pointer"
+            id="btn_export_json"
+          >
+            <Download className="w-3.5 h-3.5 mr-1.5 text-slate-500" />
+            JSON
           </button>
         </div>
       </div>
