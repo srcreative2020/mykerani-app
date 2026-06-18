@@ -33,7 +33,10 @@ import {
   EMPTY_PERSONAL_PROFILE, EMPTY_BUSINESS_PROFILE,
   type PersonalProfile, type BusinessProfile, type Vehicle, type Dependent,
 } from "../lib/profileData";
-import { addAssetPurchase, addOwnerTransaction } from "../lib/assetOwnerData";
+import {
+  addAssetPurchase, addOwnerTransaction, loadAssetPurchases, loadOwnerTransactions,
+  deleteAssetPurchase, deleteOwnerTransaction, type AssetPurchase, type OwnerTransaction,
+} from "../lib/assetOwnerData";
 import {
   submitManualPayment, initiateChipAsiaPayment, getTenantPaymentTransactions, startTrialSubscription,
   type TenantPaymentTransaction,
@@ -441,6 +444,8 @@ export function OwnerDashboard() {
   const [profileSavedAt, setProfileSavedAt] = useState<number | null>(null);
   const [newVehicle, setNewVehicle] = useState({ name: "", plateNumber: "", vehicleType: "", ownership: "BUSINESS" as "PERSONAL" | "BUSINESS" });
   const [newDependent, setNewDependent] = useState({ name: "", relationship: "", dateOfBirth: "" });
+  const [assetPurchases, setAssetPurchases] = useState<AssetPurchase[]>([]);
+  const [ownerTransactions, setOwnerTransactions] = useState<OwnerTransaction[]>([]);
   const [profileNudgeDismissed, setProfileNudgeDismissed] = useState(false);
   useEffect(() => {
     if (wsId && localStorage.getItem(`mk_profile_nudge_dismissed_${wsId}`)) setProfileNudgeDismissed(true);
@@ -452,6 +457,8 @@ export function OwnerDashboard() {
     loadBusinessProfile(wsId, isMockUser).then(setBusinessProfile);
     loadVehicles(wsId, isMockUser).then(setVehicles);
     loadDependents(wsId, isMockUser).then(setDependents);
+    loadAssetPurchases(wsId, isMockUser).then(setAssetPurchases);
+    loadOwnerTransactions(wsId, isMockUser).then(setOwnerTransactions);
   };
 
   useEffect(() => { refreshProfileData(); }, [wsId, isMockUser]);
@@ -485,6 +492,16 @@ export function OwnerDashboard() {
 
   const removeDependent = async (id: string) => {
     await deleteDependent(wsId, isMockUser, id);
+    refreshProfileData();
+  };
+
+  const removeAssetPurchase = async (id: string) => {
+    await deleteAssetPurchase(wsId, isMockUser, id);
+    refreshProfileData();
+  };
+
+  const removeOwnerTransaction = async (id: string) => {
+    await deleteOwnerTransaction(wsId, isMockUser, id);
     refreshProfileData();
   };
 
@@ -1516,6 +1533,36 @@ export function OwnerDashboard() {
                     <input value={newDependent.relationship} onChange={e => setNewDependent(d => ({ ...d, relationship: e.target.value }))} placeholder="Hubungan (anak, ibu...)" className="px-3 py-2 border border-slate-200 rounded-xl text-sm" />
                   </div>
                   <button onClick={submitNewDependent} className="w-full px-3 py-2 bg-slate-900 text-white rounded-xl text-sm font-semibold cursor-pointer">+ Tambah Tanggungan</button>
+                </div>
+
+                <div className="bg-white border border-slate-200 rounded-2xl p-5 space-y-3 shadow-sm">
+                  <h3 className="text-sm font-bold text-slate-800">Belian Aset</h3>
+                  <p className="text-xs text-slate-500">Direkodkan secara automatik bila anda sahkan cadangan AI untuk belian peralatan/mesin/kenderaan perniagaan.</p>
+                  {assetPurchases.length === 0 && <p className="text-xs text-slate-400 text-center py-2">Tiada rekod belian aset lagi</p>}
+                  {assetPurchases.map(a => (
+                    <div key={a.id} className="flex items-center justify-between bg-slate-50 border border-slate-100 rounded-xl px-3 py-2">
+                      <div>
+                        <p className="text-sm font-semibold text-slate-800">{a.assetName}</p>
+                        <span className="text-xs text-slate-500">RM{a.purchaseAmountMyr.toFixed(2)} · {a.purchaseDate}{a.vendorName ? ` · ${a.vendorName}` : ""}</span>
+                      </div>
+                      <button onClick={() => removeAssetPurchase(a.id)} className="text-rose-400 hover:text-rose-600 cursor-pointer"><Trash2 className="w-4 h-4" /></button>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="bg-white border border-slate-200 rounded-2xl p-5 space-y-3 shadow-sm">
+                  <h3 className="text-sm font-bold text-slate-800">Transaksi Pemilik (Modal/Drawing)</h3>
+                  <p className="text-xs text-slate-500">Direkodkan secara automatik bila anda sahkan cadangan AI untuk modal masuk atau pengeluaran peribadi.</p>
+                  {ownerTransactions.length === 0 && <p className="text-xs text-slate-400 text-center py-2">Tiada rekod transaksi pemilik lagi</p>}
+                  {ownerTransactions.map(o => (
+                    <div key={o.id} className="flex items-center justify-between bg-slate-50 border border-slate-100 rounded-xl px-3 py-2">
+                      <div>
+                        <p className="text-sm font-semibold text-slate-800">{o.type === "CAPITAL_INJECTION" ? "Modal Masuk" : "Pengeluaran (Drawing)"}</p>
+                        <span className="text-xs text-slate-500">RM{o.amountMyr.toFixed(2)} · {o.transactionDate}</span>
+                      </div>
+                      <button onClick={() => removeOwnerTransaction(o.id)} className="text-rose-400 hover:text-rose-600 cursor-pointer"><Trash2 className="w-4 h-4" /></button>
+                    </div>
+                  ))}
                 </div>
 
                 <p className="text-xs text-slate-400 text-center">Maklumat pinjaman/loan diuruskan dalam modul Hutang & Liabiliti sedia ada.</p>
