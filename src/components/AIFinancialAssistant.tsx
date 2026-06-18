@@ -35,6 +35,14 @@ interface AISuggestion {
   };
 }
 
+const TRANSACTION_TYPE_LABEL_MS: Record<string, string> = {
+  INCOME: "Pendapatan",
+  EXPENSE: "Perbelanjaan",
+  DEBT: "Hutang",
+  RECEIVABLE: "Belum Terima",
+  COMMITMENT: "Komitmen",
+};
+
 interface AIHighlights {
   healthStatus: string;
   estimatedRunwayDays: number;
@@ -326,6 +334,8 @@ export const AIFinancialAssistant: React.FC<AIFinancialAssistantProps> = ({ onTr
       <div className="flex-1 overflow-y-auto space-y-4 pr-1 mb-4 scrollbar-thin flex flex-col pt-2 border-t border-slate-100">
         {chatHistory.map((item) => {
           const isUser = item.sender === "user";
+          const hasTxnSuggestion = (item.suggestions || []).some(s => s.actionType === "CONFIRM_TRANSACTION");
+          if (hasTxnSuggestion && !isUser) return null;
           return (
             <div
               key={item.id}
@@ -367,11 +377,11 @@ export const AIFinancialAssistant: React.FC<AIFinancialAssistantProps> = ({ onTr
           console.log(`[AI_ASSISTANT_DEBUG] suggestion ${s.id} resolved status:`, status);
           if (status === "rejected") return null;
           return (
-            <div key={s.id} className="self-start max-w-[85%] ml-11 p-3.5 bg-amber-50 border border-amber-200 rounded-2xl text-xs space-y-2">
-              <div className="font-bold text-amber-900">{s.title}</div>
-              <div className="text-amber-800">{s.description}</div>
-              <div className="text-amber-700 font-mono">
-                {s.payload?.transactionType} • RM{Number(s.payload?.amount || 0).toFixed(2)} • {s.payload?.relatedParty} • {s.payload?.date}
+            <div key={s.id} className="self-start max-w-[85%] ml-11 p-3.5 bg-white border border-slate-200 rounded-2xl text-sm space-y-2 shadow-sm">
+              <div className="font-mono text-slate-800 space-y-0.5">
+                <div>Jenis: {TRANSACTION_TYPE_LABEL_MS[s.payload?.transactionType || ""] || s.payload?.transactionType || "-"}</div>
+                <div>Kategori: {s.payload?.category || "-"}</div>
+                <div>Jumlah: RM{Number(s.payload?.amount || 0).toFixed(2)}</div>
               </div>
 
               {status === "confirmed" && (
@@ -380,9 +390,9 @@ export const AIFinancialAssistant: React.FC<AIFinancialAssistantProps> = ({ onTr
 
               {status === "pending" && editingSuggestionId !== s.id && (
                 <div className="flex gap-2 pt-1">
-                  <button type="button" onClick={() => handleConfirmSuggestion(s)} className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-semibold">Sahkan (Confirm)</button>
+                  <button type="button" onClick={() => handleConfirmSuggestion(s)} className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-semibold">Sahkan</button>
                   <button type="button" onClick={() => handleStartEdit(s)} className="px-3 py-1.5 rounded-lg bg-slate-200 hover:bg-slate-300 text-slate-800 font-semibold">Edit</button>
-                  <button type="button" onClick={() => handleRejectSuggestion(s.id)} className="px-3 py-1.5 rounded-lg bg-rose-100 hover:bg-rose-200 text-rose-700 font-semibold">Tolak (Reject)</button>
+                  <button type="button" onClick={() => handleRejectSuggestion(s.id)} className="px-3 py-1.5 rounded-lg bg-rose-100 hover:bg-rose-200 text-rose-700 font-semibold">Tolak</button>
                 </div>
               )}
 

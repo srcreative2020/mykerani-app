@@ -37,6 +37,14 @@ function getGreeting() {
   return "Selamat Malam";
 }
 
+const TRANSACTION_TYPE_LABEL_MS: Record<string, string> = {
+  INCOME: "Pendapatan",
+  EXPENSE: "Perbelanjaan",
+  DEBT: "Hutang",
+  RECEIVABLE: "Belum Terima",
+  COMMITMENT: "Komitmen",
+};
+
 // â"€â"€ Quick Add Form (inline) â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 function AddRecordForm({
   defaultType,
@@ -410,48 +418,56 @@ export function StaffHomeScreen() {
               {/* Chat messages */}
               {chatMessages.map(msg => {
                 const isUser = msg.sender === "user";
+                const hasTxnSuggestion = (msg.suggestions || []).some(s => s.actionType === "CONFIRM_TRANSACTION");
                 return (
                   <React.Fragment key={msg.id}>
-                    <div className={`flex items-start gap-2.5 ${isUser ? "flex-row-reverse" : ""}`}>
-                      <div className={`w-7 h-7 rounded-xl flex items-center justify-center shrink-0 ${isUser ? "bg-slate-700 text-white" : "bg-slate-900 text-white"}`}>
-                        {isUser ? <UserIcon className="w-3.5 h-3.5" /> : <Brain className="w-3.5 h-3.5" />}
+                    {(!hasTxnSuggestion || isUser) && (
+                      <div className={`flex items-start gap-2.5 ${isUser ? "flex-row-reverse" : ""}`}>
+                        <div className={`w-7 h-7 rounded-xl flex items-center justify-center shrink-0 ${isUser ? "bg-slate-700 text-white" : "bg-slate-900 text-white"}`}>
+                          {isUser ? <UserIcon className="w-3.5 h-3.5" /> : <Brain className="w-3.5 h-3.5" />}
+                        </div>
+                        <div className={`max-w-[78%] px-4 py-3 rounded-2xl text-sm leading-relaxed ${isUser ? "bg-slate-700 text-white rounded-tr-none" : "bg-white border border-slate-200 text-slate-800 rounded-tl-none whitespace-pre-wrap shadow-sm"}`}>
+                          {msg.text}
+                        </div>
                       </div>
-                      <div className={`max-w-[78%] px-4 py-3 rounded-2xl text-sm leading-relaxed ${isUser ? "bg-slate-700 text-white rounded-tr-none" : "bg-white border border-slate-200 text-slate-800 rounded-tl-none whitespace-pre-wrap shadow-sm"}`}>
-                        {msg.text}
-                      </div>
-                    </div>
+                    )}
                     {(msg.suggestions || []).map(s => {
                       const status = chatSuggestionStatus[s.id] || "pending";
                       if (status === "rejected") return null;
                       return (
-                        <div key={s.id} className="max-w-[78%] ml-9.5 p-3.5 bg-amber-50 border border-amber-200 rounded-2xl text-xs space-y-2">
-                          <div className="font-bold text-amber-900">{s.title}</div>
-                          <div className="text-amber-800">{s.description}</div>
-                          <div className="text-amber-700 font-mono">
-                            {s.payload?.transactionType} • RM{Number(s.payload?.amount || 0).toFixed(2)} • {s.payload?.relatedParty} • {s.payload?.date}
+                        <div key={s.id} className="flex items-start gap-2.5">
+                          <div className="w-7 h-7 rounded-xl flex items-center justify-center shrink-0 bg-slate-900 text-white">
+                            <Brain className="w-3.5 h-3.5" />
                           </div>
-                          {status === "confirmed" && (
-                            <div className="text-emerald-700 font-bold">✅ Disahkan & direkodkan.</div>
-                          )}
-                          {status === "pending" && editingChatSuggestionId !== s.id && (
-                            <div className="flex gap-2 pt-1">
-                              <button type="button" onClick={() => handleChatConfirmSuggestion(s)} className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-semibold">Sahkan (Confirm)</button>
-                              <button type="button" onClick={() => handleChatStartEdit(s)} className="px-3 py-1.5 rounded-lg bg-slate-200 hover:bg-slate-300 text-slate-800 font-semibold">Edit</button>
-                              <button type="button" onClick={() => handleChatRejectSuggestion(s.id)} className="px-3 py-1.5 rounded-lg bg-rose-100 hover:bg-rose-200 text-rose-700 font-semibold">Tolak (Reject)</button>
+                          <div className="max-w-[78%] p-3.5 bg-white border border-slate-200 rounded-2xl text-sm space-y-2 shadow-sm">
+                            <div className="font-mono text-slate-800 space-y-0.5">
+                              <div>Jenis: {TRANSACTION_TYPE_LABEL_MS[s.payload?.transactionType || ""] || s.payload?.transactionType || "-"}</div>
+                              <div>Kategori: {s.payload?.category || "-"}</div>
+                              <div>Jumlah: RM{Number(s.payload?.amount || 0).toFixed(2)}</div>
                             </div>
-                          )}
-                          {status === "pending" && editingChatSuggestionId === s.id && (
-                            <div className="space-y-1.5 pt-1">
-                              <input value={chatEditDraft.amount} onChange={e => setChatEditDraft(d => ({ ...d, amount: e.target.value }))} placeholder="Amount (RM)" className="w-full px-2 py-1 rounded border border-amber-300 text-xs" />
-                              <input value={chatEditDraft.category} onChange={e => setChatEditDraft(d => ({ ...d, category: e.target.value }))} placeholder="Category" className="w-full px-2 py-1 rounded border border-amber-300 text-xs" />
-                              <input value={chatEditDraft.relatedParty} onChange={e => setChatEditDraft(d => ({ ...d, relatedParty: e.target.value }))} placeholder="Related Party" className="w-full px-2 py-1 rounded border border-amber-300 text-xs" />
-                              <input value={chatEditDraft.date} onChange={e => setChatEditDraft(d => ({ ...d, date: e.target.value }))} type="date" className="w-full px-2 py-1 rounded border border-amber-300 text-xs" />
+                            {status === "confirmed" && (
+                              <div className="text-emerald-700 font-bold">✅ Disahkan & direkodkan.</div>
+                            )}
+                            {status === "pending" && editingChatSuggestionId !== s.id && (
                               <div className="flex gap-2 pt-1">
-                                <button type="button" onClick={() => handleChatConfirmSuggestion(s, chatEditDraft)} className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-semibold">Sahkan Perubahan</button>
-                                <button type="button" onClick={() => setEditingChatSuggestionId(null)} className="px-3 py-1.5 rounded-lg bg-slate-200 hover:bg-slate-300 text-slate-800 font-semibold">Batal</button>
+                                <button type="button" onClick={() => handleChatConfirmSuggestion(s)} className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-semibold">Sahkan</button>
+                                <button type="button" onClick={() => handleChatStartEdit(s)} className="px-3 py-1.5 rounded-lg bg-slate-200 hover:bg-slate-300 text-slate-800 font-semibold">Edit</button>
+                                <button type="button" onClick={() => handleChatRejectSuggestion(s.id)} className="px-3 py-1.5 rounded-lg bg-rose-100 hover:bg-rose-200 text-rose-700 font-semibold">Tolak</button>
                               </div>
-                            </div>
-                          )}
+                            )}
+                            {status === "pending" && editingChatSuggestionId === s.id && (
+                              <div className="space-y-1.5 pt-1">
+                                <input value={chatEditDraft.amount} onChange={e => setChatEditDraft(d => ({ ...d, amount: e.target.value }))} placeholder="Amount (RM)" className="w-full px-2 py-1 rounded border border-slate-300 text-xs" />
+                                <input value={chatEditDraft.category} onChange={e => setChatEditDraft(d => ({ ...d, category: e.target.value }))} placeholder="Category" className="w-full px-2 py-1 rounded border border-slate-300 text-xs" />
+                                <input value={chatEditDraft.relatedParty} onChange={e => setChatEditDraft(d => ({ ...d, relatedParty: e.target.value }))} placeholder="Related Party" className="w-full px-2 py-1 rounded border border-slate-300 text-xs" />
+                                <input value={chatEditDraft.date} onChange={e => setChatEditDraft(d => ({ ...d, date: e.target.value }))} type="date" className="w-full px-2 py-1 rounded border border-slate-300 text-xs" />
+                                <div className="flex gap-2 pt-1">
+                                  <button type="button" onClick={() => handleChatConfirmSuggestion(s, chatEditDraft)} className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-semibold">Sahkan Perubahan</button>
+                                  <button type="button" onClick={() => setEditingChatSuggestionId(null)} className="px-3 py-1.5 rounded-lg bg-slate-200 hover:bg-slate-300 text-slate-800 font-semibold">Batal</button>
+                                </div>
+                              </div>
+                            )}
+                          </div>
                         </div>
                       );
                     })}
