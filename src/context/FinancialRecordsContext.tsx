@@ -238,6 +238,51 @@ const generateUUID = (): string => {
   });
 };
 
+// Normalizes a vendor name into a matching key for OCR learning: lowercases,
+// strips common Malaysian entity suffixes and punctuation, so "Tenaga Nasional
+// Bhd" and "Tenaga Nasional Berhad" collapse to the same key.
+const VENDOR_SUFFIX_PATTERN = /\b(sdn\.?\s*bhd\.?|sendirian\s*berhad|berhad|bhd\.?|enterprise|enterprises|trading|holdings|group|sole\s*proprietor|plt|llp|inc\.?|ltd\.?|corp\.?|corporation)\b/g;
+const vendorMatchKey = (name: string): string =>
+  name
+    .toLowerCase()
+    .replace(VENDOR_SUFFIX_PATTERN, "")
+    .replace(/[^a-z0-9\s]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+
+// Levenshtein edit distance, used to tolerate minor spelling drift between
+// vendor name entries (typos, OCR misreads) when matching learned patterns.
+const levenshteinDistance = (a: string, b: string): number => {
+  if (a === b) return 0;
+  if (!a.length) return b.length;
+  if (!b.length) return a.length;
+  const prev = Array.from({ length: b.length + 1 }, (_, i) => i);
+  for (let i = 1; i <= a.length; i++) {
+    const row = [i];
+    for (let j = 1; j <= b.length; j++) {
+      row[j] = a[i - 1] === b[j - 1]
+        ? prev[j - 1]
+        : 1 + Math.min(prev[j - 1], prev[j], row[j - 1]);
+    }
+    prev.splice(0, prev.length, ...row);
+  }
+  return prev[b.length];
+};
+
+// Two vendor keys are considered the same learned vendor if they're identical
+// once normalized, or close enough (small absolute edit distance relative to
+// length) to be the same name with minor spelling/OCR variation. Short keys
+// require an exact match to avoid false positives between unrelated short names.
+const isFuzzyVendorMatch = (keyA: string, keyB: string): boolean => {
+  if (!keyA || !keyB) return false;
+  if (keyA === keyB) return true;
+  const maxLen = Math.max(keyA.length, keyB.length);
+  if (maxLen < 5) return false;
+  const distance = levenshteinDistance(keyA, keyB);
+  const threshold = maxLen <= 10 ? 1 : 2;
+  return distance <= threshold;
+};
+
 export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user, isMockUser } = useAuth();
   const { activeWorkspace } = useWorkspace();
@@ -1443,11 +1488,20 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
     // Standardize vendor name (trim and case-insensitive matching)
     const normalizedVendorInput = pattern.vendorName.trim();
     const vendorLower = normalizedVendorInput.toLowerCase();
+    const vendorKey = vendorMatchKey(normalizedVendorInput);
 
-    // Look for matches
-    const existingIndex = ocrLearnedPatterns.findIndex(
+    // Look for matches: exact (case-insensitive) first, then a fuzzy match on a
+    // normalized key (strips Sdn Bhd/Enterprise/punctuation, allows small spelling
+    // drift) so e.g. "Tenaga Nasional Bhd" and "TENAGA NASIONAL BERHAD" merge into
+    // one learned pattern instead of fragmenting into duplicates.
+    let existingIndex = ocrLearnedPatterns.findIndex(
       (p) => p.vendorName.toLowerCase() === vendorLower && p.workspaceId === activeWorkspace.id
     );
+    if (existingIndex === -1) {
+      existingIndex = ocrLearnedPatterns.findIndex(
+        (p) => p.workspaceId === activeWorkspace.id && isFuzzyVendorMatch(vendorKey, vendorMatchKey(p.vendorName))
+      );
+    }
 
     let updatedPatterns = [...ocrLearnedPatterns];
     let action: "CREATE" | "UPDATE" = "CREATE";
