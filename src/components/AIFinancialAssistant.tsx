@@ -162,8 +162,14 @@ export const AIFinancialAssistant: React.FC<AIFinancialAssistantProps> = ({ onTr
         .replace(/tenant/gi, "syarikat");
 
       const systemMessageId = `assist-${Date.now()}`;
+      // The LLM's own "id" field has no uniqueness guarantee across turns (it has
+      // no memory of prior ids), so suggestionStatus[s.id] from an earlier message
+      // could otherwise leak onto a same-id suggestion in a later message. Always
+      // assign a fresh client-side id instead of trusting the model's.
       const transactionSuggestions: AISuggestion[] = Array.isArray(data.suggestions)
-        ? data.suggestions.filter((s: AISuggestion) => s.actionType === "CONFIRM_TRANSACTION")
+        ? data.suggestions
+            .filter((s: AISuggestion) => s.actionType === "CONFIRM_TRANSACTION")
+            .map((s: AISuggestion, idx: number) => ({ ...s, id: `${systemMessageId}-sugg-${idx}` }))
         : [];
       setChatHistory(prev => [...prev, { id: systemMessageId, sender: "assistant", text: cleanText, suggestions: transactionSuggestions }]);
     } catch (err: any) {
