@@ -72,7 +72,12 @@ export const OCREngineConsole: React.FC = () => {
     suggestedCategory: string;
     confidenceScore: number;
     rawExtractedText: string;
+    transactions?: { date: string; description: string; amount: number; type: "CREDIT" | "DEBIT"; suggestedCategory: string; confidenceScore: number }[];
   } | null>(null);
+
+  // Module 10: Bank Statement Engine — per-transaction confirm/reject status,
+  // keyed by index, since a statement yields many candidate records at once.
+  const [statementTxnStatus, setStatementTxnStatus] = useState<Record<number, "pending" | "confirmed" | "rejected">>({});
 
   // Post-OCR Human Modification Fields
   const [reviewedMerchantName, setReviewedMerchantName] = useState("");
@@ -240,7 +245,11 @@ export const OCREngineConsole: React.FC = () => {
         setReviewedCategory(payload.suggestedCategory || "Utilities");
         
         const categoryLower = (payload.suggestedCategory || "").toLowerCase();
-        if (categoryLower.includes("sales") || categoryLower.includes("revenue") || categoryLower.includes("income") || documentType === "STATEMENT") {
+        if (documentType === "INVOICE") {
+          // Test 5: Invoice -> Suggestion -> Confirm -> payables (the supplier owes us nothing;
+          // we owe the supplier — this is an accounts-payable bill, not a generic expense).
+          setSelectedRecordType("PAYABLE");
+        } else if (categoryLower.includes("sales") || categoryLower.includes("revenue") || categoryLower.includes("income") || documentType === "STATEMENT") {
           setSelectedRecordType("INCOME");
         } else {
           setSelectedRecordType("EXPENSE");
@@ -294,7 +303,7 @@ export const OCREngineConsole: React.FC = () => {
         setReviewedAmount(fallbackPayload.amount);
         setReviewedCurrency(fallbackPayload.currency);
         setReviewedCategory(fallbackPayload.suggestedCategory);
-        setSelectedRecordType(documentType === "RECEIPT" ? "EXPENSE" : "INCOME");
+        setSelectedRecordType(documentType === "RECEIPT" ? "EXPENSE" : documentType === "INVOICE" ? "PAYABLE" : "INCOME");
       }
     } finally {
       setIsAnalyzing(false);
@@ -384,6 +393,7 @@ export const OCREngineConsole: React.FC = () => {
 
       // 5. TRIGGER OCR LEARNING CORE OBJECTIVE
       learnOcrPattern({
+        workspaceId: activeWorkspace.id,
         vendorName: reviewedMerchantName,
         category: reviewedCategory,
         recordType: selectedRecordType,
@@ -404,6 +414,89 @@ export const OCREngineConsole: React.FC = () => {
       console.error(ex);
       setErrorText("Failed to persist financial documents internally. Please check storage credentials.");
     }
+  };
+
+  // Module 10 (OCR Bank Statement Engine): confirm a single extracted transaction
+  // row from a multi-transaction statement. CREDIT -> income_records, DEBIT -> expense_records.
+  const handleConfirmStatementTransaction = (index: number) => {
+    if (!activeWorkspace || !extractedData?.transactions) return;
+    const txn = extractedData.transactions[index];
+    if (!txn || statementTxnStatus[index]) return;
+
+    const canCreateEvidence = hasPermission("Financial Evidence Package", "create");
+    const canCreateRecords = hasPermission("Financial Records", "create");
+    if (!canCreateEvidence || !canCreateRecords) {
+      setErrorText("Policy Restriction: Your active user role lacks the permission clearance to write records inside this workspace.");
+      return;
+    }
+
+    try {
+      const freshEvidencePackage = addFinancialEvidencePackage({
+        workspaceId: activeWorkspace.id,
+        documentType: "STATEMENT",
+        uploadDate: new Date().toISOString().split("T")[0],
+        fileName: file?.name || "bank_statement.pdf",
+        fileUrl: fileDataUrl,
+        notes: `Auto-logged via AI OCR Studio bank statement line item: ${txn.description}`
+      });
+
+      const recordType: FinancialRecordType = txn.type === "CREDIT" ? "INCOME" : "EXPENSE";
+      const freshEvent = addFinancialEvent({
+        workspaceId: activeWorkspace.id,
+        type: recordType,
+        categoryName: txn.suggestedCategory || "Lain-lain",
+        amountMyr: txn.amount,
+        partyName: txn.description,
+        date: txn.date,
+        referenceNumber: `STMT-${index}`,
+        description: `Linked automated OCR bank statement line item: ${txn.description}`,
+        isCompleted: true
+      });
+
+      freshEvidencePackage.relatedRecordId = freshEvent.id;
+      freshEvidencePackage.relatedRecordType = recordType;
+
+      writeAuditLog({
+        workspaceId: activeWorkspace.id,
+        module: "Financial Evidence Package",
+        action: "CREATE",
+        oldValue: null,
+        newValue: { id: freshEvidencePackage.id, fileName: freshEvidencePackage.fileName, documentType: "STATEMENT", linkedRecordId: freshEvent.id }
+      });
+      writeAuditLog({
+        workspaceId: activeWorkspace.id,
+        module: "Financial Records",
+        action: "CREATE",
+        oldValue: null,
+        newValue: freshEvent
+      });
+
+      if (user) {
+        logEvent({
+          tenantId: user.tenantId, workspaceId: activeWorkspace.id, userId: user.id,
+          userEmail: user.email, userRole: user.role, eventType: "OCR_PROCESS",
+          description: `Confirmed bank statement transaction: ${txn.description}`,
+          metadata: { documentType: "STATEMENT", amountMyr: txn.amount, type: txn.type },
+        });
+      }
+
+      learnOcrPattern({
+        workspaceId: activeWorkspace.id,
+        vendorName: txn.description,
+        category: txn.suggestedCategory || "Lain-lain",
+        recordType,
+        confidenceScore: txn.confidenceScore ?? 0.8
+      });
+
+      setStatementTxnStatus(prev => ({ ...prev, [index]: "confirmed" }));
+    } catch (ex) {
+      console.error(ex);
+      setErrorText("Failed to persist this statement transaction.");
+    }
+  };
+
+  const handleRejectStatementTransaction = (index: number) => {
+    setStatementTxnStatus(prev => ({ ...prev, [index]: "rejected" }));
   };
 
   // Dynamic colors for confidence meter
@@ -681,9 +774,53 @@ export const OCREngineConsole: React.FC = () => {
             )}
           </div>
 
-          {/* Right Column: AI Suggestions Reviewed Editor */}
+          {/* Right Column: AI Suggestions Reviewed Editor, OR Module 10 multi-transaction list for bank statements */}
+          {extractedData?.transactions && extractedData.transactions.length > 0 ? (
+            <div className="lg:col-span-7 bg-white border border-slate-200 rounded-xl p-5 text-left space-y-4">
+              <div className="border-b border-slate-100 pb-3">
+                <h3 className="text-sm font-semibold text-slate-800">Bank Statement — Extracted Transactions</h3>
+                <p className="text-[10px] text-slate-400 font-mono">{extractedData.transactions.length} transaction(s) found. Confirm or reject each one individually.</p>
+              </div>
+              <div className="space-y-2 max-h-[480px] overflow-y-auto pr-1">
+                {extractedData.transactions.map((txn, idx) => {
+                  const status = statementTxnStatus[idx] || "pending";
+                  return (
+                    <div key={idx} className={`p-3 rounded-lg border text-xs flex items-center justify-between gap-3 ${
+                      status === "confirmed" ? "bg-emerald-50 border-emerald-200" :
+                      status === "rejected" ? "bg-slate-50 border-slate-200 opacity-50" :
+                      "bg-white border-slate-200"
+                    }`}>
+                      <div className="min-w-0">
+                        <div className="font-semibold text-slate-800 truncate">{txn.description}</div>
+                        <div className="font-mono text-slate-400">{txn.date} • {txn.suggestedCategory} • {txn.type}</div>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <span className={`font-mono font-bold ${txn.type === "CREDIT" ? "text-emerald-700" : "text-rose-700"}`}>
+                          {txn.type === "CREDIT" ? "+" : "-"}RM{txn.amount.toFixed(2)}
+                        </span>
+                        {status === "pending" && (
+                          <>
+                            <button type="button" onClick={() => handleConfirmStatementTransaction(idx)} className="px-2 py-1 rounded bg-emerald-600 hover:bg-emerald-700 text-white font-bold">Confirm</button>
+                            <button type="button" onClick={() => handleRejectStatementTransaction(idx)} className="px-2 py-1 rounded bg-rose-100 hover:bg-rose-200 text-rose-700 font-bold">Reject</button>
+                          </>
+                        )}
+                        {status === "confirmed" && <CheckCircle className="w-4 h-4 text-emerald-600" />}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+              <button
+                type="button"
+                onClick={handleClearSelected}
+                className="w-full py-2.5 rounded-lg text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700"
+              >
+                Done — Upload Another Statement
+              </button>
+            </div>
+          ) : (
           <div className="lg:col-span-7 bg-white border border-slate-200 rounded-xl p-5 text-left space-y-5">
-            
+
             {/* Header with Confidence score indicator */}
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <div>
@@ -926,6 +1063,7 @@ export const OCREngineConsole: React.FC = () => {
             </div>
 
           </div>
+          )}
 
         </div>
       )}
