@@ -146,6 +146,7 @@ export function StaffHomeScreen() {
   // â"€â"€ AI Chat â"€â"€
   const [chatMessages, setChatMessages] = useState<{ id: string; sender: "user" | "ai"; text: string; suggestions?: ChatSuggestion[]; createdAt?: string }[]>([]);
   const [showChatArchive, setShowChatArchive] = useState(false);
+  const [showProfileView, setShowProfileView] = useState(false);
   const [chatArchiveDate, setChatArchiveDate] = useState<string | null>(null);
   const [chatInput, setChatInput] = useState("");
   const [chatSuggestionStatus, setChatSuggestionStatus] = useState<Record<string, ChatSuggestionStatus>>({});
@@ -780,10 +781,54 @@ export function StaffHomeScreen() {
                 <MessageCircle className="w-4 h-4" /><span>Arkib Perbualan</span>
               </button>
 
+              <button onClick={() => setShowProfileView(true)}
+                className="w-full py-3 border border-slate-200 text-slate-600 rounded-xl text-sm font-semibold hover:bg-slate-50 transition cursor-pointer flex items-center justify-center space-x-2">
+                <Brain className="w-4 h-4" /><span>Profil Kewangan AI</span>
+              </button>
+
               <button onClick={() => signOut()}
                 className="w-full py-3 border border-rose-200 text-rose-500 rounded-xl text-sm font-semibold hover:bg-rose-50 transition cursor-pointer">
                 Log Keluar
               </button>
+            </div>
+          </div>
+        )}
+
+        {/* Profile System view (read-only — Owner manages edits in OwnerDashboard) */}
+        {showProfileView && (
+          <div className="fixed inset-0 z-50 flex flex-col bg-slate-50">
+            <div className="bg-white border-b border-slate-200 px-4 py-3 flex items-center justify-between shrink-0">
+              <div className="flex items-center space-x-2">
+                <Brain className="w-5 h-5 text-indigo-500" />
+                <h2 className="font-bold text-slate-900 text-base">Profil Kewangan AI</h2>
+              </div>
+              <button onClick={() => setShowProfileView(false)} className="p-1.5 rounded-xl hover:bg-slate-100 transition cursor-pointer">
+                <X className="w-5 h-5 text-slate-500" />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4 max-w-lg mx-auto w-full space-y-4">
+              <p className="text-xs text-slate-400">Maklumat ini membantu AI bezakan transaksi peribadi & perniagaan. Hanya Pemilik boleh kemas kini.</p>
+              <div className="bg-white border border-slate-200 rounded-2xl p-4 space-y-1 shadow-sm">
+                <h3 className="text-sm font-bold text-slate-800 mb-1">Profil Peribadi</h3>
+                <p className="text-xs text-slate-600">{personalProfile.fullName || "Belum diisi"}</p>
+                {personalProfile.occupation && <p className="text-xs text-slate-400">{personalProfile.occupation}</p>}
+              </div>
+              <div className="bg-white border border-slate-200 rounded-2xl p-4 space-y-1 shadow-sm">
+                <h3 className="text-sm font-bold text-slate-800 mb-1">Profil Perniagaan</h3>
+                <p className="text-xs text-slate-600">{businessProfile.industry || "Belum diisi"}</p>
+                {businessProfile.branchName && <p className="text-xs text-slate-400">Cawangan: {businessProfile.branchName}</p>}
+              </div>
+              <div className="bg-white border border-slate-200 rounded-2xl p-4 space-y-2 shadow-sm">
+                <h3 className="text-sm font-bold text-slate-800">Kenderaan</h3>
+                {vehicles.length === 0 ? (
+                  <p className="text-xs text-slate-400">Tiada kenderaan didaftarkan</p>
+                ) : vehicles.map(v => (
+                  <div key={v.id} className="flex items-center justify-between bg-slate-50 border border-slate-100 rounded-xl px-3 py-2">
+                    <p className="text-sm font-semibold text-slate-800">{v.name} {v.plateNumber && <span className="text-slate-400 font-normal">· {v.plateNumber}</span>}</p>
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${v.ownership === "BUSINESS" ? "bg-indigo-100 text-indigo-700" : "bg-amber-100 text-amber-700"}`}>{v.ownership === "BUSINESS" ? "Perniagaan" : "Peribadi"}</span>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         )}
