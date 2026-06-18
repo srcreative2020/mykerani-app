@@ -1,5 +1,11 @@
 # MyKerani — Project Mandate
 
+> Governing document: `MYKERANI_CONSTITUTION.md` (STATUS: LOCKED, V1.0) is the
+> master constitution for this project. All architecture, database, API, AI
+> and feature decisions must comply with it. Where this file and the
+> constitution overlap, the constitution takes precedence; this file adds
+> implementation-level detail on top of it.
+
 ## Data Ownership Rule
 
 Companies own their financial records.
