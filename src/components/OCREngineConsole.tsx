@@ -184,7 +184,17 @@ export const OCREngineConsole: React.FC = () => {
 
       if (response.status === 403) {
         const errBody = await response.json().catch(() => ({}));
-        throw new Error(errBody.error || "Akaun anda telah disekat oleh pentadbir HQ.");
+        setErrorText(errBody.error || "Akaun anda telah disekat oleh pentadbir HQ.");
+        setIsAnalyzing(false);
+        setAnalysisStep("");
+        return;
+      }
+      if (response.status === 402) {
+        const errBody = await response.json().catch(() => ({}));
+        setErrorText(errBody.error || "Kredit OCR syarikat anda telah digunakan sepenuhnya. Sila naik taraf pelan.");
+        setIsAnalyzing(false);
+        setAnalysisStep("");
+        return;
       }
       if (!response.ok) {
         throw new Error(`Extraction service returned HTTP code ${response.status}`);
