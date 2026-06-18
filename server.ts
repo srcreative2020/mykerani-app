@@ -86,46 +86,10 @@ async function startServer() {
         logs.push(`⚠️ Code: storage schema lookup skipped or deferred: ${String(e)}.`);
       }
 
-      // Step A: Parse and execute Core Architecture schemas from DATABASE_ARCHITECTURE_V1_2.md
-      logs.push("📂 Extracting core database schema from DATABASE_ARCHITECTURE_V1_2.md...");
-      const markdownPath = path.join(process.cwd(), "DATABASE_ARCHITECTURE_V1_2.md");
-      let coreSql = "";
-      if (fs.existsSync(markdownPath)) {
-        const markdown = fs.readFileSync(markdownPath, "utf-8");
-        const regex = /```sql\s+([\s\S]*?)\s*```/g;
-        let match;
-        while ((match = regex.exec(markdown)) !== null) {
-          coreSql += match[1] + "\n\n";
-        }
-      }
-
-      if (coreSql.trim()) {
-        logs.push("🛠️ Executing Core Table Schema Architecture (Applying Idempotent Wrappers)...");
-        // Make standard types idempotent
-        let sanitizedSql = coreSql;
-        sanitizedSql = sanitizedSql.replace(
-          /CREATE TYPE\s+(\w+)\s+AS\s+ENUM\s*\(([\s\S]*?)\);/gi,
-          (match, p1, p2) => {
-            return `DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = '${p1}') THEN CREATE TYPE ${p1} AS ENUM (${p2}); END IF; END $$;`;
-          }
-        );
-        // Make tables idempotent
-        sanitizedSql = sanitizedSql.replace(/CREATE TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?(\w+)/gi, "CREATE TABLE IF NOT EXISTS $1");
-        // Make indexes idempotent
-        sanitizedSql = sanitizedSql.replace(/CREATE INDEX\s+(?:IF\s+NOT\s+EXISTS\s+)?(\w+)/gi, "CREATE INDEX IF NOT EXISTS $1");
-        sanitizedSql = sanitizedSql.replace(/CREATE UNIQUE INDEX\s+(?:IF\s+NOT\s+EXISTS\s+)?(\w+)/gi, "CREATE UNIQUE INDEX IF NOT EXISTS $1");
-        // Make policies idempotent
-        sanitizedSql = sanitizedSql.replace(/CREATE POLICY\s+("?\w+"?)\s+ON\s+("?[\w.]+"?)/gi, "DROP POLICY IF EXISTS $1 ON $2; CREATE POLICY $1 ON $2");
-        // Make triggers idempotent
-        sanitizedSql = sanitizedSql.replace(/CREATE TRIGGER\s+("?\w+"?)/gi, "CREATE OR REPLACE TRIGGER $1");
-
-        await client.query(sanitizedSql);
-        logs.push("✅ Core layout tables & constraints initialized successfully.");
-      } else {
-        logs.push("⚠️ Warning: No core SQL schema blocks could be extracted from DATABASE_ARCHITECTURE_V1_2.md.");
-      }
-
-      // Step B: Loop and execute other migrations in chronological order
+      // Loop and execute migrations in chronological order. Core architecture
+      // schema now lives in supabase/migrations/20260601000000_core_architecture_foundation.sql
+      // (Supabase migrations are the single source of truth — see CLAUDE.md Priority 4).
+      // DATABASE_ARCHITECTURE_V1_2.md remains as documentation only and is no longer parsed here.
       const migrationsDir = path.join(process.cwd(), "supabase", "migrations");
       let migrationFiles: string[] = [];
       if (fs.existsSync(migrationsDir)) {
