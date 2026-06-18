@@ -8,6 +8,7 @@ import {
   loadPersonalProfile, loadBusinessProfile, loadVehicles, loadDependents,
   EMPTY_PERSONAL_PROFILE, EMPTY_BUSINESS_PROFILE, type Vehicle, type Dependent,
 } from "../lib/profileData";
+import { addAssetPurchase, addOwnerTransaction } from "../lib/assetOwnerData";
 import {
   Home, Plus, Upload, Search, Bell, User as UserIcon,
   Send, Brain, RefreshCw, Receipt, FileSpreadsheet, Landmark,
@@ -24,12 +25,13 @@ interface ChatSuggestion {
   description: string;
   actionType: string;
   payload: {
-    transactionType?: "INCOME" | "EXPENSE" | "DEBT" | "RECEIVABLE" | "PAYABLE" | "COMMITMENT";
+    transactionType?: "INCOME" | "EXPENSE" | "DEBT" | "RECEIVABLE" | "PAYABLE" | "COMMITMENT" | "ASSET_PURCHASE" | "OWNER_TRANSACTION";
     category?: string;
     amount?: number;
     date?: string;
     relatedParty?: string;
     confidenceScore?: number;
+    ownerTransactionSubtype?: "CAPITAL_INJECTION" | "DRAWING";
   };
 }
 type ChatSuggestionStatus = "pending" | "confirmed" | "rejected";
@@ -49,6 +51,8 @@ const TRANSACTION_TYPE_LABEL_MS: Record<string, string> = {
   RECEIVABLE: "Belum Terima",
   PAYABLE: "Belum Bayar",
   COMMITMENT: "Komitmen",
+  ASSET_PURCHASE: "Belian Aset",
+  OWNER_TRANSACTION: "Transaksi Pemilik",
 };
 
 // â"€â"€ Quick Add Form (inline) â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
@@ -365,11 +369,27 @@ export function StaffHomeScreen() {
         isActive: true,
         status: "ACTIVE",
       });
+    } else if (transactionType === "ASSET_PURCHASE") {
+      addAssetPurchase(activeWorkspace.id, isMockUser, {
+        assetName: category,
+        category,
+        purchaseAmountMyr: amount,
+        purchaseDate: date,
+        vendorName: relatedParty,
+        notes: `Direkodkan melalui pengesahan cadangan Kerani AI: ${s.title}`,
+      });
+    } else if (transactionType === "OWNER_TRANSACTION") {
+      addOwnerTransaction(activeWorkspace.id, isMockUser, {
+        type: s.payload?.ownerTransactionSubtype || (category.toUpperCase().includes("DRAWING") ? "DRAWING" : "CAPITAL_INJECTION"),
+        amountMyr: amount,
+        transactionDate: date,
+        description: `Direkodkan melalui pengesahan cadangan Kerani AI: ${s.title}`,
+      });
     } else {
       return;
     }
 
-    learnOcrPattern({
+    if (transactionType !== "ASSET_PURCHASE" && transactionType !== "OWNER_TRANSACTION") learnOcrPattern({
       workspaceId: activeWorkspace.id,
       vendorName: relatedParty,
       category,

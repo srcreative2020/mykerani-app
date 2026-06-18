@@ -33,6 +33,7 @@ import {
   EMPTY_PERSONAL_PROFILE, EMPTY_BUSINESS_PROFILE,
   type PersonalProfile, type BusinessProfile, type Vehicle, type Dependent,
 } from "../lib/profileData";
+import { addAssetPurchase, addOwnerTransaction } from "../lib/assetOwnerData";
 import {
   submitManualPayment, initiateChipAsiaPayment, getTenantPaymentTransactions, startTrialSubscription,
   type TenantPaymentTransaction,
@@ -47,7 +48,8 @@ interface ChatSuggestion {
   description: string;
   actionType: string;
   payload: {
-    transactionType?: "INCOME" | "EXPENSE" | "DEBT" | "RECEIVABLE" | "PAYABLE" | "COMMITMENT";
+    transactionType?: "INCOME" | "EXPENSE" | "DEBT" | "RECEIVABLE" | "PAYABLE" | "COMMITMENT" | "ASSET_PURCHASE" | "OWNER_TRANSACTION";
+    ownerTransactionSubtype?: "CAPITAL_INJECTION" | "DRAWING";
     category?: string;
     amount?: number;
     date?: string;
@@ -74,6 +76,8 @@ const TRANSACTION_TYPE_LABEL_MS: Record<string, string> = {
   RECEIVABLE: "Belum Terima",
   PAYABLE: "Belum Bayar",
   COMMITMENT: "Komitmen",
+  ASSET_PURCHASE: "Belian Aset",
+  OWNER_TRANSACTION: "Transaksi Pemilik",
 };
 
 // â"€â"€ Quick Add Record Modal â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
@@ -606,11 +610,27 @@ export function OwnerDashboard() {
         isActive: true,
         status: "ACTIVE",
       });
+    } else if (transactionType === "ASSET_PURCHASE") {
+      addAssetPurchase(activeWorkspace.id, isMockUser, {
+        assetName: category,
+        category,
+        purchaseAmountMyr: amount,
+        purchaseDate: date,
+        vendorName: relatedParty,
+        notes: `Direkodkan melalui pengesahan cadangan Kerani AI: ${s.title}`,
+      });
+    } else if (transactionType === "OWNER_TRANSACTION") {
+      addOwnerTransaction(activeWorkspace.id, isMockUser, {
+        type: s.payload?.ownerTransactionSubtype || (category.toUpperCase().includes("DRAWING") ? "DRAWING" : "CAPITAL_INJECTION"),
+        amountMyr: amount,
+        transactionDate: date,
+        description: `Direkodkan melalui pengesahan cadangan Kerani AI: ${s.title}`,
+      });
     } else {
       return;
     }
 
-    learnOcrPattern({
+    if (transactionType !== "ASSET_PURCHASE" && transactionType !== "OWNER_TRANSACTION") learnOcrPattern({
       workspaceId: activeWorkspace.id,
       vendorName: relatedParty,
       category,
