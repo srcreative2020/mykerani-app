@@ -13,6 +13,22 @@ import {
 
 type StaffTab = "home" | "tambah" | "muat_naik" | "rekod" | "notifikasi" | "profil";
 
+interface ChatSuggestion {
+  id: string;
+  title: string;
+  description: string;
+  actionType: string;
+  payload: {
+    transactionType?: "INCOME" | "EXPENSE" | "DEBT" | "RECEIVABLE" | "COMMITMENT";
+    category?: string;
+    amount?: number;
+    date?: string;
+    relatedParty?: string;
+    confidenceScore?: number;
+  };
+}
+type ChatSuggestionStatus = "pending" | "confirmed" | "rejected";
+
 function getGreeting() {
   const h = new Date().getHours();
   if (h < 12) return "Selamat Pagi";
@@ -108,15 +124,18 @@ function AddRecordForm({
 export function StaffHomeScreen() {
   const { user, signOut } = useAuth();
   const { activeWorkspace, workspaces, selectWorkspace } = useWorkspace();
-  const { financialEvents, addFinancialEvent } = useFinancials();
+  const { financialEvents, addFinancialEvent, addDebtRecord, addFinancialCommitment, learnOcrPattern } = useFinancials();
   const { activeTenant } = useTenant();
 
   const [activeTab, setActiveTab] = useState<StaffTab>("home");
   const [addDefaultType, setAddDefaultType] = useState<"INCOME" | "EXPENSE">("EXPENSE");
 
   // â"€â"€ AI Chat â"€â"€
-  const [chatMessages, setChatMessages] = useState<{ id: string; sender: "user" | "ai"; text: string }[]>([]);
+  const [chatMessages, setChatMessages] = useState<{ id: string; sender: "user" | "ai"; text: string; suggestions?: ChatSuggestion[] }[]>([]);
   const [chatInput, setChatInput] = useState("");
+  const [chatSuggestionStatus, setChatSuggestionStatus] = useState<Record<string, ChatSuggestionStatus>>({});
+  const [editingChatSuggestionId, setEditingChatSuggestionId] = useState<string | null>(null);
+  const [chatEditDraft, setChatEditDraft] = useState({ amount: "", category: "", relatedParty: "", date: "" });
   const [chatLoading, setChatLoading] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
@@ -190,12 +209,102 @@ export function StaffHomeScreen() {
       }
       let reply = data.text || "Saya sedang cuba membantu anda.";
       reply = reply.replace(/tenant/gi, "syarikat").replace(/sandbox/gi, "ujian");
-      setChatMessages(prev => [...prev, { id: `a-${Date.now()}`, sender: "ai", text: reply }]);
+      const aiMsgId = `a-${Date.now()}`;
+      const suggestions: ChatSuggestion[] = Array.isArray(data.suggestions)
+        ? data.suggestions
+            .filter((s: ChatSuggestion) => s.actionType === "CONFIRM_TRANSACTION")
+            .map((s: ChatSuggestion, idx: number) => ({ ...s, id: `${aiMsgId}-sugg-${idx}` }))
+        : [];
+      setChatMessages(prev => [...prev, { id: aiMsgId, sender: "ai", text: reply, suggestions }]);
     } catch {
       setChatMessages(prev => [...prev, { id: `e-${Date.now()}`, sender: "ai", text: "Minta maaf, sambungan terputus. Sila cuba lagi." }]);
     } finally {
       setChatLoading(false);
     }
+  };
+
+  const handleChatRejectSuggestion = (id: string) => {
+    setChatSuggestionStatus(prev => ({ ...prev, [id]: "rejected" }));
+  };
+
+  const handleChatStartEdit = (s: ChatSuggestion) => {
+    setEditingChatSuggestionId(s.id);
+    setChatEditDraft({
+      amount: String(s.payload?.amount ?? ""),
+      category: s.payload?.category || "",
+      relatedParty: s.payload?.relatedParty || "",
+      date: s.payload?.date || new Date().toISOString().split("T")[0],
+    });
+  };
+
+  const handleChatConfirmSuggestion = (s: ChatSuggestion, edited?: typeof chatEditDraft) => {
+    if (!activeWorkspace || chatSuggestionStatus[s.id] === "confirmed") return;
+    const transactionType = s.payload?.transactionType;
+    const amount = Number(edited ? edited.amount : s.payload?.amount) || 0;
+    const category = (edited ? edited.category : s.payload?.category) || "Lain-lain";
+    const relatedParty = (edited ? edited.relatedParty : s.payload?.relatedParty) || "Tidak Dinyatakan";
+    const date = (edited ? edited.date : s.payload?.date) || new Date().toISOString().split("T")[0];
+    const confidenceScore = s.payload?.confidenceScore ?? 0.7;
+
+    if (transactionType === "INCOME" || transactionType === "EXPENSE") {
+      addFinancialEvent({
+        workspaceId: activeWorkspace.id,
+        type: transactionType,
+        categoryName: category,
+        amountMyr: amount,
+        partyName: relatedParty,
+        date,
+        referenceNumber: `AI-${s.id}`,
+        description: `Direkodkan melalui pengesahan cadangan Kerani AI: ${s.title}`,
+        isCompleted: true,
+      });
+    } else if (transactionType === "DEBT") {
+      addDebtRecord({
+        workspaceId: activeWorkspace.id,
+        creditorName: relatedParty,
+        borrowedDate: date,
+        totalAmountMyr: amount,
+        repaidAmountMyr: 0,
+        status: "ACTIVE",
+        description: `Direkodkan melalui pengesahan cadangan Kerani AI: ${s.title}`,
+      });
+    } else if (transactionType === "RECEIVABLE") {
+      addFinancialEvent({
+        workspaceId: activeWorkspace.id,
+        type: "RECEIVABLE",
+        categoryName: category,
+        amountMyr: amount,
+        partyName: relatedParty,
+        date,
+        referenceNumber: `AI-${s.id}`,
+        description: `Direkodkan melalui pengesahan cadangan Kerani AI: ${s.title}`,
+        isCompleted: false,
+      });
+    } else if (transactionType === "COMMITMENT") {
+      addFinancialCommitment({
+        workspaceId: activeWorkspace.id,
+        description: `Direkodkan melalui pengesahan cadangan Kerani AI: ${s.title}`,
+        obligeeName: relatedParty,
+        amountPerIntervalMyr: amount,
+        recurrence: "MONTHLY",
+        startDate: date,
+        isActive: true,
+        status: "ACTIVE",
+      });
+    } else {
+      return;
+    }
+
+    learnOcrPattern({
+      workspaceId: activeWorkspace.id,
+      vendorName: relatedParty,
+      category,
+      recordType: transactionType === "COMMITMENT" ? "EXPENSE" : transactionType,
+      confidenceScore,
+    });
+
+    setChatSuggestionStatus(prev => ({ ...prev, [s.id]: "confirmed" }));
+    setEditingChatSuggestionId(null);
   };
 
   const handleSaveRecord = (data: { type: string; amount: number; description: string; party: string; date: string }) => {
@@ -302,14 +411,51 @@ export function StaffHomeScreen() {
               {chatMessages.map(msg => {
                 const isUser = msg.sender === "user";
                 return (
-                  <div key={msg.id} className={`flex items-start gap-2.5 ${isUser ? "flex-row-reverse" : ""}`}>
-                    <div className={`w-7 h-7 rounded-xl flex items-center justify-center shrink-0 ${isUser ? "bg-slate-700 text-white" : "bg-slate-900 text-white"}`}>
-                      {isUser ? <UserIcon className="w-3.5 h-3.5" /> : <Brain className="w-3.5 h-3.5" />}
+                  <React.Fragment key={msg.id}>
+                    <div className={`flex items-start gap-2.5 ${isUser ? "flex-row-reverse" : ""}`}>
+                      <div className={`w-7 h-7 rounded-xl flex items-center justify-center shrink-0 ${isUser ? "bg-slate-700 text-white" : "bg-slate-900 text-white"}`}>
+                        {isUser ? <UserIcon className="w-3.5 h-3.5" /> : <Brain className="w-3.5 h-3.5" />}
+                      </div>
+                      <div className={`max-w-[78%] px-4 py-3 rounded-2xl text-sm leading-relaxed ${isUser ? "bg-slate-700 text-white rounded-tr-none" : "bg-white border border-slate-200 text-slate-800 rounded-tl-none whitespace-pre-wrap shadow-sm"}`}>
+                        {msg.text}
+                      </div>
                     </div>
-                    <div className={`max-w-[78%] px-4 py-3 rounded-2xl text-sm leading-relaxed ${isUser ? "bg-slate-700 text-white rounded-tr-none" : "bg-white border border-slate-200 text-slate-800 rounded-tl-none whitespace-pre-wrap shadow-sm"}`}>
-                      {msg.text}
-                    </div>
-                  </div>
+                    {(msg.suggestions || []).map(s => {
+                      const status = chatSuggestionStatus[s.id] || "pending";
+                      if (status === "rejected") return null;
+                      return (
+                        <div key={s.id} className="max-w-[78%] ml-9.5 p-3.5 bg-amber-50 border border-amber-200 rounded-2xl text-xs space-y-2">
+                          <div className="font-bold text-amber-900">{s.title}</div>
+                          <div className="text-amber-800">{s.description}</div>
+                          <div className="text-amber-700 font-mono">
+                            {s.payload?.transactionType} • RM{Number(s.payload?.amount || 0).toFixed(2)} • {s.payload?.relatedParty} • {s.payload?.date}
+                          </div>
+                          {status === "confirmed" && (
+                            <div className="text-emerald-700 font-bold">✅ Disahkan & direkodkan.</div>
+                          )}
+                          {status === "pending" && editingChatSuggestionId !== s.id && (
+                            <div className="flex gap-2 pt-1">
+                              <button type="button" onClick={() => handleChatConfirmSuggestion(s)} className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-semibold">Sahkan (Confirm)</button>
+                              <button type="button" onClick={() => handleChatStartEdit(s)} className="px-3 py-1.5 rounded-lg bg-slate-200 hover:bg-slate-300 text-slate-800 font-semibold">Edit</button>
+                              <button type="button" onClick={() => handleChatRejectSuggestion(s.id)} className="px-3 py-1.5 rounded-lg bg-rose-100 hover:bg-rose-200 text-rose-700 font-semibold">Tolak (Reject)</button>
+                            </div>
+                          )}
+                          {status === "pending" && editingChatSuggestionId === s.id && (
+                            <div className="space-y-1.5 pt-1">
+                              <input value={chatEditDraft.amount} onChange={e => setChatEditDraft(d => ({ ...d, amount: e.target.value }))} placeholder="Amount (RM)" className="w-full px-2 py-1 rounded border border-amber-300 text-xs" />
+                              <input value={chatEditDraft.category} onChange={e => setChatEditDraft(d => ({ ...d, category: e.target.value }))} placeholder="Category" className="w-full px-2 py-1 rounded border border-amber-300 text-xs" />
+                              <input value={chatEditDraft.relatedParty} onChange={e => setChatEditDraft(d => ({ ...d, relatedParty: e.target.value }))} placeholder="Related Party" className="w-full px-2 py-1 rounded border border-amber-300 text-xs" />
+                              <input value={chatEditDraft.date} onChange={e => setChatEditDraft(d => ({ ...d, date: e.target.value }))} type="date" className="w-full px-2 py-1 rounded border border-amber-300 text-xs" />
+                              <div className="flex gap-2 pt-1">
+                                <button type="button" onClick={() => handleChatConfirmSuggestion(s, chatEditDraft)} className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-semibold">Sahkan Perubahan</button>
+                                <button type="button" onClick={() => setEditingChatSuggestionId(null)} className="px-3 py-1.5 rounded-lg bg-slate-200 hover:bg-slate-300 text-slate-800 font-semibold">Batal</button>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </React.Fragment>
                 );
               })}
 
