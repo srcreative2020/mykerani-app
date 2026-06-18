@@ -1,9 +1,10 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import { useFinancials } from "../context/FinancialRecordsContext";
 import { useWorkspace } from "../context/WorkspaceContext";
 import { useAuth } from "../context/AuthContext";
 import { useTenant } from "../context/TenantContext";
 import { logEvent } from "../lib/eventLog";
+import { loadBusinessProfile, EMPTY_BUSINESS_PROFILE, type BusinessProfile } from "../lib/profileData";
 import {
   TrendingUp, 
   ArrowDownLeft, 
@@ -29,7 +30,7 @@ import { exportToCSV, exportToExcel, exportToJSON, exportToPDF, type ExportColum
 
 export const FinancialReportsAnalytics: React.FC = () => {
   const { activeWorkspace } = useWorkspace();
-  const { user } = useAuth();
+  const { user, isMockUser } = useAuth();
   const { activeTenant } = useTenant();
   const {
     financialEvents,
@@ -37,12 +38,18 @@ export const FinancialReportsAnalytics: React.FC = () => {
     bankAccounts,
     debtRecords,
     financialCommitments,
+    financialEvidencePackages,
   } = useFinancials();
 
-  // Active Report Selection state: 6 reports
+  // Active Report Selection state: 7 reports
   const [selectedReport, setSelectedReport] = useState<
-    "summary" | "cashflow" | "receivables_aging" | "payables_aging" | "commitments" | "health"
+    "summary" | "cashflow" | "receivables_aging" | "payables_aging" | "commitments" | "health" | "tax_readiness"
   >("summary");
+
+  const [businessProfile, setBusinessProfile] = useState<BusinessProfile>(EMPTY_BUSINESS_PROFILE);
+  useEffect(() => {
+    if (activeWorkspace?.id) loadBusinessProfile(activeWorkspace.id, isMockUser).then(setBusinessProfile);
+  }, [activeWorkspace?.id, isMockUser]);
 
   // Search filter inside specific reports
   const [searchTerm, setSearchTerm] = useState("");
@@ -297,6 +304,95 @@ export const FinancialReportsAnalytics: React.FC = () => {
     };
   }, [aggregateAssets, aggregateLiabilities, totalLiquidAssets, totalPayables, commitmentBurnData]);
 
+  // LHDN Tax Readiness checklist — computed purely from existing income/expense
+  // records, evidence linkage, and business profile completeness. No mock data.
+  const taxReadiness = useMemo(() => {
+    const incomeRecords = financialEvents.filter(e => e.type === "INCOME");
+    const expenseRecords = financialEvents.filter(e => e.type === "EXPENSE");
+
+    const hasEvidence = (e: FinancialEvent) =>
+      financialEvidencePackages.some(p => p.relatedRecordId === e.id && p.relatedRecordType === e.type);
+
+    const incomeWithEvidence = incomeRecords.filter(hasEvidence).length;
+    const expenseWithEvidence = expenseRecords.filter(hasEvidence).length;
+    const incomeEvidencePct = incomeRecords.length === 0 ? 0 : (incomeWithEvidence / incomeRecords.length) * 100;
+    const expenseEvidencePct = expenseRecords.length === 0 ? 0 : (expenseWithEvidence / expenseRecords.length) * 100;
+
+    const uncategorized = financialEvents.filter(e => !e.categoryName || e.categoryName.trim() === "" || e.categoryName === "Lain-lain").length;
+    const categorizedPct = financialEvents.length === 0 ? 0 : ((financialEvents.length - uncategorized) / financialEvents.length) * 100;
+
+    // Bookkeeping coverage: % of the last 12 calendar months (up to current month)
+    // with at least one income or expense record — flags gaps in record-keeping.
+    const monthsWithRecords = new Set(
+      [...incomeRecords, ...expenseRecords].map(e => e.date?.slice(0, 7)).filter(Boolean)
+    );
+    const monthKeys: string[] = [];
+    for (let i = 0; i < 12; i++) {
+      const d = new Date(baseDate.getFullYear(), baseDate.getMonth() - i, 1);
+      monthKeys.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
+    }
+    const monthsCovered = monthKeys.filter(m => monthsWithRecords.has(m)).length;
+    const coveragePct = (monthsCovered / monthKeys.length) * 100;
+
+    const checks = [
+      {
+        id: "registration",
+        label: "No. Pendaftaran Perniagaan Direkodkan",
+        pass: Boolean(businessProfile.registrationNo && businessProfile.registrationNo.trim()),
+        detail: businessProfile.registrationNo
+          ? `No. pendaftaran: ${businessProfile.registrationNo}`
+          : "Sila lengkapkan No. Pendaftaran Perniagaan dalam Profil Kewangan AI — diperlukan untuk pengisian cukai LHDN.",
+      },
+      {
+        id: "income_evidence",
+        label: "Resit/Invois Pendapatan Disokong Bukti",
+        pass: incomeEvidencePct >= 70,
+        detail: `${incomeWithEvidence}/${incomeRecords.length} rekod pendapatan (${incomeEvidencePct.toFixed(0)}%) mempunyai dokumen sokongan dimuat naik.`,
+      },
+      {
+        id: "expense_evidence",
+        label: "Resit Perbelanjaan Disokong Bukti",
+        pass: expenseEvidencePct >= 70,
+        detail: `${expenseWithEvidence}/${expenseRecords.length} rekod perbelanjaan (${expenseEvidencePct.toFixed(0)}%) mempunyai dokumen sokongan dimuat naik.`,
+      },
+      {
+        id: "categorized",
+        label: "Rekod Kewangan Dikategorikan dengan Betul",
+        pass: categorizedPct >= 90,
+        detail: `${categorizedPct.toFixed(0)}% rekod mempunyai kategori spesifik (bukan "Lain-lain" atau kosong).`,
+      },
+      {
+        id: "coverage",
+        label: "Tiada Jurang Rekod Bulanan (12 Bulan Lepas)",
+        pass: coveragePct >= 80,
+        detail: `${monthsCovered}/${monthKeys.length} bulan dalam tempoh 12 bulan lepas mempunyai sekurang-kurangnya satu rekod pendapatan/perbelanjaan.`,
+      },
+      {
+        id: "industry",
+        label: "Industri/Jenis Perniagaan Ditetapkan",
+        pass: Boolean(businessProfile.industry && businessProfile.industry.trim()),
+        detail: businessProfile.industry
+          ? `Industri: ${businessProfile.industry}`
+          : "Sila lengkapkan Industri dalam Profil Kewangan AI — membantu pengkategorian cukai yang betul.",
+      },
+    ];
+
+    const passedCount = checks.filter(c => c.pass).length;
+    const scorePct = (passedCount / checks.length) * 100;
+
+    let scoreGrade = "Sedia";
+    let scoreColor = "text-emerald-600 bg-emerald-50 border-emerald-150";
+    if (scorePct < 50) {
+      scoreGrade = "Belum Sedia";
+      scoreColor = "text-rose-600 bg-rose-50 border-rose-150";
+    } else if (scorePct < 85) {
+      scoreGrade = "Sebahagian Sedia";
+      scoreColor = "text-amber-600 bg-amber-50 border-amber-100";
+    }
+
+    return { checks, passedCount, totalChecks: checks.length, scorePct, scoreGrade, scoreColor, incomeEvidencePct, expenseEvidencePct, categorizedPct, coveragePct };
+  }, [financialEvents, financialEvidencePackages, businessProfile, baseDate]);
+
   // Build the export dataset for the currently selected report
   const exportDataset = useMemo((): { columns: ExportColumn[]; rows: Record<string, unknown>[]; title: string } => {
     const eventColumns: ExportColumn[] = [
@@ -353,6 +449,11 @@ export const FinancialReportsAnalytics: React.FC = () => {
         ];
         return { columns, rows, title: "Laporan Kesihatan Kewangan" };
       }
+      case "tax_readiness": {
+        const columns: ExportColumn[] = [{ key: "label", label: "Pemeriksaan" }, { key: "status", label: "Status" }, { key: "detail", label: "Butiran" }];
+        const rows = taxReadiness.checks.map(c => ({ label: c.label, status: c.pass ? "Lulus" : "Belum Lulus", detail: c.detail }));
+        return { columns, rows, title: "Laporan Kesediaan Cukai LHDN" };
+      }
       default: {
         const columns: ExportColumn[] = [{ key: "metric", label: "Metrik" }, { key: "value", label: "Nilai (RM)" }];
         const rows = [
@@ -369,6 +470,7 @@ export const FinancialReportsAnalytics: React.FC = () => {
   }, [
     selectedReport, financialEvents, receivablesAgingData, payablesAgingData, commitmentBurnData,
     healthScoring, totalLiquidAssets, totalReceivables, totalPayables, totalDebts, aggregateAssets, aggregateLiabilities,
+    taxReadiness,
   ]);
 
   const exportFilenameBase = `MyKerani_${activeWorkspace.name}_${selectedReport}_${new Date().toISOString().slice(0, 10)}`.replace(/\s+/g, "_");
@@ -557,6 +659,21 @@ export const FinancialReportsAnalytics: React.FC = () => {
             </div>
           </button>
 
+          <button
+            onClick={() => { setSelectedReport("tax_readiness"); setSearchTerm(""); }}
+            className={`w-full text-left px-3.5 py-3 rounded-xl text-xs font-semibold flex items-center justify-between transition border ${
+              selectedReport === "tax_readiness"
+                ? "bg-slate-950 border-slate-950 text-white shadow-xs"
+                : "bg-white border-slate-200 text-slate-700 hover:bg-slate-50 hover:text-slate-950"
+            }`}
+            id="nav_report_tax_readiness"
+          >
+            <div className="flex items-center space-x-2">
+              <ShieldCheck className="w-4 h-4 text-teal-500" />
+              <span>7. Kesediaan Cukai LHDN</span>
+            </div>
+          </button>
+
           <div className="p-4 bg-indigo-50 rounded-xl space-y-2.5 mt-4 border border-indigo-100">
             <span className="text-[10px] font-mono uppercase bg-indigo-100 text-indigo-800 px-1.5 py-0.5 rounded font-bold">
               Nota Kedaulatan Data
@@ -582,6 +699,7 @@ export const FinancialReportsAnalytics: React.FC = () => {
               {selectedReport === "payables_aging" && "4. Laporan Penuaan Hutang Pembekal & Bil Belum Bayar"}
               {selectedReport === "commitments" && "5. Laporan Inventori Komitmen Operasional & Kontrak"}
               {selectedReport === "health" && "6. Skor Kesihatan Syarikat & Ramalan Jangka Kelangsungan"}
+              {selectedReport === "tax_readiness" && "7. Senarai Semak Kesediaan Cukai LHDN"}
             </h3>
             <p className="text-xs text-slate-500 mt-0.5 font-sans">
               Sektor perakaunan pintar bertauliah dari platform MYKERANI.
@@ -1415,6 +1533,55 @@ export const FinancialReportsAnalytics: React.FC = () => {
                   </div>
 
                 </div>
+              </div>
+
+            </div>
+          )}
+
+          {/* Report 7: LHDN Tax Readiness */}
+          {selectedReport === "tax_readiness" && (
+            <div className="space-y-6 animate-fade-in" id="report_tax_readiness_view">
+
+              <div className={`p-5 rounded-2xl border-2 space-y-2 ${taxReadiness.scoreColor}`}>
+                <div className="flex justify-between items-center border-b border-white/20 pb-2">
+                  <span className="text-[10px] font-mono font-bold uppercase tracking-wide">
+                    Skor Kesediaan Cukai LHDN
+                  </span>
+                  <span className="text-xs font-mono font-bold">{taxReadiness.passedCount}/{taxReadiness.totalChecks} Pemeriksaan Lulus</span>
+                </div>
+                <p className="text-2xl font-mono font-bold tracking-tight mt-0.5">
+                  {taxReadiness.scorePct.toFixed(0)}%
+                </p>
+                <p className="text-[11px] font-sans mt-1 opacity-90 leading-relaxed">
+                  Status: <strong>{taxReadiness.scoreGrade}</strong>. Skor ini dikira terus daripada kelengkapan rekod pendapatan, perbelanjaan, bukti dokumen dan profil perniagaan anda — bukan anggaran kosmetik.
+                </p>
+              </div>
+
+              <div className="space-y-3">
+                <h4 className="font-display font-semibold text-xs text-slate-900 uppercase tracking-widest">
+                  Senarai Semak Terperinci
+                </h4>
+                <div className="divide-y divide-slate-100 border border-slate-200 rounded-2xl overflow-hidden text-xs">
+                  {taxReadiness.checks.map(c => (
+                    <div key={c.id} className="p-4 flex items-start space-x-3.5">
+                      {c.pass ? (
+                        <ShieldCheck className="w-5 h-5 text-emerald-600 flex-shrink-0 mt-0.5" />
+                      ) : (
+                        <AlertCircle className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" />
+                      )}
+                      <div className="space-y-1">
+                        <span className="font-bold text-slate-805 block">{c.label}</span>
+                        <p className={`leading-relaxed font-sans ${c.pass ? "text-slate-505" : "text-amber-700"}`}>{c.detail}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="p-4 bg-slate-50 rounded-xl border border-slate-200">
+                <p className="text-[11px] text-slate-500 leading-relaxed font-sans">
+                  Senarai semak ini adalah panduan kesediaan dalaman MYKERANI dan bukan nasihat percukaian rasmi. Sila rujuk akauntan bertauliah atau LHDN sebelum penyerahan cukai sebenar.
+                </p>
               </div>
 
             </div>
