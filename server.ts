@@ -804,6 +804,12 @@ Here is the structured financial database content of the active workspace:
 6. Evidence Packages: ${JSON.stringify(financialContext?.financialEvidencePackages || [])}
 7. OCR Learned Vendor Patterns (Learning Layer memory): ${JSON.stringify(financialContext?.ocrLearnedPatterns || [])}
 
+Here is what you know about the user's life (Profile System — all fields are optional and may be empty; never assume facts beyond what is given here):
+8. Personal Profile: ${JSON.stringify(financialContext?.personalProfile || {})}
+9. Business Profile: ${JSON.stringify(financialContext?.businessProfile || {})}
+10. Vehicles (name, plateNumber, vehicleType, ownership "PERSONAL"|"BUSINESS"): ${JSON.stringify(financialContext?.vehicles || [])}
+11. Dependents: ${JSON.stringify(financialContext?.dependents || [])}
+
 Instructions & Constraints:
 - AI Suggests. User Confirms. AI Learns. (If you identify any unrecognized category, or vendor without a learned profile, ALWAYS generate a 'LEARN_PATTERN' suggestion inside the 'suggestions' array. Do not suggest editing or deleting records. Only recommend classifications that the user can confirm manually.)
 - AI is strictly advisory. Your recommendations should prioritize safety, financial health, liquidity, and double-entry accuracy.
@@ -811,6 +817,7 @@ Instructions & Constraints:
 - Return structured visual metrics in the 'highlights' object. Health Status must be EXCELLENT, STABLE, WARNING, or THREAT.
 - FINANCIAL INTENT DETECTION: if the user's query describes a real-world financial transaction (in Malay or English) rather than a question, detect it and populate 'financialIntent'. Examples: "Pelanggan bayar RM500" / "Customer paid RM500" -> INCOME; "Saya isi minyak RM50" / "Filled petrol RM50" -> EXPENSE; "Saya hutang pembekal RM300" / "Borrowed RM1000 from Ali" -> DEBT; "Customer owes RM500" / "Pelanggan berhutang RM500" -> RECEIVABLE; "Rental RM1200 monthly" / "Sewa RM1200 sebulan" -> COMMITMENT. If no transaction is described, set "detected": false and leave the other financialIntent fields null.
 - When financialIntent.detected is true, you MUST ALSO add exactly one suggestion to the 'suggestions' array with "actionType": "CONFIRM_TRANSACTION" whose payload carries the structured transaction fields below. This is a SUGGESTION ONLY — you never write the record yourself; the user must explicitly Confirm (optionally after editing) before anything is saved. Default "date" to today (${new Date().toISOString().split("T")[0]}) if the user didn't state one.
+- DISAMBIGUATION: if there are 2+ Vehicles listed above (section 10) and the user's transaction text plausibly relates to a vehicle (petrol, toll, parking, service, repair, road tax, insurance) but does NOT name which vehicle, do NOT guess. Instead set financialIntent.detected to false, leave 'suggestions' empty, and in 'text' ask a short clarifying question listing the vehicle names and their ownership (e.g. "Untuk kenderaan mana — Hilux (Perniagaan) atau Myvi (Peribadi)?"). Once the user's NEXT message names the vehicle, treat it as the missing detail for the same transaction and proceed normally (detect + CONFIRM_TRANSACTION), using that vehicle's ownership to decide whether it is a business EXPENSE or a personal/owner-drawing transaction. The same pattern applies if Business Profile / multiple businesses make the transaction's owner ambiguous: ask, don't guess.
 
 Provide your output precisely formatted as raw JSON matching exactly this shape, with no markdown code fences and no extra commentary outside the JSON object:
 {

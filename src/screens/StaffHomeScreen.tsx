@@ -5,6 +5,10 @@ import { useFinancials } from "../context/FinancialRecordsContext";
 import { useTenant } from "../context/TenantContext";
 import { loadChatHistory, saveChatMessage } from "../lib/chatHistory";
 import {
+  loadPersonalProfile, loadBusinessProfile, loadVehicles, loadDependents,
+  EMPTY_PERSONAL_PROFILE, EMPTY_BUSINESS_PROFILE, type Vehicle, type Dependent,
+} from "../lib/profileData";
+import {
   Home, Plus, Upload, Search, Bell, User as UserIcon,
   Send, Brain, RefreshCw, Receipt, FileSpreadsheet, Landmark,
   TrendingUp, TrendingDown, Clock, ChevronRight, X,
@@ -204,6 +208,18 @@ export function StaffHomeScreen() {
   }, [wsId, isMockUser]);
   useEffect(() => { supportEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [supportMessages, supportLoading]);
 
+  const [personalProfile, setPersonalProfile] = useState(EMPTY_PERSONAL_PROFILE);
+  const [businessProfile, setBusinessProfile] = useState(EMPTY_BUSINESS_PROFILE);
+  const [vehicles, setVehicles] = useState<Vehicle[]>([]);
+  const [dependents, setDependents] = useState<Dependent[]>([]);
+  useEffect(() => {
+    if (!wsId) return;
+    loadPersonalProfile(wsId, isMockUser).then(setPersonalProfile);
+    loadBusinessProfile(wsId, isMockUser).then(setBusinessProfile);
+    loadVehicles(wsId, isMockUser).then(setVehicles);
+    loadDependents(wsId, isMockUser).then(setDependents);
+  }, [wsId, isMockUser]);
+
   const sendSupport = async (text?: string) => {
     const q = (text || supportInput).trim();
     if (!q || supportLoading) return;
@@ -240,7 +256,7 @@ export function StaffHomeScreen() {
         headers: { "Content-Type": "application/json", ...(await getAuthHeader()) },
         body: JSON.stringify({
           query: q,
-          financialContext: { activeTenant, activeWorkspace, financialEvents },
+          financialContext: { activeTenant, activeWorkspace, financialEvents, personalProfile, businessProfile, vehicles, dependents },
           userId: user?.id,
         }),
       });

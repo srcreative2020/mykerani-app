@@ -12,7 +12,7 @@ import {
   HelpCircle, CreditCard, Cpu, HardDrive, Bell, Shield,
   BookOpen, Ticket, MessageCircle, Zap, Database, Edit3,
   UserCheck, UserX, KeyRound, AlertCircle, CheckCircle2,
-  ToggleLeft, ToggleRight, ExternalLink,
+  ToggleLeft, ToggleRight, ExternalLink, Trash2,
 } from "lucide-react";
 import { FinancialEvidencePackageManager } from "../components/FinancialEvidencePackage";
 import { FinancialReportsAnalytics } from "../components/FinancialReportsAnalytics";
@@ -28,12 +28,18 @@ import {
 import { supabase, isSupabaseConfigured } from "../lib/supabase";
 import { loadChatHistory, saveChatMessage } from "../lib/chatHistory";
 import {
+  loadPersonalProfile, savePersonalProfile, loadBusinessProfile, saveBusinessProfile,
+  loadVehicles, addVehicle, deleteVehicle, loadDependents, addDependent, deleteDependent,
+  EMPTY_PERSONAL_PROFILE, EMPTY_BUSINESS_PROFILE,
+  type PersonalProfile, type BusinessProfile, type Vehicle, type Dependent,
+} from "../lib/profileData";
+import {
   submitManualPayment, initiateChipAsiaPayment, getTenantPaymentTransactions, startTrialSubscription,
   type TenantPaymentTransaction,
 } from "../lib/paymentService";
 
 type MainTab = "home" | "dashboard" | "documents" | "reports" | "more";
-type MorePage = "menu" | "team" | "history" | "settings" | "profile" | "support" | "billing" | "resources" | "chatArchive";
+type MorePage = "menu" | "team" | "history" | "settings" | "profile" | "myProfile" | "support" | "billing" | "resources" | "chatArchive";
 
 interface ChatSuggestion {
   id: string;
@@ -422,6 +428,57 @@ export function OwnerDashboard() {
     });
   }, [wsId, isMockUser]);
 
+  const [personalProfile, setPersonalProfile] = useState<PersonalProfile>(EMPTY_PERSONAL_PROFILE);
+  const [businessProfile, setBusinessProfile] = useState<BusinessProfile>(EMPTY_BUSINESS_PROFILE);
+  const [vehicles, setVehicles] = useState<Vehicle[]>([]);
+  const [dependents, setDependents] = useState<Dependent[]>([]);
+  const [profileSaving, setProfileSaving] = useState(false);
+  const [profileSavedAt, setProfileSavedAt] = useState<number | null>(null);
+  const [newVehicle, setNewVehicle] = useState({ name: "", plateNumber: "", vehicleType: "", ownership: "BUSINESS" as "PERSONAL" | "BUSINESS" });
+  const [newDependent, setNewDependent] = useState({ name: "", relationship: "", dateOfBirth: "" });
+
+  const refreshProfileData = () => {
+    if (!wsId) return;
+    loadPersonalProfile(wsId, isMockUser).then(setPersonalProfile);
+    loadBusinessProfile(wsId, isMockUser).then(setBusinessProfile);
+    loadVehicles(wsId, isMockUser).then(setVehicles);
+    loadDependents(wsId, isMockUser).then(setDependents);
+  };
+
+  useEffect(() => { refreshProfileData(); }, [wsId, isMockUser]);
+
+  const saveProfiles = async () => {
+    setProfileSaving(true);
+    await savePersonalProfile(wsId, isMockUser, personalProfile);
+    await saveBusinessProfile(wsId, isMockUser, businessProfile);
+    setProfileSaving(false);
+    setProfileSavedAt(Date.now());
+  };
+
+  const submitNewVehicle = async () => {
+    if (!newVehicle.name.trim()) return;
+    await addVehicle(wsId, isMockUser, newVehicle);
+    setNewVehicle({ name: "", plateNumber: "", vehicleType: "", ownership: "BUSINESS" });
+    refreshProfileData();
+  };
+
+  const removeVehicle = async (id: string) => {
+    await deleteVehicle(wsId, isMockUser, id);
+    refreshProfileData();
+  };
+
+  const submitNewDependent = async () => {
+    if (!newDependent.name.trim()) return;
+    await addDependent(wsId, isMockUser, newDependent);
+    setNewDependent({ name: "", relationship: "", dateOfBirth: "" });
+    refreshProfileData();
+  };
+
+  const removeDependent = async (id: string) => {
+    await deleteDependent(wsId, isMockUser, id);
+    refreshProfileData();
+  };
+
   const sendChat = async (text?: string) => {
     const q = (text || chatInput).trim();
     if (!q || chatLoading) return;
@@ -437,7 +494,7 @@ export function OwnerDashboard() {
         headers: { "Content-Type": "application/json", ...(await getAuthHeader()) },
         body: JSON.stringify({
           query: q,
-          financialContext: { activeTenant, activeWorkspace, financialEvents },
+          financialContext: { activeTenant, activeWorkspace, financialEvents, personalProfile, businessProfile, vehicles, dependents },
           userId: user?.id,
         }),
       });
@@ -1219,6 +1276,7 @@ export function OwnerDashboard() {
                     { id: "support" as MorePage,   label: "Pusat Sokongan",    desc: "Bantuan, FAQ & tiket sokongan",         icon: HelpCircle },
                     { id: "history" as MorePage,   label: "Sejarah Aktiviti",  desc: "Log semua transaksi & aktiviti",        icon: History },
                     { id: "chatArchive" as MorePage, label: "Arkib Perbualan", desc: "Sejarah perbualan dengan MYKERANI ikut tarikh", icon: MessageCircle },
+                    { id: "myProfile" as MorePage, label: "Profil Kewangan AI", desc: "Maklumat peribadi, perniagaan & kenderaan", icon: Brain },
                     { id: "settings" as MorePage,  label: "Tetapan",           desc: "Konfigurasi & peringatan",              icon: Settings },
                     { id: "profile" as MorePage,   label: "Profil Saya",       desc: user?.email || "",                       icon: User },
                   ]).map(({ id, label, desc, icon: Icon }) => (
@@ -1326,6 +1384,89 @@ export function OwnerDashboard() {
                     </span>
                   </div>
                 ))}
+              </div>
+            )}
+
+            {morePage === "myProfile" && (
+              <div className="space-y-4">
+                <h2 className="text-lg font-bold text-slate-900">Profil Kewangan AI</h2>
+                <p className="text-xs text-slate-500">Semua maklumat di sini adalah <span className="font-semibold">pilihan (optional)</span> — boleh dilangkau atau dikemas kini bila-bila masa. Lebih lengkap maklumat, lebih pintar MYKERANI AI membantu anda.</p>
+
+                <div className="bg-white border border-slate-200 rounded-2xl p-5 space-y-3 shadow-sm">
+                  <h3 className="text-sm font-bold text-slate-800">Profil Peribadi</h3>
+                  <input value={personalProfile.fullName} onChange={e => setPersonalProfile(p => ({ ...p, fullName: e.target.value }))} placeholder="Nama penuh" className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm" />
+                  <div className="grid grid-cols-2 gap-2">
+                    <input type="date" value={personalProfile.dateOfBirth} onChange={e => setPersonalProfile(p => ({ ...p, dateOfBirth: e.target.value }))} className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm" />
+                    <input value={personalProfile.maritalStatus} onChange={e => setPersonalProfile(p => ({ ...p, maritalStatus: e.target.value }))} placeholder="Status perkahwinan" className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm" />
+                  </div>
+                  <input value={personalProfile.occupation} onChange={e => setPersonalProfile(p => ({ ...p, occupation: e.target.value }))} placeholder="Pekerjaan" className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm" />
+                  <div className="grid grid-cols-2 gap-2">
+                    <input type="number" value={personalProfile.monthlyIncomeMyr} onChange={e => setPersonalProfile(p => ({ ...p, monthlyIncomeMyr: e.target.value }))} placeholder="Pendapatan bulanan (RM)" className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm" />
+                    <input type="number" value={personalProfile.dependentsCount} onChange={e => setPersonalProfile(p => ({ ...p, dependentsCount: e.target.value }))} placeholder="Bilangan tanggungan" className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm" />
+                  </div>
+                  <textarea value={personalProfile.notes} onChange={e => setPersonalProfile(p => ({ ...p, notes: e.target.value }))} placeholder="Nota tambahan (contoh: ada perniagaan sampingan, dll)" className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm" rows={2} />
+                </div>
+
+                <div className="bg-white border border-slate-200 rounded-2xl p-5 space-y-3 shadow-sm">
+                  <h3 className="text-sm font-bold text-slate-800">Profil Perniagaan</h3>
+                  <input value={businessProfile.industry} onChange={e => setBusinessProfile(p => ({ ...p, industry: e.target.value }))} placeholder="Industri (contoh: F&B, Percetakan)" className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm" />
+                  <div className="grid grid-cols-2 gap-2">
+                    <input value={businessProfile.branchName} onChange={e => setBusinessProfile(p => ({ ...p, branchName: e.target.value }))} placeholder="Nama cawangan" className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm" />
+                    <input value={businessProfile.businessType} onChange={e => setBusinessProfile(p => ({ ...p, businessType: e.target.value }))} placeholder="Jenis perniagaan (Sdn Bhd, Enterprise...)" className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm" />
+                  </div>
+                  <input value={businessProfile.registrationNo} onChange={e => setBusinessProfile(p => ({ ...p, registrationNo: e.target.value }))} placeholder="No. pendaftaran perniagaan" className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm" />
+                  <textarea value={businessProfile.notes} onChange={e => setBusinessProfile(p => ({ ...p, notes: e.target.value }))} placeholder="Nota tambahan" className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm" rows={2} />
+                </div>
+
+                <button onClick={saveProfiles} disabled={profileSaving} className="w-full py-3 bg-indigo-600 text-white rounded-xl text-sm font-semibold disabled:opacity-50 cursor-pointer">
+                  {profileSaving ? "Menyimpan..." : "Simpan Profil"}
+                </button>
+                {profileSavedAt && <p className="text-center text-xs text-emerald-600">Profil disimpan ✓</p>}
+
+                <div className="bg-white border border-slate-200 rounded-2xl p-5 space-y-3 shadow-sm">
+                  <h3 className="text-sm font-bold text-slate-800">Kenderaan</h3>
+                  <p className="text-xs text-slate-500">Tambah kenderaan supaya AI boleh tanya "Hilux atau Myvi?" bila anda rekod belian minyak/tol/servis.</p>
+                  {vehicles.map(v => (
+                    <div key={v.id} className="flex items-center justify-between bg-slate-50 border border-slate-100 rounded-xl px-3 py-2">
+                      <div>
+                        <p className="text-sm font-semibold text-slate-800">{v.name} {v.plateNumber && <span className="text-slate-400 font-normal">· {v.plateNumber}</span>}</p>
+                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${v.ownership === "BUSINESS" ? "bg-indigo-100 text-indigo-700" : "bg-amber-100 text-amber-700"}`}>{v.ownership === "BUSINESS" ? "Perniagaan" : "Peribadi"}</span>
+                      </div>
+                      <button onClick={() => removeVehicle(v.id)} className="text-rose-400 hover:text-rose-600 cursor-pointer"><Trash2 className="w-4 h-4" /></button>
+                    </div>
+                  ))}
+                  <div className="grid grid-cols-2 gap-2">
+                    <input value={newVehicle.name} onChange={e => setNewVehicle(v => ({ ...v, name: e.target.value }))} placeholder="Nama (contoh: Hilux)" className="px-3 py-2 border border-slate-200 rounded-xl text-sm" />
+                    <input value={newVehicle.plateNumber} onChange={e => setNewVehicle(v => ({ ...v, plateNumber: e.target.value }))} placeholder="No. plat" className="px-3 py-2 border border-slate-200 rounded-xl text-sm" />
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <select value={newVehicle.ownership} onChange={e => setNewVehicle(v => ({ ...v, ownership: e.target.value as "PERSONAL" | "BUSINESS" }))} className="px-3 py-2 border border-slate-200 rounded-xl text-sm">
+                      <option value="BUSINESS">Perniagaan</option>
+                      <option value="PERSONAL">Peribadi</option>
+                    </select>
+                    <button onClick={submitNewVehicle} className="px-3 py-2 bg-slate-900 text-white rounded-xl text-sm font-semibold cursor-pointer">+ Tambah Kenderaan</button>
+                  </div>
+                </div>
+
+                <div className="bg-white border border-slate-200 rounded-2xl p-5 space-y-3 shadow-sm">
+                  <h3 className="text-sm font-bold text-slate-800">Tanggungan</h3>
+                  {dependents.map(d => (
+                    <div key={d.id} className="flex items-center justify-between bg-slate-50 border border-slate-100 rounded-xl px-3 py-2">
+                      <div>
+                        <p className="text-sm font-semibold text-slate-800">{d.name}</p>
+                        <span className="text-xs text-slate-500">{d.relationship}</span>
+                      </div>
+                      <button onClick={() => removeDependent(d.id)} className="text-rose-400 hover:text-rose-600 cursor-pointer"><Trash2 className="w-4 h-4" /></button>
+                    </div>
+                  ))}
+                  <div className="grid grid-cols-2 gap-2">
+                    <input value={newDependent.name} onChange={e => setNewDependent(d => ({ ...d, name: e.target.value }))} placeholder="Nama" className="px-3 py-2 border border-slate-200 rounded-xl text-sm" />
+                    <input value={newDependent.relationship} onChange={e => setNewDependent(d => ({ ...d, relationship: e.target.value }))} placeholder="Hubungan (anak, ibu...)" className="px-3 py-2 border border-slate-200 rounded-xl text-sm" />
+                  </div>
+                  <button onClick={submitNewDependent} className="w-full px-3 py-2 bg-slate-900 text-white rounded-xl text-sm font-semibold cursor-pointer">+ Tambah Tanggungan</button>
+                </div>
+
+                <p className="text-xs text-slate-400 text-center">Maklumat pinjaman/loan diuruskan dalam modul Hutang & Liabiliti sedia ada.</p>
               </div>
             )}
 
