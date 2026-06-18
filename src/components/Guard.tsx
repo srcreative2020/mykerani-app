@@ -1,10 +1,12 @@
-import React from "react";
+import React, { useState } from "react";
 import { useAuth } from "../context/AuthContext";
 import LoginScreen from "../screens/LoginScreen";
+import LandingPage from "../screens/LandingPage";
 import { Loader2 } from "lucide-react";
 
 export const Guard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user, loading } = useAuth();
+  const [view, setView] = useState<"landing" | "login" | "register">("landing");
 
   if (loading) {
     return (
@@ -20,7 +22,15 @@ export const Guard: React.FC<{ children: React.ReactNode }> = ({ children }) => 
   }
 
   if (!user) {
-    return <LoginScreen />;
+    if (view === "landing") {
+      return <LandingPage onLogin={() => setView("login")} onRegister={() => setView("register")} />;
+    }
+    return (
+      <LoginScreen
+        initialMode={view === "register" ? "signup" : "login"}
+        onBack={() => setView("landing")}
+      />
+    );
   }
 
   return <>{children}</>;

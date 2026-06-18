@@ -7,7 +7,7 @@ import {
   Brain, Building2, UserCheck, UserX, Edit3, Bell, Shield, LogOut,
   ArrowUpRight, Menu, X, Activity, Package, Receipt, ToggleLeft,
   ToggleRight, AlertTriangle, Circle, FileText, MessageSquare,
-  User, Send, Star, Repeat, Archive,
+  User, Send, Star, Repeat, Archive, Globe, HelpCircle, Trash2,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { useNotifications, buildHQNotifs, fmtNotifTime } from "../lib/notifications";
@@ -25,7 +25,7 @@ interface HQConsoleShellProps {
 
 // HQ_OWNER pages: all 8
 // HQ_STAFF pages: dashboard, customers, subscriptions, support
-type HQPage = "dashboard" | "customers" | "billing" | "usage" | "support" | "revenue" | "settings" | "system" | "subscriptions";
+type HQPage = "dashboard" | "customers" | "billing" | "usage" | "support" | "revenue" | "settings" | "system" | "subscriptions" | "website";
 
 // â"€â"€ Mock data (demo accounts only) â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 const MOCK_CUSTOMERS = [
@@ -288,6 +288,48 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
     if (useRealData) { await hqService.deletePlan(id); reloadPlans(); }
     else setPlans(prev => prev.filter(p => p.id !== id));
     setDeletingPlanId(null);
+  };
+
+  // ── Public marketing site CMS (real, Supabase-backed) ──
+  const BLANK_SITE_SETTINGS: hqService.SiteSettings = {
+    companyName: "MyKerani", logoUrl: "", heroHeadline: "", heroSubheadline: "",
+    contactEmail: "", contactPhone: "", contactWhatsapp: "", contactAddress: "",
+    businessHours: "", socialLinks: {}, demoVideoUrl: "",
+  };
+  const [siteSettings, setSiteSettings] = useState<hqService.SiteSettings>(BLANK_SITE_SETTINGS);
+  const [siteSettingsSaving, setSiteSettingsSaving] = useState(false);
+  const [siteSettingsSaved, setSiteSettingsSaved] = useState(false);
+  const [faqItems, setFaqItems] = useState<hqService.FaqItem[]>([]);
+  const [faqDraft, setFaqDraft] = useState<{ question: string; answer: string }>({ question: "", answer: "" });
+
+  const reloadSiteCms = () => {
+    if (!useRealData) return;
+    hqService.getSiteSettings().then(s => { if (s) setSiteSettings(s); });
+    hqService.getFaqItems(true).then(setFaqItems);
+  };
+  useEffect(() => { reloadSiteCms(); }, [useRealData]);
+
+  const saveSiteSettingsNow = async () => {
+    setSiteSettingsSaving(true);
+    setSiteSettingsSaved(false);
+    await hqService.saveSiteSettings(siteSettings);
+    setSiteSettingsSaving(false);
+    setSiteSettingsSaved(true);
+  };
+
+  const addFaqItem = async () => {
+    if (!faqDraft.question.trim() || !faqDraft.answer.trim()) return;
+    await hqService.createFaqItem({ question: faqDraft.question, answer: faqDraft.answer, sortOrder: faqItems.length + 1, isPublished: true });
+    setFaqDraft({ question: "", answer: "" });
+    reloadSiteCms();
+  };
+  const toggleFaqPublished = async (item: hqService.FaqItem) => {
+    await hqService.updateFaqItem(item.id, { ...item, isPublished: !item.isPublished });
+    reloadSiteCms();
+  };
+  const removeFaqItem = async (id: string) => {
+    await hqService.deleteFaqItem(id);
+    reloadSiteCms();
   };
 
   // Customer modal & detail state
@@ -676,6 +718,7 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
     { id: "usage" as HQPage,       label: "Penggunaan",     icon: Activity },
     { id: "support" as HQPage,     label: "Sokongan",       icon: Headphones, badge: openCases },
     { id: "revenue" as HQPage,     label: "Hasil",          icon: DollarSign },
+    { id: "website" as HQPage,     label: "Tapak Web",      icon: Globe },
     { id: "settings" as HQPage,    label: "Tetapan",        icon: Settings },
     { id: "system" as HQPage,      label: "Pusat Sistem",   icon: Server },
   ];
@@ -1719,6 +1762,111 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
             })()}
 
             {/* â•â•â•â• SETTINGS (HQ_OWNER only) â•â•â•â• */}
+            {activePage === "website" && !isStaff && (
+              <div className="space-y-5" id="hq_website">
+                <div className="flex items-center justify-between">
+                  <h1 className="text-xl font-bold text-slate-900">Tapak Web Awam</h1>
+                  {siteSettingsSaved && <span className="text-xs text-emerald-600 font-bold bg-emerald-50 border border-emerald-200 px-3 py-1.5 rounded-xl">Tersimpan</span>}
+                </div>
+
+                <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-3">
+                  <h3 className="text-sm font-bold text-slate-900">Jenama & Hero</h3>
+                  <div>
+                    <label className="text-xs font-semibold text-slate-500 mb-1 block">Nama Syarikat</label>
+                    <input value={siteSettings.companyName} onChange={e => setSiteSettings(s => ({ ...s, companyName: e.target.value }))}
+                      className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-emerald-400" />
+                  </div>
+                  <div>
+                    <label className="text-xs font-semibold text-slate-500 mb-1 block">URL Logo</label>
+                    <input value={siteSettings.logoUrl} onChange={e => setSiteSettings(s => ({ ...s, logoUrl: e.target.value }))}
+                      placeholder="https://..."
+                      className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-emerald-400" />
+                  </div>
+                  <div>
+                    <label className="text-xs font-semibold text-slate-500 mb-1 block">Tajuk Utama (Hero Headline)</label>
+                    <textarea rows={2} value={siteSettings.heroHeadline} onChange={e => setSiteSettings(s => ({ ...s, heroHeadline: e.target.value }))}
+                      className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-emerald-400" />
+                  </div>
+                  <div>
+                    <label className="text-xs font-semibold text-slate-500 mb-1 block">Sub-tajuk (Hero Subheadline)</label>
+                    <textarea rows={2} value={siteSettings.heroSubheadline} onChange={e => setSiteSettings(s => ({ ...s, heroSubheadline: e.target.value }))}
+                      className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-emerald-400" />
+                  </div>
+                  <div>
+                    <label className="text-xs font-semibold text-slate-500 mb-1 block">URL Video Demo</label>
+                    <input value={siteSettings.demoVideoUrl} onChange={e => setSiteSettings(s => ({ ...s, demoVideoUrl: e.target.value }))}
+                      placeholder="https://..."
+                      className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-emerald-400" />
+                  </div>
+                </div>
+
+                <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-3">
+                  <h3 className="text-sm font-bold text-slate-900">Maklumat Hubungan</h3>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-xs font-semibold text-slate-500 mb-1 block">E-mel</label>
+                      <input value={siteSettings.contactEmail} onChange={e => setSiteSettings(s => ({ ...s, contactEmail: e.target.value }))}
+                        className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-emerald-400" />
+                    </div>
+                    <div>
+                      <label className="text-xs font-semibold text-slate-500 mb-1 block">Telefon</label>
+                      <input value={siteSettings.contactPhone} onChange={e => setSiteSettings(s => ({ ...s, contactPhone: e.target.value }))}
+                        className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-emerald-400" />
+                    </div>
+                    <div>
+                      <label className="text-xs font-semibold text-slate-500 mb-1 block">WhatsApp</label>
+                      <input value={siteSettings.contactWhatsapp} onChange={e => setSiteSettings(s => ({ ...s, contactWhatsapp: e.target.value }))}
+                        className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-emerald-400" />
+                    </div>
+                    <div>
+                      <label className="text-xs font-semibold text-slate-500 mb-1 block">Waktu Perniagaan</label>
+                      <input value={siteSettings.businessHours} onChange={e => setSiteSettings(s => ({ ...s, businessHours: e.target.value }))}
+                        className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-emerald-400" />
+                    </div>
+                    <div className="col-span-2">
+                      <label className="text-xs font-semibold text-slate-500 mb-1 block">Alamat</label>
+                      <input value={siteSettings.contactAddress} onChange={e => setSiteSettings(s => ({ ...s, contactAddress: e.target.value }))}
+                        className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-emerald-400" />
+                    </div>
+                  </div>
+                  <button onClick={saveSiteSettingsNow} disabled={siteSettingsSaving}
+                    className="px-4 py-2.5 bg-emerald-700 text-white rounded-xl text-xs font-bold cursor-pointer hover:bg-emerald-800 transition disabled:opacity-40">
+                    {siteSettingsSaving ? "Menyimpan..." : "Simpan Tapak Web"}
+                  </button>
+                </div>
+
+                <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-3">
+                  <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2"><HelpCircle className="w-4 h-4 text-indigo-500" /> Soalan Lazim (FAQ)</h3>
+                  <div className="space-y-2">
+                    {faqItems.map(f => (
+                      <div key={f.id} className="flex items-start justify-between gap-3 p-3 border border-slate-100 rounded-xl">
+                        <div className="min-w-0">
+                          <p className="text-xs font-bold text-slate-800">{f.question}</p>
+                          <p className="text-[11px] text-slate-400 mt-0.5">{f.answer}</p>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <button onClick={() => toggleFaqPublished(f)} className={`text-[10px] font-bold px-2 py-1 rounded-full cursor-pointer ${f.isPublished ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-400"}`}>
+                            {f.isPublished ? "Tersiar" : "Disembunyikan"}
+                          </button>
+                          <button onClick={() => removeFaqItem(f.id)} className="text-rose-400 hover:text-rose-600 cursor-pointer"><Trash2 className="w-3.5 h-3.5" /></button>
+                        </div>
+                      </div>
+                    ))}
+                    {faqItems.length === 0 && <p className="text-xs text-slate-400 text-center py-3">Tiada soalan lazim lagi.</p>}
+                  </div>
+                  <div className="space-y-2 pt-2 border-t border-slate-100">
+                    <input value={faqDraft.question} onChange={e => setFaqDraft(d => ({ ...d, question: e.target.value }))}
+                      placeholder="Soalan baru..."
+                      className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-emerald-400" />
+                    <textarea rows={2} value={faqDraft.answer} onChange={e => setFaqDraft(d => ({ ...d, answer: e.target.value }))}
+                      placeholder="Jawapan..."
+                      className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-emerald-400" />
+                    <button onClick={addFaqItem} className="px-4 py-2 bg-indigo-600 text-white rounded-xl text-xs font-bold cursor-pointer hover:bg-indigo-700 transition">Tambah Soalan</button>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {activePage === "settings" && !isStaff && (
               <div className="space-y-5" id="hq_settings">
                 <div className="flex items-center justify-between">

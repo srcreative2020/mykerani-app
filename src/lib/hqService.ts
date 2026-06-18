@@ -415,3 +415,101 @@ export async function getPaymentSlipUrl(path: string): Promise<string | null> {
   const { data, error } = await supabase.storage.from("payment-slips").createSignedUrl(path, 3600);
   return error ? null : data.signedUrl;
 }
+
+// --- Public marketing site CMS (HQ-editable, publicly readable) ---
+
+export interface SiteSettings {
+  companyName: string;
+  logoUrl: string;
+  heroHeadline: string;
+  heroSubheadline: string;
+  contactEmail: string;
+  contactPhone: string;
+  contactWhatsapp: string;
+  contactAddress: string;
+  businessHours: string;
+  socialLinks: Record<string, string>;
+  demoVideoUrl: string;
+}
+
+export async function getSiteSettings(): Promise<SiteSettings | null> {
+  if (!isSupabaseConfigured() || !supabase) return null;
+  const { data, error } = await supabase.from("site_settings").select("*").eq("id", "global").maybeSingle();
+  if (error || !data) return null;
+  return {
+    companyName: data.company_name || "MyKerani",
+    logoUrl: data.logo_url || "",
+    heroHeadline: data.hero_headline || "",
+    heroSubheadline: data.hero_subheadline || "",
+    contactEmail: data.contact_email || "",
+    contactPhone: data.contact_phone || "",
+    contactWhatsapp: data.contact_whatsapp || "",
+    contactAddress: data.contact_address || "",
+    businessHours: data.business_hours || "",
+    socialLinks: data.social_links || {},
+    demoVideoUrl: data.demo_video_url || "",
+  };
+}
+
+export async function saveSiteSettings(settings: SiteSettings): Promise<boolean> {
+  if (!isSupabaseConfigured() || !supabase) return false;
+  const { error } = await supabase.from("site_settings").update({
+    company_name: settings.companyName,
+    logo_url: settings.logoUrl || null,
+    hero_headline: settings.heroHeadline,
+    hero_subheadline: settings.heroSubheadline,
+    contact_email: settings.contactEmail || null,
+    contact_phone: settings.contactPhone || null,
+    contact_whatsapp: settings.contactWhatsapp || null,
+    contact_address: settings.contactAddress || null,
+    business_hours: settings.businessHours || null,
+    social_links: settings.socialLinks || {},
+    demo_video_url: settings.demoVideoUrl || null,
+    updated_at: new Date().toISOString(),
+  }).eq("id", "global");
+  return !error;
+}
+
+export interface FaqItem {
+  id: string;
+  question: string;
+  answer: string;
+  sortOrder: number;
+  isPublished: boolean;
+}
+
+export async function getFaqItems(includeUnpublished = false): Promise<FaqItem[]> {
+  if (!isSupabaseConfigured() || !supabase) return [];
+  let query = supabase.from("faq_items").select("*").order("sort_order", { ascending: true });
+  if (!includeUnpublished) query = query.eq("is_published", true);
+  const { data, error } = await query;
+  if (error || !data) return [];
+  return data.map((row: any) => ({
+    id: row.id, question: row.question, answer: row.answer,
+    sortOrder: row.sort_order, isPublished: row.is_published,
+  }));
+}
+
+export async function createFaqItem(item: Omit<FaqItem, "id">): Promise<FaqItem | null> {
+  if (!isSupabaseConfigured() || !supabase) return null;
+  const { data, error } = await supabase.from("faq_items").insert({
+    question: item.question, answer: item.answer, sort_order: item.sortOrder, is_published: item.isPublished,
+  }).select().single();
+  if (error || !data) return null;
+  return { id: data.id, ...item };
+}
+
+export async function updateFaqItem(id: string, item: Omit<FaqItem, "id">): Promise<boolean> {
+  if (!isSupabaseConfigured() || !supabase) return false;
+  const { error } = await supabase.from("faq_items").update({
+    question: item.question, answer: item.answer, sort_order: item.sortOrder, is_published: item.isPublished,
+    updated_at: new Date().toISOString(),
+  }).eq("id", id);
+  return !error;
+}
+
+export async function deleteFaqItem(id: string): Promise<boolean> {
+  if (!isSupabaseConfigured() || !supabase) return false;
+  const { error } = await supabase.from("faq_items").delete().eq("id", id);
+  return !error;
+}
