@@ -62,12 +62,13 @@ function AddRecordForm({
   onDone,
 }: {
   defaultType: "INCOME" | "EXPENSE";
-  onSave: (d: { type: string; amount: number; description: string; party: string; date: string }) => void;
+  onSave: (d: { type: string; amount: number; description: string; party: string; date: string; category: string }) => void;
   onDone: () => void;
 }) {
   const [type, setType] = useState<"INCOME" | "EXPENSE">(defaultType);
   const [amount, setAmount] = useState("");
   const [party, setParty] = useState("");
+  const [category, setCategory] = useState("");
   const [description, setDescription] = useState("");
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
   const [saved, setSaved] = useState(false);
@@ -75,9 +76,9 @@ function AddRecordForm({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!amount) return;
-    onSave({ type, amount: parseFloat(amount), description, party, date });
+    onSave({ type, amount: parseFloat(amount), description, party, date, category });
     setSaved(true);
-    setAmount(""); setParty(""); setDescription("");
+    setAmount(""); setParty(""); setCategory(""); setDescription("");
     setTimeout(() => { setSaved(false); onDone(); }, 1500);
   };
 
@@ -115,6 +116,12 @@ function AddRecordForm({
           </label>
           <input type="text" value={party} onChange={e => setParty(e.target.value)}
             placeholder={type === "INCOME" ? "Nama pelanggan" : "Nama pembekal"}
+            className="w-full mt-1 border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-indigo-400 bg-white" />
+        </div>
+        <div>
+          <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Kategori</label>
+          <input type="text" value={category} onChange={e => setCategory(e.target.value)}
+            placeholder="Cth: Sewa, Minyak, Jualan Produk"
             className="w-full mt-1 border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-indigo-400 bg-white" />
         </div>
         <div>
@@ -186,12 +193,22 @@ export function StaffHomeScreen() {
   };
   const saveEditTxn = () => {
     if (!editingTxnId) return;
+    const editedEvent = financialEvents.find(e => e.id === editingTxnId);
     editFinancialEvent(editingTxnId, {
       amountMyr: Number(editTxnDraft.amountMyr) || 0,
       categoryName: editTxnDraft.categoryName,
       partyName: editTxnDraft.partyName,
       date: editTxnDraft.date,
     });
+    if (editedEvent && editTxnDraft.partyName.trim() && (editTxnDraft.categoryName !== editedEvent.categoryName || editTxnDraft.partyName !== editedEvent.partyName)) {
+      learnOcrPattern({
+        workspaceId: editedEvent.workspaceId,
+        vendorName: editTxnDraft.partyName.trim(),
+        category: editTxnDraft.categoryName,
+        recordType: editedEvent.type,
+        confidenceScore: 0.95,
+      });
+    }
     setEditingTxnId(null);
   };
   const myRecords = useMemo(() =>
@@ -401,12 +418,13 @@ export function StaffHomeScreen() {
     setEditingChatSuggestionId(null);
   };
 
-  const handleSaveRecord = (data: { type: string; amount: number; description: string; party: string; date: string }) => {
+  const handleSaveRecord = (data: { type: string; amount: number; description: string; party: string; date: string; category: string }) => {
     if (!activeWorkspace) return;
+    const categoryName = data.category.trim() || (data.type === "INCOME" ? "Pendapatan" : "Perbelanjaan");
     addFinancialEvent({
       workspaceId: activeWorkspace.id,
       type: data.type as any,
-      categoryName: data.type === "INCOME" ? "Pendapatan" : "Perbelanjaan",
+      categoryName,
       amountMyr: data.amount,
       partyName: data.party || "Tidak dinyatakan",
       date: data.date,
@@ -414,6 +432,15 @@ export function StaffHomeScreen() {
       description: data.description,
       isCompleted: false,
     });
+    if (data.party.trim()) {
+      learnOcrPattern({
+        workspaceId: activeWorkspace.id,
+        vendorName: data.party.trim(),
+        category: categoryName,
+        recordType: data.type as any,
+        confidenceScore: 0.9,
+      });
+    }
   };
 
   const QUICK_PROMPTS = [

@@ -89,9 +89,10 @@ function QuickAddModal({
 }: {
   type: "INCOME" | "EXPENSE";
   onClose: () => void;
-  onSave: (d: { type: string; amount: number; description: string; party: string; date: string }) => void;
+  onSave: (d: { type: string; amount: number; description: string; party: string; date: string; category: string }) => void;
 }) {
   const [amount, setAmount] = useState("");
+  const [category, setCategory] = useState("");
   const [description, setDescription] = useState("");
   const [party, setParty] = useState("");
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
@@ -100,7 +101,7 @@ function QuickAddModal({
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
     if (!amount) return;
-    onSave({ type, amount: parseFloat(amount), description, party, date });
+    onSave({ type, amount: parseFloat(amount), description, party, date, category });
     onClose();
   };
 
@@ -119,6 +120,9 @@ function QuickAddModal({
             className="w-full border border-slate-200 rounded-xl px-4 py-3 text-lg font-bold focus:outline-none focus:border-indigo-400" />
           <input type="text" value={party} onChange={e => setParty(e.target.value)}
             placeholder={isIncome ? "Dari siapa? (Pelanggan)" : "Kepada siapa? (Pembekal)"}
+            className="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-indigo-400" />
+          <input type="text" value={category} onChange={e => setCategory(e.target.value)}
+            placeholder="Kategori (contoh: Sewa, Minyak, Jualan Produk)"
             className="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-indigo-400" />
           <input type="text" value={description} onChange={e => setDescription(e.target.value)}
             placeholder="Penerangan (pilihan)"
@@ -240,12 +244,22 @@ export function OwnerDashboard() {
   };
   const saveEditTxn = () => {
     if (!editingTxnId) return;
+    const editedEvent = myEvents.find(e => e.id === editingTxnId);
     editFinancialEvent(editingTxnId, {
       amountMyr: Number(editTxnDraft.amountMyr) || 0,
       categoryName: editTxnDraft.categoryName,
       partyName: editTxnDraft.partyName,
       date: editTxnDraft.date,
     });
+    if (editedEvent && editTxnDraft.partyName.trim() && (editTxnDraft.categoryName !== editedEvent.categoryName || editTxnDraft.partyName !== editedEvent.partyName)) {
+      learnOcrPattern({
+        workspaceId: editedEvent.workspaceId,
+        vendorName: editTxnDraft.partyName.trim(),
+        category: editTxnDraft.categoryName,
+        recordType: editedEvent.type,
+        confidenceScore: 0.95,
+      });
+    }
     setEditingTxnId(null);
   };
   const incomeThisMonth = useMemo(() => myEvents.filter(e => e.type === "INCOME" && e.date.startsWith(thisMonth)).reduce((s, e) => s + e.amountMyr, 0), [myEvents, thisMonth]);
@@ -685,12 +699,13 @@ export function OwnerDashboard() {
     }
   };
 
-  const handleSaveRecord = (data: { type: string; amount: number; description: string; party: string; date: string }) => {
+  const handleSaveRecord = (data: { type: string; amount: number; description: string; party: string; date: string; category: string }) => {
     if (!activeWorkspace) return;
+    const categoryName = data.category.trim() || (data.type === "INCOME" ? "Pendapatan" : "Perbelanjaan");
     addFinancialEvent({
       workspaceId: activeWorkspace.id,
       type: data.type as any,
-      categoryName: data.type === "INCOME" ? "Pendapatan" : "Perbelanjaan",
+      categoryName,
       amountMyr: data.amount,
       partyName: data.party || "Tidak dinyatakan",
       date: data.date,
@@ -698,6 +713,15 @@ export function OwnerDashboard() {
       description: data.description,
       isCompleted: false,
     });
+    if (data.party.trim()) {
+      learnOcrPattern({
+        workspaceId: activeWorkspace.id,
+        vendorName: data.party.trim(),
+        category: categoryName,
+        recordType: data.type as any,
+        confidenceScore: 0.9,
+      });
+    }
   };
 
   const handleInviteSubmit = async () => {
