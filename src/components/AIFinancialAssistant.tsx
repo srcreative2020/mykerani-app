@@ -146,7 +146,9 @@ export const AIFinancialAssistant: React.FC<AIFinancialAssistantProps> = ({ onTr
       }
 
       const data = await res.json();
-      
+      console.log("[AI_ASSISTANT_DEBUG] raw API response:", data);
+      console.log("[AI_ASSISTANT_DEBUG] data.suggestions:", data.suggestions);
+
       // Clean data text of forbidden terms if any leak in
       let cleanText = data.text || "Saya telah menyemak maklumat tersebut.";
       cleanText = cleanText
@@ -171,6 +173,7 @@ export const AIFinancialAssistant: React.FC<AIFinancialAssistantProps> = ({ onTr
             .filter((s: AISuggestion) => s.actionType === "CONFIRM_TRANSACTION")
             .map((s: AISuggestion, idx: number) => ({ ...s, id: `${systemMessageId}-sugg-${idx}` }))
         : [];
+      console.log("[AI_ASSISTANT_DEBUG] confirmSuggestions (filtered+remapped):", transactionSuggestions, "length:", transactionSuggestions.length);
       setChatHistory(prev => [...prev, { id: systemMessageId, sender: "assistant", text: cleanText, suggestions: transactionSuggestions }]);
     } catch (err: any) {
       console.error(err);
@@ -355,8 +358,13 @@ export const AIFinancialAssistant: React.FC<AIFinancialAssistantProps> = ({ onTr
           );
         })}
 
-        {chatHistory.map((item) => (item.suggestions || []).map((s) => {
+        {chatHistory.map((item) => {
+          if (item.suggestions && item.suggestions.length > 0) {
+            console.log("[AI_ASSISTANT_DEBUG] render pass — item.suggestions:", item.suggestions, "length:", item.suggestions.length, "suggestionStatus:", suggestionStatus);
+          }
+          return (item.suggestions || []).map((s) => {
           const status = suggestionStatus[s.id] || "pending";
+          console.log(`[AI_ASSISTANT_DEBUG] suggestion ${s.id} resolved status:`, status);
           if (status === "rejected") return null;
           return (
             <div key={s.id} className="self-start max-w-[85%] ml-11 p-3.5 bg-amber-50 border border-amber-200 rounded-2xl text-xs space-y-2">
@@ -392,7 +400,8 @@ export const AIFinancialAssistant: React.FC<AIFinancialAssistantProps> = ({ onTr
               )}
             </div>
           );
-        }))}
+          });
+        })}
 
         {/* Loading Indicator */}
         {loading && (
