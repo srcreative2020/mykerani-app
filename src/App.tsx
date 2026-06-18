@@ -98,9 +98,10 @@ function MainDashboardContent() {
   const handleVerifyDb = async (pass = dbPassword) => {
     setVerifyLoading(true);
     try {
+      const { getAuthHeader } = await import("./lib/supabase");
       const res = await fetch("/api/admin/db/verify", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...(await getAuthHeader()) },
         body: JSON.stringify({ dbPassword: pass }),
       });
       const data = await res.json();
@@ -115,9 +116,10 @@ function MainDashboardContent() {
   const fetchDbStatus = async (pass = dbPassword) => {
     setStatusLoading(true);
     try {
+      const { getAuthHeader } = await import("./lib/supabase");
       const res = await fetch("/api/admin/db/status", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...(await getAuthHeader()) },
         body: JSON.stringify({ dbPassword: pass }),
       });
       const data = await res.json();
@@ -136,9 +138,10 @@ function MainDashboardContent() {
     setInitializing(true);
     setInitializedLogs([]);
     try {
+      const { getAuthHeader } = await import("./lib/supabase");
       const res = await fetch("/api/admin/db/initialize", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...(await getAuthHeader()) },
         body: JSON.stringify({ dbPassword }),
       });
       const data = await res.json();

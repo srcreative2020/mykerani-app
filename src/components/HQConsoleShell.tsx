@@ -718,8 +718,8 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
       const jwt = sessionData?.session?.access_token || "";
       const res = await fetch("/api/admin/create-staff", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: staffEmail.trim(), fullName: staffName.trim(), role: "HQ_STAFF", tenantId: "tenant-hq-0001", callerJwt: jwt }),
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${jwt}` },
+        body: JSON.stringify({ email: staffEmail.trim(), fullName: staffName.trim(), role: "HQ_STAFF" }),
       });
       const data = await res.json() as any;
       if (data.success) {

@@ -447,8 +447,8 @@ export function OwnerDashboard() {
       const jwt = sessionData?.session?.access_token || "";
       const res = await fetch("/api/admin/create-staff", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: inviteEmail.trim(), fullName: inviteName.trim(), role: "TENANT_STAFF", tenantId: user?.tenantId || "", callerJwt: jwt }),
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${jwt}` },
+        body: JSON.stringify({ email: inviteEmail.trim(), fullName: inviteName.trim(), role: "TENANT_STAFF" }),
       });
       const data = await res.json() as any;
       if (data.success) {

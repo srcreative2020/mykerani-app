@@ -1,4 +1,4 @@
-import { supabase, isSupabaseConfigured } from "./supabase";
+import { supabase, isSupabaseConfigured, getAuthHeader } from "./supabase";
 
 export interface TenantPaymentTransaction {
   id: string;
@@ -88,7 +88,7 @@ export async function initiateChipAsiaPayment(
 
   const res = await fetch("/api/payments/chip-asia/init", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...(await getAuthHeader()) },
     body: JSON.stringify({ transactionId: data, tenantId, planId, amountMyr }),
   });
   if (!res.ok) {

@@ -204,6 +204,10 @@ async function startServer() {
 
   // endpoint to fetch database connection, tables, buckets and migrations status
   app.post("/api/admin/db/status", async (req, res) => {
+    const hqAuth = await requireHqRole(req, ["HQ_OWNER", "HQ_STAFF"]);
+    if (!hqAuth.ok) {
+      return res.status(403).json({ errorMessage: "Akses ditolak. Hanya kakitangan HQ yang sah boleh menyemak status pangkalan data." });
+    }
     const { dbPassword } = req.body;
     const projectRef = getProjectRef();
     
@@ -296,6 +300,10 @@ async function startServer() {
 
   // endpoint to programmatically execute schema setup and SQL migrations against Supabase
   app.post("/api/admin/db/initialize", async (req, res) => {
+    const hqAuth = await requireHqRole(req, ["HQ_OWNER"]);
+    if (!hqAuth.ok) {
+      return res.status(403).json({ success: false, errorMessage: "Akses ditolak. Hanya HQ Pemilik boleh menjalankan migrasi pangkalan data." });
+    }
     const { dbPassword } = req.body;
     const { success, logs, errorMessage } = await runDatabaseInitialization(dbPassword, true);
     res.json({ success, logs, errorMessage });
@@ -303,6 +311,10 @@ async function startServer() {
 
   // End-to-end Verification and Production Readiness Analyzer (Task 5 & 6)
   app.post("/api/admin/db/verify", async (req, res) => {
+    const hqAuth = await requireHqRole(req, ["HQ_OWNER"]);
+    if (!hqAuth.ok) {
+      return res.status(403).json({ success: false, errorMessage: "Akses ditolak. Hanya HQ Pemilik boleh menjalankan ujian pengesahan pangkalan data." });
+    }
     const { dbPassword } = req.body;
     let client: any = null;
     
@@ -558,7 +570,7 @@ async function startServer() {
   // ── CREATE STAFF ACCOUNT (Admin only) ─────────────────────────────────────
   app.post("/api/admin/create-staff", async (req, res) => {
     try {
-      const { email, fullName, role, tenantId, callerJwt } = req.body;
+      const { email, fullName, role } = req.body;
 
       if (!email || !fullName || !role) {
         return res.status(400).json({ success: false, error: "Email, nama, dan role diperlukan." });
@@ -576,21 +588,22 @@ async function startServer() {
         return res.status(503).json({ success: false, error: "Sistem belum dikonfigurasi. Sila tambah SUPABASE_SERVICE_ROLE_KEY dalam Railway." });
       }
 
-      // Verify caller JWT — pastikan caller adalah HQ_OWNER atau TENANT_OWNER
-      if (callerJwt) {
-        const verifyRes = await fetch(`${supabaseUrl}/auth/v1/user`, {
-          headers: { "Authorization": `Bearer ${callerJwt}`, "apikey": process.env.VITE_SUPABASE_ANON_KEY || "" }
-        });
-        if (!verifyRes.ok) {
-          return res.status(401).json({ success: false, error: "Sesi tidak sah. Sila log masuk semula." });
-        }
-        const callerData = await verifyRes.json() as any;
-        const callerRole = callerData?.user_metadata?.role || callerData?.role;
-        const allowed = ["HQ_OWNER", "TENANT_OWNER"];
-        if (!allowed.includes(callerRole)) {
-          return res.status(403).json({ success: false, error: "Hanya HQ Pemilik atau Pemilik Syarikat boleh cipta akaun staf." });
-        }
+      // Caller identity (role + tenant) is always resolved server-side from
+      // their session bearer token — never trusted from the request body.
+      const caller = await resolveCallerIdentity(req);
+      if (!caller.ok) {
+        return res.status(401).json({ success: false, error: "Sesi tidak sah. Sila log masuk semula." });
       }
+      if (role === "HQ_STAFF" && caller.role !== "HQ_OWNER") {
+        return res.status(403).json({ success: false, error: "Hanya HQ Pemilik boleh cipta akaun HQ Staf." });
+      }
+      if (role === "TENANT_STAFF" && caller.role !== "TENANT_OWNER" && caller.role !== "HQ_OWNER") {
+        return res.status(403).json({ success: false, error: "Hanya Pemilik Syarikat boleh cipta akaun staf syarikat." });
+      }
+      // A tenant owner can only create staff inside their own tenant — the
+      // tenantId always comes from the caller's verified session, never
+      // from the request body, so it cannot be spoofed to another tenant.
+      const newStaffTenantId = role === "TENANT_STAFF" ? (caller.tenantId || "") : "";
 
       // Generate temporary password
       const tempPassword = `MyKerani@${Math.random().toString(36).slice(2, 8).toUpperCase()}${Date.now().toString().slice(-4)}!`;
@@ -610,7 +623,7 @@ async function startServer() {
           user_metadata: {
             fullName,
             role,
-            tenantId: tenantId || "",
+            tenantId: newStaffTenantId,
           }
         })
       });
@@ -1021,16 +1034,17 @@ If you output markdown formatting inside the fields, escape quotes correctly.`;
   // tenantId/workspaceId and drain or misattribute that tenant's AI/OCR
   // credit wallet (Constitution: Multi Tenant Rule — "Backend validation
   // is mandatory").
-  async function verifyTenantAccess(
-    req: any,
-    claimedTenantId: string | undefined | null,
-    claimedWorkspaceId: string | undefined | null
-  ): Promise<{ ok: boolean; userId?: string }> {
+  // Resolves the caller's identity (user id, tenant id, role) strictly from
+  // their Supabase session bearer token + the user_role_assignments table —
+  // never from anything the client put in the request body. This is the
+  // single source of truth for "who is calling" used by every endpoint
+  // below (Constitution: Multi Tenant Rule — "tenant identity must come
+  // from the authenticated session, not the request body").
+  async function resolveCallerIdentity(req: any): Promise<{ ok: boolean; userId?: string; tenantId?: string; role?: string }> {
     const supabaseUrl = process.env.VITE_SUPABASE_URL;
     const anonKey = process.env.VITE_SUPABASE_ANON_KEY;
     const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
     if (!supabaseUrl || !anonKey || !serviceRoleKey) return { ok: true }; // local/self-hosted dev without DB
-    if (!claimedTenantId) return { ok: false };
 
     const authHeader = req.headers?.authorization || "";
     const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : "";
@@ -1046,29 +1060,66 @@ If you output markdown formatting inside the fields, escape quotes correctly.`;
       if (!userId) return { ok: false };
 
       const roleResp = await fetch(
-        `${supabaseUrl}/rest/v1/user_role_assignments?user_id=eq.${userId}&select=tenant_id`,
+        `${supabaseUrl}/rest/v1/user_role_assignments?user_id=eq.${userId}&select=tenant_id,role`,
         { headers: { apikey: serviceRoleKey, Authorization: `Bearer ${serviceRoleKey}` } }
       );
       if (!roleResp.ok) return { ok: false };
       const roleRows: any[] = await roleResp.json();
-      const actualTenantId = roleRows[0]?.tenant_id;
-      if (!actualTenantId || actualTenantId !== claimedTenantId) return { ok: false };
+      const tenantId = roleRows[0]?.tenant_id;
+      const role = roleRows[0]?.role;
+      if (!tenantId || !role) return { ok: false };
 
-      if (claimedWorkspaceId) {
+      return { ok: true, userId, tenantId, role };
+    } catch (err) {
+      console.error("Failed to resolve caller identity:", err);
+      return { ok: false };
+    }
+  }
+
+  // Verifies the caller's authenticated tenant/workspace membership.
+  // Returns the *authoritative* tenantId/userId/role resolved server-side
+  // from the session — callers should use the returned values, not the
+  // claimed ones, for any downstream DB writes.
+  async function verifyTenantAccess(
+    req: any,
+    claimedTenantId: string | undefined | null,
+    claimedWorkspaceId: string | undefined | null
+  ): Promise<{ ok: boolean; userId?: string; tenantId?: string; role?: string }> {
+    const identity = await resolveCallerIdentity(req);
+    if (!identity.ok) return { ok: false };
+    // Dev fallback (no Supabase configured) has no tenantId to compare against.
+    if (!identity.tenantId) return identity;
+    if (claimedTenantId && identity.tenantId !== claimedTenantId) return { ok: false };
+
+    if (claimedWorkspaceId) {
+      const supabaseUrl = process.env.VITE_SUPABASE_URL;
+      const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+      try {
         const wsResp = await fetch(
           `${supabaseUrl}/rest/v1/workspaces?id=eq.${claimedWorkspaceId}&select=tenant_id`,
-          { headers: { apikey: serviceRoleKey, Authorization: `Bearer ${serviceRoleKey}` } }
+          { headers: { apikey: serviceRoleKey!, Authorization: `Bearer ${serviceRoleKey}` } }
         );
         if (!wsResp.ok) return { ok: false };
         const wsRows: any[] = await wsResp.json();
-        if (wsRows[0]?.tenant_id !== actualTenantId) return { ok: false };
+        if (wsRows[0]?.tenant_id !== identity.tenantId) return { ok: false };
+      } catch (err) {
+        console.error("Failed to verify workspace ownership:", err);
+        return { ok: false };
       }
-
-      return { ok: true, userId };
-    } catch (err) {
-      console.error("Failed to verify tenant access:", err);
-      return { ok: false };
     }
+
+    return identity;
+  }
+
+  // Gate for HQ-only operations (DB administration, schema migrations).
+  // Rejects unless the caller's session resolves to one of allowedRoles —
+  // a raw dbPassword in the request body is never treated as authorization.
+  async function requireHqRole(req: any, allowedRoles: string[]): Promise<{ ok: boolean; userId?: string; role?: string }> {
+    const identity = await resolveCallerIdentity(req);
+    if (!identity.ok) return { ok: false };
+    if (!identity.role) return identity; // dev fallback, no Supabase configured
+    if (!allowedRoles.includes(identity.role)) return { ok: false };
+    return identity;
   }
 
   // Atomically checks and deducts one credit of the given type from the
@@ -1160,6 +1211,11 @@ If you output markdown formatting inside the fields, escape quotes correctly.`;
       const { transactionId, tenantId, planId, amountMyr } = req.body || {};
       if (!transactionId || !tenantId || !planId || !amountMyr) {
         return res.status(400).json({ error: "Maklumat pembayaran tidak lengkap." });
+      }
+
+      const access = await verifyTenantAccess(req, tenantId, null);
+      if (!access.ok) {
+        return res.status(403).json({ error: "Sesi tidak sah atau tidak mempunyai akses kepada syarikat ini." });
       }
 
       const settings = await fetchPaymentGatewaySettings();
