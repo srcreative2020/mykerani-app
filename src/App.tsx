@@ -672,7 +672,7 @@ function MainDashboardContent() {
               <div className="bg-slate-50 border border-slate-200/50 rounded-xl p-4 flex flex-col justify-between">
                 <span className="text-[10px] font-mono text-slate-400 block uppercase font-bold">SUPABASE URL</span>
                 <p className="text-xs font-mono font-bold text-slate-800 truncate mt-1">
-                  {process.env.VITE_SUPABASE_URL || "MISSING"}
+                  {(import.meta as any).env?.VITE_SUPABASE_URL || "MISSING"}
                 </p>
                 <div className="mt-2 text-sm">
                   {diagnostics.isConfigured ? (
