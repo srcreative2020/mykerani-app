@@ -25,6 +25,11 @@ import {
   isAllowedFileType, MAX_FILE_SIZE, fmtBytes as fmtDocBytes,
   type UploadedDoc, type DocType,
 } from "../lib/documentStorage";
+import { supabase, isSupabaseConfigured } from "../lib/supabase";
+import {
+  submitManualPayment, initiateChipAsiaPayment, getTenantPaymentTransactions,
+  type TenantPaymentTransaction,
+} from "../lib/paymentService";
 
 type MainTab = "home" | "dashboard" | "documents" | "reports" | "more";
 type MorePage = "menu" | "team" | "history" | "settings" | "profile" | "support" | "billing" | "resources";
@@ -190,6 +195,73 @@ export function OwnerDashboard() {
   const aiCredits = useAiCredits(tenantId);
   const [showAddonModal, setShowAddonModal] = useState(false);
 
+  // ── Subscription plan + payment (real, Supabase-backed) ──
+  interface PlanOption { id: string; name: string; price: number; }
+  const [availablePlans, setAvailablePlans] = useState<PlanOption[]>([]);
+  const [currentSub, setCurrentSub] = useState<{ planId: string; planName: string; price: number; status: string; renewal: string } | null>(null);
+  const [paymentMethods, setPaymentMethods] = useState({ chipAsiaEnabled: false, manualPaymentEnabled: true });
+  const [paymentTxs, setPaymentTxs] = useState<TenantPaymentTransaction[]>([]);
+  const [paymentTxRefresh, setPaymentTxRefresh] = useState(0);
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [paymentModalPlanId, setPaymentModalPlanId] = useState("");
+  const [paymentMethod, setPaymentMethod] = useState<"chip_asia" | "manual">("manual");
+  const [slipFile, setSlipFile] = useState<File | null>(null);
+  const [paymentSubmitting, setPaymentSubmitting] = useState(false);
+  const [paymentError, setPaymentError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!isSupabaseConfigured() || !supabase || !activeTenant?.id) return;
+    supabase.from("subscription_plans").select("id,name,monthly_price_myr").order("monthly_price_myr", { ascending: true })
+      .then(({ data }) => setAvailablePlans((data || []).map((p: any) => ({ id: p.id, name: p.name, price: Number(p.monthly_price_myr) || 0 }))));
+    supabase.from("payment_gateway_settings").select("chip_asia_enabled,manual_payment_enabled").eq("id", "global").maybeSingle()
+      .then(({ data }) => { if (data) setPaymentMethods({ chipAsiaEnabled: Boolean(data.chip_asia_enabled), manualPaymentEnabled: Boolean(data.manual_payment_enabled) }); });
+    supabase.from("tenant_subscriptions").select("plan_id,status,current_period_end,subscription_plans(name,monthly_price_myr)").eq("tenant_id", activeTenant.id).maybeSingle()
+      .then(({ data }: any) => {
+        if (data) {
+          setCurrentSub({
+            planId: data.plan_id,
+            planName: data.subscription_plans?.name || "",
+            price: Number(data.subscription_plans?.monthly_price_myr) || 0,
+            status: data.status,
+            renewal: data.current_period_end ? new Date(data.current_period_end).toLocaleDateString("ms-MY", { day: "numeric", month: "short", year: "numeric" }) : "",
+          });
+        }
+      });
+    getTenantPaymentTransactions(activeTenant.id).then(setPaymentTxs);
+  }, [activeTenant?.id, paymentTxRefresh]);
+
+  const openPaymentModal = (planId?: string) => {
+    setPaymentModalPlanId(planId || currentSub?.planId || availablePlans[0]?.id || "");
+    setPaymentMethod(paymentMethods.chipAsiaEnabled ? "chip_asia" : "manual");
+    setSlipFile(null);
+    setPaymentError(null);
+    setShowPaymentModal(true);
+  };
+
+  const submitPayment = async () => {
+    if (!activeTenant?.id || !paymentModalPlanId) return;
+    const plan = availablePlans.find(p => p.id === paymentModalPlanId);
+    if (!plan) return;
+    setPaymentSubmitting(true);
+    setPaymentError(null);
+    try {
+      if (paymentMethod === "manual") {
+        if (!slipFile) { setPaymentError("Sila muat naik slip pembayaran."); return; }
+        const { error } = await submitManualPayment(activeTenant.id, plan.id, plan.price, slipFile);
+        if (error) { setPaymentError(error); return; }
+      } else {
+        const { checkoutUrl, error } = await initiateChipAsiaPayment(activeTenant.id, plan.id, plan.price);
+        if (error || !checkoutUrl) { setPaymentError(error || "Gagal memulakan pembayaran."); return; }
+        window.location.href = checkoutUrl;
+        return;
+      }
+      setShowPaymentModal(false);
+      setPaymentTxRefresh(t => t + 1);
+    } finally {
+      setPaymentSubmitting(false);
+    }
+  };
+
   // â"€â"€ Document upload state â"€â"€
   const [docs, setDocs] = useState<UploadedDoc[]>([]);
   const [docsLoading, setDocsLoading] = useState(false);
@@ -281,10 +353,16 @@ export function OwnerDashboard() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           query: q,
-          financialContext: { activeTenant, activeWorkspace, financialEvents }
+          financialContext: { activeTenant, activeWorkspace, financialEvents },
+          userId: user?.id,
         }),
       });
       const data = await res.json() as any;
+      if (res.status === 403) {
+        setChatMessages(prev => [...prev, { id: `a-${Date.now()}`, sender: "ai", text: data.error || "Akaun anda telah disekat." }]);
+        setChatLoading(false);
+        return;
+      }
       let reply = data.text || "Saya sedang cuba membantu anda.";
       reply = reply.replace(/tenant/gi, "syarikat").replace(/sandbox/gi, "ujian");
       setChatMessages(prev => [...prev, { id: `a-${Date.now()}`, sender: "ai", text: reply }]);
@@ -308,10 +386,11 @@ export function OwnerDashboard() {
         body: JSON.stringify({
           query: `[SOKONGAN MYKERANI] ${q}`,
           financialContext: { activeTenant, activeWorkspace, financialEvents },
+          userId: user?.id,
         }),
       });
       const data = await res.json() as any;
-      setSupportMessages(prev => [...prev, { id: `a-${Date.now()}`, sender: "ai", text: data.text || "Saya sedang menyemak soalan anda." }]);
+      setSupportMessages(prev => [...prev, { id: `a-${Date.now()}`, sender: "ai", text: data.text || data.error || "Saya sedang menyemak soalan anda." }]);
     } catch {
       setSupportMessages(prev => [...prev, { id: `e-${Date.now()}`, sender: "ai", text: "Maaf, sambungan terputus. Cuba lagi atau buka tiket sokongan." }]);
     } finally {
@@ -1249,25 +1328,22 @@ export function OwnerDashboard() {
                   <div className="flex items-center justify-between mb-3">
                     <div>
                       <p className="text-[11px] text-indigo-200">Plan Semasa</p>
-                      <p className="text-2xl font-bold">Starter</p>
+                      <p className="text-2xl font-bold">{currentSub?.planName || "Tiada Plan"}</p>
                     </div>
-                    <span className="bg-emerald-400 text-emerald-900 text-[10px] font-bold px-2.5 py-1 rounded-full">Aktif</span>
+                    <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full ${currentSub?.status === "active" ? "bg-emerald-400 text-emerald-900" : "bg-amber-300 text-amber-900"}`}>
+                      {currentSub?.status === "active" ? "Aktif" : currentSub?.status === "trialing" ? "Trial" : "Belum Aktif"}
+                    </span>
                   </div>
                   <div className="grid grid-cols-2 gap-2 text-[11px]">
-                    <div><p className="text-indigo-300">Tarikh Pembaharuan</p><p className="font-semibold">17 Jul 2026</p></div>
-                    <div><p className="text-indigo-300">Harga Bulanan</p><p className="font-semibold">RM 99/bulan</p></div>
+                    <div><p className="text-indigo-300">Tarikh Pembaharuan</p><p className="font-semibold">{currentSub?.renewal || "—"}</p></div>
+                    <div><p className="text-indigo-300">Harga Bulanan</p><p className="font-semibold">RM {(currentSub?.price ?? 0).toLocaleString()}/bulan</p></div>
                   </div>
                 </div>
 
                 {/* Plan actions */}
                 <div className="grid grid-cols-3 gap-2">
-                  {[
-                    { label: "Perbaharui", color: "bg-emerald-50 border-emerald-100 text-emerald-700" },
-                    { label: "Naik Taraf", color: "bg-indigo-50 border-indigo-100 text-indigo-700" },
-                    { label: "Turun Taraf", color: "bg-slate-50 border-slate-200 text-slate-600" },
-                  ].map(({ label, color }) => (
-                    <button key={label} className={`py-2.5 rounded-xl text-xs font-bold border transition cursor-pointer ${color}`}>{label}</button>
-                  ))}
+                  <button onClick={() => openPaymentModal(currentSub?.planId)} className="py-2.5 rounded-xl text-xs font-bold border transition cursor-pointer bg-emerald-50 border-emerald-100 text-emerald-700">Perbaharui</button>
+                  <button onClick={() => openPaymentModal()} className="py-2.5 rounded-xl text-xs font-bold border transition cursor-pointer bg-indigo-50 border-indigo-100 text-indigo-700">Naik/Turun Taraf</button>
                 </div>
 
                 {/* Storage Bar */}
@@ -1323,13 +1399,87 @@ export function OwnerDashboard() {
                   </div>
                 </div>
 
-                {/* Invoices */}
+                {/* Invoices / payment history */}
                 <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-3">
                   <p className="text-sm font-bold text-slate-900">Invois & Sejarah Pembayaran</p>
-                  <div className="text-center py-4">
-                    <Receipt className="w-7 h-7 text-slate-200 mx-auto mb-1" />
-                    <p className="text-xs text-slate-400">Tiada invois lagi</p>
+                  {paymentTxs.length === 0 ? (
+                    <div className="text-center py-4">
+                      <Receipt className="w-7 h-7 text-slate-200 mx-auto mb-1" />
+                      <p className="text-xs text-slate-400">Tiada invois lagi</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      {paymentTxs.map(tx => (
+                        <div key={tx.id} className="flex items-center justify-between p-2.5 border border-slate-100 rounded-xl">
+                          <div>
+                            <p className="text-xs font-semibold text-slate-800">{tx.planName} — RM {tx.amountMyr.toLocaleString()}</p>
+                            <p className="text-[10px] text-slate-400">{new Date(tx.createdAt).toLocaleDateString("ms-MY", { day: "numeric", month: "short", year: "numeric" })} · {tx.method === "manual" ? "Manual" : "Chip Asia"}</p>
+                          </div>
+                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                            tx.status === "approved" || tx.status === "success" ? "bg-emerald-50 text-emerald-700" :
+                            tx.status === "rejected" || tx.status === "failed" ? "bg-red-50 text-red-600" : "bg-amber-50 text-amber-700"
+                          }`}>
+                            {tx.status === "pending" ? "Menunggu" : tx.status === "approved" || tx.status === "success" ? "Berjaya" : tx.status === "rejected" ? "Ditolak" : "Gagal"}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Payment modal — manual slip upload or Chip Asia checkout */}
+            {showPaymentModal && (
+              <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-6" onClick={() => setShowPaymentModal(false)}>
+                <div className="bg-white rounded-2xl p-5 max-w-sm w-full space-y-4" onClick={e => e.stopPropagation()}>
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-sm font-bold text-slate-900">Bayar Langganan</h3>
+                    <button onClick={() => setShowPaymentModal(false)} className="text-slate-400 hover:text-slate-600 cursor-pointer"><X className="w-4 h-4" /></button>
                   </div>
+
+                  <div>
+                    <label className="text-xs font-semibold text-slate-500 mb-1 block">Pilih Plan</label>
+                    <select value={paymentModalPlanId} onChange={e => setPaymentModalPlanId(e.target.value)}
+                      className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-indigo-400 bg-white">
+                      {availablePlans.map(p => <option key={p.id} value={p.id}>{p.name} — RM {p.price.toLocaleString()}/bln</option>)}
+                    </select>
+                  </div>
+
+                  {(paymentMethods.chipAsiaEnabled || paymentMethods.manualPaymentEnabled) ? (
+                    <div className="flex gap-2">
+                      {paymentMethods.chipAsiaEnabled && (
+                        <button onClick={() => setPaymentMethod("chip_asia")}
+                          className={`flex-1 py-2 rounded-xl text-xs font-bold border cursor-pointer ${paymentMethod === "chip_asia" ? "bg-indigo-600 text-white border-indigo-600" : "border-slate-200 text-slate-500"}`}>
+                          Bayar Online (Chip Asia)
+                        </button>
+                      )}
+                      {paymentMethods.manualPaymentEnabled && (
+                        <button onClick={() => setPaymentMethod("manual")}
+                          className={`flex-1 py-2 rounded-xl text-xs font-bold border cursor-pointer ${paymentMethod === "manual" ? "bg-indigo-600 text-white border-indigo-600" : "border-slate-200 text-slate-500"}`}>
+                          Muat Naik Slip
+                        </button>
+                      )}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-amber-600 bg-amber-50 p-2.5 rounded-xl">Tiada kaedah pembayaran diaktifkan oleh HQ.</p>
+                  )}
+
+                  {paymentMethod === "manual" && paymentMethods.manualPaymentEnabled && (
+                    <div>
+                      <label className="text-xs font-semibold text-slate-500 mb-1 block">Slip Bank (gambar/PDF)</label>
+                      <input type="file" accept="image/*,application/pdf" onChange={e => setSlipFile(e.target.files?.[0] || null)}
+                        className="w-full text-xs border border-slate-200 rounded-xl px-3 py-2.5" />
+                      <p className="text-[10px] text-slate-400 mt-1">HQ owner atau staf akan menyemak dan meluluskan sebelum pakej diaktifkan.</p>
+                    </div>
+                  )}
+
+                  {paymentError && <p className="text-xs text-red-600 bg-red-50 p-2.5 rounded-xl">{paymentError}</p>}
+
+                  <button onClick={submitPayment} disabled={paymentSubmitting || (!paymentMethods.chipAsiaEnabled && !paymentMethods.manualPaymentEnabled)}
+                    className="w-full py-2.5 bg-indigo-600 text-white rounded-xl text-xs font-bold cursor-pointer hover:bg-indigo-700 transition disabled:opacity-40">
+                    {paymentSubmitting ? "Menghantar..." : paymentMethod === "chip_asia" ? "Teruskan ke Chip Asia" : "Hantar Slip untuk Kelulusan"}
+                  </button>
                 </div>
               </div>
             )}

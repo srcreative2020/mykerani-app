@@ -5,6 +5,7 @@ import { GoogleGenAI, Type } from "@google/genai";
 import dotenv from "dotenv";
 import fs from "fs";
 import pg from "pg";
+import { createVerify } from "crypto";
 
 const { Client } = pg;
 
@@ -637,9 +638,12 @@ async function startServer() {
 
   app.post("/api/ocr/analyze", async (req, res) => {
     try {
-      const { fileDataUrl, fileName, documentType, tenantId, workspaceId } = req.body;
+      const { fileDataUrl, fileName, documentType, tenantId, workspaceId, userId } = req.body;
       if (!fileDataUrl) {
         return res.status(400).json({ error: "No file data provided." });
+      }
+      if (await isUserSuspended(userId)) {
+        return res.status(403).json({ error: "Akaun anda telah disekat oleh pentadbir HQ. Sila hubungi sokongan." });
       }
 
       const candidates = await getAiProviderCandidates();
@@ -690,7 +694,7 @@ Provide your output precisely formatted as raw JSON matching exactly this shape,
         throw lastErr || new Error("All configured AI providers failed for OCR");
       }
 
-      logAiUsage(tenantId, workspaceId, "ocr", usedCandidate!.provider, usedCandidate!.model);
+      logAiUsage(tenantId, workspaceId, userId, "ocr", usedCandidate!.provider, usedCandidate!.model);
 
       return res.json(parsedResult);
 
@@ -719,9 +723,12 @@ Provide your output precisely formatted as raw JSON matching exactly this shape,
   // AI FINANCIAL ASSISTANT SECURE PROXY ROUTE
   app.post("/api/ai/assistant", async (req, res) => {
     try {
-      const { query, financialContext } = req.body;
+      const { query, financialContext, userId } = req.body;
       if (!query) {
         return res.status(400).json({ error: "Missing assistant query text." });
+      }
+      if (await isUserSuspended(userId)) {
+        return res.status(403).json({ error: "Akaun anda telah disekat oleh pentadbir HQ. Sila hubungi sokongan." });
       }
 
       const candidates = await getAiProviderCandidates();
@@ -784,7 +791,7 @@ If you output markdown formatting inside the fields, escape quotes correctly.`;
         throw lastErr || new Error("All configured AI providers failed");
       }
 
-      logAiUsage(financialContext?.activeTenant?.id, financialContext?.activeWorkspace?.id, "assistant", usedCandidate!.provider, usedCandidate!.model);
+      logAiUsage(financialContext?.activeTenant?.id, financialContext?.activeWorkspace?.id, userId, "assistant", usedCandidate!.provider, usedCandidate!.model);
 
       return res.json(parsedResponse);
 
@@ -912,7 +919,7 @@ If you output markdown formatting inside the fields, escape quotes correctly.`;
   // Records one AI usage credit against a tenant (service-role write — no client
   // role can insert directly, see ai_usage_log RLS). Best-effort: a logging failure
   // must never block the actual AI response from reaching the user.
-  async function logAiUsage(tenantId: string | undefined | null, workspaceId: string | undefined | null, feature: "assistant" | "ocr", provider: string, model: string): Promise<void> {
+  async function logAiUsage(tenantId: string | undefined | null, workspaceId: string | undefined | null, userId: string | undefined | null, feature: "assistant" | "ocr", provider: string, model: string): Promise<void> {
     if (!tenantId) return;
     const supabaseUrl = process.env.VITE_SUPABASE_URL;
     const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -926,12 +933,166 @@ If you output markdown formatting inside the fields, escape quotes correctly.`;
           "Content-Type": "application/json",
           Prefer: "return=minimal",
         },
-        body: JSON.stringify({ tenant_id: tenantId, workspace_id: workspaceId || null, feature, provider, model }),
+        body: JSON.stringify({ tenant_id: tenantId, workspace_id: workspaceId || null, user_id: userId || null, feature, provider, model }),
       });
     } catch (err) {
       console.error("Failed to log AI usage:", err);
     }
   }
+
+  // HQ can suspend an individual user's access to AI features (see
+  // set_user_suspended RPC). Checked server-side so a suspended user can't
+  // bypass it by calling the API directly.
+  async function isUserSuspended(userId: string | undefined | null): Promise<boolean> {
+    if (!userId) return false;
+    const supabaseUrl = process.env.VITE_SUPABASE_URL;
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    if (!supabaseUrl || !serviceRoleKey) return false;
+    try {
+      const resp = await fetch(`${supabaseUrl}/rest/v1/profiles?id=eq.${userId}&select=is_suspended`, {
+        headers: { apikey: serviceRoleKey, Authorization: `Bearer ${serviceRoleKey}` },
+      });
+      if (!resp.ok) return false;
+      const rows: any[] = await resp.json();
+      return Boolean(rows[0]?.is_suspended);
+    } catch (err) {
+      console.error("Failed to check user suspension state:", err);
+      return false;
+    }
+  }
+
+  // --- Chip Asia payment gateway (https://docs.chip-in.asia) ---
+  // HQ stores the brand_id + secret key in payment_gateway_settings (Supabase).
+  // We never expose the secret key to the client — only this server talks to Chip Asia.
+
+  let chipAsiaPublicKeyCache: string | null = null;
+
+  async function fetchPaymentGatewaySettings(): Promise<{ chipAsiaEnabled: boolean; chipAsiaApiKey: string; chipAsiaSecretKey: string; chipAsiaBrandId: string } | null> {
+    const supabaseUrl = process.env.VITE_SUPABASE_URL;
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    if (!supabaseUrl || !serviceRoleKey) return null;
+    try {
+      const resp = await fetch(`${supabaseUrl}/rest/v1/payment_gateway_settings?id=eq.global&select=*`, {
+        headers: { apikey: serviceRoleKey, Authorization: `Bearer ${serviceRoleKey}` },
+      });
+      if (!resp.ok) return null;
+      const rows: any[] = await resp.json();
+      const row = rows[0];
+      if (!row) return null;
+      return {
+        chipAsiaEnabled: Boolean(row.chip_asia_enabled),
+        chipAsiaApiKey: row.chip_asia_api_key || "",
+        chipAsiaSecretKey: row.chip_asia_secret_key || "",
+        chipAsiaBrandId: row.chip_asia_brand_id || "",
+      };
+    } catch (err) {
+      console.error("Failed to fetch payment gateway settings:", err);
+      return null;
+    }
+  }
+
+  async function finalizeChipAsiaTransaction(transactionId: string, success: boolean, reference: string | null): Promise<void> {
+    const supabaseUrl = process.env.VITE_SUPABASE_URL;
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    if (!supabaseUrl || !serviceRoleKey) return;
+    try {
+      await fetch(`${supabaseUrl}/rest/v1/rpc/finalize_chip_asia_transaction`, {
+        method: "POST",
+        headers: { apikey: serviceRoleKey, Authorization: `Bearer ${serviceRoleKey}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ p_transaction_id: transactionId, p_success: success, p_reference: reference }),
+      });
+    } catch (err) {
+      console.error("Failed to finalize Chip Asia transaction:", err);
+    }
+  }
+
+  // Tenant initiates a Chip Asia purchase: creates the Chip Asia "purchase" and
+  // returns the checkout_url for the client to redirect the user to.
+  app.post("/api/payments/chip-asia/init", async (req, res) => {
+    try {
+      const { transactionId, tenantId, planId, amountMyr } = req.body || {};
+      if (!transactionId || !tenantId || !planId || !amountMyr) {
+        return res.status(400).json({ error: "Maklumat pembayaran tidak lengkap." });
+      }
+
+      const settings = await fetchPaymentGatewaySettings();
+      if (!settings || !settings.chipAsiaEnabled || !settings.chipAsiaSecretKey || !settings.chipAsiaBrandId) {
+        return res.status(503).json({ error: "Chip Asia belum diaktifkan atau dikonfigurasi oleh HQ." });
+      }
+
+      const baseUrl = process.env.PUBLIC_APP_URL || `http://localhost:${PORT}`;
+      const chipRes = await fetch("https://gate.chip-in.asia/api/v1/purchases/", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${settings.chipAsiaSecretKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          brand_id: settings.chipAsiaBrandId,
+          client: { email: req.body.email || "billing@mykerani.app" },
+          purchase: {
+            products: [{ name: `Pelan Langganan MyKerani`, price: Math.round(Number(amountMyr) * 100) }],
+          },
+          reference: transactionId,
+          success_redirect: `${baseUrl}/?payment=success`,
+          failure_redirect: `${baseUrl}/?payment=failed`,
+          success_callback: `${baseUrl}/api/payments/chip-asia/webhook`,
+        }),
+      });
+
+      const chipData = await chipRes.json() as any;
+      if (!chipRes.ok) {
+        return res.status(400).json({ error: chipData?.message || "Chip Asia menolak permintaan pembayaran." });
+      }
+
+      return res.json({ checkoutUrl: chipData.checkout_url, chipPurchaseId: chipData.id });
+    } catch (err: any) {
+      console.error("chip-asia init error:", err);
+      return res.status(500).json({ error: err?.message || "Ralat sistem pembayaran." });
+    }
+  });
+
+  // Chip Asia calls this once a purchase is paid or fails. Signature is verified
+  // against Chip Asia's public key (fetched once and cached) before trusting the payload.
+  app.post("/api/payments/chip-asia/webhook", async (req, res) => {
+    try {
+      const settings = await fetchPaymentGatewaySettings();
+      if (!settings || !settings.chipAsiaSecretKey) return res.status(503).end();
+
+      const signature = req.header("X-Signature");
+      if (!signature) return res.status(400).end();
+
+      if (!chipAsiaPublicKeyCache) {
+        const keyRes = await fetch("https://gate.chip-in.asia/api/v1/public_key/", {
+          headers: { Authorization: `Bearer ${settings.chipAsiaSecretKey}` },
+        });
+        if (keyRes.ok) chipAsiaPublicKeyCache = await keyRes.text();
+      }
+
+      const rawBody = JSON.stringify(req.body);
+      if (chipAsiaPublicKeyCache) {
+        const verifier = createVerify("RSA-SHA256");
+        verifier.update(rawBody);
+        const valid = verifier.verify(chipAsiaPublicKeyCache, Buffer.from(signature, "base64"));
+        if (!valid) {
+          console.error("Chip Asia webhook signature verification failed");
+          return res.status(401).end();
+        }
+      }
+
+      const purchase = req.body;
+      const transactionId = purchase?.reference;
+      const status = purchase?.status; // 'paid' on success per Chip Asia docs
+      if (transactionId) {
+        await finalizeChipAsiaTransaction(transactionId, status === "paid", purchase?.id || null);
+      }
+
+      return res.status(200).end();
+    } catch (err: any) {
+      console.error("chip-asia webhook error:", err);
+      return res.status(500).end();
+    }
+  });
 
   // Builds the ordered candidate list to try, cheapest-first by default (or per
   // the HQ-selected strategy: balanced prefers mid-tier models, quality prefers

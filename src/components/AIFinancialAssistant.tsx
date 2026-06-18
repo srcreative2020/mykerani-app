@@ -3,6 +3,7 @@ import { useFinancials } from "../context/FinancialRecordsContext";
 import { useAudit } from "../context/AuditContext";
 import { useTenant } from "../context/TenantContext";
 import { useWorkspace } from "../context/WorkspaceContext";
+import { useAuth } from "../context/AuthContext";
 import { motion } from "../lib/motionCompat";
 import {
   Brain,
@@ -61,6 +62,7 @@ export const AIFinancialAssistant: React.FC<AIFinancialAssistantProps> = ({ onTr
 
   const { activeTenant } = useTenant();
   const { activeWorkspace } = useWorkspace();
+  const { user } = useAuth();
 
   // Component state
   const [query, setQuery] = useState("");
@@ -110,10 +112,15 @@ export const AIFinancialAssistant: React.FC<AIFinancialAssistantProps> = ({ onTr
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           query: queryText,
-          financialContext
+          financialContext,
+          userId: user?.id
         })
       });
 
+      if (res.status === 403) {
+        const errBody = await res.json().catch(() => ({}));
+        throw new Error(errBody.error || "Akaun anda telah disekat oleh pentadbir HQ.");
+      }
       if (!res.ok) {
         throw new Error(`HTTP state: ${res.status}`);
       }

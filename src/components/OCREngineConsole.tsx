@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect, useMemo } from "react";
 import { useFinancials } from "../context/FinancialRecordsContext";
 import { useWorkspace } from "../context/WorkspaceContext";
+import { useAuth } from "../context/AuthContext";
 import { usePermission } from "../context/PermissionContext";
 import { useAudit } from "../context/AuditContext";
 import { 
@@ -41,6 +42,7 @@ export const OCREngineConsole: React.FC = () => {
   } = useFinancials();
 
   const { activeWorkspace } = useWorkspace();
+  const { user } = useAuth();
   const { hasPermission } = usePermission();
   const { writeAuditLog } = useAudit();
 
@@ -175,10 +177,15 @@ export const OCREngineConsole: React.FC = () => {
           fileName: file.name,
           documentType,
           tenantId: activeWorkspace?.tenantId,
-          workspaceId: activeWorkspace?.id
+          workspaceId: activeWorkspace?.id,
+          userId: user?.id
         })
       });
 
+      if (response.status === 403) {
+        const errBody = await response.json().catch(() => ({}));
+        throw new Error(errBody.error || "Akaun anda telah disekat oleh pentadbir HQ.");
+      }
       if (!response.ok) {
         throw new Error(`Extraction service returned HTTP code ${response.status}`);
       }
