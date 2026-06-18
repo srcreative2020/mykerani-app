@@ -39,11 +39,11 @@ export const PermissionSettingsConsole: React.FC = () => {
   // Form states for creating new assignment
   const [newEmail, setNewEmail] = useState("");
   const [newFullName, setNewFullName] = useState("");
-  const [selectedRole, setSelectedRole] = useState<UserRole>("STAFF");
+  const [selectedRole, setSelectedRole] = useState<UserRole>("TENANT_STAFF");
   const [submittingUser, setSubmittingUser] = useState(false);
   const [formMsg, setFormMsg] = useState("");
 
-  const editRights = ["HQ_OWNER", "TENANT_OWNER", "TENANT_OWNER"].includes(user?.role || "");
+  const editRights = ["HQ_OWNER", "TENANT_OWNER"].includes(user?.role || "");
 
   const handleAddAssignment = async (e: React.FormEvent) => {
     e.preventDefault();

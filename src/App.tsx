@@ -428,7 +428,7 @@ function MainDashboardContent() {
         {/* Right: Company switcher (owner only) + User + Logout */}
         <div className="flex items-center gap-2 shrink-0">
           {/* Company switcher — hanya untuk owner yang ada lebih 1 syarikat */}
-          {!["STAFF", "VIEWER"].includes(user?.role || "") && workspaces.length > 1 && (
+          {!["TENANT_STAFF", "HQ_STAFF"].includes(user?.role || "") && workspaces.length > 1 && (
             <select
               value={activeWorkspace?.id || ""}
               onChange={(e) => selectWorkspace(e.target.value)}
