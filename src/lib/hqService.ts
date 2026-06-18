@@ -24,6 +24,7 @@ export interface HqCustomer {
   mrr: number;
   joinedAt: string;
   notes?: string;
+  totalPaidMyr: number;
 }
 
 function fmtDate(value: string | null | undefined): string {
@@ -82,13 +83,14 @@ export async function deletePlan(id: string): Promise<boolean> {
 export async function getCustomers(): Promise<HqCustomer[]> {
   if (!isSupabaseConfigured() || !supabase) return [];
 
-  const [{ data: tenants, error: tenantsErr }, { data: subs }, { data: plans }, { data: profiles }, { data: aiUsageRows }, { data: storageRows }] = await Promise.all([
+  const [{ data: tenants, error: tenantsErr }, { data: subs }, { data: plans }, { data: profiles }, { data: aiUsageRows }, { data: storageRows }, { data: paidRows }] = await Promise.all([
     supabase.from("tenants").select("*").eq("category", "USER"),
     supabase.from("tenant_subscriptions").select("*"),
     supabase.from("subscription_plans").select("*"),
     supabase.from("profiles").select("*"),
     supabase.rpc("get_hq_ai_usage_all"),
     supabase.rpc("get_all_workspaces_storage_usage"),
+    supabase.rpc("get_payment_totals_by_tenant"),
   ]);
   if (tenantsErr || !tenants) return [];
 
@@ -104,6 +106,7 @@ export async function getCustomers(): Promise<HqCustomer[]> {
   (storageRows || []).forEach((r: any) => {
     storageBytesByTenant.set(r.tenant_id, (storageBytesByTenant.get(r.tenant_id) || 0) + Number(r.total_bytes || 0));
   });
+  const totalPaidByTenant = new Map<string, number>((paidRows || []).map((r: any) => [r.tenant_id, Number(r.total_paid_myr) || 0]));
 
   return tenants.map((t: any) => {
     const sub = subByTenant.get(t.id);
@@ -124,6 +127,7 @@ export async function getCustomers(): Promise<HqCustomer[]> {
       mrr: status === "active" ? Number(plan?.monthly_price_myr) || 0 : 0,
       joinedAt: t.created_at ? t.created_at.split("T")[0] : "",
       notes: "",
+      totalPaidMyr: totalPaidByTenant.get(t.id) || 0,
     };
   });
 }
@@ -300,4 +304,88 @@ export async function upsertAiProviderConfig(provider: string, enabled: boolean,
     p_selected_model: selectedModel,
   });
   return !error;
+}
+
+// --- Payment gateway (Chip Asia + manual) & approval workflow ---
+
+export interface PaymentGatewaySettings {
+  chipAsiaEnabled: boolean;
+  chipAsiaApiKey: string;
+  chipAsiaSecretKey: string;
+  chipAsiaBrandId: string;
+  manualPaymentEnabled: boolean;
+}
+
+export async function getPaymentGatewaySettings(): Promise<PaymentGatewaySettings | null> {
+  if (!isSupabaseConfigured() || !supabase) return null;
+  const { data, error } = await supabase.from("payment_gateway_settings").select("*").eq("id", "global").maybeSingle();
+  if (error || !data) return null;
+  return {
+    chipAsiaEnabled: Boolean(data.chip_asia_enabled),
+    chipAsiaApiKey: data.chip_asia_api_key || "",
+    chipAsiaSecretKey: data.chip_asia_secret_key || "",
+    chipAsiaBrandId: data.chip_asia_brand_id || "",
+    manualPaymentEnabled: Boolean(data.manual_payment_enabled),
+  };
+}
+
+export async function savePaymentGatewaySettings(settings: PaymentGatewaySettings): Promise<boolean> {
+  if (!isSupabaseConfigured() || !supabase) return false;
+  const { error } = await supabase.from("payment_gateway_settings").update({
+    chip_asia_enabled: settings.chipAsiaEnabled,
+    chip_asia_api_key: settings.chipAsiaApiKey || null,
+    chip_asia_secret_key: settings.chipAsiaSecretKey || null,
+    chip_asia_brand_id: settings.chipAsiaBrandId || null,
+    manual_payment_enabled: settings.manualPaymentEnabled,
+    updated_at: new Date().toISOString(),
+  }).eq("id", "global");
+  return !error;
+}
+
+export interface PendingPaymentApproval {
+  id: string;
+  tenantId: string;
+  tenantName: string;
+  planId: string;
+  planName: string;
+  amountMyr: number;
+  method: "chip_asia" | "manual";
+  slipPath: string | null;
+  submittedByName: string;
+  submittedByEmail: string;
+  createdAt: string;
+}
+
+export async function getPendingPaymentApprovals(): Promise<PendingPaymentApproval[]> {
+  if (!isSupabaseConfigured() || !supabase) return [];
+  const { data, error } = await supabase.rpc("get_pending_payment_approvals");
+  if (error || !data) return [];
+  return data.map((row: any) => ({
+    id: row.id,
+    tenantId: row.tenant_id,
+    tenantName: row.tenant_name,
+    planId: row.plan_id,
+    planName: row.plan_name,
+    amountMyr: Number(row.amount_myr) || 0,
+    method: row.method,
+    slipPath: row.slip_path,
+    submittedByName: row.submitted_by_name || "",
+    submittedByEmail: row.submitted_by_email || "",
+    createdAt: row.created_at,
+  }));
+}
+
+export async function reviewPaymentTransaction(transactionId: string, approve: boolean): Promise<boolean> {
+  if (!isSupabaseConfigured() || !supabase) return false;
+  const { data, error } = await supabase.rpc("review_payment_transaction", {
+    p_transaction_id: transactionId,
+    p_approve: approve,
+  });
+  return !error && Boolean(data);
+}
+
+export async function getPaymentSlipUrl(path: string): Promise<string | null> {
+  if (!isSupabaseConfigured() || !supabase) return null;
+  const { data, error } = await supabase.storage.from("payment-slips").createSignedUrl(path, 3600);
+  return error ? null : data.signedUrl;
 }

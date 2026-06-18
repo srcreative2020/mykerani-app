@@ -186,10 +186,11 @@ interface Customer {
   mrr: number;
   joinedAt: string;
   notes?: string;
+  totalPaidMyr: number;
 }
 
 const BLANK_PLAN: Omit<Plan, "id"> = { name: "", price: 0, aiCredits: 500, storageGB: 5, maxUsers: 3, featured: false };
-const BLANK_CUSTOMER: Omit<Customer, "id" | "aiUsage" | "storageGB" | "attention" | "mrr" | "joinedAt"> = {
+const BLANK_CUSTOMER: Omit<Customer, "id" | "aiUsage" | "storageGB" | "attention" | "mrr" | "joinedAt" | "totalPaidMyr"> = {
   name: "", email: "", phone: "", plan: "", status: "active", renewal: "", notes: ""
 };
 
@@ -209,7 +210,7 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
       if (stored) return JSON.parse(stored);
     } catch {}
     return isMockUser
-      ? MOCK_CUSTOMERS.map(c => ({ ...c, email: `${c.id}@demo.my`, phone: "", joinedAt: "2026-01-01", notes: "" }))
+      ? MOCK_CUSTOMERS.map(c => ({ ...c, email: `${c.id}@demo.my`, phone: "", joinedAt: "2026-01-01", notes: "", totalPaidMyr: c.mrr * 3 }))
       : [];
   });
   const [customersLoading, setCustomersLoading] = useState(useRealData);
@@ -309,7 +310,7 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
         : c));
       setSelectedCustomer(prev => prev?.id === editingCustomer.id ? { ...prev, ...customerForm, renewal, mrr } : prev);
     } else {
-      const nc: Customer = { ...customerForm, renewal, mrr, id: `c-${Date.now()}`, aiUsage: 0, storageGB: 0, attention: false, joinedAt: new Date().toISOString().split("T")[0] };
+      const nc: Customer = { ...customerForm, renewal, mrr, id: `c-${Date.now()}`, aiUsage: 0, storageGB: 0, attention: false, joinedAt: new Date().toISOString().split("T")[0], totalPaidMyr: 0 };
       setCustomers(prev => [...prev, nc]);
     }
     setShowCustomerModal(false);
@@ -335,6 +336,8 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
   const [activePage, setActivePage] = useState<HQPage>("dashboard");
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [customersPage, setCustomersPage] = useState(1);
+  const [customersPageSize, setCustomersPageSize] = useState(20);
 
   // Cipta HQ Staff state
   const [showCreateStaff, setShowCreateStaff] = useState(false);
@@ -382,6 +385,36 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
     HQ_OWNER: "Pemilik HQ", HQ_STAFF: "Kakitangan HQ",
     TENANT_OWNER: "Pemilik Syarikat", TENANT_STAFF: "Kakitangan Syarikat",
   }[role] || role);
+
+  // Payment gateway settings (Chip Asia + manual) + pending manual-payment approvals
+  const [paymentSettings, setPaymentSettings] = useState<hqService.PaymentGatewaySettings>({
+    chipAsiaEnabled: false, chipAsiaApiKey: "", chipAsiaSecretKey: "", chipAsiaBrandId: "", manualPaymentEnabled: true,
+  });
+  const [paymentSettingsSaved, setPaymentSettingsSaved] = useState(false);
+  const [pendingApprovals, setPendingApprovals] = useState<hqService.PendingPaymentApproval[]>([]);
+  const [approvalsRefreshTick, setApprovalsRefreshTick] = useState(0);
+  useEffect(() => {
+    if (!useRealData) return;
+    hqService.getPaymentGatewaySettings().then(s => { if (s) setPaymentSettings(s); });
+  }, [useRealData]);
+  useEffect(() => {
+    if (!useRealData) return;
+    hqService.getPendingPaymentApprovals().then(setPendingApprovals);
+  }, [useRealData, approvalsRefreshTick]);
+  const savePaymentSettings = async () => {
+    const ok = await hqService.savePaymentGatewaySettings(paymentSettings);
+    if (ok) { setPaymentSettingsSaved(true); setTimeout(() => setPaymentSettingsSaved(false), 2000); }
+  };
+  const reviewApproval = async (id: string, approve: boolean) => {
+    const ok = await hqService.reviewPaymentTransaction(id, approve);
+    if (ok) { setApprovalsRefreshTick(t => t + 1); reloadCustomers(); }
+  };
+  const [slipPreviewUrl, setSlipPreviewUrl] = useState<string | null>(null);
+  const viewSlip = async (path: string | null) => {
+    if (!path) return;
+    const url = await hqService.getPaymentSlipUrl(path);
+    if (url) setSlipPreviewUrl(url);
+  };
 
   // Notifications (HQ)
   const notif = useNotifications(`hq_${user?.id || "guest"}`);
@@ -1095,20 +1128,44 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
                       Tambah Pelanggan Pertama
                     </button>
                   </div>
-                ) : (
+                ) : (() => {
+                  const filtered = customers
+                    .filter(c => !searchQuery || c.name.toLowerCase().includes(searchQuery.toLowerCase()) || c.email.toLowerCase().includes(searchQuery.toLowerCase()))
+                    .slice()
+                    .sort((a, b) => (b.joinedAt || "").localeCompare(a.joinedAt || ""));
+                  const totalCount = filtered.length;
+                  const totalPages = Math.max(1, Math.ceil(totalCount / customersPageSize));
+                  const page = Math.min(customersPage, totalPages);
+                  const pageRows = filtered.slice((page - 1) * customersPageSize, page * customersPageSize);
+                  return (
+                  <>
+                    <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 flex items-center justify-between">
+                      <div>
+                        <p className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Jumlah Pelanggan</p>
+                        <p className="text-xl font-bold text-slate-900">{totalCount.toLocaleString()}</p>
+                      </div>
+                      <div className="flex items-center gap-2 text-xs text-slate-500">
+                        <span>Papar</span>
+                        <select value={customersPageSize} onChange={e => { setCustomersPageSize(Number(e.target.value)); setCustomersPage(1); }}
+                          className="border border-slate-200 rounded-lg px-2 py-1.5 text-xs bg-white outline-none focus:border-emerald-400">
+                          {[10, 20, 50, 100, 500, 1000].map(n => <option key={n} value={n}>{n}</option>)}
+                        </select>
+                        <span>setiap halaman</span>
+                      </div>
+                    </div>
                   <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
                     <div className="grid grid-cols-12 px-5 py-3 bg-slate-50 border-b border-slate-100 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                      <div className="col-span-4">Pelanggan</div>
+                      <div className="col-span-3">Pelanggan</div>
                       <div className="col-span-2">Plan</div>
-                      <div className="col-span-2">Status</div>
-                      <div className="col-span-2 hidden md:block">Perbaharui</div>
+                      <div className="col-span-1">Status</div>
+                      <div className="col-span-1 hidden md:block">Mula</div>
+                      <div className="col-span-2 hidden md:block">Bayaran Seterusnya</div>
+                      <div className="col-span-1 hidden lg:block">Dibayar</div>
                       <div className="col-span-2">Tindakan</div>
                     </div>
-                    {customers
-                      .filter(c => !searchQuery || c.name.toLowerCase().includes(searchQuery.toLowerCase()) || c.email.toLowerCase().includes(searchQuery.toLowerCase()))
-                      .map(c => (
+                    {pageRows.map(c => (
                         <div key={c.id} className="grid grid-cols-12 px-5 py-4 border-b border-slate-50 hover:bg-slate-50 transition items-center">
-                          <div className="col-span-4 flex items-center space-x-3">
+                          <div className="col-span-3 flex items-center space-x-3">
                             <div className="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-700 font-bold text-sm flex items-center justify-center shrink-0">
                               {c.name.charAt(0).toUpperCase()}
                             </div>
@@ -1121,11 +1178,17 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
                           <div className="col-span-2">
                             <span className="text-xs font-semibold text-slate-600">{c.plan || "—"}</span>
                           </div>
-                          <div className="col-span-2">
+                          <div className="col-span-1">
                             <StatusBadge status={c.status} />
+                          </div>
+                          <div className="col-span-1 hidden md:block">
+                            <span className="text-xs text-slate-500">{c.joinedAt || "—"}</span>
                           </div>
                           <div className="col-span-2 hidden md:block">
                             <span className="text-xs text-slate-500">{c.renewal || "—"}</span>
+                          </div>
+                          <div className="col-span-1 hidden lg:block">
+                            <span className="text-xs font-semibold text-slate-600">RM {c.totalPaidMyr.toLocaleString()}</span>
                           </div>
                           <div className="col-span-2 flex items-center gap-1.5">
                             <button onClick={() => setSelectedCustomer(c)} className="px-2.5 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded-lg text-[10px] font-bold cursor-pointer transition">Buka</button>
@@ -1136,11 +1199,22 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
                           </div>
                         </div>
                       ))}
-                    {customers.filter(c => !searchQuery || c.name.toLowerCase().includes(searchQuery.toLowerCase()) || c.email.toLowerCase().includes(searchQuery.toLowerCase())).length === 0 && searchQuery && (
+                    {totalCount === 0 && searchQuery && (
                       <div className="p-10 text-center text-xs text-slate-400">Tiada hasil carian untuk "{searchQuery}"</div>
                     )}
                   </div>
-                )}
+                  {totalPages > 1 && (
+                    <div className="flex items-center justify-between px-2">
+                      <button disabled={page <= 1} onClick={() => setCustomersPage(p => Math.max(1, p - 1))}
+                        className="px-3 py-1.5 text-xs font-bold rounded-lg border border-slate-200 disabled:opacity-40 cursor-pointer hover:bg-slate-50">Sebelum</button>
+                      <span className="text-xs text-slate-500">Halaman {page} / {totalPages}</span>
+                      <button disabled={page >= totalPages} onClick={() => setCustomersPage(p => Math.min(totalPages, p + 1))}
+                        className="px-3 py-1.5 text-xs font-bold rounded-lg border border-slate-200 disabled:opacity-40 cursor-pointer hover:bg-slate-50">Seterusnya</button>
+                    </div>
+                  )}
+                  </>
+                  );
+                })()}
               </div>
             )}
 
@@ -1203,14 +1277,52 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
                   </div>
                 </div>
 
-                {/* Invoices */}
+                {/* Pending manual payment approvals */}
                 <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-3">
-                  <h3 className="text-sm font-bold text-slate-900">Invois Terkini</h3>
-                  <div className="text-center py-6">
-                    <Receipt className="w-7 h-7 text-slate-200 mx-auto mb-2" />
-                    <p className="text-xs text-slate-400">Tiada invois lagi</p>
-                  </div>
+                  <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                    <Receipt className="w-4 h-4 text-amber-600" />
+                    Menunggu Kelulusan Pembayaran
+                    {pendingApprovals.length > 0 && <span className="text-[10px] bg-amber-100 text-amber-800 font-bold px-2 py-0.5 rounded-full">{pendingApprovals.length}</span>}
+                  </h3>
+                  {pendingApprovals.length === 0 ? (
+                    <div className="text-center py-6">
+                      <Receipt className="w-7 h-7 text-slate-200 mx-auto mb-2" />
+                      <p className="text-xs text-slate-400">Tiada pembayaran menunggu kelulusan</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      {pendingApprovals.map(a => (
+                        <div key={a.id} className="flex items-center justify-between p-3 border border-slate-100 rounded-xl">
+                          <div className="min-w-0">
+                            <p className="text-xs font-bold text-slate-800 truncate">{a.tenantName} — {a.planName}</p>
+                            <p className="text-[10px] text-slate-400 truncate">
+                              RM {a.amountMyr.toLocaleString()} · {a.method === "manual" ? "Manual (slip)" : "Chip Asia"} · dihantar oleh {a.submittedByName || a.submittedByEmail}
+                            </p>
+                          </div>
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            {a.slipPath && (
+                              <button onClick={() => viewSlip(a.slipPath)} className="px-2.5 py-1.5 bg-slate-50 hover:bg-slate-100 text-slate-600 rounded-lg text-[10px] font-bold cursor-pointer transition">Lihat Slip</button>
+                            )}
+                            <button onClick={() => reviewApproval(a.id, true)} className="px-2.5 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded-lg text-[10px] font-bold cursor-pointer transition">Lulus</button>
+                            <button onClick={() => reviewApproval(a.id, false)} className="px-2.5 py-1.5 bg-red-50 hover:bg-red-100 text-red-600 rounded-lg text-[10px] font-bold cursor-pointer transition">Tolak</button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
+
+                {slipPreviewUrl && (
+                  <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-6" onClick={() => setSlipPreviewUrl(null)}>
+                    <div className="bg-white rounded-2xl p-4 max-w-lg w-full" onClick={e => e.stopPropagation()}>
+                      <div className="flex items-center justify-between mb-3">
+                        <h4 className="text-sm font-bold text-slate-900">Slip Pembayaran</h4>
+                        <button onClick={() => setSlipPreviewUrl(null)} className="text-slate-400 hover:text-slate-600 cursor-pointer">✕</button>
+                      </div>
+                      <img src={slipPreviewUrl} alt="Slip pembayaran" className="w-full rounded-xl border border-slate-100" />
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
@@ -1637,6 +1749,52 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
                     className="px-4 py-2 bg-emerald-700 text-white rounded-xl text-xs font-bold cursor-pointer hover:bg-emerald-800 transition">
                     Simpan Profil
                   </button>
+                </div>
+
+                {/* Payment Gateway Settings */}
+                <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-4">
+                  <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2"><CreditCard className="w-4 h-4 text-emerald-600" />Tetapan Pembayaran</h3>
+
+                  <div className="flex items-center justify-between p-3 border border-slate-100 rounded-xl">
+                    <div>
+                      <p className="text-xs font-bold text-slate-800">Chip Asia (auto)</p>
+                      <p className="text-[10px] text-slate-400">Bayaran online disahkan automatik oleh sistem bila berjaya.</p>
+                    </div>
+                    <button onClick={() => setPaymentSettings(s => ({ ...s, chipAsiaEnabled: !s.chipAsiaEnabled }))}
+                      className={`w-11 h-6 rounded-full relative transition cursor-pointer ${paymentSettings.chipAsiaEnabled ? "bg-emerald-600" : "bg-slate-200"}`}>
+                      <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full transition ${paymentSettings.chipAsiaEnabled ? "translate-x-5" : ""}`} />
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-xs font-semibold text-slate-500 mb-1 block">Brand ID</label>
+                      <input value={paymentSettings.chipAsiaBrandId} onChange={e => setPaymentSettings(s => ({ ...s, chipAsiaBrandId: e.target.value }))}
+                        className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-emerald-400" />
+                    </div>
+                    <div>
+                      <label className="text-xs font-semibold text-slate-500 mb-1 block">Secret Key</label>
+                      <input type="password" value={paymentSettings.chipAsiaSecretKey} onChange={e => setPaymentSettings(s => ({ ...s, chipAsiaSecretKey: e.target.value }))}
+                        className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-emerald-400" />
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between p-3 border border-slate-100 rounded-xl">
+                    <div>
+                      <p className="text-xs font-bold text-slate-800">Manual (slip bank)</p>
+                      <p className="text-[10px] text-slate-400">Tenant owner muat naik slip; HQ owner/staf perlu luluskan sebelum pakej diaktifkan.</p>
+                    </div>
+                    <button onClick={() => setPaymentSettings(s => ({ ...s, manualPaymentEnabled: !s.manualPaymentEnabled }))}
+                      className={`w-11 h-6 rounded-full relative transition cursor-pointer ${paymentSettings.manualPaymentEnabled ? "bg-emerald-600" : "bg-slate-200"}`}>
+                      <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full transition ${paymentSettings.manualPaymentEnabled ? "translate-x-5" : ""}`} />
+                    </button>
+                  </div>
+
+                  <div className="flex items-center gap-3">
+                    <button onClick={savePaymentSettings} className="px-4 py-2 bg-emerald-700 text-white rounded-xl text-xs font-bold cursor-pointer hover:bg-emerald-800 transition">
+                      Simpan Tetapan Pembayaran
+                    </button>
+                    {paymentSettingsSaved && <span className="text-xs text-emerald-600 font-bold">Tersimpan</span>}
+                  </div>
                 </div>
 
                 {/* Credit Limits per Plan */}
