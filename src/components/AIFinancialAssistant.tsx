@@ -201,21 +201,21 @@ export const AIFinancialAssistant: React.FC<AIFinancialAssistantProps> = ({ onTr
   const handleStartEdit = (s: AISuggestion) => {
     setEditingSuggestionId(s.id);
     setEditDraft({
-      amount: String(s.payload.amount ?? ""),
-      category: s.payload.category || "",
-      relatedParty: s.payload.relatedParty || "",
-      date: s.payload.date || new Date().toISOString().split("T")[0]
+      amount: String(s.payload?.amount ?? ""),
+      category: s.payload?.category || "",
+      relatedParty: s.payload?.relatedParty || "",
+      date: s.payload?.date || new Date().toISOString().split("T")[0]
     });
   };
 
   const handleConfirmSuggestion = async (s: AISuggestion, edited?: typeof editDraft) => {
     if (!activeWorkspace || suggestionStatus[s.id] === "confirmed") return;
-    const transactionType = s.payload.transactionType;
-    const amount = Number(edited ? edited.amount : s.payload.amount) || 0;
-    const category = (edited ? edited.category : s.payload.category) || "Lain-lain";
-    const relatedParty = (edited ? edited.relatedParty : s.payload.relatedParty) || "Tidak Dinyatakan";
-    const date = (edited ? edited.date : s.payload.date) || new Date().toISOString().split("T")[0];
-    const confidenceScore = s.payload.confidenceScore ?? 0.7;
+    const transactionType = s.payload?.transactionType;
+    const amount = Number(edited ? edited.amount : s.payload?.amount) || 0;
+    const category = (edited ? edited.category : s.payload?.category) || "Lain-lain";
+    const relatedParty = (edited ? edited.relatedParty : s.payload?.relatedParty) || "Tidak Dinyatakan";
+    const date = (edited ? edited.date : s.payload?.date) || new Date().toISOString().split("T")[0];
+    const confidenceScore = s.payload?.confidenceScore ?? 0.7;
 
     try {
       if (transactionType === "INCOME" || transactionType === "EXPENSE") {
@@ -357,7 +357,7 @@ export const AIFinancialAssistant: React.FC<AIFinancialAssistantProps> = ({ onTr
               <div className="font-bold text-amber-900">{s.title}</div>
               <div className="text-amber-800">{s.description}</div>
               <div className="text-amber-700 font-mono">
-                {s.payload.transactionType} • RM{Number(s.payload.amount || 0).toFixed(2)} • {s.payload.relatedParty} • {s.payload.date}
+                {s.payload?.transactionType} • RM{Number(s.payload?.amount || 0).toFixed(2)} • {s.payload?.relatedParty} • {s.payload?.date}
               </div>
 
               {status === "confirmed" && (
