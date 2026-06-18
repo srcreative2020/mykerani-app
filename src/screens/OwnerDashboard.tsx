@@ -436,6 +436,10 @@ export function OwnerDashboard() {
   const [profileSavedAt, setProfileSavedAt] = useState<number | null>(null);
   const [newVehicle, setNewVehicle] = useState({ name: "", plateNumber: "", vehicleType: "", ownership: "BUSINESS" as "PERSONAL" | "BUSINESS" });
   const [newDependent, setNewDependent] = useState({ name: "", relationship: "", dateOfBirth: "" });
+  const [profileNudgeDismissed, setProfileNudgeDismissed] = useState(false);
+  useEffect(() => {
+    if (wsId && localStorage.getItem(`mk_profile_nudge_dismissed_${wsId}`)) setProfileNudgeDismissed(true);
+  }, [wsId]);
 
   const refreshProfileData = () => {
     if (!wsId) return;
@@ -832,6 +836,21 @@ export function OwnerDashboard() {
                       <p className="text-xs text-slate-400">{now.toLocaleDateString("ms-MY", { weekday:"long", day:"numeric", month:"long" })}</p>
                     </div>
                   </div>
+
+                  {/* Onboarding nudge: encourage filling the optional Profile System so AI can disambiguate */}
+                  {!profileNudgeDismissed && !personalProfile.fullName && !businessProfile.industry && vehicles.length === 0 && (
+                    <div className="bg-indigo-50 border border-indigo-100 rounded-2xl p-4 flex items-start gap-3">
+                      <Brain className="w-5 h-5 text-indigo-500 shrink-0 mt-0.5" />
+                      <div className="flex-1">
+                        <p className="text-xs font-bold text-indigo-800">Bantu MYKERANI AI kenal anda lebih baik</p>
+                        <p className="text-xs text-indigo-600 mt-0.5">Tambah profil peribadi, perniagaan & kenderaan (pilihan) supaya AI boleh bezakan transaksi peribadi & perniagaan dengan tepat — contoh: "isi minyak RM50" untuk Hilux atau Myvi?</p>
+                        <div className="flex gap-2 mt-2">
+                          <button onClick={() => { setMorePage("myProfile"); setActiveTab("more"); }} className="px-3 py-1.5 bg-indigo-600 text-white rounded-lg text-xs font-bold cursor-pointer">Isi Profil</button>
+                          <button onClick={() => { setProfileNudgeDismissed(true); localStorage.setItem(`mk_profile_nudge_dismissed_${wsId}`, "1"); }} className="px-3 py-1.5 text-indigo-500 rounded-lg text-xs font-semibold cursor-pointer">Lain kali</button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
 
                   {/* Financial Snapshot */}
                   {myEvents.length > 0 ? (
