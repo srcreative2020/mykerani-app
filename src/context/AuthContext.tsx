@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useRef } from "react";
 import { supabase, isSupabaseConfigured } from "../lib/supabase";
 import { type UserSessionProfile, type AuthState, type UserRole } from "../types";
+import { logEvent } from "../lib/eventLog";
 
 // Akaun demo untuk presentation/sales — hanya aktif bila user ketap butang secara
 // eksplisit. Tidak boleh auto-login. Tenant ID diselaraskan dengan DEFAULT_MOCK_TENANTS.
@@ -201,6 +202,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           tenantId,
         };
         setState({ user: profile, loading: false, error: null, isMockUser: false });
+        logEvent({ tenantId, userId: profile.id, userEmail: profile.email, userRole: profile.role, eventType: "LOGIN" });
       }
     } catch (err: any) {
       setState(prev => ({
@@ -304,6 +306,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const signOut = async () => {
     isMockRef.current = false; // reset ref dulu supaya onAuthStateChange boleh fire
     setState(prev => ({ ...prev, loading: true }));
+
+    if (state.user && !state.isMockUser) {
+      logEvent({ tenantId: state.user.tenantId, userId: state.user.id, userEmail: state.user.email, userRole: state.user.role, eventType: "LOGOUT" });
+    }
 
     if (supabase && !state.isMockUser) {
       await supabase.auth.signOut();

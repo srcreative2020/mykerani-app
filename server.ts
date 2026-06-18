@@ -956,6 +956,31 @@ If you output markdown formatting inside the fields, escape quotes correctly.`;
     } catch (err) {
       console.error("Failed to log AI usage:", err);
     }
+
+    // Mirror into the generic event_logs ledger (separate from ai_usage_log,
+    // which is billing-detail-specific) so AI/OCR calls show up alongside
+    // login/upload/export/etc. for monitoring, analytics, and troubleshooting.
+    try {
+      await fetch(`${supabaseUrl}/rest/v1/event_logs`, {
+        method: "POST",
+        headers: {
+          apikey: serviceRoleKey,
+          Authorization: `Bearer ${serviceRoleKey}`,
+          "Content-Type": "application/json",
+          Prefer: "return=minimal",
+        },
+        body: JSON.stringify({
+          tenant_id: tenantId,
+          workspace_id: workspaceId || null,
+          user_id: userId || null,
+          event_type: feature === "ocr" ? "OCR_PROCESS" : "AI_ANALYSIS",
+          description: `${feature === "ocr" ? "OCR document processed" : "AI analysis call"} via ${provider}/${model}`,
+          metadata: { provider, model, feature },
+        }),
+      });
+    } catch (err) {
+      console.error("Failed to write event log for AI usage:", err);
+    }
   }
 
   // HQ can suspend an individual user's access to AI features (see

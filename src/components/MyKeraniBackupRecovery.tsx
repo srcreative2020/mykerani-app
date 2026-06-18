@@ -4,6 +4,7 @@ import { useAuth } from "../context/AuthContext";
 import { useWorkspace } from "../context/WorkspaceContext";
 import { useTenant } from "../context/TenantContext";
 import { useAudit } from "../context/AuditContext";
+import { logEvent } from "../lib/eventLog";
 import { useStorage } from "../context/StorageContext";
 import { motion, AnimatePresence } from "../lib/motionCompat";
 import {
@@ -202,6 +203,15 @@ export const MyKeraniBackupRecovery: React.FC = () => {
         }
       });
 
+      if (user && activeTenant) {
+        logEvent({
+          tenantId: activeTenant.id, workspaceId: activeWorkspace?.id, userId: user.id,
+          userEmail: user.email, userRole: user.role, eventType: "BACKUP",
+          description: `Created backup snapshot ${newBackup.id}`,
+          metadata: { backupId: newBackup.id, sizeBytes: newBackup.sizeBytes, recordsCount: newBackup.recordsCount },
+        });
+      }
+
       setSuccessMessage(`Backup snapshot [${newBackup.id}] was created and archived successfully.`);
     } catch (err: any) {
       setErrorMessage(`Snapshot failed: ${err.message || err}`);
@@ -332,6 +342,15 @@ export const MyKeraniBackupRecovery: React.FC = () => {
           stats: backupToRestore.recordsCount
         }
       });
+
+      if (user && activeTenant) {
+        logEvent({
+          tenantId: activeTenant.id, workspaceId: activeWorkspace?.id, userId: user.id,
+          userEmail: user.email, userRole: user.role, eventType: "RESTORE",
+          description: `Restored workspace from backup snapshot ${backupToRestore.id}`,
+          metadata: { backupId: backupToRestore.id, preRestoreStats },
+        });
+      }
 
       // Clear restoration panel
       setSelectedBackupForRestore(null);

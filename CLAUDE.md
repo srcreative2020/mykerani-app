@@ -35,6 +35,35 @@ Implementation notes:
 - Do not add HQ-side bulk-export or ownership-transfer features over tenant
   financial data without an explicit tenant-initiated action.
 
+## Event Logging Rule
+
+Every system event must be recorded: Login, Logout, Upload, OCR Process,
+AI Analysis, Report Generation, Export, Backup, Restore.
+
+Event logs are separate from audit logs:
+- `audit_logs` — records data **mutations** (CREATE/UPDATE/DELETE on
+  financial records), written via `useAudit().writeAuditLog()`.
+- `event_logs` — records system/operational **events**, written via
+  `logEvent()` in `src/lib/eventLog.ts`. Supports monitoring, analytics,
+  troubleshooting, and cost tracking.
+
+Both tables share the same tenant-isolation + immutability RLS posture
+(insert/select only, no update/delete), see
+`supabase/migrations/20260618040000_event_logs_foundation.sql`.
+
+Event logging is fire-and-forget and best-effort — a logging failure must
+never block the underlying action. Demo/mock sessions are skipped (they use
+non-UUID tenant ids with no real backing row).
+
+Current wiring:
+- LOGIN/LOGOUT — `src/context/AuthContext.tsx` (`signIn`/`signOut`)
+- UPLOAD — `src/components/FinancialEvidencePackage.tsx` (`processFile`)
+- OCR_PROCESS — `src/components/OCREngineConsole.tsx` (client, on save) and
+  `server.ts` `logAiUsage()` (server, on the raw OCR API call)
+- AI_ANALYSIS — `server.ts` `logAiUsage()`
+- EXPORT / REPORT_GENERATION — `src/components/FinancialReportsAnalytics.tsx`
+- BACKUP / RESTORE — `src/components/MyKeraniBackupRecovery.tsx`
+
 ## General
 
 - Everything must be real — no mock/dummy/cosmetic features standing in for

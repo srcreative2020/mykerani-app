@@ -4,6 +4,7 @@ import { useWorkspace } from "../context/WorkspaceContext";
 import { useAuth } from "../context/AuthContext";
 import { usePermission } from "../context/PermissionContext";
 import { useAudit } from "../context/AuditContext";
+import { logEvent } from "../lib/eventLog";
 import { 
   FileText, 
   UploadCloud, 
@@ -370,6 +371,15 @@ export const OCREngineConsole: React.FC = () => {
         oldValue: null,
         newValue: freshEvent
       });
+
+      if (user) {
+        logEvent({
+          tenantId: user.tenantId, workspaceId: activeWorkspace.id, userId: user.id,
+          userEmail: user.email, userRole: user.role, eventType: "OCR_PROCESS",
+          description: `Processed OCR document for ${reviewedMerchantName} (${documentType})`,
+          metadata: { documentType, merchantName: reviewedMerchantName, amountMyr: reviewedAmount },
+        });
+      }
 
       // 5. TRIGGER OCR LEARNING CORE OBJECTIVE
       learnOcrPattern({

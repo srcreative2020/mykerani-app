@@ -5,6 +5,7 @@ import { useWorkspace } from "../context/WorkspaceContext";
 import { useStorage } from "../context/StorageContext";
 import { supabase, isSupabaseConfigured } from "../lib/supabase";
 import { useAuth } from "../context/AuthContext";
+import { logEvent } from "../lib/eventLog";
 import { AnimatePresence, motion } from "../lib/motionCompat";
 import {
   UploadCloud,
@@ -39,7 +40,7 @@ export const FinancialEvidencePackageManager: React.FC = () => {
   } = useFinancials();
 
   const { activeWorkspace } = useWorkspace();
-  const { isMockUser } = useAuth();
+  const { user, isMockUser } = useAuth();
   const { activeProvider } = useStorage();
 
   // Selected state for previewing or editing packages
@@ -250,6 +251,14 @@ export const FinancialEvidencePackageManager: React.FC = () => {
         });
 
         setSuccessText(`Successfully uploaded and created ${file.name}`);
+        if (user) {
+          logEvent({
+            tenantId: user.tenantId, workspaceId: activeWorkspace.id, userId: user.id,
+            userEmail: user.email, userRole: user.role, eventType: "UPLOAD",
+            description: `Uploaded ${documentType}: ${file.name}`,
+            metadata: { fileName: file.name, fileSizeBytes: file.size, documentType },
+          });
+        }
         setUploadNotes("");
         setLinkType("NONE");
         setLinkedEventId("");

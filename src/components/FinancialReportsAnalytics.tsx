@@ -1,7 +1,10 @@
 import React, { useState, useMemo } from "react";
 import { useFinancials } from "../context/FinancialRecordsContext";
 import { useWorkspace } from "../context/WorkspaceContext";
-import { 
+import { useAuth } from "../context/AuthContext";
+import { useTenant } from "../context/TenantContext";
+import { logEvent } from "../lib/eventLog";
+import {
   TrendingUp, 
   ArrowDownLeft, 
   ArrowUpRight, 
@@ -26,6 +29,8 @@ import { exportToCSV, exportToExcel, exportToJSON, exportToPDF, type ExportColum
 
 export const FinancialReportsAnalytics: React.FC = () => {
   const { activeWorkspace } = useWorkspace();
+  const { user } = useAuth();
+  const { activeTenant } = useTenant();
   const {
     financialEvents,
     cashAccounts,
@@ -374,10 +379,27 @@ export const FinancialReportsAnalytics: React.FC = () => {
     if (format === "excel") exportToExcel(rows, columns, `${exportFilenameBase}.xls`);
     if (format === "pdf") exportToPDF(rows, columns, `${exportFilenameBase}.pdf`, title);
     if (format === "json") exportToJSON(rows, `${exportFilenameBase}.json`, { workspace: activeWorkspace.name, report: selectedReport, generatedAt: new Date().toISOString() });
+
+    if (user && activeTenant) {
+      logEvent({
+        tenantId: activeTenant.id, workspaceId: activeWorkspace.id, userId: user.id,
+        userEmail: user.email, userRole: user.role, eventType: "EXPORT",
+        description: `Exported ${title} as ${format.toUpperCase()}`,
+        metadata: { report: selectedReport, format, rowCount: rows.length },
+      });
+    }
   };
 
   const handlePrint = () => {
     window.print();
+    if (user && activeTenant) {
+      logEvent({
+        tenantId: activeTenant.id, workspaceId: activeWorkspace.id, userId: user.id,
+        userEmail: user.email, userRole: user.role, eventType: "REPORT_GENERATION",
+        description: `Generated/printed ${exportDataset.title}`,
+        metadata: { report: selectedReport },
+      });
+    }
   };
 
   return (
