@@ -370,9 +370,10 @@ export function OwnerDashboard() {
     setChatMessages(prev => [...prev, userMsg]);
     setChatLoading(true);
     try {
+      const { getAuthHeader } = await import("../lib/supabase");
       const res = await fetch("/api/ai/assistant", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...(await getAuthHeader()) },
         body: JSON.stringify({
           query: q,
           financialContext: { activeTenant, activeWorkspace, financialEvents },
@@ -402,9 +403,10 @@ export function OwnerDashboard() {
     setSupportMessages(prev => [...prev, { id: `u-${Date.now()}`, sender: "user", text: q }]);
     setSupportLoading(true);
     try {
+      const { getAuthHeader } = await import("../lib/supabase");
       const res = await fetch("/api/ai/assistant", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...(await getAuthHeader()) },
         body: JSON.stringify({
           query: `[SOKONGAN MYKERANI] ${q}`,
           financialContext: { activeTenant, activeWorkspace, financialEvents },

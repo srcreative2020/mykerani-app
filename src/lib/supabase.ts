@@ -25,6 +25,18 @@ export const supabase = isSupabaseConfigured()
   : null;
 
 /**
+ * Builds an Authorization header carrying the current session's access
+ * token, so backend endpoints can verify the caller actually belongs to
+ * the tenant/workspace it claims (frontend filtering is not security).
+ */
+export async function getAuthHeader(): Promise<Record<string, string>> {
+  if (!supabase) return {};
+  const { data } = await supabase.auth.getSession();
+  const token = data?.session?.access_token;
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
+/**
  * Structure containing detail level diagnostic verification outputs.
  */
 export interface SupabaseDiagnostics {

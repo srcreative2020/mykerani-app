@@ -170,9 +170,10 @@ export const OCREngineConsole: React.FC = () => {
       setTimeout(() => setAnalysisStep("Invoking multi-modal OCR processor..."), 1000);
       setTimeout(() => setAnalysisStep("Extracting key signatures & merchant indexes..."), 2200);
 
+      const { getAuthHeader } = await import("../lib/supabase");
       const response = await fetch("/api/ocr/analyze", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...(await getAuthHeader()) },
         body: JSON.stringify({
           fileDataUrl,
           fileName: file.name,

@@ -123,6 +123,23 @@ export function useStorageQuota(tenantId: string, workspaceId?: string): Storage
     return () => { cancelled = true; };
   }, [tenantId, tick]);
 
+  // Real, HQ-configurable storage quota from the tenant's subscription plan
+  // (subscription_plans.storage_credits_allowance_mb) — quotas must never be
+  // hardcoded per the Configuration Rule. Only overrides quotaBytes when a
+  // real plan is found; otherwise the local default/manual quota stands.
+  useEffect(() => {
+    if (!isSupabaseConfigured() || !supabase || !tenantId || !uuidRe.test(tenantId)) return;
+    let cancelled = false;
+    supabase.from("tenant_subscriptions").select("plan_id").eq("tenant_id", tenantId).maybeSingle().then(async ({ data: sub }) => {
+      if (cancelled || !sub?.plan_id) return;
+      const { data: plan } = await supabase!.from("subscription_plans").select("storage_credits_allowance_mb").eq("id", sub.plan_id).maybeSingle();
+      if (cancelled || !plan?.storage_credits_allowance_mb) return;
+      const planQuotaBytes = Number(plan.storage_credits_allowance_mb) * MB;
+      setState(prev => prev.quotaBytes === planQuotaBytes ? prev : { ...prev, quotaBytes: planQuotaBytes });
+    });
+    return () => { cancelled = true; };
+  }, [tenantId]);
+
   // Persist quota settings (not usage — usage comes from Supabase)
   useEffect(() => {
     if (!tenantId) return;

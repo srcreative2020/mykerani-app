@@ -187,9 +187,10 @@ export const FinancialRecordsConsole: React.FC<FinancialRecordsConsoleProps> = (
           debtRecords,
           financialCommitments
         };
+        const { getAuthHeader } = await import("../lib/supabase");
         const res = await fetch("/api/ai/assistant", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: { "Content-Type": "application/json", ...(await getAuthHeader()) },
           body: JSON.stringify({
             query: "Sila berikan rumusan pendek kewangan (3-4 ayat ringkas dalam Bahasa Melayu terjemahan sopan, profesional, mesra pemilik perniagaan) berasaskan baki tunai perniagaan, baki bank, tuntutan belum terima, bayaran tertunggak, dan komitmen kewangan dalam workspace ini untuk dipaparkan di Dashboard utama MYKERANI. Terangkan status kesihatan syarikat secara membimbing tanpa bahasa teknikal perakaunan.",
             financialContext

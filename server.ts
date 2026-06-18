@@ -646,6 +646,11 @@ async function startServer() {
         return res.status(403).json({ error: "Akaun anda telah disekat oleh pentadbir HQ. Sila hubungi sokongan." });
       }
 
+      const access = await verifyTenantAccess(req, tenantId, workspaceId);
+      if (!access.ok) {
+        return res.status(403).json({ error: "Sesi tidak sah atau tidak mempunyai akses kepada syarikat ini." });
+      }
+
       const candidates = await getAiProviderCandidates();
       if (candidates.length === 0) {
         console.info("No AI provider configured (checked HQ Console AI Router settings, then OPENAI_API_KEY/GEMINI_API_KEY/ANTHROPIC_API_KEY env vars). Using realistic sandbox OCR fallback.");
@@ -748,6 +753,12 @@ Provide your output precisely formatted as raw JSON matching exactly this shape,
 
       const tenantId = financialContext?.activeTenant?.id;
       const workspaceId = financialContext?.activeWorkspace?.id;
+
+      const access = await verifyTenantAccess(req, tenantId, workspaceId);
+      if (!access.ok) {
+        return res.status(403).json({ error: "Sesi tidak sah atau tidak mempunyai akses kepada syarikat ini." });
+      }
+
       const hasCredit = await consumeResourceCredit(tenantId, workspaceId, "AI", `AI assistant query: ${String(query).slice(0, 80)}`);
       if (!hasCredit) {
         return res.status(402).json({
@@ -1001,6 +1012,62 @@ If you output markdown formatting inside the fields, escape quotes correctly.`;
     } catch (err) {
       console.error("Failed to check user suspension state:", err);
       return false;
+    }
+  }
+
+  // Verifies the caller's Supabase session token actually belongs to the
+  // tenant/workspace it claims in the request body. Frontend filtering is
+  // not security — without this, any client could pass another tenant's
+  // tenantId/workspaceId and drain or misattribute that tenant's AI/OCR
+  // credit wallet (Constitution: Multi Tenant Rule — "Backend validation
+  // is mandatory").
+  async function verifyTenantAccess(
+    req: any,
+    claimedTenantId: string | undefined | null,
+    claimedWorkspaceId: string | undefined | null
+  ): Promise<{ ok: boolean; userId?: string }> {
+    const supabaseUrl = process.env.VITE_SUPABASE_URL;
+    const anonKey = process.env.VITE_SUPABASE_ANON_KEY;
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    if (!supabaseUrl || !anonKey || !serviceRoleKey) return { ok: true }; // local/self-hosted dev without DB
+    if (!claimedTenantId) return { ok: false };
+
+    const authHeader = req.headers?.authorization || "";
+    const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : "";
+    if (!token) return { ok: false };
+
+    try {
+      const userResp = await fetch(`${supabaseUrl}/auth/v1/user`, {
+        headers: { apikey: anonKey, Authorization: `Bearer ${token}` },
+      });
+      if (!userResp.ok) return { ok: false };
+      const userData = await userResp.json() as any;
+      const userId = userData?.id;
+      if (!userId) return { ok: false };
+
+      const roleResp = await fetch(
+        `${supabaseUrl}/rest/v1/user_role_assignments?user_id=eq.${userId}&select=tenant_id`,
+        { headers: { apikey: serviceRoleKey, Authorization: `Bearer ${serviceRoleKey}` } }
+      );
+      if (!roleResp.ok) return { ok: false };
+      const roleRows: any[] = await roleResp.json();
+      const actualTenantId = roleRows[0]?.tenant_id;
+      if (!actualTenantId || actualTenantId !== claimedTenantId) return { ok: false };
+
+      if (claimedWorkspaceId) {
+        const wsResp = await fetch(
+          `${supabaseUrl}/rest/v1/workspaces?id=eq.${claimedWorkspaceId}&select=tenant_id`,
+          { headers: { apikey: serviceRoleKey, Authorization: `Bearer ${serviceRoleKey}` } }
+        );
+        if (!wsResp.ok) return { ok: false };
+        const wsRows: any[] = await wsResp.json();
+        if (wsRows[0]?.tenant_id !== actualTenantId) return { ok: false };
+      }
+
+      return { ok: true, userId };
+    } catch (err) {
+      console.error("Failed to verify tenant access:", err);
+      return { ok: false };
     }
   }
 

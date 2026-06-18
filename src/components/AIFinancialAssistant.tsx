@@ -107,9 +107,10 @@ export const AIFinancialAssistant: React.FC<AIFinancialAssistantProps> = ({ onTr
         ocrLearnedPatterns
       };
 
+      const { getAuthHeader } = await import("../lib/supabase");
       const res = await fetch("/api/ai/assistant", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...(await getAuthHeader()) },
         body: JSON.stringify({
           query: queryText,
           financialContext,
