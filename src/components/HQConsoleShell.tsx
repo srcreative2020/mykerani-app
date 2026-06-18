@@ -357,11 +357,13 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
     total_bytes: number; file_count: number;
   }[]>([]);
   const [storageRefreshTick, setStorageRefreshTick] = useState(0);
+  const [freezeStates, setFreezeStates] = useState<hqService.TenantStorageState[]>([]);
 
-  // Fetch real storage usage from Supabase
+  // Fetch real storage usage + freeze/inactivity state from Supabase
   useEffect(() => {
     getAllWorkspacesStorageUsage().then(data => { if (data.length > 0) setRealStorageData(data); });
-  }, [storageRefreshTick]);
+    if (useRealData) hqService.getStorageFreezeStates().then(setFreezeStates);
+  }, [storageRefreshTick, useRealData]);
 
   // Notifications (HQ)
   const notif = useNotifications(`hq_${user?.id || "guest"}`);
@@ -2073,18 +2075,27 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
                     const used  = real ? Number(real.total_bytes) : 0;
                     const fileCount = real ? Number(real.file_count) : 0;
                     const pct   = used / quota;
-                    // Freeze settings still from localStorage (HQ config)
-                    const cfgRaw = localStorage.getItem(storageQuotaKey(c.id));
+                    // Freeze/inactivity settings: real Supabase state when available (HQ + tenant
+                    // both read/enforce the same record), localStorage fallback for sandbox/mock mode.
+                    const freezeState = freezeStates.find(f => f.tenantId === c.id);
+                    const cfgRaw = useRealData ? null : localStorage.getItem(storageQuotaKey(c.id));
                     const cfg = cfgRaw ? JSON.parse(cfgRaw) : {};
-                    const lastActive = cfg.lastActiveAt || new Date().toISOString();
+                    const lastActive = freezeState?.lastActiveAt || cfg.lastActiveAt || new Date().toISOString();
                     const daysSinceActive = Math.floor((Date.now() - new Date(lastActive).getTime()) / 86400000);
-                    return { id: c.id, name: c.name, plan: c.plan, used, quota, pct, fileCount, isFrozen: cfg.isFrozen || false, frozenReason: cfg.frozenReason || "", lastActive, daysSince: daysSinceActive, isInactive: daysSinceActive >= inactiveDays };
+                    const isFrozen = freezeState?.isFrozen ?? cfg.isFrozen ?? false;
+                    const frozenReason = freezeState?.frozenReason ?? cfg.frozenReason ?? "";
+                    return { id: c.id, name: c.name, plan: c.plan, used, quota, pct, fileCount, isFrozen, frozenReason, lastActive, daysSince: daysSinceActive, isInactive: daysSinceActive >= inactiveDays };
                   });
 
                   const totalUsed = tenantViews.reduce((s, t) => s + t.used, 0);
                   const supabasePct = totalUsed / supabasePlan;
 
-                  const toggleFreeze = (tenantId: string, isFrozen: boolean) => {
+                  const toggleFreeze = async (tenantId: string, isFrozen: boolean) => {
+                    if (useRealData) {
+                      await hqService.setTenantFrozen(tenantId, !isFrozen, !isFrozen ? "hq_manual" : "");
+                      setStorageRefreshTick(t => t + 1);
+                      return;
+                    }
                     const key = storageQuotaKey(tenantId);
                     try {
                       const raw = localStorage.getItem(key);

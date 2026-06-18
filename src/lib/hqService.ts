@@ -82,11 +82,13 @@ export async function deletePlan(id: string): Promise<boolean> {
 export async function getCustomers(): Promise<HqCustomer[]> {
   if (!isSupabaseConfigured() || !supabase) return [];
 
-  const [{ data: tenants, error: tenantsErr }, { data: subs }, { data: plans }, { data: profiles }] = await Promise.all([
+  const [{ data: tenants, error: tenantsErr }, { data: subs }, { data: plans }, { data: profiles }, { data: aiUsageRows }, { data: storageRows }] = await Promise.all([
     supabase.from("tenants").select("*").eq("category", "USER"),
     supabase.from("tenant_subscriptions").select("*"),
     supabase.from("subscription_plans").select("*"),
     supabase.from("profiles").select("*"),
+    supabase.rpc("get_hq_ai_usage_all"),
+    supabase.rpc("get_all_workspaces_storage_usage"),
   ]);
   if (tenantsErr || !tenants) return [];
 
@@ -97,6 +99,11 @@ export async function getCustomers(): Promise<HqCustomer[]> {
       .filter((p: any) => p.role === "TENANT_OWNER")
       .map((p: any) => [p.tenant_id, p])
   );
+  const aiUsageByTenant = new Map<string, number>((aiUsageRows || []).map((r: any) => [r.tenant_id, Number(r.usage_count) || 0]));
+  const storageBytesByTenant = new Map<string, number>();
+  (storageRows || []).forEach((r: any) => {
+    storageBytesByTenant.set(r.tenant_id, (storageBytesByTenant.get(r.tenant_id) || 0) + Number(r.total_bytes || 0));
+  });
 
   return tenants.map((t: any) => {
     const sub = subByTenant.get(t.id);
@@ -111,8 +118,8 @@ export async function getCustomers(): Promise<HqCustomer[]> {
       plan: plan?.name || "",
       status,
       renewal: fmtDate(sub?.current_period_end),
-      aiUsage: 0,
-      storageGB: 0,
+      aiUsage: aiUsageByTenant.get(t.id) || 0,
+      storageGB: (storageBytesByTenant.get(t.id) || 0) / (1024 * 1024 * 1024),
       attention: false,
       mrr: status === "active" ? Number(plan?.monthly_price_myr) || 0 : 0,
       joinedAt: t.created_at ? t.created_at.split("T")[0] : "",
@@ -156,6 +163,35 @@ export async function setCustomerStatus(tenantId: string, status: HqCustomer["st
   if (!isSupabaseConfigured() || !supabase) return false;
   const dbStatus = status === "active" ? "active" : status === "pending" ? "trialing" : "suspended";
   const { error } = await supabase.from("tenant_subscriptions").update({ status: dbStatus }).eq("tenant_id", tenantId);
+  return !error;
+}
+
+// --- Storage freeze/inactivity state (real, server-enforced) ---
+
+export interface TenantStorageState {
+  tenantId: string;
+  isFrozen: boolean;
+  frozenReason: string;
+  lastActiveAt: string;
+  inactiveDaysLimit: number;
+}
+
+export async function getStorageFreezeStates(): Promise<TenantStorageState[]> {
+  if (!isSupabaseConfigured() || !supabase) return [];
+  const { data, error } = await supabase.from("workspace_storage_state").select("*");
+  if (error || !data) return [];
+  return data.map((row: any) => ({
+    tenantId: row.tenant_id,
+    isFrozen: row.is_frozen,
+    frozenReason: row.frozen_reason || "",
+    lastActiveAt: row.last_active_at,
+    inactiveDaysLimit: row.inactive_days_limit,
+  }));
+}
+
+export async function setTenantFrozen(tenantId: string, isFrozen: boolean, reason: string): Promise<boolean> {
+  if (!isSupabaseConfigured() || !supabase) return false;
+  const { error } = await supabase.rpc("set_tenant_frozen", { p_tenant_id: tenantId, p_is_frozen: isFrozen, p_reason: reason });
   return !error;
 }
 

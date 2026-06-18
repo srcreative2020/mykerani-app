@@ -637,7 +637,7 @@ async function startServer() {
 
   app.post("/api/ocr/analyze", async (req, res) => {
     try {
-      const { fileDataUrl, fileName, documentType } = req.body;
+      const { fileDataUrl, fileName, documentType, tenantId, workspaceId } = req.body;
       if (!fileDataUrl) {
         return res.status(400).json({ error: "No file data provided." });
       }
@@ -674,9 +674,11 @@ Provide your output precisely formatted as raw JSON matching exactly this shape,
 
       let parsedResult: any = null;
       let lastErr: any = null;
+      let usedCandidate: AiCandidate | null = null;
       for (const candidate of candidates) {
         try {
           parsedResult = await callAiProviderOcr(candidate, mimeType, base64Data, ocrPrompt);
+          usedCandidate = candidate;
           break;
         } catch (err: any) {
           lastErr = err;
@@ -687,6 +689,8 @@ Provide your output precisely formatted as raw JSON matching exactly this shape,
       if (!parsedResult) {
         throw lastErr || new Error("All configured AI providers failed for OCR");
       }
+
+      logAiUsage(tenantId, workspaceId, "ocr", usedCandidate!.provider, usedCandidate!.model);
 
       return res.json(parsedResult);
 
@@ -764,9 +768,11 @@ If you output markdown formatting inside the fields, escape quotes correctly.`;
       // next one if a call fails (quota/billing/outage), before giving up to the simulator.
       let parsedResponse: any = null;
       let lastErr: any = null;
+      let usedCandidate: AiCandidate | null = null;
       for (const candidate of candidates) {
         try {
           parsedResponse = await callAiProvider(candidate, systemPrompt);
+          usedCandidate = candidate;
           break;
         } catch (err: any) {
           lastErr = err;
@@ -777,6 +783,8 @@ If you output markdown formatting inside the fields, escape quotes correctly.`;
       if (!parsedResponse) {
         throw lastErr || new Error("All configured AI providers failed");
       }
+
+      logAiUsage(financialContext?.activeTenant?.id, financialContext?.activeWorkspace?.id, "assistant", usedCandidate!.provider, usedCandidate!.model);
 
       return res.json(parsedResponse);
 
@@ -898,6 +906,30 @@ If you output markdown formatting inside the fields, escape quotes correctly.`;
     } catch (err) {
       console.error("Failed to fetch AI Router config from Supabase:", err);
       return null;
+    }
+  }
+
+  // Records one AI usage credit against a tenant (service-role write — no client
+  // role can insert directly, see ai_usage_log RLS). Best-effort: a logging failure
+  // must never block the actual AI response from reaching the user.
+  async function logAiUsage(tenantId: string | undefined | null, workspaceId: string | undefined | null, feature: "assistant" | "ocr", provider: string, model: string): Promise<void> {
+    if (!tenantId) return;
+    const supabaseUrl = process.env.VITE_SUPABASE_URL;
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    if (!supabaseUrl || !serviceRoleKey) return;
+    try {
+      await fetch(`${supabaseUrl}/rest/v1/ai_usage_log`, {
+        method: "POST",
+        headers: {
+          apikey: serviceRoleKey,
+          Authorization: `Bearer ${serviceRoleKey}`,
+          "Content-Type": "application/json",
+          Prefer: "return=minimal",
+        },
+        body: JSON.stringify({ tenant_id: tenantId, workspace_id: workspaceId || null, feature, provider, model }),
+      });
+    } catch (err) {
+      console.error("Failed to log AI usage:", err);
     }
   }
 
