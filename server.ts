@@ -653,6 +653,14 @@ async function startServer() {
         return res.json(mockResult);
       }
 
+      const hasCredit = await consumeResourceCredit(tenantId, workspaceId, "OCR", `OCR analyze: ${fileName || "document"}`);
+      if (!hasCredit) {
+        return res.status(402).json({
+          error: "Kredit OCR syarikat anda telah digunakan sepenuhnya untuk tempoh semasa. Sila naik taraf pelan atau tunggu pembaharuan bulanan.",
+          code: "OCR_CREDITS_EXHAUSTED",
+        });
+      }
+
       // Process fileDataUrl. Format: data:<mimeType>;base64,<base64Data>
       const match = fileDataUrl.match(/^data:([^;]+);base64,(.+)$/);
       let mimeType = "image/png";
@@ -736,6 +744,16 @@ Provide your output precisely formatted as raw JSON matching exactly this shape,
         console.info("No AI provider configured (checked HQ Console AI Router settings, then OPENAI_API_KEY/GEMINI_API_KEY/ANTHROPIC_API_KEY env vars). Directing to simulated workspace context analysis.");
         const fallbackResult = generateFallbackAssistantResponse(query, financialContext || {});
         return res.json(fallbackResult);
+      }
+
+      const tenantId = financialContext?.activeTenant?.id;
+      const workspaceId = financialContext?.activeWorkspace?.id;
+      const hasCredit = await consumeResourceCredit(tenantId, workspaceId, "AI", `AI assistant query: ${String(query).slice(0, 80)}`);
+      if (!hasCredit) {
+        return res.status(402).json({
+          error: "Kredit AI syarikat anda telah digunakan sepenuhnya untuk tempoh semasa. Sila naik taraf pelan atau tunggu pembaharuan bulanan.",
+          code: "AI_CREDITS_EXHAUSTED",
+        });
       }
 
       const systemPrompt = `You are MYKERANI AI Financial Assistant, a highly trained cognitive co-pilot. Your purpose is to analyze the active workspace financial data and provide Q&A answers, structured searches, analytical summaries, diagnostic health explanations, and evidence retrieval references.
@@ -958,6 +976,43 @@ If you output markdown formatting inside the fields, escape quotes correctly.`;
     } catch (err) {
       console.error("Failed to check user suspension state:", err);
       return false;
+    }
+  }
+
+  // Atomically checks and deducts one credit of the given type from the
+  // workspace's resource_wallets balance via the consume_resource_credit RPC
+  // (SECURITY DEFINER, service_role-only). Returns false if the wallet has
+  // insufficient balance — callers must not call a paid AI provider in that
+  // case. Fails open (returns true) if Supabase isn't configured or the
+  // tenant/workspace id is missing, matching this project's existing
+  // best-effort posture for local/self-hosted dev without a DB.
+  async function consumeResourceCredit(
+    tenantId: string | undefined | null,
+    workspaceId: string | undefined | null,
+    creditType: "AI" | "OCR",
+    description: string
+  ): Promise<boolean> {
+    if (!tenantId || !workspaceId) return true;
+    const supabaseUrl = process.env.VITE_SUPABASE_URL;
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    if (!supabaseUrl || !serviceRoleKey) return true;
+    try {
+      const resp = await fetch(`${supabaseUrl}/rest/v1/rpc/consume_resource_credit`, {
+        method: "POST",
+        headers: { apikey: serviceRoleKey, Authorization: `Bearer ${serviceRoleKey}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          p_tenant_id: tenantId,
+          p_workspace_id: workspaceId,
+          p_credit_type: creditType,
+          p_amount: 1,
+          p_description: description,
+        }),
+      });
+      if (!resp.ok) return true;
+      return Boolean(await resp.json());
+    } catch (err) {
+      console.error("Failed to check/consume resource credit:", err);
+      return true;
     }
   }
 

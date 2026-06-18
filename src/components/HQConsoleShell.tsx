@@ -7,7 +7,7 @@ import {
   Brain, Building2, UserCheck, UserX, Edit3, Bell, Shield, LogOut,
   ArrowUpRight, Menu, X, Activity, Package, Receipt, ToggleLeft,
   ToggleRight, AlertTriangle, Circle, FileText, MessageSquare,
-  User, Send, Star, Repeat, Archive,
+  User, Send, Star, Repeat, Archive, Globe, HelpCircle, Trash2,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { useNotifications, buildHQNotifs, fmtNotifTime } from "../lib/notifications";
@@ -25,7 +25,7 @@ interface HQConsoleShellProps {
 
 // HQ_OWNER pages: all 8
 // HQ_STAFF pages: dashboard, customers, subscriptions, support
-type HQPage = "dashboard" | "customers" | "billing" | "usage" | "support" | "revenue" | "settings" | "system" | "subscriptions";
+type HQPage = "dashboard" | "customers" | "billing" | "usage" | "support" | "revenue" | "settings" | "system" | "subscriptions" | "website";
 
 // â"€â"€ Mock data (demo accounts only) â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 const MOCK_CUSTOMERS = [
@@ -167,9 +167,15 @@ interface Plan {
   name: string;
   price: number;
   aiCredits: number;
+  ocrCredits: number;
   storageGB: number;
   maxUsers: number;
   featured?: boolean;
+  features: string[];
+  limitations: string[];
+  isTrial: boolean;
+  trialDays: number;
+  isCustomPricing: boolean;
 }
 
 interface Customer {
@@ -189,7 +195,10 @@ interface Customer {
   totalPaidMyr: number;
 }
 
-const BLANK_PLAN: Omit<Plan, "id"> = { name: "", price: 0, aiCredits: 500, storageGB: 5, maxUsers: 3, featured: false };
+const BLANK_PLAN: Omit<Plan, "id"> = {
+  name: "", price: 0, aiCredits: 500, ocrCredits: 50, storageGB: 5, maxUsers: 3, featured: false,
+  features: [], limitations: [], isTrial: false, trialDays: 0, isCustomPricing: false,
+};
 const BLANK_CUSTOMER: Omit<Customer, "id" | "aiUsage" | "storageGB" | "attention" | "mrr" | "joinedAt" | "totalPaidMyr"> = {
   name: "", email: "", phone: "", plan: "", status: "active", renewal: "", notes: ""
 };
@@ -232,7 +241,7 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
       if (stored) return JSON.parse(stored);
     } catch {}
     return isMockUser
-      ? MOCK_PLANS.map(p => ({ ...p, storageGB: parseInt(p.storage), maxUsers: 10 }))
+      ? MOCK_PLANS.map(p => ({ ...p, storageGB: parseInt(p.storage), maxUsers: 10, ocrCredits: 0, features: [], limitations: [], isTrial: false, trialDays: 0, isCustomPricing: false }))
       : [];
   });
   const [plansLoading, setPlansLoading] = useState(useRealData);
@@ -252,7 +261,16 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
   const [deletingPlanId, setDeletingPlanId] = useState<string | null>(null);
 
   const openCreatePlan = () => { setPlanForm(BLANK_PLAN); setEditingPlan(null); setShowPlanModal(true); };
-  const openEditPlan = (p: Plan) => { setPlanForm({ name: p.name, price: p.price, aiCredits: p.aiCredits, storageGB: p.storageGB, maxUsers: p.maxUsers, featured: p.featured }); setEditingPlan(p); setShowPlanModal(true); };
+  const openEditPlan = (p: Plan) => {
+    setPlanForm({
+      name: p.name, price: p.price, aiCredits: p.aiCredits, ocrCredits: p.ocrCredits,
+      storageGB: p.storageGB, maxUsers: p.maxUsers, featured: p.featured,
+      features: p.features ?? [], limitations: p.limitations ?? [],
+      isTrial: p.isTrial ?? false, trialDays: p.trialDays ?? 0, isCustomPricing: p.isCustomPricing ?? false,
+    });
+    setEditingPlan(p);
+    setShowPlanModal(true);
+  };
   const savePlan = async () => {
     if (!planForm.name.trim()) return;
     if (useRealData) {
@@ -270,6 +288,73 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
     if (useRealData) { await hqService.deletePlan(id); reloadPlans(); }
     else setPlans(prev => prev.filter(p => p.id !== id));
     setDeletingPlanId(null);
+  };
+
+  // ── Public marketing site CMS (real, Supabase-backed) ──
+  const BLANK_SITE_SETTINGS: hqService.SiteSettings = {
+    companyName: "MyKerani", logoUrl: "", heroHeadline: "", heroSubheadline: "",
+    contactEmail: "", contactPhone: "", contactWhatsapp: "", contactAddress: "",
+    businessHours: "", socialLinks: {}, demoVideoUrl: "",
+  };
+  const [siteSettings, setSiteSettings] = useState<hqService.SiteSettings>(BLANK_SITE_SETTINGS);
+  const [siteSettingsSaving, setSiteSettingsSaving] = useState(false);
+  const [siteSettingsSaved, setSiteSettingsSaved] = useState(false);
+  const [faqItems, setFaqItems] = useState<hqService.FaqItem[]>([]);
+  const [faqDraft, setFaqDraft] = useState<{ question: string; answer: string }>({ question: "", answer: "" });
+  const [logoUploading, setLogoUploading] = useState(false);
+  const [socialDraft, setSocialDraft] = useState<{ platform: string; url: string }>({ platform: "", url: "" });
+
+  const reloadSiteCms = () => {
+    if (!useRealData) return;
+    hqService.getSiteSettings().then(s => { if (s) setSiteSettings(s); });
+    hqService.getFaqItems(true).then(setFaqItems);
+  };
+  useEffect(() => { reloadSiteCms(); }, [useRealData]);
+
+  const saveSiteSettingsNow = async () => {
+    setSiteSettingsSaving(true);
+    setSiteSettingsSaved(false);
+    await hqService.saveSiteSettings(siteSettings);
+    setSiteSettingsSaving(false);
+    setSiteSettingsSaved(true);
+  };
+
+  const addFaqItem = async () => {
+    if (!faqDraft.question.trim() || !faqDraft.answer.trim()) return;
+    await hqService.createFaqItem({ question: faqDraft.question, answer: faqDraft.answer, sortOrder: faqItems.length + 1, isPublished: true });
+    setFaqDraft({ question: "", answer: "" });
+    reloadSiteCms();
+  };
+  const toggleFaqPublished = async (item: hqService.FaqItem) => {
+    await hqService.updateFaqItem(item.id, { ...item, isPublished: !item.isPublished });
+    reloadSiteCms();
+  };
+  const removeFaqItem = async (id: string) => {
+    await hqService.deleteFaqItem(id);
+    reloadSiteCms();
+  };
+
+  const handleLogoFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setLogoUploading(true);
+    const url = await hqService.uploadSiteLogo(file);
+    setLogoUploading(false);
+    if (url) setSiteSettings(s => ({ ...s, logoUrl: url }));
+    e.target.value = "";
+  };
+
+  const addSocialLink = () => {
+    if (!socialDraft.platform.trim() || !socialDraft.url.trim()) return;
+    setSiteSettings(s => ({ ...s, socialLinks: { ...s.socialLinks, [socialDraft.platform.trim()]: socialDraft.url.trim() } }));
+    setSocialDraft({ platform: "", url: "" });
+  };
+  const removeSocialLink = (platform: string) => {
+    setSiteSettings(s => {
+      const next = { ...s.socialLinks };
+      delete next[platform];
+      return { ...s, socialLinks: next };
+    });
   };
 
   // Customer modal & detail state
@@ -658,6 +743,7 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
     { id: "usage" as HQPage,       label: "Penggunaan",     icon: Activity },
     { id: "support" as HQPage,     label: "Sokongan",       icon: Headphones, badge: openCases },
     { id: "revenue" as HQPage,     label: "Hasil",          icon: DollarSign },
+    { id: "website" as HQPage,     label: "Tapak Web",      icon: Globe },
     { id: "settings" as HQPage,    label: "Tetapan",        icon: Settings },
     { id: "system" as HQPage,      label: "Pusat Sistem",   icon: Server },
   ];
@@ -1243,16 +1329,37 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
                       return (
                         <div key={p.id} className={`border rounded-2xl p-4 space-y-2 relative ${p.featured ? "border-emerald-300 bg-emerald-50/30" : "border-slate-200 bg-white"}`}>
                           {p.featured && <span className="absolute top-3 right-3 text-[9px] font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full">Popular</span>}
+                          {p.isTrial && <span className="absolute top-3 right-3 text-[9px] font-bold text-indigo-700 bg-indigo-100 px-2 py-0.5 rounded-full">Percubaan</span>}
                           <div className="flex items-center justify-between pr-14">
                             <span className="font-bold text-slate-900">{p.name}</span>
                           </div>
-                          <p className="text-2xl font-bold text-slate-900">RM {p.price.toLocaleString()}<span className="text-xs text-slate-400 font-normal">/bln</span></p>
+                          {p.isCustomPricing ? (
+                            <p className="text-lg font-bold text-slate-900">Harga Tersuai</p>
+                          ) : (
+                            <p className="text-2xl font-bold text-slate-900">RM {p.price.toLocaleString()}<span className="text-xs text-slate-400 font-normal">/bln</span></p>
+                          )}
                           <div className="text-[11px] text-slate-400 space-y-0.5">
                             <p>AI: {p.aiCredits.toLocaleString()} kredit/bln</p>
+                            <p>OCR: {(p.ocrCredits ?? 0).toLocaleString()} kredit/bln</p>
                             <p>Storan: {p.storageGB} GB</p>
                             <p>Pengguna: sehingga {p.maxUsers}</p>
+                            {p.isTrial && p.trialDays > 0 && <p>Tempoh percubaan: {p.trialDays} hari</p>}
                             {isMockUser && <p className="text-emerald-600 font-semibold">{activeCount} pelanggan aktif</p>}
                           </div>
+                          {(p.features?.length > 0 || p.limitations?.length > 0) && (
+                            <div className="text-[10px] space-y-1 pt-1 border-t border-slate-100">
+                              {p.features?.length > 0 && (
+                                <ul className="space-y-0.5">
+                                  {p.features.map((f, i) => <li key={i} className="text-emerald-700">+ {f}</li>)}
+                                </ul>
+                              )}
+                              {p.limitations?.length > 0 && (
+                                <ul className="space-y-0.5">
+                                  {p.limitations.map((l, i) => <li key={i} className="text-slate-400">- {l}</li>)}
+                                </ul>
+                              )}
+                            </div>
+                          )}
                           <div className="flex gap-2 pt-1">
                             <button onClick={() => openEditPlan(p)} className="flex-1 py-1.5 border border-slate-200 rounded-lg text-[10px] font-bold text-slate-600 cursor-pointer hover:bg-slate-50 transition flex items-center justify-center gap-1">
                               <Edit3 className="w-3 h-3" />Edit
@@ -1680,6 +1787,149 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
             })()}
 
             {/* â•â•â•â• SETTINGS (HQ_OWNER only) â•â•â•â• */}
+            {activePage === "website" && !isStaff && (
+              <div className="space-y-5" id="hq_website">
+                <div className="flex items-center justify-between">
+                  <h1 className="text-xl font-bold text-slate-900">Tapak Web Awam</h1>
+                  {siteSettingsSaved && <span className="text-xs text-emerald-600 font-bold bg-emerald-50 border border-emerald-200 px-3 py-1.5 rounded-xl">Tersimpan</span>}
+                </div>
+
+                <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-3">
+                  <h3 className="text-sm font-bold text-slate-900">Jenama & Hero</h3>
+                  <div>
+                    <label className="text-xs font-semibold text-slate-500 mb-1 block">Nama Syarikat</label>
+                    <input value={siteSettings.companyName} onChange={e => setSiteSettings(s => ({ ...s, companyName: e.target.value }))}
+                      className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-emerald-400" />
+                  </div>
+                  <div>
+                    <label className="text-xs font-semibold text-slate-500 mb-1 block">URL Logo</label>
+                    <input value={siteSettings.logoUrl} onChange={e => setSiteSettings(s => ({ ...s, logoUrl: e.target.value }))}
+                      placeholder="https://..."
+                      className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-emerald-400" />
+                    <div className="flex items-center gap-3 mt-2">
+                      {siteSettings.logoUrl && (
+                        <img src={siteSettings.logoUrl} alt="Logo" className="w-12 h-12 rounded-xl object-contain border border-slate-100 bg-slate-50" />
+                      )}
+                      <label className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold cursor-pointer transition">
+                        {logoUploading ? "Memuat naik..." : "Muat Naik Logo"}
+                        <input type="file" accept="image/*" className="hidden" disabled={logoUploading} onChange={handleLogoFileChange} />
+                      </label>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-xs font-semibold text-slate-500 mb-1 block">Tajuk Utama (Hero Headline)</label>
+                    <textarea rows={2} value={siteSettings.heroHeadline} onChange={e => setSiteSettings(s => ({ ...s, heroHeadline: e.target.value }))}
+                      className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-emerald-400" />
+                  </div>
+                  <div>
+                    <label className="text-xs font-semibold text-slate-500 mb-1 block">Sub-tajuk (Hero Subheadline)</label>
+                    <textarea rows={2} value={siteSettings.heroSubheadline} onChange={e => setSiteSettings(s => ({ ...s, heroSubheadline: e.target.value }))}
+                      className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-emerald-400" />
+                  </div>
+                  <div>
+                    <label className="text-xs font-semibold text-slate-500 mb-1 block">URL Video Demo</label>
+                    <input value={siteSettings.demoVideoUrl} onChange={e => setSiteSettings(s => ({ ...s, demoVideoUrl: e.target.value }))}
+                      placeholder="https://..."
+                      className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-emerald-400" />
+                  </div>
+                </div>
+
+                <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-3">
+                  <h3 className="text-sm font-bold text-slate-900">Maklumat Hubungan</h3>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-xs font-semibold text-slate-500 mb-1 block">E-mel</label>
+                      <input value={siteSettings.contactEmail} onChange={e => setSiteSettings(s => ({ ...s, contactEmail: e.target.value }))}
+                        className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-emerald-400" />
+                    </div>
+                    <div>
+                      <label className="text-xs font-semibold text-slate-500 mb-1 block">Telefon</label>
+                      <input value={siteSettings.contactPhone} onChange={e => setSiteSettings(s => ({ ...s, contactPhone: e.target.value }))}
+                        className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-emerald-400" />
+                    </div>
+                    <div>
+                      <label className="text-xs font-semibold text-slate-500 mb-1 block">WhatsApp</label>
+                      <input value={siteSettings.contactWhatsapp} onChange={e => setSiteSettings(s => ({ ...s, contactWhatsapp: e.target.value }))}
+                        className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-emerald-400" />
+                    </div>
+                    <div>
+                      <label className="text-xs font-semibold text-slate-500 mb-1 block">Waktu Perniagaan</label>
+                      <input value={siteSettings.businessHours} onChange={e => setSiteSettings(s => ({ ...s, businessHours: e.target.value }))}
+                        className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-emerald-400" />
+                    </div>
+                    <div className="col-span-2">
+                      <label className="text-xs font-semibold text-slate-500 mb-1 block">Alamat</label>
+                      <input value={siteSettings.contactAddress} onChange={e => setSiteSettings(s => ({ ...s, contactAddress: e.target.value }))}
+                        className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-emerald-400" />
+                    </div>
+                  </div>
+                  <button onClick={saveSiteSettingsNow} disabled={siteSettingsSaving}
+                    className="px-4 py-2.5 bg-emerald-700 text-white rounded-xl text-xs font-bold cursor-pointer hover:bg-emerald-800 transition disabled:opacity-40">
+                    {siteSettingsSaving ? "Menyimpan..." : "Simpan Tapak Web"}
+                  </button>
+                </div>
+
+                <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-3">
+                  <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2"><Globe className="w-4 h-4 text-sky-500" /> Pautan Media Sosial</h3>
+                  <div className="space-y-2">
+                    {Object.entries(siteSettings.socialLinks || {}).map(([platform, url]) => (
+                      <div key={platform} className="flex items-center justify-between gap-3 p-3 border border-slate-100 rounded-xl">
+                        <div className="min-w-0">
+                          <p className="text-xs font-bold text-slate-800">{platform}</p>
+                          <p className="text-[11px] text-slate-400 truncate">{url}</p>
+                        </div>
+                        <button onClick={() => removeSocialLink(platform)} className="text-rose-400 hover:text-rose-600 cursor-pointer shrink-0"><Trash2 className="w-3.5 h-3.5" /></button>
+                      </div>
+                    ))}
+                    {Object.keys(siteSettings.socialLinks || {}).length === 0 && <p className="text-xs text-slate-400 text-center py-3">Tiada pautan media sosial lagi.</p>}
+                  </div>
+                  <div className="flex items-center gap-2 pt-2 border-t border-slate-100">
+                    <input value={socialDraft.platform} onChange={e => setSocialDraft(d => ({ ...d, platform: e.target.value }))}
+                      placeholder="Platform (cth: Facebook)"
+                      className="w-1/3 border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-emerald-400" />
+                    <input value={socialDraft.url} onChange={e => setSocialDraft(d => ({ ...d, url: e.target.value }))}
+                      placeholder="https://..."
+                      className="flex-1 border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-emerald-400" />
+                    <button onClick={addSocialLink} className="px-4 py-2 bg-indigo-600 text-white rounded-xl text-xs font-bold cursor-pointer hover:bg-indigo-700 transition shrink-0">Tambah</button>
+                  </div>
+                  <button onClick={saveSiteSettingsNow} disabled={siteSettingsSaving}
+                    className="px-4 py-2.5 bg-emerald-700 text-white rounded-xl text-xs font-bold cursor-pointer hover:bg-emerald-800 transition disabled:opacity-40">
+                    {siteSettingsSaving ? "Menyimpan..." : "Simpan Tapak Web"}
+                  </button>
+                </div>
+
+                <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-3">
+                  <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2"><HelpCircle className="w-4 h-4 text-indigo-500" /> Soalan Lazim (FAQ)</h3>
+                  <div className="space-y-2">
+                    {faqItems.map(f => (
+                      <div key={f.id} className="flex items-start justify-between gap-3 p-3 border border-slate-100 rounded-xl">
+                        <div className="min-w-0">
+                          <p className="text-xs font-bold text-slate-800">{f.question}</p>
+                          <p className="text-[11px] text-slate-400 mt-0.5">{f.answer}</p>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <button onClick={() => toggleFaqPublished(f)} className={`text-[10px] font-bold px-2 py-1 rounded-full cursor-pointer ${f.isPublished ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-400"}`}>
+                            {f.isPublished ? "Tersiar" : "Disembunyikan"}
+                          </button>
+                          <button onClick={() => removeFaqItem(f.id)} className="text-rose-400 hover:text-rose-600 cursor-pointer"><Trash2 className="w-3.5 h-3.5" /></button>
+                        </div>
+                      </div>
+                    ))}
+                    {faqItems.length === 0 && <p className="text-xs text-slate-400 text-center py-3">Tiada soalan lazim lagi.</p>}
+                  </div>
+                  <div className="space-y-2 pt-2 border-t border-slate-100">
+                    <input value={faqDraft.question} onChange={e => setFaqDraft(d => ({ ...d, question: e.target.value }))}
+                      placeholder="Soalan baru..."
+                      className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-emerald-400" />
+                    <textarea rows={2} value={faqDraft.answer} onChange={e => setFaqDraft(d => ({ ...d, answer: e.target.value }))}
+                      placeholder="Jawapan..."
+                      className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-emerald-400" />
+                    <button onClick={addFaqItem} className="px-4 py-2 bg-indigo-600 text-white rounded-xl text-xs font-bold cursor-pointer hover:bg-indigo-700 transition">Tambah Soalan</button>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {activePage === "settings" && !isStaff && (
               <div className="space-y-5" id="hq_settings">
                 <div className="flex items-center justify-between">
@@ -2619,15 +2869,27 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
                   className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100" />
               </div>
 
+              <label className="flex items-center gap-2 cursor-pointer select-none">
+                <input type="checkbox" checked={!!planForm.isCustomPricing} onChange={e => setPlanForm(f => ({...f, isCustomPricing: e.target.checked}))}
+                  className="w-4 h-4 rounded accent-emerald-600" />
+                <span className="text-xs font-semibold text-slate-600">Harga tersuai (Hubungi Jualan, cth: Enterprise)</span>
+              </label>
+
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="text-xs font-semibold text-slate-500 mb-1 block">Harga (RM/bln) *</label>
-                  <input type="number" min={0} value={planForm.price} onChange={e => setPlanForm(f => ({...f, price: Number(e.target.value)}))}
-                    className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100" />
+                  <input type="number" min={0} value={planForm.price} disabled={planForm.isCustomPricing}
+                    onChange={e => setPlanForm(f => ({...f, price: Number(e.target.value)}))}
+                    className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100 disabled:opacity-40" />
                 </div>
                 <div>
                   <label className="text-xs font-semibold text-slate-500 mb-1 block">Kredit AI/bln</label>
                   <input type="number" min={0} value={planForm.aiCredits} onChange={e => setPlanForm(f => ({...f, aiCredits: Number(e.target.value)}))}
+                    className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100" />
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-slate-500 mb-1 block">Kredit OCR/bln</label>
+                  <input type="number" min={0} value={planForm.ocrCredits} onChange={e => setPlanForm(f => ({...f, ocrCredits: Number(e.target.value)}))}
                     className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100" />
                 </div>
                 <div>
@@ -2647,6 +2909,34 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
                   className="w-4 h-4 rounded accent-emerald-600" />
                 <span className="text-xs font-semibold text-slate-600">Tandai sebagai plan popular</span>
               </label>
+
+              <label className="flex items-center gap-2 cursor-pointer select-none">
+                <input type="checkbox" checked={!!planForm.isTrial} onChange={e => setPlanForm(f => ({...f, isTrial: e.target.checked}))}
+                  className="w-4 h-4 rounded accent-emerald-600" />
+                <span className="text-xs font-semibold text-slate-600">Plan percubaan percuma (Trial)</span>
+              </label>
+              {planForm.isTrial && (
+                <div>
+                  <label className="text-xs font-semibold text-slate-500 mb-1 block">Tempoh percubaan (hari)</label>
+                  <input type="number" min={1} value={planForm.trialDays} onChange={e => setPlanForm(f => ({...f, trialDays: Number(e.target.value)}))}
+                    className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100" />
+                </div>
+              )}
+
+              <div>
+                <label className="text-xs font-semibold text-slate-500 mb-1 block">Ciri-ciri (satu baris setiap ciri)</label>
+                <textarea rows={4} value={planForm.features.join("\n")}
+                  onChange={e => setPlanForm(f => ({...f, features: e.target.value.split("\n").map(s => s.trim()).filter(Boolean)}))}
+                  placeholder={"1 Syarikat\nSehingga 3 Pengguna\nPengurusan Pendapatan"}
+                  className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100" />
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-slate-500 mb-1 block">Limitasi (satu baris setiap limitasi)</label>
+                <textarea rows={3} value={planForm.limitations.join("\n")}
+                  onChange={e => setPlanForm(f => ({...f, limitations: e.target.value.split("\n").map(s => s.trim()).filter(Boolean)}))}
+                  placeholder={"Kredit AI Terhad\nTiada Ramalan Aliran Tunai"}
+                  className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100" />
+              </div>
             </div>
 
             <div className="flex gap-3 pt-2">

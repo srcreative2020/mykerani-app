@@ -27,7 +27,7 @@ import {
 } from "../lib/documentStorage";
 import { supabase, isSupabaseConfigured } from "../lib/supabase";
 import {
-  submitManualPayment, initiateChipAsiaPayment, getTenantPaymentTransactions,
+  submitManualPayment, initiateChipAsiaPayment, getTenantPaymentTransactions, startTrialSubscription,
   type TenantPaymentTransaction,
 } from "../lib/paymentService";
 
@@ -196,7 +196,10 @@ export function OwnerDashboard() {
   const [showAddonModal, setShowAddonModal] = useState(false);
 
   // ── Subscription plan + payment (real, Supabase-backed) ──
-  interface PlanOption { id: string; name: string; price: number; }
+  interface PlanOption {
+    id: string; name: string; price: number;
+    features: string[]; limitations: string[]; isTrial: boolean; isCustomPricing: boolean;
+  }
   const [availablePlans, setAvailablePlans] = useState<PlanOption[]>([]);
   const [currentSub, setCurrentSub] = useState<{ planId: string; planName: string; price: number; status: string; renewal: string } | null>(null);
   const [paymentMethods, setPaymentMethods] = useState({ chipAsiaEnabled: false, manualPaymentEnabled: true });
@@ -208,11 +211,17 @@ export function OwnerDashboard() {
   const [slipFile, setSlipFile] = useState<File | null>(null);
   const [paymentSubmitting, setPaymentSubmitting] = useState(false);
   const [paymentError, setPaymentError] = useState<string | null>(null);
+  const [trialSubmitting, setTrialSubmitting] = useState(false);
+  const [trialError, setTrialError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!isSupabaseConfigured() || !supabase || !activeTenant?.id) return;
-    supabase.from("subscription_plans").select("id,name,monthly_price_myr").order("monthly_price_myr", { ascending: true })
-      .then(({ data }) => setAvailablePlans((data || []).map((p: any) => ({ id: p.id, name: p.name, price: Number(p.monthly_price_myr) || 0 }))));
+    supabase.from("subscription_plans").select("id,name,monthly_price_myr,features").order("monthly_price_myr", { ascending: true })
+      .then(({ data }) => setAvailablePlans((data || []).map((p: any) => ({
+        id: p.id, name: p.name, price: Number(p.monthly_price_myr) || 0,
+        features: p.features?.featureList ?? [], limitations: p.features?.limitations ?? [],
+        isTrial: p.features?.isTrial ?? false, isCustomPricing: p.features?.isCustomPricing ?? false,
+      }))));
     supabase.from("payment_gateway_settings").select("chip_asia_enabled,manual_payment_enabled").eq("id", "global").maybeSingle()
       .then(({ data }) => { if (data) setPaymentMethods({ chipAsiaEnabled: Boolean(data.chip_asia_enabled), manualPaymentEnabled: Boolean(data.manual_payment_enabled) }); });
     supabase.from("tenant_subscriptions").select("plan_id,status,current_period_end,subscription_plans(name,monthly_price_myr)").eq("tenant_id", activeTenant.id).maybeSingle()
@@ -236,6 +245,19 @@ export function OwnerDashboard() {
     setSlipFile(null);
     setPaymentError(null);
     setShowPaymentModal(true);
+  };
+
+  const startTrial = async () => {
+    if (!activeTenant?.id) return;
+    setTrialSubmitting(true);
+    setTrialError(null);
+    try {
+      const { success, error } = await startTrialSubscription(activeTenant.id);
+      if (!success) { setTrialError(error || "Gagal mengaktifkan percubaan percuma."); return; }
+      setPaymentTxRefresh(t => t + 1);
+    } finally {
+      setTrialSubmitting(false);
+    }
   };
 
   const submitPayment = async () => {
@@ -1344,6 +1366,44 @@ export function OwnerDashboard() {
                 <div className="grid grid-cols-3 gap-2">
                   <button onClick={() => openPaymentModal(currentSub?.planId)} className="py-2.5 rounded-xl text-xs font-bold border transition cursor-pointer bg-emerald-50 border-emerald-100 text-emerald-700">Perbaharui</button>
                   <button onClick={() => openPaymentModal()} className="py-2.5 rounded-xl text-xs font-bold border transition cursor-pointer bg-indigo-50 border-indigo-100 text-indigo-700">Naik/Turun Taraf</button>
+                </div>
+
+                {/* Available plans — every tenant owner must choose from what HQ offers */}
+                <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-3">
+                  <p className="text-sm font-bold text-slate-900">Plan Tersedia</p>
+                  {trialError && <p className="text-xs text-red-600">{trialError}</p>}
+                  <div className="grid sm:grid-cols-2 gap-3">
+                    {availablePlans.map(p => (
+                      <div key={p.id} className={`border rounded-2xl p-4 space-y-2 ${currentSub?.planId === p.id ? "border-indigo-300 bg-indigo-50/40" : "border-slate-200"}`}>
+                        <p className="font-bold text-slate-900">{p.name}</p>
+                        {p.isCustomPricing ? (
+                          <p className="text-lg font-bold text-slate-900">Harga Tersuai</p>
+                        ) : (
+                          <p className="text-xl font-bold text-slate-900">RM {p.price.toLocaleString()}<span className="text-xs text-slate-400 font-normal">/bln</span></p>
+                        )}
+                        {p.features.length > 0 && (
+                          <ul className="text-[10px] text-emerald-700 space-y-0.5">
+                            {p.features.slice(0, 5).map((f, i) => <li key={i}>+ {f}</li>)}
+                          </ul>
+                        )}
+                        {p.isTrial ? (
+                          <button onClick={startTrial} disabled={trialSubmitting || !!currentSub}
+                            className="w-full py-2 bg-indigo-600 text-white rounded-xl text-xs font-bold cursor-pointer hover:bg-indigo-700 transition disabled:opacity-40">
+                            {trialSubmitting ? "Mengaktifkan..." : "Mulakan Percubaan Percuma"}
+                          </button>
+                        ) : p.isCustomPricing ? (
+                          <a href="mailto:sales@mykerani.com" className="w-full block text-center py-2 bg-slate-900 text-white rounded-xl text-xs font-bold cursor-pointer hover:bg-slate-800 transition">
+                            Hubungi Jualan
+                          </a>
+                        ) : (
+                          <button onClick={() => openPaymentModal(p.id)}
+                            className="w-full py-2 bg-emerald-50 border border-emerald-100 text-emerald-700 rounded-xl text-xs font-bold cursor-pointer hover:bg-emerald-100 transition">
+                            Pilih Plan
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
                 </div>
 
                 {/* Storage Bar */}

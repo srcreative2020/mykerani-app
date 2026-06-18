@@ -60,6 +60,14 @@ export async function submitManualPayment(
   return { id: data as string, error: null };
 }
 
+// Trial: self-activate the free TRIAL plan once for this tenant, bypassing Chip Asia / manual approval.
+export async function startTrialSubscription(tenantId: string): Promise<{ success: boolean; error: string | null }> {
+  if (!isSupabaseConfigured() || !supabase) return { success: false, error: "Supabase tidak dikonfigurasi." };
+  const { data, error } = await supabase.rpc("start_trial_subscription", { p_tenant_id: tenantId });
+  if (error) return { success: false, error: error.message };
+  return { success: Boolean(data), error: data ? null : "Percubaan percuma sudah digunakan atau tidak tersedia." };
+}
+
 // Chip Asia: create a pending transaction, then hand off to the server route which talks to Chip Asia
 // and calls finalize_chip_asia_transaction() once the gateway confirms the result.
 export async function initiateChipAsiaPayment(
