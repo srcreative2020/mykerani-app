@@ -512,14 +512,12 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
   // Business settings — persistent
   interface BizSettings {
     bizName: string; bizTagline: string; bizEmail: string; bizPhone: string;
-    aiProvider: "gemini" | "openai" | "anthropic"; aiModel: string; aiApiKey: string;
     notifyNewCustomer: boolean; notifyRenewal: boolean; notifySupport: boolean; notifyHighUsage: boolean;
     currency: string; timezone: string;
   }
   const settingsKey = `mykerani_bizsettings_${user?.id ?? "guest"}`;
   const defaultSettings: BizSettings = {
     bizName: "MYKERANI", bizTagline: "AI Financial Clerk", bizEmail: user?.email || "", bizPhone: "",
-    aiProvider: "gemini", aiModel: "gemini-2.0-flash", aiApiKey: "",
     notifyNewCustomer: true, notifyRenewal: true, notifySupport: true, notifyHighUsage: false,
     currency: "MYR", timezone: "Asia/Kuala_Lumpur",
   };
@@ -1585,56 +1583,6 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
                   <button onClick={() => saveBizSettings(bizSettings)}
                     className="px-4 py-2 bg-emerald-700 text-white rounded-xl text-xs font-bold cursor-pointer hover:bg-emerald-800 transition">
                     Simpan Profil
-                  </button>
-                </div>
-
-                {/* AI Configuration */}
-                <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-4">
-                  <div className="flex items-center gap-2">
-                    <Brain className="w-4 h-4 text-emerald-600" />
-                    <h3 className="text-sm font-bold text-slate-900">Konfigurasi AI</h3>
-                    <span className="text-[10px] bg-violet-100 text-violet-700 font-bold px-2 py-0.5 rounded-full">Invisible kepada pelanggan</span>
-                  </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    <div>
-                      <label className="text-xs font-semibold text-slate-500 mb-1 block">Provider AI</label>
-                      <select value={bizSettings.aiProvider} onChange={e => setBizSettings(s => ({...s, aiProvider: e.target.value as any, aiModel: e.target.value === "gemini" ? "gemini-2.0-flash" : e.target.value === "openai" ? "gpt-4o-mini" : "claude-haiku-4-5-20251001"}))}
-                        className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-emerald-400 bg-white">
-                        <option value="gemini">Google Gemini (Default)</option>
-                        <option value="openai">OpenAI GPT</option>
-                        <option value="anthropic">Anthropic Claude</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label className="text-xs font-semibold text-slate-500 mb-1 block">Model</label>
-                      <select value={bizSettings.aiModel} onChange={e => setBizSettings(s => ({...s, aiModel: e.target.value}))}
-                        className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-emerald-400 bg-white">
-                        {bizSettings.aiProvider === "gemini" && <>
-                          <option value="gemini-2.0-flash">gemini-2.0-flash (Pantas)</option>
-                          <option value="gemini-1.5-pro">gemini-1.5-pro (Pintar)</option>
-                        </>}
-                        {bizSettings.aiProvider === "openai" && <>
-                          <option value="gpt-4o-mini">gpt-4o-mini (Jimat)</option>
-                          <option value="gpt-4o">gpt-4o (Terbaik)</option>
-                        </>}
-                        {bizSettings.aiProvider === "anthropic" && <>
-                          <option value="claude-haiku-4-5-20251001">Claude Haiku (Pantas)</option>
-                          <option value="claude-sonnet-4-6">Claude Sonnet (Seimbang)</option>
-                        </>}
-                      </select>
-                    </div>
-                    <div className="md:col-span-2">
-                      <label className="text-xs font-semibold text-slate-500 mb-1 block">API Key</label>
-                      <input type="password" value={bizSettings.aiApiKey} onChange={e => setBizSettings(s => ({...s, aiApiKey: e.target.value}))}
-                        placeholder="Masukkan API key anda..."
-                        className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-emerald-400 font-mono" />
-                      <p className="text-[10px] text-slate-400 mt-1">API key disimpan secara selamat dan tidak dikongsi dengan pelanggan.</p>
-                      <p className="text-[10px] text-amber-600 mt-1 font-semibold">⚠️ Untuk mengaktifkan pembekal AI sebenar, gunakan panel "Pusat Sistem &rarr; AI Router" — tetapan tersebut yang digunakan oleh seluruh sistem MyKerani.</p>
-                    </div>
-                  </div>
-                  <button onClick={() => saveBizSettings({ aiProvider: bizSettings.aiProvider, aiModel: bizSettings.aiModel, aiApiKey: bizSettings.aiApiKey })}
-                    className="px-4 py-2 bg-emerald-700 text-white rounded-xl text-xs font-bold cursor-pointer hover:bg-emerald-800 transition">
-                    Simpan Konfigurasi AI
                   </button>
                 </div>
 
