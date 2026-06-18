@@ -26,13 +26,14 @@ import {
   type UploadedDoc, type DocType,
 } from "../lib/documentStorage";
 import { supabase, isSupabaseConfigured } from "../lib/supabase";
+import { loadChatHistory, saveChatMessage } from "../lib/chatHistory";
 import {
   submitManualPayment, initiateChipAsiaPayment, getTenantPaymentTransactions, startTrialSubscription,
   type TenantPaymentTransaction,
 } from "../lib/paymentService";
 
 type MainTab = "home" | "dashboard" | "documents" | "reports" | "more";
-type MorePage = "menu" | "team" | "history" | "settings" | "profile" | "support" | "billing" | "resources";
+type MorePage = "menu" | "team" | "history" | "settings" | "profile" | "support" | "billing" | "resources" | "chatArchive";
 
 interface ChatSuggestion {
   id: string;
@@ -50,7 +51,7 @@ interface ChatSuggestion {
 }
 type ChatSuggestionStatus = "pending" | "confirmed" | "rejected";
 
-interface ChatMsg { id: string; sender: "user" | "ai"; text: string; suggestions?: ChatSuggestion[]; }
+interface ChatMsg { id: string; sender: "user" | "ai"; text: string; suggestions?: ChatSuggestion[]; createdAt?: string; }
 
 function getGreeting() {
   const h = new Date().getHours();
@@ -122,10 +123,10 @@ function QuickAddModal({
 
 // â"€â"€â"€ Main Component â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 export function OwnerDashboard() {
-  const { user, signOut } = useAuth();
+  const { user, signOut, isMockUser } = useAuth();
   const { activeWorkspace, workspaces, selectWorkspace } = useWorkspace();
   const { activeTenant } = useTenant();
-  const { financialEvents, addFinancialEvent, addDebtRecord, addFinancialCommitment, learnOcrPattern } = useFinancials();
+  const { financialEvents, addFinancialEvent, editFinancialEvent, addDebtRecord, addFinancialCommitment, learnOcrPattern } = useFinancials();
 
   const [activeTab, setActiveTab] = useState<MainTab>("home");
   const [morePage, setMorePage] = useState<MorePage>("menu");
@@ -148,6 +149,7 @@ export function OwnerDashboard() {
 
   // â"€â"€ AI Chat State â"€â"€
   const [chatMessages, setChatMessages] = useState<ChatMsg[]>([]);
+  const [chatArchiveDate, setChatArchiveDate] = useState<string | null>(null);
   const [chatInput, setChatInput] = useState("");
   const [chatLoading, setChatLoading] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
@@ -210,6 +212,28 @@ export function OwnerDashboard() {
   const greeting = getGreeting();
 
   const myEvents = useMemo(() => financialEvents.filter(e => e.workspaceId === wsId), [financialEvents, wsId]);
+  const [txnFilterFrom, setTxnFilterFrom] = useState("");
+  const [txnFilterTo, setTxnFilterTo] = useState("");
+  const filteredEvents = useMemo(
+    () => myEvents.filter(e => (!txnFilterFrom || e.date >= txnFilterFrom) && (!txnFilterTo || e.date <= txnFilterTo)),
+    [myEvents, txnFilterFrom, txnFilterTo]
+  );
+  const [editingTxnId, setEditingTxnId] = useState<string | null>(null);
+  const [editTxnDraft, setEditTxnDraft] = useState({ amountMyr: "", categoryName: "", partyName: "", date: "" });
+  const startEditTxn = (ev: typeof myEvents[number]) => {
+    setEditingTxnId(ev.id);
+    setEditTxnDraft({ amountMyr: String(ev.amountMyr), categoryName: ev.categoryName, partyName: ev.partyName, date: ev.date });
+  };
+  const saveEditTxn = () => {
+    if (!editingTxnId) return;
+    editFinancialEvent(editingTxnId, {
+      amountMyr: Number(editTxnDraft.amountMyr) || 0,
+      categoryName: editTxnDraft.categoryName,
+      partyName: editTxnDraft.partyName,
+      date: editTxnDraft.date,
+    });
+    setEditingTxnId(null);
+  };
   const incomeThisMonth = useMemo(() => myEvents.filter(e => e.type === "INCOME" && e.date.startsWith(thisMonth)).reduce((s, e) => s + e.amountMyr, 0), [myEvents, thisMonth]);
   const expenseThisMonth = useMemo(() => myEvents.filter(e => e.type === "EXPENSE" && e.date.startsWith(thisMonth)).reduce((s, e) => s + e.amountMyr, 0), [myEvents, thisMonth]);
   const totalReceivable = useMemo(() => myEvents.filter(e => e.type === "RECEIVABLE" && !e.isCompleted).reduce((s, e) => s + e.amountMyr, 0), [myEvents]);
@@ -389,12 +413,22 @@ export function OwnerDashboard() {
   useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [chatMessages, chatLoading]);
   useEffect(() => { supportEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [supportMessages, supportLoading]);
 
+  useEffect(() => {
+    if (!wsId) return;
+    loadChatHistory(wsId, isMockUser).then(history => {
+      if (history.length > 0) {
+        setChatMessages(history.map(h => ({ id: h.id, sender: h.sender, text: h.text, suggestions: h.suggestions, createdAt: h.createdAt })));
+      }
+    });
+  }, [wsId, isMockUser]);
+
   const sendChat = async (text?: string) => {
     const q = (text || chatInput).trim();
     if (!q || chatLoading) return;
     setChatInput("");
-    const userMsg: ChatMsg = { id: `u-${Date.now()}`, sender: "user", text: q };
+    const userMsg: ChatMsg = { id: `u-${Date.now()}`, sender: "user", text: q, createdAt: new Date().toISOString() };
     setChatMessages(prev => [...prev, userMsg]);
+    saveChatMessage(wsId, user?.id, isMockUser, { sender: "user", text: q });
     setChatLoading(true);
     try {
       const { getAuthHeader } = await import("../lib/supabase");
@@ -421,7 +455,8 @@ export function OwnerDashboard() {
             .filter((s: ChatSuggestion) => s.actionType === "CONFIRM_TRANSACTION")
             .map((s: ChatSuggestion, idx: number) => ({ ...s, id: `${aiMsgId}-sugg-${idx}` }))
         : [];
-      setChatMessages(prev => [...prev, { id: aiMsgId, sender: "ai", text: reply, suggestions }]);
+      setChatMessages(prev => [...prev, { id: aiMsgId, sender: "ai", text: reply, suggestions, createdAt: new Date().toISOString() }]);
+      saveChatMessage(wsId, user?.id, isMockUser, { sender: "ai", text: reply, suggestions });
     } catch {
       setChatMessages(prev => [...prev, { id: `e-${Date.now()}`, sender: "ai", text: "Minta maaf, sambungan terputus sebentar. Sila cuba lagi." }]);
     } finally {
@@ -994,21 +1029,58 @@ export function OwnerDashboard() {
 
             {myEvents.length > 0 ? (
               <div className="space-y-2">
-                <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Transaksi Terkini</p>
-                {myEvents.slice(-8).reverse().map(ev => (
-                  <div key={ev.id} className="bg-white border border-slate-200 rounded-xl p-3 flex items-center justify-between shadow-sm">
-                    <div className="flex items-center space-x-3">
-                      <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${ev.type === "INCOME" ? "bg-emerald-50" : "bg-rose-50"}`}>
-                        {ev.type === "INCOME" ? <TrendingUp className="w-3.5 h-3.5 text-emerald-500" /> : <TrendingDown className="w-3.5 h-3.5 text-rose-500" />}
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Transaksi Terkini</p>
+                  {(txnFilterFrom || txnFilterTo) && (
+                    <button onClick={() => { setTxnFilterFrom(""); setTxnFilterTo(""); }} className="text-[10px] text-indigo-500 font-semibold cursor-pointer hover:underline">
+                      Kosongkan tapisan
+                    </button>
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
+                  <input type="date" value={txnFilterFrom} onChange={e => setTxnFilterFrom(e.target.value)}
+                    className="flex-1 px-2.5 py-1.5 rounded-lg border border-slate-200 text-[11px] text-slate-600" />
+                  <span className="text-[10px] text-slate-400">hingga</span>
+                  <input type="date" value={txnFilterTo} onChange={e => setTxnFilterTo(e.target.value)}
+                    className="flex-1 px-2.5 py-1.5 rounded-lg border border-slate-200 text-[11px] text-slate-600" />
+                </div>
+                {filteredEvents.length === 0 && (
+                  <p className="text-[11px] text-slate-400 text-center py-3">Tiada transaksi dalam tempoh ini.</p>
+                )}
+                {filteredEvents.slice(-8).reverse().map(ev => (
+                  <div key={ev.id} className="bg-white border border-slate-200 rounded-xl p-3 shadow-sm">
+                    {editingTxnId === ev.id ? (
+                      <div className="space-y-1.5">
+                        <input value={editTxnDraft.partyName} onChange={e => setEditTxnDraft(d => ({ ...d, partyName: e.target.value }))} placeholder="Pihak Berkaitan" className="w-full px-2 py-1 rounded border border-slate-300 text-xs" />
+                        <input value={editTxnDraft.categoryName} onChange={e => setEditTxnDraft(d => ({ ...d, categoryName: e.target.value }))} placeholder="Kategori" className="w-full px-2 py-1 rounded border border-slate-300 text-xs" />
+                        <input value={editTxnDraft.amountMyr} onChange={e => setEditTxnDraft(d => ({ ...d, amountMyr: e.target.value }))} type="number" placeholder="Jumlah (RM)" className="w-full px-2 py-1 rounded border border-slate-300 text-xs" />
+                        <input value={editTxnDraft.date} onChange={e => setEditTxnDraft(d => ({ ...d, date: e.target.value }))} type="date" className="w-full px-2 py-1 rounded border border-slate-300 text-xs" />
+                        <div className="flex gap-2 pt-1">
+                          <button onClick={saveEditTxn} className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold cursor-pointer">Simpan</button>
+                          <button onClick={() => setEditingTxnId(null)} className="px-3 py-1.5 rounded-lg bg-slate-200 hover:bg-slate-300 text-slate-800 text-xs font-semibold cursor-pointer">Batal</button>
+                        </div>
                       </div>
-                      <div>
-                        <p className="text-xs font-semibold text-slate-800 truncate max-w-[150px]">{ev.partyName || ev.categoryName}</p>
-                        <p className="text-[10px] text-slate-400">{ev.date}</p>
+                    ) : (
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center space-x-3">
+                          <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${ev.type === "INCOME" ? "bg-emerald-50" : "bg-rose-50"}`}>
+                            {ev.type === "INCOME" ? <TrendingUp className="w-3.5 h-3.5 text-emerald-500" /> : <TrendingDown className="w-3.5 h-3.5 text-rose-500" />}
+                          </div>
+                          <div>
+                            <p className="text-xs font-semibold text-slate-800 truncate max-w-[150px]">{ev.partyName || ev.categoryName}</p>
+                            <p className="text-[10px] text-slate-400">{ev.date}</p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className={`text-sm font-bold ${ev.type === "INCOME" ? "text-emerald-600" : "text-rose-500"}`}>
+                            {ev.type === "INCOME" ? "+" : "-"}RM {ev.amountMyr.toFixed(2)}
+                          </span>
+                          <button onClick={() => startEditTxn(ev)} className="p-1 text-slate-300 hover:text-indigo-500 cursor-pointer" aria-label="Edit transaksi">
+                            <Edit3 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
                       </div>
-                    </div>
-                    <span className={`text-sm font-bold ${ev.type === "INCOME" ? "text-emerald-600" : "text-rose-500"}`}>
-                      {ev.type === "INCOME" ? "+" : "-"}RM {ev.amountMyr.toFixed(2)}
-                    </span>
+                    )}
                   </div>
                 ))}
               </div>
@@ -1146,6 +1218,7 @@ export function OwnerDashboard() {
                     { id: "resources" as MorePage, label: "Tetapan Sumber",    desc: "AI & storan yang digunakan",            icon: Cpu },
                     { id: "support" as MorePage,   label: "Pusat Sokongan",    desc: "Bantuan, FAQ & tiket sokongan",         icon: HelpCircle },
                     { id: "history" as MorePage,   label: "Sejarah Aktiviti",  desc: "Log semua transaksi & aktiviti",        icon: History },
+                    { id: "chatArchive" as MorePage, label: "Arkib Perbualan", desc: "Sejarah perbualan dengan MYKERANI ikut tarikh", icon: MessageCircle },
                     { id: "settings" as MorePage,  label: "Tetapan",           desc: "Konfigurasi & peringatan",              icon: Settings },
                     { id: "profile" as MorePage,   label: "Profil Saya",       desc: user?.email || "",                       icon: User },
                   ]).map(({ id, label, desc, icon: Icon }) => (
@@ -1253,6 +1326,57 @@ export function OwnerDashboard() {
                     </span>
                   </div>
                 ))}
+              </div>
+            )}
+
+            {morePage === "chatArchive" && (
+              <div className="space-y-3">
+                <h2 className="text-lg font-bold text-slate-900">Arkib Perbualan</h2>
+                {chatMessages.length === 0 ? (
+                  <div className="bg-white border border-slate-200 rounded-2xl p-10 text-center shadow-sm">
+                    <MessageCircle className="w-10 h-10 text-slate-200 mx-auto mb-2" />
+                    <p className="text-sm text-slate-400">Tiada perbualan lagi</p>
+                  </div>
+                ) : (
+                  (() => {
+                    const byDate: Record<string, ChatMsg[]> = {};
+                    chatMessages.forEach(m => {
+                      const d = (m.createdAt || new Date().toISOString()).slice(0, 10);
+                      (byDate[d] = byDate[d] || []).push(m);
+                    });
+                    const dates = Object.keys(byDate).sort((a, b) => b.localeCompare(a));
+                    return (
+                      <>
+                        <div className="grid grid-cols-3 gap-2">
+                          {dates.map(d => (
+                            <button key={d} onClick={() => setChatArchiveDate(chatArchiveDate === d ? null : d)}
+                              className={`px-2 py-2.5 rounded-xl text-center border transition cursor-pointer ${chatArchiveDate === d ? "bg-indigo-600 border-indigo-600 text-white" : "bg-white border-slate-200 text-slate-700 hover:bg-slate-50"}`}>
+                              <p className="text-[11px] font-bold">{new Date(d).toLocaleDateString("ms-MY", { day: "numeric", month: "short" })}</p>
+                              <p className={`text-[9px] ${chatArchiveDate === d ? "text-indigo-100" : "text-slate-400"}`}>{byDate[d].length} mesej</p>
+                            </button>
+                          ))}
+                        </div>
+                        {chatArchiveDate && (
+                          <div className="bg-white border border-slate-200 rounded-2xl p-4 space-y-3 shadow-sm">
+                            <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">
+                              {new Date(chatArchiveDate).toLocaleDateString("ms-MY", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
+                            </p>
+                            {byDate[chatArchiveDate].map(m => (
+                              <div key={m.id} className={`flex items-start gap-2.5 ${m.sender === "user" ? "flex-row-reverse" : ""}`}>
+                                <div className={`w-6 h-6 rounded-lg flex items-center justify-center shrink-0 ${m.sender === "user" ? "bg-indigo-600 text-white" : "bg-slate-900 text-white"}`}>
+                                  {m.sender === "user" ? <UserIcon className="w-3 h-3" /> : <Brain className="w-3 h-3" />}
+                                </div>
+                                <div className={`max-w-[80%] px-3 py-2 rounded-xl text-xs leading-relaxed ${m.sender === "user" ? "bg-indigo-50 text-indigo-900" : "bg-slate-50 text-slate-700 whitespace-pre-wrap"}`}>
+                                  {m.text}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </>
+                    );
+                  })()
+                )}
               </div>
             )}
 

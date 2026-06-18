@@ -3,12 +3,13 @@ import { useAuth } from "../context/AuthContext";
 import { useWorkspace } from "../context/WorkspaceContext";
 import { useFinancials } from "../context/FinancialRecordsContext";
 import { useTenant } from "../context/TenantContext";
+import { loadChatHistory, saveChatMessage } from "../lib/chatHistory";
 import {
   Home, Plus, Upload, Search, Bell, User as UserIcon,
   Send, Brain, RefreshCw, Receipt, FileSpreadsheet, Landmark,
   TrendingUp, TrendingDown, Clock, ChevronRight, X,
   CheckCircle2, LogOut, ClipboardList, HelpCircle,
-  MessageCircle, BookOpen, Ticket,
+  MessageCircle, BookOpen, Ticket, Edit3,
 } from "lucide-react";
 
 type StaffTab = "home" | "tambah" | "muat_naik" | "rekod" | "notifikasi" | "profil";
@@ -130,16 +131,18 @@ function AddRecordForm({
 
 // â"€â"€â"€ Main Component â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 export function StaffHomeScreen() {
-  const { user, signOut } = useAuth();
+  const { user, signOut, isMockUser } = useAuth();
   const { activeWorkspace, workspaces, selectWorkspace } = useWorkspace();
-  const { financialEvents, addFinancialEvent, addDebtRecord, addFinancialCommitment, learnOcrPattern } = useFinancials();
+  const { financialEvents, addFinancialEvent, editFinancialEvent, addDebtRecord, addFinancialCommitment, learnOcrPattern } = useFinancials();
   const { activeTenant } = useTenant();
 
   const [activeTab, setActiveTab] = useState<StaffTab>("home");
   const [addDefaultType, setAddDefaultType] = useState<"INCOME" | "EXPENSE">("EXPENSE");
 
   // â"€â"€ AI Chat â"€â"€
-  const [chatMessages, setChatMessages] = useState<{ id: string; sender: "user" | "ai"; text: string; suggestions?: ChatSuggestion[] }[]>([]);
+  const [chatMessages, setChatMessages] = useState<{ id: string; sender: "user" | "ai"; text: string; suggestions?: ChatSuggestion[]; createdAt?: string }[]>([]);
+  const [showChatArchive, setShowChatArchive] = useState(false);
+  const [chatArchiveDate, setChatArchiveDate] = useState<string | null>(null);
   const [chatInput, setChatInput] = useState("");
   const [chatSuggestionStatus, setChatSuggestionStatus] = useState<Record<string, ChatSuggestionStatus>>({});
   const [editingChatSuggestionId, setEditingChatSuggestionId] = useState<string | null>(null);
@@ -163,11 +166,42 @@ export function StaffHomeScreen() {
   const greeting = getGreeting();
   const today = new Date().toLocaleDateString("ms-MY", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
 
+  const [txnFilterFrom, setTxnFilterFrom] = useState("");
+  const [txnFilterTo, setTxnFilterTo] = useState("");
+  const [editingTxnId, setEditingTxnId] = useState<string | null>(null);
+  const [editTxnDraft, setEditTxnDraft] = useState({ amountMyr: "", categoryName: "", partyName: "", date: "" });
+  const startEditTxn = (ev: { id: string; amountMyr: number; categoryName: string; partyName: string; date: string }) => {
+    setEditingTxnId(ev.id);
+    setEditTxnDraft({ amountMyr: String(ev.amountMyr), categoryName: ev.categoryName, partyName: ev.partyName, date: ev.date });
+  };
+  const saveEditTxn = () => {
+    if (!editingTxnId) return;
+    editFinancialEvent(editingTxnId, {
+      amountMyr: Number(editTxnDraft.amountMyr) || 0,
+      categoryName: editTxnDraft.categoryName,
+      partyName: editTxnDraft.partyName,
+      date: editTxnDraft.date,
+    });
+    setEditingTxnId(null);
+  };
   const myRecords = useMemo(() =>
     financialEvents.filter(e => e.workspaceId === wsId).slice().reverse(),
     [financialEvents, wsId]);
+  const filteredRecords = useMemo(
+    () => myRecords.filter(r => (!txnFilterFrom || r.date >= txnFilterFrom) && (!txnFilterTo || r.date <= txnFilterTo)),
+    [myRecords, txnFilterFrom, txnFilterTo]
+  );
 
   useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [chatMessages, chatLoading]);
+
+  useEffect(() => {
+    if (!wsId) return;
+    loadChatHistory(wsId, isMockUser).then(history => {
+      if (history.length > 0) {
+        setChatMessages(history.map(h => ({ id: h.id, sender: h.sender, text: h.text, suggestions: h.suggestions, createdAt: h.createdAt })));
+      }
+    });
+  }, [wsId, isMockUser]);
   useEffect(() => { supportEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [supportMessages, supportLoading]);
 
   const sendSupport = async (text?: string) => {
@@ -196,7 +230,8 @@ export function StaffHomeScreen() {
     const q = (text || chatInput).trim();
     if (!q || chatLoading) return;
     setChatInput("");
-    setChatMessages(prev => [...prev, { id: `u-${Date.now()}`, sender: "user", text: q }]);
+    setChatMessages(prev => [...prev, { id: `u-${Date.now()}`, sender: "user", text: q, createdAt: new Date().toISOString() }]);
+    saveChatMessage(wsId, user?.id, isMockUser, { sender: "user", text: q });
     setChatLoading(true);
     try {
       const { getAuthHeader } = await import("../lib/supabase");
@@ -223,7 +258,8 @@ export function StaffHomeScreen() {
             .filter((s: ChatSuggestion) => s.actionType === "CONFIRM_TRANSACTION")
             .map((s: ChatSuggestion, idx: number) => ({ ...s, id: `${aiMsgId}-sugg-${idx}` }))
         : [];
-      setChatMessages(prev => [...prev, { id: aiMsgId, sender: "ai", text: reply, suggestions }]);
+      setChatMessages(prev => [...prev, { id: aiMsgId, sender: "ai", text: reply, suggestions, createdAt: new Date().toISOString() }]);
+      saveChatMessage(wsId, user?.id, isMockUser, { sender: "ai", text: reply, suggestions });
     } catch {
       setChatMessages(prev => [...prev, { id: `e-${Date.now()}`, sender: "ai", text: "Minta maaf, sambungan terputus. Sila cuba lagi." }]);
     } finally {
@@ -618,24 +654,65 @@ export function StaffHomeScreen() {
                   Tambah Rekod Pertama
                 </button>
               </div>
-            ) : myRecords.map(rec => (
-              <div key={rec.id} className="bg-white border border-slate-200 rounded-xl p-3.5 flex items-center justify-between shadow-sm">
-                <div className="flex items-center space-x-3">
-                  <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${rec.type === "INCOME" ? "bg-emerald-50" : "bg-rose-50"}`}>
-                    {rec.type === "INCOME"
-                      ? <TrendingUp className="w-4 h-4 text-emerald-500" />
-                      : <TrendingDown className="w-4 h-4 text-rose-500" />}
-                  </div>
-                  <div>
-                    <p className="text-sm font-semibold text-slate-800 truncate max-w-[170px]">{rec.partyName || rec.categoryName}</p>
-                    <p className="text-[11px] text-slate-400">{rec.date}</p>
-                  </div>
+            ) : (
+              <>
+                <div className="flex items-center justify-between">
+                  {(txnFilterFrom || txnFilterTo) && (
+                    <button onClick={() => { setTxnFilterFrom(""); setTxnFilterTo(""); }} className="text-[10px] text-indigo-500 font-semibold cursor-pointer hover:underline">
+                      Kosongkan tapisan
+                    </button>
+                  )}
                 </div>
-                <span className={`text-sm font-bold ${rec.type === "INCOME" ? "text-emerald-600" : "text-rose-500"}`}>
-                  {rec.type === "INCOME" ? "+" : "-"}RM {rec.amountMyr.toFixed(2)}
-                </span>
-              </div>
-            ))}
+                <div className="flex items-center gap-2 pb-1">
+                  <input type="date" value={txnFilterFrom} onChange={e => setTxnFilterFrom(e.target.value)}
+                    className="flex-1 px-2.5 py-1.5 rounded-lg border border-slate-200 text-[11px] text-slate-600" />
+                  <span className="text-[10px] text-slate-400">hingga</span>
+                  <input type="date" value={txnFilterTo} onChange={e => setTxnFilterTo(e.target.value)}
+                    className="flex-1 px-2.5 py-1.5 rounded-lg border border-slate-200 text-[11px] text-slate-600" />
+                </div>
+                {filteredRecords.length === 0 && (
+                  <p className="text-[11px] text-slate-400 text-center py-3">Tiada transaksi dalam tempoh ini.</p>
+                )}
+                {filteredRecords.map(rec => (
+                  <div key={rec.id} className="bg-white border border-slate-200 rounded-xl p-3.5 shadow-sm">
+                    {editingTxnId === rec.id ? (
+                      <div className="space-y-1.5">
+                        <input value={editTxnDraft.partyName} onChange={e => setEditTxnDraft(d => ({ ...d, partyName: e.target.value }))} placeholder="Pihak Berkaitan" className="w-full px-2 py-1 rounded border border-slate-300 text-xs" />
+                        <input value={editTxnDraft.categoryName} onChange={e => setEditTxnDraft(d => ({ ...d, categoryName: e.target.value }))} placeholder="Kategori" className="w-full px-2 py-1 rounded border border-slate-300 text-xs" />
+                        <input value={editTxnDraft.amountMyr} onChange={e => setEditTxnDraft(d => ({ ...d, amountMyr: e.target.value }))} type="number" placeholder="Jumlah (RM)" className="w-full px-2 py-1 rounded border border-slate-300 text-xs" />
+                        <input value={editTxnDraft.date} onChange={e => setEditTxnDraft(d => ({ ...d, date: e.target.value }))} type="date" className="w-full px-2 py-1 rounded border border-slate-300 text-xs" />
+                        <div className="flex gap-2 pt-1">
+                          <button onClick={saveEditTxn} className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold cursor-pointer">Simpan</button>
+                          <button onClick={() => setEditingTxnId(null)} className="px-3 py-1.5 rounded-lg bg-slate-200 hover:bg-slate-300 text-slate-800 text-xs font-semibold cursor-pointer">Batal</button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center space-x-3">
+                          <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${rec.type === "INCOME" ? "bg-emerald-50" : "bg-rose-50"}`}>
+                            {rec.type === "INCOME"
+                              ? <TrendingUp className="w-4 h-4 text-emerald-500" />
+                              : <TrendingDown className="w-4 h-4 text-rose-500" />}
+                          </div>
+                          <div>
+                            <p className="text-sm font-semibold text-slate-800 truncate max-w-[170px]">{rec.partyName || rec.categoryName}</p>
+                            <p className="text-[11px] text-slate-400">{rec.date}</p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className={`text-sm font-bold ${rec.type === "INCOME" ? "text-emerald-600" : "text-rose-500"}`}>
+                            {rec.type === "INCOME" ? "+" : "-"}RM {rec.amountMyr.toFixed(2)}
+                          </span>
+                          <button onClick={() => startEditTxn(rec)} className="p-1 text-slate-300 hover:text-indigo-500 cursor-pointer" aria-label="Edit transaksi">
+                            <Edit3 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </>
+            )}
           </div>
         )}
 
@@ -682,10 +759,76 @@ export function StaffHomeScreen() {
                 <HelpCircle className="w-4 h-4" /><span>Pusat Sokongan</span>
               </button>
 
+              <button onClick={() => setShowChatArchive(true)}
+                className="w-full py-3 border border-slate-200 text-slate-600 rounded-xl text-sm font-semibold hover:bg-slate-50 transition cursor-pointer flex items-center justify-center space-x-2">
+                <MessageCircle className="w-4 h-4" /><span>Arkib Perbualan</span>
+              </button>
+
               <button onClick={() => signOut()}
                 className="w-full py-3 border border-rose-200 text-rose-500 rounded-xl text-sm font-semibold hover:bg-rose-50 transition cursor-pointer">
                 Log Keluar
               </button>
+            </div>
+          </div>
+        )}
+
+        {/* Chat Archive Modal */}
+        {showChatArchive && (
+          <div className="fixed inset-0 z-50 flex flex-col bg-slate-50">
+            <div className="bg-white border-b border-slate-200 px-4 py-3 flex items-center justify-between shrink-0">
+              <div className="flex items-center space-x-2">
+                <MessageCircle className="w-5 h-5 text-indigo-500" />
+                <h2 className="font-bold text-slate-900 text-base">Arkib Perbualan</h2>
+              </div>
+              <button onClick={() => { setShowChatArchive(false); setChatArchiveDate(null); }}
+                className="p-1.5 rounded-xl hover:bg-slate-100 transition cursor-pointer">
+                <X className="w-5 h-5 text-slate-500" />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4 max-w-lg mx-auto w-full space-y-3">
+              {chatMessages.length === 0 ? (
+                <div className="bg-white border border-slate-200 rounded-2xl p-10 text-center shadow-sm">
+                  <MessageCircle className="w-10 h-10 text-slate-200 mx-auto mb-2" />
+                  <p className="text-sm text-slate-400">Tiada perbualan lagi</p>
+                </div>
+              ) : (() => {
+                const byDate: Record<string, typeof chatMessages> = {};
+                chatMessages.forEach(m => {
+                  const d = (m.createdAt || new Date().toISOString()).slice(0, 10);
+                  (byDate[d] = byDate[d] || []).push(m);
+                });
+                const dates = Object.keys(byDate).sort((a, b) => b.localeCompare(a));
+                return (
+                  <>
+                    <div className="grid grid-cols-3 gap-2">
+                      {dates.map(d => (
+                        <button key={d} onClick={() => setChatArchiveDate(chatArchiveDate === d ? null : d)}
+                          className={`px-2 py-2.5 rounded-xl text-center border transition cursor-pointer ${chatArchiveDate === d ? "bg-indigo-600 border-indigo-600 text-white" : "bg-white border-slate-200 text-slate-700 hover:bg-slate-50"}`}>
+                          <p className="text-[11px] font-bold">{new Date(d).toLocaleDateString("ms-MY", { day: "numeric", month: "short" })}</p>
+                          <p className={`text-[9px] ${chatArchiveDate === d ? "text-indigo-100" : "text-slate-400"}`}>{byDate[d].length} mesej</p>
+                        </button>
+                      ))}
+                    </div>
+                    {chatArchiveDate && (
+                      <div className="bg-white border border-slate-200 rounded-2xl p-4 space-y-3 shadow-sm">
+                        <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">
+                          {new Date(chatArchiveDate).toLocaleDateString("ms-MY", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
+                        </p>
+                        {byDate[chatArchiveDate].map(m => (
+                          <div key={m.id} className={`flex items-start gap-2.5 ${m.sender === "user" ? "flex-row-reverse" : ""}`}>
+                            <div className={`w-6 h-6 rounded-lg flex items-center justify-center shrink-0 ${m.sender === "user" ? "bg-indigo-600 text-white" : "bg-slate-900 text-white"}`}>
+                              {m.sender === "user" ? <UserIcon className="w-3 h-3" /> : <Brain className="w-3 h-3" />}
+                            </div>
+                            <div className={`max-w-[80%] px-3 py-2 rounded-xl text-xs leading-relaxed ${m.sender === "user" ? "bg-indigo-50 text-indigo-900" : "bg-slate-50 text-slate-700 whitespace-pre-wrap"}`}>
+                              {m.text}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </>
+                );
+              })()}
             </div>
           </div>
         )}
