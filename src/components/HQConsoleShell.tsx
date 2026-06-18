@@ -365,6 +365,24 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
     if (useRealData) hqService.getStorageFreezeStates().then(setFreezeStates);
   }, [storageRefreshTick, useRealData]);
 
+  // Per-user AI usage + suspension state — real, server-enforced (HQ owner/staff/tenant owner/staff)
+  const [userUsage, setUserUsage] = useState<hqService.HqUserUsage[]>([]);
+  const [usageByFeature, setUsageByFeature] = useState<hqService.HqUsageByFeature[]>([]);
+  const [userUsageRefreshTick, setUserUsageRefreshTick] = useState(0);
+  useEffect(() => {
+    if (!useRealData) return;
+    hqService.getUserUsage().then(setUserUsage);
+    hqService.getUsageByFeature().then(setUsageByFeature);
+  }, [useRealData, userUsageRefreshTick]);
+  const toggleUserSuspend = async (u: hqService.HqUserUsage) => {
+    const ok = await hqService.setUserSuspended(u.userId, !u.isSuspended);
+    if (ok) setUserUsageRefreshTick(t => t + 1);
+  };
+  const roleLabel = (role: string): string => ({
+    HQ_OWNER: "Pemilik HQ", HQ_STAFF: "Kakitangan HQ",
+    TENANT_OWNER: "Pemilik Syarikat", TENANT_STAFF: "Kakitangan Syarikat",
+  }[role] || role);
+
   // Notifications (HQ)
   const notif = useNotifications(`hq_${user?.id || "guest"}`);
   const [showNotifPanel, setShowNotifPanel] = useState(false);
@@ -1204,7 +1222,7 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                   <MetricCard label="Jumlah Kredit AI"  value={totalAI.toLocaleString()}      sub="semua pelanggan bulan ini" icon={Zap}      color="amber" />
                   <MetricCard label="Jumlah Storan"     value={`${customers.reduce((s,c)=>s+c.storageGB,0).toFixed(1)} GB`} sub="digunakan" icon={HardDrive} color="slate" />
-                  <MetricCard label="OCR Digunakan"     value="-"                              sub="belum diaktifkan"          icon={Brain}    color="violet" />
+                  <MetricCard label="OCR Digunakan"     value={(usageByFeature.find(f => f.feature === "ocr")?.usageCount ?? 0).toLocaleString()} sub="imbasan bulan ini" icon={Brain} color="violet" />
                 </div>
 
                 {/* Top usage customers */}
@@ -1232,6 +1250,41 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
                             <p className="text-xs font-bold text-slate-700">{c.aiUsage} kredit</p>
                             <p className="text-[10px] text-slate-400">{c.storageGB} GB storan</p>
                           </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Per-user breakdown — HQ owner/staff, tenant owner/staff, individually */}
+                <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+                  <div className="px-5 py-4 border-b border-slate-100">
+                    <h3 className="text-sm font-bold text-slate-900">Penggunaan Mengikut Pengguna</h3>
+                    <p className="text-[11px] text-slate-400 mt-0.5">Sekat atau luluskan akses AI bagi mana-mana pengguna individu</p>
+                  </div>
+                  {!useRealData ? (
+                    <div className="p-8 text-center"><p className="text-xs text-slate-400">Tersedia hanya dengan data sebenar (bukan akaun ujian)</p></div>
+                  ) : userUsage.length === 0 ? (
+                    <div className="p-8 text-center"><p className="text-xs text-slate-400">Tiada data pengguna</p></div>
+                  ) : (
+                    <div className="divide-y divide-slate-50">
+                      {[...userUsage].sort((a, b) => b.aiUsageCount - a.aiUsageCount).map(u => (
+                        <div key={u.userId} className="px-5 py-3.5 flex items-center gap-4">
+                          <div className={`w-7 h-7 rounded-lg font-bold text-xs flex items-center justify-center shrink-0 ${u.isSuspended ? "bg-red-50 text-red-600" : "bg-emerald-50 text-emerald-700"}`}>
+                            {(u.fullName || u.email || "?").charAt(0).toUpperCase()}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs font-semibold text-slate-800 truncate">{u.fullName || u.email}</p>
+                            <p className="text-[10px] text-slate-400 truncate">{roleLabel(u.role)} · {u.tenantName || "—"}</p>
+                          </div>
+                          <div className="text-right shrink-0">
+                            <p className="text-xs font-bold text-slate-700">{u.aiUsageCount} kredit</p>
+                            {u.isSuspended && <p className="text-[10px] text-red-500 font-semibold">Disekat</p>}
+                          </div>
+                          <button onClick={() => toggleUserSuspend(u)}
+                            className={`px-2.5 py-1.5 rounded-lg text-[10px] font-bold cursor-pointer transition shrink-0 ${u.isSuspended ? "bg-emerald-50 hover:bg-emerald-100 text-emerald-700" : "bg-slate-50 hover:bg-red-50 text-slate-400 hover:text-red-500"}`}>
+                            {u.isSuspended ? "Luluskan" : "Sekat"}
+                          </button>
                         </div>
                       ))}
                     </div>

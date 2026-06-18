@@ -281,10 +281,16 @@ export function OwnerDashboard() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           query: q,
-          financialContext: { activeTenant, activeWorkspace, financialEvents }
+          financialContext: { activeTenant, activeWorkspace, financialEvents },
+          userId: user?.id,
         }),
       });
       const data = await res.json() as any;
+      if (res.status === 403) {
+        setChatMessages(prev => [...prev, { id: `a-${Date.now()}`, sender: "ai", text: data.error || "Akaun anda telah disekat." }]);
+        setChatLoading(false);
+        return;
+      }
       let reply = data.text || "Saya sedang cuba membantu anda.";
       reply = reply.replace(/tenant/gi, "syarikat").replace(/sandbox/gi, "ujian");
       setChatMessages(prev => [...prev, { id: `a-${Date.now()}`, sender: "ai", text: reply }]);
@@ -308,10 +314,11 @@ export function OwnerDashboard() {
         body: JSON.stringify({
           query: `[SOKONGAN MYKERANI] ${q}`,
           financialContext: { activeTenant, activeWorkspace, financialEvents },
+          userId: user?.id,
         }),
       });
       const data = await res.json() as any;
-      setSupportMessages(prev => [...prev, { id: `a-${Date.now()}`, sender: "ai", text: data.text || "Saya sedang menyemak soalan anda." }]);
+      setSupportMessages(prev => [...prev, { id: `a-${Date.now()}`, sender: "ai", text: data.text || data.error || "Saya sedang menyemak soalan anda." }]);
     } catch {
       setSupportMessages(prev => [...prev, { id: `e-${Date.now()}`, sender: "ai", text: "Maaf, sambungan terputus. Cuba lagi atau buka tiket sokongan." }]);
     } finally {

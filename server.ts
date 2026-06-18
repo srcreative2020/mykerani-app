@@ -637,9 +637,12 @@ async function startServer() {
 
   app.post("/api/ocr/analyze", async (req, res) => {
     try {
-      const { fileDataUrl, fileName, documentType, tenantId, workspaceId } = req.body;
+      const { fileDataUrl, fileName, documentType, tenantId, workspaceId, userId } = req.body;
       if (!fileDataUrl) {
         return res.status(400).json({ error: "No file data provided." });
+      }
+      if (await isUserSuspended(userId)) {
+        return res.status(403).json({ error: "Akaun anda telah disekat oleh pentadbir HQ. Sila hubungi sokongan." });
       }
 
       const candidates = await getAiProviderCandidates();
@@ -690,7 +693,7 @@ Provide your output precisely formatted as raw JSON matching exactly this shape,
         throw lastErr || new Error("All configured AI providers failed for OCR");
       }
 
-      logAiUsage(tenantId, workspaceId, "ocr", usedCandidate!.provider, usedCandidate!.model);
+      logAiUsage(tenantId, workspaceId, userId, "ocr", usedCandidate!.provider, usedCandidate!.model);
 
       return res.json(parsedResult);
 
@@ -719,9 +722,12 @@ Provide your output precisely formatted as raw JSON matching exactly this shape,
   // AI FINANCIAL ASSISTANT SECURE PROXY ROUTE
   app.post("/api/ai/assistant", async (req, res) => {
     try {
-      const { query, financialContext } = req.body;
+      const { query, financialContext, userId } = req.body;
       if (!query) {
         return res.status(400).json({ error: "Missing assistant query text." });
+      }
+      if (await isUserSuspended(userId)) {
+        return res.status(403).json({ error: "Akaun anda telah disekat oleh pentadbir HQ. Sila hubungi sokongan." });
       }
 
       const candidates = await getAiProviderCandidates();
@@ -784,7 +790,7 @@ If you output markdown formatting inside the fields, escape quotes correctly.`;
         throw lastErr || new Error("All configured AI providers failed");
       }
 
-      logAiUsage(financialContext?.activeTenant?.id, financialContext?.activeWorkspace?.id, "assistant", usedCandidate!.provider, usedCandidate!.model);
+      logAiUsage(financialContext?.activeTenant?.id, financialContext?.activeWorkspace?.id, userId, "assistant", usedCandidate!.provider, usedCandidate!.model);
 
       return res.json(parsedResponse);
 
@@ -912,7 +918,7 @@ If you output markdown formatting inside the fields, escape quotes correctly.`;
   // Records one AI usage credit against a tenant (service-role write — no client
   // role can insert directly, see ai_usage_log RLS). Best-effort: a logging failure
   // must never block the actual AI response from reaching the user.
-  async function logAiUsage(tenantId: string | undefined | null, workspaceId: string | undefined | null, feature: "assistant" | "ocr", provider: string, model: string): Promise<void> {
+  async function logAiUsage(tenantId: string | undefined | null, workspaceId: string | undefined | null, userId: string | undefined | null, feature: "assistant" | "ocr", provider: string, model: string): Promise<void> {
     if (!tenantId) return;
     const supabaseUrl = process.env.VITE_SUPABASE_URL;
     const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -926,10 +932,31 @@ If you output markdown formatting inside the fields, escape quotes correctly.`;
           "Content-Type": "application/json",
           Prefer: "return=minimal",
         },
-        body: JSON.stringify({ tenant_id: tenantId, workspace_id: workspaceId || null, feature, provider, model }),
+        body: JSON.stringify({ tenant_id: tenantId, workspace_id: workspaceId || null, user_id: userId || null, feature, provider, model }),
       });
     } catch (err) {
       console.error("Failed to log AI usage:", err);
+    }
+  }
+
+  // HQ can suspend an individual user's access to AI features (see
+  // set_user_suspended RPC). Checked server-side so a suspended user can't
+  // bypass it by calling the API directly.
+  async function isUserSuspended(userId: string | undefined | null): Promise<boolean> {
+    if (!userId) return false;
+    const supabaseUrl = process.env.VITE_SUPABASE_URL;
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    if (!supabaseUrl || !serviceRoleKey) return false;
+    try {
+      const resp = await fetch(`${supabaseUrl}/rest/v1/profiles?id=eq.${userId}&select=is_suspended`, {
+        headers: { apikey: serviceRoleKey, Authorization: `Bearer ${serviceRoleKey}` },
+      });
+      if (!resp.ok) return false;
+      const rows: any[] = await resp.json();
+      return Boolean(rows[0]?.is_suspended);
+    } catch (err) {
+      console.error("Failed to check user suspension state:", err);
+      return false;
     }
   }
 

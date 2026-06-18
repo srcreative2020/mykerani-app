@@ -195,6 +195,53 @@ export async function setTenantFrozen(tenantId: string, isFrozen: boolean, reaso
   return !error;
 }
 
+// --- Per-user AI usage + suspension (real, server-enforced) ---
+
+export interface HqUserUsage {
+  userId: string;
+  email: string;
+  fullName: string;
+  role: string;
+  tenantId: string;
+  tenantName: string;
+  aiUsageCount: number;
+  isSuspended: boolean;
+}
+
+export async function getUserUsage(): Promise<HqUserUsage[]> {
+  if (!isSupabaseConfigured() || !supabase) return [];
+  const { data, error } = await supabase.rpc("get_hq_user_usage");
+  if (error || !data) return [];
+  return data.map((row: any) => ({
+    userId: row.user_id,
+    email: row.email || "",
+    fullName: row.full_name || "",
+    role: row.role || "",
+    tenantId: row.tenant_id || "",
+    tenantName: row.tenant_name || "",
+    aiUsageCount: Number(row.ai_usage_count) || 0,
+    isSuspended: Boolean(row.is_suspended),
+  }));
+}
+
+export async function setUserSuspended(userId: string, suspended: boolean): Promise<boolean> {
+  if (!isSupabaseConfigured() || !supabase) return false;
+  const { error } = await supabase.rpc("set_user_suspended", { p_user_id: userId, p_suspended: suspended });
+  return !error;
+}
+
+export interface HqUsageByFeature {
+  feature: string;
+  usageCount: number;
+}
+
+export async function getUsageByFeature(): Promise<HqUsageByFeature[]> {
+  if (!isSupabaseConfigured() || !supabase) return [];
+  const { data, error } = await supabase.rpc("get_hq_usage_by_feature");
+  if (error || !data) return [];
+  return data.map((row: any) => ({ feature: row.feature, usageCount: Number(row.usage_count) || 0 }));
+}
+
 // --- AI Router ---
 
 export interface AiRouterSettings {
