@@ -451,6 +451,16 @@ export async function getSiteSettings(): Promise<SiteSettings | null> {
   };
 }
 
+export async function uploadSiteLogo(file: File): Promise<string | null> {
+  if (!isSupabaseConfigured() || !supabase) return null;
+  const ext = file.name.split(".").pop() || "png";
+  const path = `logo-${Date.now()}.${ext}`;
+  const { error } = await supabase.storage.from("site-assets").upload(path, file, { upsert: true });
+  if (error) return null;
+  const { data } = supabase.storage.from("site-assets").getPublicUrl(path);
+  return data.publicUrl;
+}
+
 export async function saveSiteSettings(settings: SiteSettings): Promise<boolean> {
   if (!isSupabaseConfigured() || !supabase) return false;
   const { error } = await supabase.from("site_settings").update({

@@ -301,6 +301,8 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
   const [siteSettingsSaved, setSiteSettingsSaved] = useState(false);
   const [faqItems, setFaqItems] = useState<hqService.FaqItem[]>([]);
   const [faqDraft, setFaqDraft] = useState<{ question: string; answer: string }>({ question: "", answer: "" });
+  const [logoUploading, setLogoUploading] = useState(false);
+  const [socialDraft, setSocialDraft] = useState<{ platform: string; url: string }>({ platform: "", url: "" });
 
   const reloadSiteCms = () => {
     if (!useRealData) return;
@@ -330,6 +332,29 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
   const removeFaqItem = async (id: string) => {
     await hqService.deleteFaqItem(id);
     reloadSiteCms();
+  };
+
+  const handleLogoFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setLogoUploading(true);
+    const url = await hqService.uploadSiteLogo(file);
+    setLogoUploading(false);
+    if (url) setSiteSettings(s => ({ ...s, logoUrl: url }));
+    e.target.value = "";
+  };
+
+  const addSocialLink = () => {
+    if (!socialDraft.platform.trim() || !socialDraft.url.trim()) return;
+    setSiteSettings(s => ({ ...s, socialLinks: { ...s.socialLinks, [socialDraft.platform.trim()]: socialDraft.url.trim() } }));
+    setSocialDraft({ platform: "", url: "" });
+  };
+  const removeSocialLink = (platform: string) => {
+    setSiteSettings(s => {
+      const next = { ...s.socialLinks };
+      delete next[platform];
+      return { ...s, socialLinks: next };
+    });
   };
 
   // Customer modal & detail state
@@ -1781,6 +1806,15 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
                     <input value={siteSettings.logoUrl} onChange={e => setSiteSettings(s => ({ ...s, logoUrl: e.target.value }))}
                       placeholder="https://..."
                       className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-emerald-400" />
+                    <div className="flex items-center gap-3 mt-2">
+                      {siteSettings.logoUrl && (
+                        <img src={siteSettings.logoUrl} alt="Logo" className="w-12 h-12 rounded-xl object-contain border border-slate-100 bg-slate-50" />
+                      )}
+                      <label className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold cursor-pointer transition">
+                        {logoUploading ? "Memuat naik..." : "Muat Naik Logo"}
+                        <input type="file" accept="image/*" className="hidden" disabled={logoUploading} onChange={handleLogoFileChange} />
+                      </label>
+                    </div>
                   </div>
                   <div>
                     <label className="text-xs font-semibold text-slate-500 mb-1 block">Tajuk Utama (Hero Headline)</label>
@@ -1828,6 +1862,35 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
                       <input value={siteSettings.contactAddress} onChange={e => setSiteSettings(s => ({ ...s, contactAddress: e.target.value }))}
                         className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-emerald-400" />
                     </div>
+                  </div>
+                  <button onClick={saveSiteSettingsNow} disabled={siteSettingsSaving}
+                    className="px-4 py-2.5 bg-emerald-700 text-white rounded-xl text-xs font-bold cursor-pointer hover:bg-emerald-800 transition disabled:opacity-40">
+                    {siteSettingsSaving ? "Menyimpan..." : "Simpan Tapak Web"}
+                  </button>
+                </div>
+
+                <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-3">
+                  <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2"><Globe className="w-4 h-4 text-sky-500" /> Pautan Media Sosial</h3>
+                  <div className="space-y-2">
+                    {Object.entries(siteSettings.socialLinks || {}).map(([platform, url]) => (
+                      <div key={platform} className="flex items-center justify-between gap-3 p-3 border border-slate-100 rounded-xl">
+                        <div className="min-w-0">
+                          <p className="text-xs font-bold text-slate-800">{platform}</p>
+                          <p className="text-[11px] text-slate-400 truncate">{url}</p>
+                        </div>
+                        <button onClick={() => removeSocialLink(platform)} className="text-rose-400 hover:text-rose-600 cursor-pointer shrink-0"><Trash2 className="w-3.5 h-3.5" /></button>
+                      </div>
+                    ))}
+                    {Object.keys(siteSettings.socialLinks || {}).length === 0 && <p className="text-xs text-slate-400 text-center py-3">Tiada pautan media sosial lagi.</p>}
+                  </div>
+                  <div className="flex items-center gap-2 pt-2 border-t border-slate-100">
+                    <input value={socialDraft.platform} onChange={e => setSocialDraft(d => ({ ...d, platform: e.target.value }))}
+                      placeholder="Platform (cth: Facebook)"
+                      className="w-1/3 border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-emerald-400" />
+                    <input value={socialDraft.url} onChange={e => setSocialDraft(d => ({ ...d, url: e.target.value }))}
+                      placeholder="https://..."
+                      className="flex-1 border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-emerald-400" />
+                    <button onClick={addSocialLink} className="px-4 py-2 bg-indigo-600 text-white rounded-xl text-xs font-bold cursor-pointer hover:bg-indigo-700 transition shrink-0">Tambah</button>
                   </div>
                   <button onClick={saveSiteSettingsNow} disabled={siteSettingsSaving}
                     className="px-4 py-2.5 bg-emerald-700 text-white rounded-xl text-xs font-bold cursor-pointer hover:bg-emerald-800 transition disabled:opacity-40">

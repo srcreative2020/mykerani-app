@@ -137,7 +137,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLogin, onRegister })
               Mula Percubaan Percuma <ArrowRight className="w-4 h-4" />
             </button>
             <button onClick={handleTryDemo} disabled={demoLoading} className="flex items-center gap-2 px-5 py-3 border border-slate-200 rounded-2xl text-sm font-bold text-slate-700 cursor-pointer hover:bg-slate-50 transition disabled:opacity-50">
-              <PlayCircle className="w-4 h-4" /> {demoLoading ? "Memuatkan..." : "Lihat Demo"}
+              <PlayCircle className="w-4 h-4" /> {demoLoading ? "Memuatkan..." : "Lihat Demo (Tanpa Daftar)"}
             </button>
           </div>
         </div>
@@ -222,9 +222,9 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLogin, onRegister })
       {/* Live demo workspace */}
       <section className="max-w-6xl mx-auto px-5 py-14 border-t border-slate-100 text-center space-y-4">
         <h2 className="text-xl font-display font-bold">Cuba Ruang Kerja Demo</h2>
-        <p className="text-xs text-slate-400 max-w-md mx-auto">Jelajahi papan pemuka, transaksi, dokumen, laporan dan pembantu AI tanpa perlu mendaftar.</p>
+        <p className="text-xs text-slate-400 max-w-md mx-auto">Jelajahi papan pemuka, transaksi, dokumen, laporan dan pembantu AI tanpa perlu mendaftar — tiada e-mel, tiada kata laluan, tiada akaun dicipta.</p>
         <button onClick={handleTryDemo} disabled={demoLoading} className="px-6 py-3 bg-slate-900 text-white rounded-2xl text-sm font-bold cursor-pointer hover:bg-slate-800 transition disabled:opacity-50">
-          {demoLoading ? "Memuatkan..." : "Cuba Demo"}
+          {demoLoading ? "Memuatkan..." : "Cuba Demo Sekarang"}
         </button>
       </section>
 
@@ -311,8 +311,17 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLogin, onRegister })
         </div>
       </section>
 
-      <footer className="text-center py-6 text-[11px] text-slate-400">
-        © {new Date().getFullYear()} {companyName}. Hak cipta terpelihara.
+      <footer className="text-center py-6 text-[11px] text-slate-400 space-y-2">
+        {settings?.socialLinks && Object.keys(settings.socialLinks).length > 0 && (
+          <div className="flex items-center justify-center gap-4">
+            {Object.entries(settings.socialLinks).map(([platform, url]) => (
+              <a key={platform} href={url} target="_blank" rel="noopener noreferrer" className="font-semibold text-slate-500 hover:text-slate-800 transition">
+                {platform}
+              </a>
+            ))}
+          </div>
+        )}
+        <p>© {new Date().getFullYear()} {companyName}. Hak cipta terpelihara.</p>
       </footer>
     </div>
   );

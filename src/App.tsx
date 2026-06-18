@@ -1121,20 +1121,36 @@ function MainDashboardContent() {
 }
 
 function RoleRouter() {
-  const { user } = useAuth();
+  const { user, isMockUser, signOut } = useAuth();
   const { activeTenant } = useTenant();
 
-  // V1.0 Role Authority routing
-  if (user?.role === "TENANT_STAFF") {
-    return <Suspense fallback={<LazyFallback />}><StaffHomeScreen /></Suspense>;
-  }
+  const content = (() => {
+    // V1.0 Role Authority routing
+    if (user?.role === "TENANT_STAFF") {
+      return <Suspense fallback={<LazyFallback />}><StaffHomeScreen /></Suspense>;
+    }
 
-  if (user?.role === "HQ_OWNER" || user?.role === "HQ_STAFF" || activeTenant?.category === "HQ") {
-    return <Suspense fallback={<LazyFallback />}><MainDashboardContent /></Suspense>;
-  }
+    if (user?.role === "HQ_OWNER" || user?.role === "HQ_STAFF" || activeTenant?.category === "HQ") {
+      return <Suspense fallback={<LazyFallback />}><MainDashboardContent /></Suspense>;
+    }
 
-  // TENANT_OWNER → Owner Business Dashboard
-  return <Suspense fallback={<LazyFallback />}><OwnerDashboard /></Suspense>;
+    // TENANT_OWNER → Owner Business Dashboard
+    return <Suspense fallback={<LazyFallback />}><OwnerDashboard /></Suspense>;
+  })();
+
+  if (!isMockUser) return content;
+
+  return (
+    <div id="demo_mode_wrapper">
+      <div className="sticky top-0 z-50 bg-amber-500 text-amber-950 text-xs font-bold px-4 py-2 flex items-center justify-between gap-3">
+        <span>MOD DEMO — tiada log masuk sebenar, tiada akaun dicipta, data ini bukan data sebenar.</span>
+        <button onClick={() => signOut()} className="px-3 py-1 bg-amber-950 text-amber-50 rounded-lg text-[11px] font-bold cursor-pointer hover:bg-amber-900 transition shrink-0">
+          Keluar Demo
+        </button>
+      </div>
+      {content}
+    </div>
+  );
 }
 
 class AppErrorBoundary extends React.Component<
