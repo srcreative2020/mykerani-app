@@ -28,6 +28,7 @@ import {
 import { type FinancialEvent, type FinancialCommitment } from "../types";
 import { exportToCSV, exportToExcel, exportToJSON, exportToPDF, type ExportColumn } from "../lib/exportUtils";
 import { computeFinancialHealthScoring } from "../lib/financialHealth";
+import { ProfitLossReport } from "./ProfitLossReport";
 
 export const FinancialReportsAnalytics: React.FC = () => {
   const { activeWorkspace } = useWorkspace();
@@ -42,9 +43,9 @@ export const FinancialReportsAnalytics: React.FC = () => {
     financialEvidencePackages,
   } = useFinancials();
 
-  // Active Report Selection state: 8 reports
+  // Active Report Selection state: 9 reports
   const [selectedReport, setSelectedReport] = useState<
-    "summary" | "cashflow" | "receivables_aging" | "payables_aging" | "commitments" | "health" | "tax_readiness" | "bank_readiness"
+    "summary" | "cashflow" | "receivables_aging" | "payables_aging" | "commitments" | "health" | "tax_readiness" | "bank_readiness" | "profit_loss"
   >("summary");
 
   const [businessProfile, setBusinessProfile] = useState<BusinessProfile>(EMPTY_BUSINESS_PROFILE);
@@ -755,6 +756,21 @@ export const FinancialReportsAnalytics: React.FC = () => {
             </div>
           </button>
 
+          <button
+            onClick={() => { setSelectedReport("profit_loss"); setSearchTerm(""); }}
+            className={`w-full text-left px-3.5 py-3 rounded-xl text-xs font-semibold flex items-center justify-between transition border ${
+              selectedReport === "profit_loss"
+                ? "bg-slate-950 border-slate-950 text-white shadow-xs"
+                : "bg-white border-slate-200 text-slate-700 hover:bg-slate-50 hover:text-slate-950"
+            }`}
+            id="nav_report_profit_loss"
+          >
+            <div className="flex items-center space-x-2">
+              <TrendingUp className="w-4 h-4 text-emerald-600" />
+              <span>9. Untung Rugi (Profit & Loss)</span>
+            </div>
+          </button>
+
           <div className="p-4 bg-indigo-50 rounded-xl space-y-2.5 mt-4 border border-indigo-100">
             <span className="text-[10px] font-mono uppercase bg-indigo-100 text-indigo-800 px-1.5 py-0.5 rounded font-bold">
               Nota Kedaulatan Data
@@ -782,6 +798,7 @@ export const FinancialReportsAnalytics: React.FC = () => {
               {selectedReport === "health" && "6. Skor Kesihatan Syarikat & Ramalan Jangka Kelangsungan"}
               {selectedReport === "tax_readiness" && "7. Senarai Semak Kesediaan Cukai LHDN"}
               {selectedReport === "bank_readiness" && "8. Senarai Semak Kesediaan Pembiayaan/Pinjaman"}
+              {selectedReport === "profit_loss" && "9. Penyata Untung Rugi (Profit & Loss Statement)"}
             </h3>
             <p className="text-xs text-slate-500 mt-0.5 font-sans">
               Sektor perakaunan pintar bertauliah dari platform MYKERANI.
@@ -1715,6 +1732,15 @@ export const FinancialReportsAnalytics: React.FC = () => {
                 </p>
               </div>
 
+            </div>
+          )}
+
+          {selectedReport === "profit_loss" && (
+            <div className="animate-fade-in" id="report_profit_loss_view">
+              <ProfitLossReport
+                financialEvents={financialEvents}
+                financialEvidencePackages={financialEvidencePackages}
+              />
             </div>
           )}
 
