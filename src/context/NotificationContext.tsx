@@ -7,6 +7,7 @@ import { useAudit } from "./AuditContext";
 import { useStorage } from "./StorageContext";
 import { useFinancials } from "./FinancialRecordsContext";
 import { isDemoWorkspace } from "../lib/seeder";
+import { computeFinancialHealthScoring } from "../lib/financialHealth";
 
 export interface WorkspaceNotification {
   id: string;
@@ -57,7 +58,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
   const { activeWorkspace } = useWorkspace();
   const { writeAuditLog } = useAudit();
   const { activeProvider } = useStorage();
-  const { financialEvents, financialCommitments, financialEvidencePackages } = useFinancials();
+  const { financialEvents, financialCommitments, financialEvidencePackages, cashAccounts, bankAccounts, debtRecords } = useFinancials();
 
   const [notifications, setNotifications] = useState<WorkspaceNotification[]>([]);
   const [preferences, setPreferences] = useState<WorkspaceNotificationPreferences | null>(null);
@@ -668,6 +669,35 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
           metadata: { alert_key: `missing_evidence_${e.id}`, financial_event_id: e.id }
         });
       });
+
+    // 3c. --- Financial Health Risk Detector ---
+    // Reuses the exact same solvency/quick-ratio/runway model shown in the
+    // Financial Health report so the proactive alert never contradicts the report.
+    const scoring = computeFinancialHealthScoring(cashAccounts, bankAccounts, financialEvents, debtRecords, financialCommitments, today);
+
+    if (scoring.solvencyGrade === "Critical Risk") {
+      proposedAlerts.push({
+        workspaceId,
+        tenantId,
+        category: "FINANCIAL_RECORD",
+        title: "Amaran Kesihatan Kewangan: Risiko Solvensi Kritikal",
+        message: `Nisbah aset berbanding liabiliti anda kini ${scoring.solvencyRatio.toFixed(2)}x — jumlah hutang dan bil pembekal melebihi jumlah tunai dan tuntutan anda. Sila semak Laporan Kesihatan & Kelangsungan untuk butiran penuh.`,
+        status: "UNREAD",
+        metadata: { alert_key: `health_solvency_critical_${TODAY_STR}` }
+      });
+    }
+
+    if (scoring.runwayGrade === "Immediate Action Required (< 2 Months)") {
+      proposedAlerts.push({
+        workspaceId,
+        tenantId,
+        category: "FINANCIAL_RECORD",
+        title: "Amaran Kesihatan Kewangan: Kelangsungan Operasi Terhad",
+        message: `Baki tunai cair anda hanya mampu menampung komitmen bulanan untuk ${scoring.runwayMonths.toFixed(1)} bulan sahaja. Sila semak Laporan Kesihatan & Kelangsungan dan pertimbangkan langkah memulihkan mudah tunai.`,
+        status: "UNREAD",
+        metadata: { alert_key: `health_runway_critical_${TODAY_STR}` }
+      });
+    }
 
     // 4. --- Backup Detector ---
     const backupsRepoRaw = localStorage.getItem("mykerani_backups_repository");

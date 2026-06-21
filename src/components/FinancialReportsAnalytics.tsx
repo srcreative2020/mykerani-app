@@ -27,6 +27,7 @@ import {
 } from "lucide-react";
 import { type FinancialEvent, type FinancialCommitment } from "../types";
 import { exportToCSV, exportToExcel, exportToJSON, exportToPDF, type ExportColumn } from "../lib/exportUtils";
+import { computeFinancialHealthScoring } from "../lib/financialHealth";
 
 export const FinancialReportsAnalytics: React.FC = () => {
   const { activeWorkspace } = useWorkspace();
@@ -253,56 +254,30 @@ export const FinancialReportsAnalytics: React.FC = () => {
     };
   }, [financialCommitments, baseDate]);
 
-  // Financial Health scoring model
+  // Financial Health scoring model (shared with proactive advisory alerts — see src/lib/financialHealth.ts)
   const healthScoring = useMemo(() => {
-    const solvencyRatio = aggregateLiabilities === 0 ? 10 : aggregateAssets / aggregateLiabilities;
-    const quickRatio = totalPayables === 0 ? 10 : totalLiquidAssets / totalPayables;
-    
-    // Runway survival cash / commitment burn
-    const runwayMonths = commitmentBurnData.monthlyBurn === 0 ? 999 : totalLiquidAssets / commitmentBurnData.monthlyBurn;
+    const scoring = computeFinancialHealthScoring(cashAccounts, bankAccounts, financialEvents, debtRecords, financialCommitments, baseDate);
 
-    let solvencyGrade = "Excellent";
-    let solvencyColor = "text-emerald-600 bg-emerald-50 border-emerald-150";
-    if (solvencyRatio < 1.0) {
-      solvencyGrade = "Critical Risk";
-      solvencyColor = "text-rose-600 bg-rose-50 border-rose-150";
-    } else if (solvencyRatio < 1.8) {
-      solvencyGrade = "Moderate";
-      solvencyColor = "text-amber-600 bg-amber-50 border-amber-100";
-    }
+    const solvencyColor = scoring.solvencyGrade === "Critical Risk"
+      ? "text-rose-600 bg-rose-50 border-rose-150"
+      : scoring.solvencyGrade === "Moderate"
+        ? "text-amber-600 bg-amber-50 border-amber-100"
+        : "text-emerald-600 bg-emerald-50 border-emerald-150";
 
-    let quickGrade = "Secure";
-    let quickColor = "text-emerald-600 bg-emerald-50 border-emerald-155";
-    if (quickRatio < 1.0) {
-      quickGrade = "Strained";
-      quickColor = "text-rose-600 bg-rose-50 border-rose-154";
-    } else if (quickRatio < 1.6) {
-      quickGrade = "Adequate";
-      quickColor = "text-amber-650 bg-amber-50 border-amber-150";
-    }
+    const quickColor = scoring.quickGrade === "Strained"
+      ? "text-rose-600 bg-rose-50 border-rose-154"
+      : scoring.quickGrade === "Adequate"
+        ? "text-amber-650 bg-amber-50 border-amber-150"
+        : "text-emerald-600 bg-emerald-50 border-emerald-155";
 
-    let runwayGrade = "Healthy (6+ Months)";
-    let runwayColor = "text-emerald-600 bg-emerald-50 border-emerald-150";
-    if (runwayMonths < 2.0) {
-      runwayGrade = "Immediate Action Required (< 2 Months)";
-      runwayColor = "text-rose-600 bg-rose-50 border-rose-150";
-    } else if (runwayMonths < 5.0) {
-      runwayGrade = "Moderate Buffer (2-5 Months)";
-      runwayColor = "text-amber-600 bg-amber-50 border-amber-100";
-    }
+    const runwayColor = scoring.runwayGrade === "Immediate Action Required (< 2 Months)"
+      ? "text-rose-600 bg-rose-50 border-rose-150"
+      : scoring.runwayGrade === "Moderate Buffer (2-5 Months)"
+        ? "text-amber-600 bg-amber-50 border-amber-100"
+        : "text-emerald-600 bg-emerald-50 border-emerald-150";
 
-    return {
-      solvencyRatio,
-      solvencyGrade,
-      solvencyColor,
-      quickRatio,
-      quickGrade,
-      quickColor,
-      runwayMonths,
-      runwayGrade,
-      runwayColor
-    };
-  }, [aggregateAssets, aggregateLiabilities, totalLiquidAssets, totalPayables, commitmentBurnData]);
+    return { ...scoring, solvencyColor, quickColor, runwayColor };
+  }, [cashAccounts, bankAccounts, financialEvents, debtRecords, financialCommitments, baseDate]);
 
   // LHDN Tax Readiness checklist — computed purely from existing income/expense
   // records, evidence linkage, and business profile completeness. No mock data.
