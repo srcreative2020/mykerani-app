@@ -228,6 +228,10 @@ export function OwnerDashboard() {
 
   // â"€â"€ AI Chat State â"€â"€
   const [chatMessages, setChatMessages] = useState<ChatMsg[]>([]);
+  // Full conversation history (all dates) — kept separate from chatMessages so the
+  // active home thread can always start fresh on login/refresh while Arkib Perbualan
+  // still has access to everything that was ever said.
+  const [chatHistoryAll, setChatHistoryAll] = useState<ChatMsg[]>([]);
   const [chatArchiveDate, setChatArchiveDate] = useState<string | null>(null);
   const [chatInput, setChatInput] = useState("");
   const [chatLoading, setChatLoading] = useState(false);
@@ -930,14 +934,13 @@ export function OwnerDashboard() {
 
   useEffect(() => {
     if (!wsId) return;
+    // Every login/page-load starts on a fresh chat home view — previous
+    // conversations (today's or older) stay reachable via Arkib Perbualan
+    // instead of auto-resuming and silently replacing whatever the user
+    // was just typing into a "Chat Baharu".
+    setChatMessages([]);
     loadChatHistory(wsId, isMockUser).then(history => {
-      // Only resume today's conversation on load/login — older messages stay
-      // reachable via Arkib Perbualan instead of re-flooding the active thread.
-      const todayStr = new Date().toISOString().slice(0, 10);
-      const todays = history.filter(h => (h.createdAt || "").slice(0, 10) === todayStr);
-      if (todays.length > 0) {
-        setChatMessages(todays.map(h => ({ id: h.id, sender: h.sender, text: h.text, suggestions: h.suggestions, createdAt: h.createdAt, attachmentUrl: h.attachmentUrl, attachmentName: h.attachmentName, attachmentType: h.attachmentType })));
-      }
+      setChatHistoryAll(history.map(h => ({ id: h.id, sender: h.sender, text: h.text, suggestions: h.suggestions, createdAt: h.createdAt, attachmentUrl: h.attachmentUrl, attachmentName: h.attachmentName, attachmentType: h.attachmentType })));
     });
     try {
       const stored = localStorage.getItem(chatSuggestionStatusKey(wsId));
@@ -2936,15 +2939,22 @@ export function OwnerDashboard() {
             {morePage === "chatArchive" && (
               <div className="space-y-3">
                 <h2 className="text-lg font-bold text-slate-900">Arkib Perbualan</h2>
-                {chatMessages.length === 0 ? (
-                  <div className="bg-white border border-slate-200 rounded-2xl p-10 text-center shadow-sm">
-                    <MessageCircle className="w-10 h-10 text-slate-200 mx-auto mb-2" />
-                    <p className="text-sm text-slate-400">Tiada perbualan lagi</p>
-                  </div>
-                ) : (
-                  (() => {
+                {(() => {
+                  const merged = new Map<string, ChatMsg>();
+                  chatHistoryAll.forEach(m => merged.set(m.id, m));
+                  chatMessages.forEach(m => merged.set(m.id, m));
+                  const allMessages = Array.from(merged.values());
+                  if (allMessages.length === 0) {
+                    return (
+                      <div className="bg-white border border-slate-200 rounded-2xl p-10 text-center shadow-sm">
+                        <MessageCircle className="w-10 h-10 text-slate-200 mx-auto mb-2" />
+                        <p className="text-sm text-slate-400">Tiada perbualan lagi</p>
+                      </div>
+                    );
+                  }
+                  {
                     const byDate: Record<string, ChatMsg[]> = {};
-                    chatMessages.forEach(m => {
+                    allMessages.forEach(m => {
                       const d = (m.createdAt || new Date().toISOString()).slice(0, 10);
                       (byDate[d] = byDate[d] || []).push(m);
                     });
@@ -2979,8 +2989,8 @@ export function OwnerDashboard() {
                         )}
                       </>
                     );
-                  })()
-                )}
+                  }
+                })()}
               </div>
             )}
 
@@ -3309,8 +3319,8 @@ export function OwnerDashboard() {
                     <p className="text-[10px] text-slate-400">{Math.max(0, aiCredits.total - aiCredits.used)} kredit berbaki</p>
                   </div>
                   <div className="grid grid-cols-2 gap-2">
-                    <button className="py-2.5 bg-amber-50 border border-amber-100 text-amber-700 rounded-xl text-xs font-bold cursor-pointer hover:bg-amber-100 transition">Beli Kredit</button>
-                    <button className="py-2.5 bg-slate-50 border border-slate-200 text-slate-600 rounded-xl text-xs font-bold cursor-pointer hover:bg-slate-100 transition">Lihat Penggunaan</button>
+                    <button onClick={() => setMorePage("resources")} className="py-2.5 bg-amber-50 border border-amber-100 text-amber-700 rounded-xl text-xs font-bold cursor-pointer hover:bg-amber-100 transition">Beli Kredit</button>
+                    <button onClick={() => setMorePage("resources")} className="py-2.5 bg-slate-50 border border-slate-200 text-slate-600 rounded-xl text-xs font-bold cursor-pointer hover:bg-slate-100 transition">Lihat Penggunaan</button>
                   </div>
                 </div>
 
@@ -3321,21 +3331,21 @@ export function OwnerDashboard() {
                       <Database className="w-4 h-4 text-blue-500" />
                       <p className="text-sm font-bold text-slate-900">Storan</p>
                     </div>
-                    <span className="text-xs text-slate-400">5 GB termasuk</span>
+                    <span className="text-xs text-slate-400">{storageQuota.quotaGB.toFixed(1)} GB termasuk</span>
                   </div>
                   <div className="space-y-1">
                     <div className="flex justify-between text-xs">
                       <span className="text-slate-500">Digunakan</span>
-                      <span className="font-semibold text-slate-800">0.3 GB / 5 GB</span>
+                      <span className="font-semibold text-slate-800">{storageQuota.usedGB.toFixed(2)} GB / {storageQuota.quotaGB.toFixed(1)} GB</span>
                     </div>
                     <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
-                      <div className="h-full bg-blue-400 rounded-full" style={{ width: "6%" }} />
+                      <div className="h-full bg-blue-400 rounded-full" style={{ width: `${Math.min(100, storageQuota.pctUsed * 100)}%` }} />
                     </div>
-                    <p className="text-[10px] text-slate-400">4.7 GB berbaki</p>
+                    <p className="text-[10px] text-slate-400">{Math.max(0, storageQuota.quotaGB - storageQuota.usedGB).toFixed(2)} GB berbaki</p>
                   </div>
                   <div className="grid grid-cols-2 gap-2">
-                    <button className="py-2.5 bg-blue-50 border border-blue-100 text-blue-700 rounded-xl text-xs font-bold cursor-pointer hover:bg-blue-100 transition">Beli Storan</button>
-                    <button className="py-2.5 bg-slate-50 border border-slate-200 text-slate-600 rounded-xl text-xs font-bold cursor-pointer hover:bg-slate-100 transition">Lihat Penggunaan</button>
+                    <button onClick={() => setShowAddonModal(true)} className="py-2.5 bg-blue-50 border border-blue-100 text-blue-700 rounded-xl text-xs font-bold cursor-pointer hover:bg-blue-100 transition">Beli Storan</button>
+                    <button onClick={() => setMorePage("resources")} className="py-2.5 bg-slate-50 border border-slate-200 text-slate-600 rounded-xl text-xs font-bold cursor-pointer hover:bg-slate-100 transition">Lihat Penggunaan</button>
                   </div>
                 </div>
 

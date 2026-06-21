@@ -179,6 +179,10 @@ export function StaffHomeScreen() {
 
   // â"€â"€ AI Chat â"€â"€
   const [chatMessages, setChatMessages] = useState<{ id: string; sender: "user" | "ai"; text: string; suggestions?: ChatSuggestion[]; createdAt?: string; attachmentUrl?: string; attachmentName?: string; attachmentType?: "image" | "pdf" | "audio" }[]>([]);
+  // Full conversation history (all dates) — kept separate from chatMessages so the
+  // active home thread can always start fresh on login/refresh while Arkib Perbualan
+  // still has access to everything that was ever said.
+  const [chatHistoryAll, setChatHistoryAll] = useState<typeof chatMessages>([]);
   const [showChatArchive, setShowChatArchive] = useState(false);
   const [showProfileView, setShowProfileView] = useState(false);
   const [chatArchiveDate, setChatArchiveDate] = useState<string | null>(null);
@@ -262,12 +266,13 @@ export function StaffHomeScreen() {
 
   useEffect(() => {
     if (!wsId) return;
+    // Every login/page-load starts on a fresh chat home view — previous
+    // conversations (today's or older) stay reachable via Arkib Perbualan
+    // instead of auto-resuming and silently replacing whatever the user
+    // was just typing into a "Chat Baharu".
+    setChatMessages([]);
     loadChatHistory(wsId, isMockUser).then(history => {
-      const todayStr = new Date().toISOString().slice(0, 10);
-      const todays = history.filter(h => (h.createdAt || "").slice(0, 10) === todayStr);
-      if (todays.length > 0) {
-        setChatMessages(todays.map(h => ({ id: h.id, sender: h.sender, text: h.text, suggestions: h.suggestions, createdAt: h.createdAt, attachmentUrl: h.attachmentUrl, attachmentName: h.attachmentName, attachmentType: h.attachmentType })));
-      }
+      setChatHistoryAll(history.map(h => ({ id: h.id, sender: h.sender, text: h.text, suggestions: h.suggestions, createdAt: h.createdAt, attachmentUrl: h.attachmentUrl, attachmentName: h.attachmentName, attachmentType: h.attachmentType })));
     });
     try {
       const stored = localStorage.getItem(chatSuggestionStatusKey(wsId));
@@ -1279,14 +1284,24 @@ export function StaffHomeScreen() {
               </button>
             </div>
             <div className="flex-1 overflow-y-auto p-4 max-w-lg mx-auto w-full space-y-3">
-              {chatMessages.length === 0 ? (
+              {(() => {
+                const merged = new Map<string, typeof chatMessages[number]>();
+                chatHistoryAll.forEach(m => merged.set(m.id, m));
+                chatMessages.forEach(m => merged.set(m.id, m));
+                const allMessages = Array.from(merged.values());
+                return allMessages.length === 0;
+              })() ? (
                 <div className="bg-white border border-slate-200 rounded-2xl p-10 text-center shadow-sm">
                   <MessageCircle className="w-10 h-10 text-slate-200 mx-auto mb-2" />
                   <p className="text-sm text-slate-400">Tiada perbualan lagi</p>
                 </div>
               ) : (() => {
+                const merged = new Map<string, typeof chatMessages[number]>();
+                chatHistoryAll.forEach(m => merged.set(m.id, m));
+                chatMessages.forEach(m => merged.set(m.id, m));
+                const allMessages = Array.from(merged.values());
                 const byDate: Record<string, typeof chatMessages> = {};
-                chatMessages.forEach(m => {
+                allMessages.forEach(m => {
                   const d = (m.createdAt || new Date().toISOString()).slice(0, 10);
                   (byDate[d] = byDate[d] || []).push(m);
                 });
