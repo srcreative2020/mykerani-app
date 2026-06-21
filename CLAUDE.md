@@ -1,10 +1,21 @@
 # MyKerani — Project Mandate
 
-> Governing document: `MYKERANI_CONSTITUTION.md` (STATUS: LOCKED, V1.0) is the
-> master constitution for this project. All architecture, database, API, AI
-> and feature decisions must comply with it. Where this file and the
-> constitution overlap, the constitution takes precedence; this file adds
-> implementation-level detail on top of it.
+> Governing documents:
+> - `MYKERANI_VISION.md` (STATUS: LOCKED, V1.0) is the master PURPOSE/VISION
+>   document — why MyKerani exists, who it serves, and the non-negotiable
+>   "AI Suggests → User Confirms → AI Learns" formula. Every feature, UX
+>   decision, and update must align with this. If a proposed change does not
+>   serve "Cakap. Upload. Sahkan." (talk, upload, confirm) for a non-accountant
+>   user, or violates what AI is/isn't allowed to do (never auto-approve,
+>   auto-edit, auto-delete, pay, or decide on the user's behalf), it must be
+>   reconsidered.
+> - `MYKERANI_CONSTITUTION.md` (STATUS: LOCKED, V1.0) is the master technical
+>   constitution — defines product scope (100% financial only; no HR/CRM/POS/
+>   inventory). All architecture, database, API, AI and feature decisions must
+>   comply with it.
+> - Where these overlap: the vision document defines WHY/intent, the
+>   constitution defines WHAT is in/out of scope, and this file adds
+>   implementation-level detail on top of both.
 
 ## Data Ownership Rule
 
