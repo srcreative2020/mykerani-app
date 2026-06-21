@@ -699,6 +699,49 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       });
     }
 
+    // 3d. --- Spending Anomaly Detector ---
+    // Vision requirement: AI learns the user's typical spending pattern per category
+    // and flags outliers, instead of just recording transactions blindly.
+    const currentMonthKey = `${today.getFullYear()}-${today.getMonth()}`;
+    const expenseEvents = financialEvents.filter(e => e.type === "EXPENSE" && e.categoryName);
+
+    const byCategory = new Map<string, { currentMonthTotal: number; pastMonthTotals: Map<string, number> }>();
+    expenseEvents.forEach(e => {
+      const d = new Date(e.date);
+      if (isNaN(d.getTime())) return;
+      const monthKey = `${d.getFullYear()}-${d.getMonth()}`;
+      if (!byCategory.has(e.categoryName)) {
+        byCategory.set(e.categoryName, { currentMonthTotal: 0, pastMonthTotals: new Map() });
+      }
+      const entry = byCategory.get(e.categoryName)!;
+      if (monthKey === currentMonthKey) {
+        entry.currentMonthTotal += e.amountMyr;
+      } else {
+        entry.pastMonthTotals.set(monthKey, (entry.pastMonthTotals.get(monthKey) || 0) + e.amountMyr);
+      }
+    });
+
+    byCategory.forEach((entry, categoryName) => {
+      const pastMonths = Array.from(entry.pastMonthTotals.values());
+      if (pastMonths.length < 2 || entry.currentMonthTotal === 0) return; // need real history to learn a baseline
+
+      const avgPastMonth = pastMonths.reduce((sum, v) => sum + v, 0) / pastMonths.length;
+      if (avgPastMonth <= 0) return;
+
+      const increasePct = ((entry.currentMonthTotal - avgPastMonth) / avgPastMonth) * 100;
+      if (increasePct >= 50 && (entry.currentMonthTotal - avgPastMonth) >= 50) {
+        proposedAlerts.push({
+          workspaceId,
+          tenantId,
+          category: "FINANCIAL_RECORD",
+          title: `Corak Perbelanjaan Luar Biasa: ${categoryName}`,
+          message: `Perbelanjaan kategori "${categoryName}" bulan ini RM ${entry.currentMonthTotal.toLocaleString("en-MY", { minimumFractionDigits: 2 })}, iaitu ${increasePct.toFixed(0)}% lebih tinggi daripada purata bulanan biasa anda (RM ${avgPastMonth.toLocaleString("en-MY", { minimumFractionDigits: 2 })}). Sila semak rekod untuk pastikan semuanya betul.`,
+          status: "UNREAD",
+          metadata: { alert_key: `spend_anomaly_${categoryName}_${currentMonthKey}` }
+        });
+      }
+    });
+
     // 4. --- Backup Detector ---
     const backupsRepoRaw = localStorage.getItem("mykerani_backups_repository");
     let workspaceBackups: any[] = [];
