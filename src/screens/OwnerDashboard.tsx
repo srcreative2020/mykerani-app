@@ -28,6 +28,10 @@ import {
 } from "../lib/documentStorage";
 import { supabase, isSupabaseConfigured } from "../lib/supabase";
 import { loadChatHistory, saveChatMessage } from "../lib/chatHistory";
+import { logEvent } from "../lib/eventLog";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
+import JSZip from "jszip";
 import {
   loadPersonalProfile, savePersonalProfile, loadBusinessProfile, saveBusinessProfile,
   loadVehicles, addVehicle, deleteVehicle, loadDependents, addDependent, deleteDependent,
@@ -375,6 +379,113 @@ export function OwnerDashboard() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [pendingDocType, setPendingDocType] = useState<DocType>("SUPPORTING_DOC");
   const [docTypeFilter, setDocTypeFilter] = useState<"ALL" | DocType>("ALL");
+
+  // Evidence Package Compiler: bundle a cover summary + every uploaded document
+  // within a date range into one ZIP, for bank/LHDN/accountant requests.
+  const todayIsoForPackage = new Date().toISOString().split("T")[0];
+  const yearStartIsoForPackage = `${new Date().getFullYear()}-01-01`;
+  const [packageStartDate, setPackageStartDate] = useState(yearStartIsoForPackage);
+  const [packageEndDate, setPackageEndDate] = useState(todayIsoForPackage);
+  const [isCompilingPackage, setIsCompilingPackage] = useState(false);
+  const [compilePackageError, setCompilePackageError] = useState<string>("");
+
+  const compileEvidencePackage = async () => {
+    if (!activeWorkspace) return;
+    setIsCompilingPackage(true);
+    setCompilePackageError("");
+
+    try {
+      const start = new Date(packageStartDate);
+      const end = new Date(packageEndDate);
+      end.setHours(23, 59, 59, 999);
+
+      const docsInRange = docs.filter((d) => {
+        const created = new Date(d.created_at);
+        return !isNaN(created.getTime()) && created >= start && created <= end;
+      });
+
+      const eventsInRange = financialEvents.filter((e) => {
+        if (e.workspaceId !== activeWorkspace.id) return false;
+        const d = new Date(e.date);
+        return !isNaN(d.getTime()) && d >= start && d <= end;
+      });
+
+      const totalIncome = eventsInRange.filter((e) => e.type === "INCOME").reduce((s, e) => s + e.amountMyr, 0);
+      const totalExpense = eventsInRange.filter((e) => e.type === "EXPENSE").reduce((s, e) => s + e.amountMyr, 0);
+      const totalReceivable = eventsInRange.filter((e) => e.type === "RECEIVABLE" && !e.isCompleted).reduce((s, e) => s + e.amountMyr, 0);
+      const totalPayable = eventsInRange.filter((e) => e.type === "PAYABLE" && !e.isCompleted).reduce((s, e) => s + e.amountMyr, 0);
+
+      const doc = new jsPDF();
+      doc.setFontSize(16);
+      doc.text("MyKerani — Pek Bukti Kewangan (Evidence Package)", 14, 18);
+      doc.setFontSize(10);
+      doc.text(`Workspace: ${activeWorkspace.name}`, 14, 28);
+      doc.text(`Tempoh: ${packageStartDate} hingga ${packageEndDate}`, 14, 34);
+      doc.text(`Dijana pada: ${new Date().toISOString().slice(0, 19).replace("T", " ")}`, 14, 40);
+
+      autoTable(doc, {
+        startY: 48,
+        head: [["Ringkasan", "Jumlah (RM)"]],
+        body: [
+          ["Jumlah Pendapatan", totalIncome.toLocaleString("en-MY", { minimumFractionDigits: 2 })],
+          ["Jumlah Perbelanjaan", totalExpense.toLocaleString("en-MY", { minimumFractionDigits: 2 })],
+          ["Belum Dikutip (Receivable)", totalReceivable.toLocaleString("en-MY", { minimumFractionDigits: 2 })],
+          ["Belum Dibayar (Payable)", totalPayable.toLocaleString("en-MY", { minimumFractionDigits: 2 })],
+        ],
+      });
+
+      const tableY = (doc as any).lastAutoTable?.finalY || 60;
+      autoTable(doc, {
+        startY: tableY + 10,
+        head: [["Dokumen Disertakan", "Jenis", "Tarikh Muat Naik"]],
+        body: docsInRange.length
+          ? docsInRange.map((d) => [d.file_name, d.document_type, d.created_at.slice(0, 10)])
+          : [["Tiada dokumen sokongan dalam tempoh ini", "-", "-"]],
+      });
+
+      const coverPdfBlob = doc.output("blob");
+
+      const zip = new JSZip();
+      const safeWorkspaceName = activeWorkspace.name.replace(/[^a-z0-9]+/gi, "_");
+      zip.file(`00_Ringkasan_${safeWorkspaceName}.pdf`, coverPdfBlob);
+
+      for (const docItem of docsInRange) {
+        try {
+          const url = await getDocumentUrl(docItem.file_path_supabase);
+          if (!url) continue;
+          const res = await fetch(url);
+          if (!res.ok) continue;
+          const blob = await res.blob();
+          zip.file(docItem.file_name || `dokumen_${docItem.id}`, blob);
+        } catch {
+          // Skip files that fail to fetch; cover PDF still lists them for reference.
+        }
+      }
+
+      const zipBlob = await zip.generateAsync({ type: "blob" });
+      const url = URL.createObjectURL(zipBlob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `MyKerani_EvidencePackage_${safeWorkspaceName}_${packageStartDate}_${packageEndDate}.zip`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+
+      if (user && activeTenant) {
+        logEvent({
+          tenantId: activeTenant.id, workspaceId: activeWorkspace.id, userId: user.id,
+          userEmail: user.email, userRole: user.role, eventType: "EXPORT",
+          description: `Compiled Evidence Package (${packageStartDate} to ${packageEndDate})`,
+          metadata: { docCount: docsInRange.length, startDate: packageStartDate, endDate: packageEndDate },
+        });
+      }
+    } catch (e: any) {
+      setCompilePackageError(e?.message || "Gagal menyediakan pek bukti kewangan. Sila cuba lagi.");
+    } finally {
+      setIsCompilingPackage(false);
+    }
+  };
 
   // AI document reading: AI Suggests -> Tenant Confirms/Edits/Rejects, mirroring
   // the same pattern used by OCREngineConsole/chat suggestions elsewhere in the app.
@@ -1548,6 +1659,34 @@ export function OwnerDashboard() {
               <Upload className="w-4 h-4 text-slate-400" />
               <span className="text-xs text-slate-500 font-semibold">Muat naik dokumen lain (Kontrak, dsb.)</span>
             </button>
+
+            {/* Evidence Package Compiler — bila bank/LHDN/akauntan minta bukti kewangan */}
+            <div className="bg-white border border-slate-200 rounded-2xl p-4 space-y-3" id="owner_evidence_package_compiler">
+              <div className="flex items-center space-x-2">
+                <FileSpreadsheet className="w-4 h-4 text-slate-700" />
+                <h3 className="font-bold text-slate-900 text-sm">Sediakan Pek Bukti Kewangan</h3>
+              </div>
+              <p className="text-[11px] text-slate-500 leading-relaxed">
+                Bila bank, LHDN, atau akauntan minta bukti, jana satu pek (ZIP) berisi ringkasan kewangan dan semua dokumen dalam tempoh yang dipilih.
+              </p>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-[10px] font-semibold text-slate-500 block mb-1">Dari Tarikh</label>
+                  <input type="date" value={packageStartDate} onChange={(e) => setPackageStartDate(e.target.value)}
+                    className="w-full text-xs bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-2 outline-hidden focus:bg-white focus:border-slate-900" />
+                </div>
+                <div>
+                  <label className="text-[10px] font-semibold text-slate-500 block mb-1">Hingga Tarikh</label>
+                  <input type="date" value={packageEndDate} onChange={(e) => setPackageEndDate(e.target.value)}
+                    className="w-full text-xs bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-2 outline-hidden focus:bg-white focus:border-slate-900" />
+                </div>
+              </div>
+              <button type="button" onClick={compileEvidencePackage} disabled={isCompilingPackage}
+                className="w-full px-4 py-2.5 bg-slate-900 hover:bg-slate-800 disabled:opacity-50 text-white text-xs font-semibold rounded-xl transition cursor-pointer">
+                {isCompilingPackage ? "Menyediakan..." : "Jana Pek (ZIP)"}
+              </button>
+              {compilePackageError && <p className="text-[10px] text-rose-600">{compilePackageError}</p>}
+            </div>
 
             {docAnalyzing && (
               <div className="bg-indigo-50 border border-indigo-200 rounded-xl px-4 py-3 flex items-center gap-2">
