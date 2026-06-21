@@ -163,6 +163,12 @@ export function OwnerDashboard() {
   const [activeTab, setActiveTab] = useState<MainTab>("home");
   const [morePage, setMorePage] = useState<MorePage>("menu");
   const [quickAdd, setQuickAdd] = useState<"INCOME" | "EXPENSE" | null>(null);
+  // Persisted (localStorage) so a confirmed/rejected suggestion is not re-actioned (and
+  // duplicate-inserted) after a page refresh, remount, or chat history reload — the chat
+  // message itself is reloaded from ai_chat_messages on every mount, but without this the
+  // suggestion buttons would always come back as "pending" even though the record was
+  // already saved to the database.
+  const chatSuggestionStatusKey = (wsId: string) => `mykerani_chat_suggestion_status_${wsId}`;
   const [chatSuggestionStatus, setChatSuggestionStatus] = useState<Record<string, ChatSuggestionStatus>>({});
   const [editingChatSuggestionId, setEditingChatSuggestionId] = useState<string | null>(null);
   const [chatEditDraft, setChatEditDraft] = useState({ amount: "", category: "", relatedParty: "", date: "" });
@@ -792,7 +798,29 @@ export function OwnerDashboard() {
         setChatMessages(history.map(h => ({ id: h.id, sender: h.sender, text: h.text, suggestions: h.suggestions, createdAt: h.createdAt })));
       }
     });
+    try {
+      const stored = localStorage.getItem(chatSuggestionStatusKey(wsId));
+      setChatSuggestionStatus(stored ? JSON.parse(stored) : {});
+    } catch {
+      setChatSuggestionStatus({});
+    }
   }, [wsId, isMockUser]);
+
+  // Persist confirmed/rejected suggestion status to localStorage so refresh/remount cannot
+  // forget it and re-trigger a duplicate database insert via handleChatConfirmSuggestion.
+  const markChatSuggestionStatus = (id: string, status: ChatSuggestionStatus) => {
+    setChatSuggestionStatus(prev => {
+      const next = { ...prev, [id]: status };
+      if (wsId) {
+        try {
+          localStorage.setItem(chatSuggestionStatusKey(wsId), JSON.stringify(next));
+        } catch {
+          // best-effort only
+        }
+      }
+      return next;
+    });
+  };
 
   const [personalProfile, setPersonalProfile] = useState<PersonalProfile>(EMPTY_PERSONAL_PROFILE);
   const [businesses, setBusinesses] = useState<Business[]>([]);
@@ -1044,7 +1072,7 @@ export function OwnerDashboard() {
   };
 
   const handleChatRejectSuggestion = (id: string) => {
-    setChatSuggestionStatus(prev => ({ ...prev, [id]: "rejected" }));
+    markChatSuggestionStatus(id, "rejected");
   };
 
   const handleChatStartEdit = (s: ChatSuggestion) => {
@@ -1083,6 +1111,11 @@ export function OwnerDashboard() {
     if (!activeWorkspace || chatSuggestionStatus[s.id] === "confirmed") return;
     const extra = chatSuggestionExtra[s.id];
     if (!extra || !extra.businessPicked) return;
+    // Mark confirmed immediately (and persist) before any further work — closes the race
+    // where a duplicate click, re-render, or chat-history reload could call this function
+    // again for the same suggestion before the original confirm finished, which previously
+    // caused the same transaction to be inserted into the database multiple times.
+    markChatSuggestionStatus(s.id, "confirmed");
     const businessId = extra.businessId;
     const transactionType = s.payload?.transactionType;
     const amount = Number(edited ? edited.amount : s.payload?.amount) || 0;
@@ -1181,7 +1214,6 @@ export function OwnerDashboard() {
       confidenceScore,
     });
 
-    setChatSuggestionStatus(prev => ({ ...prev, [s.id]: "confirmed" }));
     setEditingChatSuggestionId(null);
   };
 
@@ -1790,7 +1822,7 @@ export function OwnerDashboard() {
                             {ev.type === "INCOME" ? <TrendingUp className="w-3.5 h-3.5 text-emerald-500" /> : <TrendingDown className="w-3.5 h-3.5 text-rose-500" />}
                           </div>
                           <div>
-                            <p className="text-xs font-semibold text-slate-800 truncate max-w-[150px]">{ev.partyName || ev.categoryName}</p>
+                            <p className="text-xs font-semibold text-slate-800 truncate max-w-[150px]">{(ev.partyName && ev.partyName !== "Tidak Dinyatakan") ? ev.partyName : ev.categoryName}</p>
                             <p className="text-[10px] text-slate-400">{ev.date}</p>
                           </div>
                         </div>

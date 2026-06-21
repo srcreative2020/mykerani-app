@@ -166,6 +166,9 @@ export function StaffHomeScreen() {
   const [showProfileView, setShowProfileView] = useState(false);
   const [chatArchiveDate, setChatArchiveDate] = useState<string | null>(null);
   const [chatInput, setChatInput] = useState("");
+  // Persisted (localStorage) so a confirmed/rejected suggestion is not re-actioned (and
+  // duplicate-inserted) after a page refresh, remount, or chat history reload.
+  const chatSuggestionStatusKey = (wsId: string) => `mykerani_chat_suggestion_status_${wsId}`;
   const [chatSuggestionStatus, setChatSuggestionStatus] = useState<Record<string, ChatSuggestionStatus>>({});
   const [editingChatSuggestionId, setEditingChatSuggestionId] = useState<string | null>(null);
   const [chatEditDraft, setChatEditDraft] = useState({ amount: "", category: "", relatedParty: "", date: "" });
@@ -237,7 +240,29 @@ export function StaffHomeScreen() {
         setChatMessages(history.map(h => ({ id: h.id, sender: h.sender, text: h.text, suggestions: h.suggestions, createdAt: h.createdAt })));
       }
     });
+    try {
+      const stored = localStorage.getItem(chatSuggestionStatusKey(wsId));
+      setChatSuggestionStatus(stored ? JSON.parse(stored) : {});
+    } catch {
+      setChatSuggestionStatus({});
+    }
   }, [wsId, isMockUser]);
+
+  // Persist confirmed/rejected suggestion status to localStorage so refresh/remount cannot
+  // forget it and re-trigger a duplicate database insert via handleChatConfirmSuggestion.
+  const markChatSuggestionStatus = (id: string, status: ChatSuggestionStatus) => {
+    setChatSuggestionStatus(prev => {
+      const next = { ...prev, [id]: status };
+      if (wsId) {
+        try {
+          localStorage.setItem(chatSuggestionStatusKey(wsId), JSON.stringify(next));
+        } catch {
+          // best-effort only
+        }
+      }
+      return next;
+    });
+  };
   useEffect(() => { supportEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [supportMessages, supportLoading]);
 
   const [personalProfile, setPersonalProfile] = useState(EMPTY_PERSONAL_PROFILE);
@@ -328,7 +353,7 @@ export function StaffHomeScreen() {
   };
 
   const handleChatRejectSuggestion = (id: string) => {
-    setChatSuggestionStatus(prev => ({ ...prev, [id]: "rejected" }));
+    markChatSuggestionStatus(id, "rejected");
   };
 
   const handleChatStartEdit = (s: ChatSuggestion) => {
@@ -367,6 +392,9 @@ export function StaffHomeScreen() {
     if (!activeWorkspace || chatSuggestionStatus[s.id] === "confirmed") return;
     const extra = chatSuggestionExtra[s.id];
     if (!extra || !extra.businessPicked) return;
+    // Mark confirmed immediately (and persist) before any further work — see OwnerDashboard's
+    // identical fix for why this prevents duplicate database inserts of the same transaction.
+    markChatSuggestionStatus(s.id, "confirmed");
     const businessId = extra.businessId;
     const transactionType = s.payload?.transactionType;
     const amount = Number(edited ? edited.amount : s.payload?.amount) || 0;
@@ -465,7 +493,6 @@ export function StaffHomeScreen() {
       confidenceScore,
     });
 
-    setChatSuggestionStatus(prev => ({ ...prev, [s.id]: "confirmed" }));
     setEditingChatSuggestionId(null);
   };
 
@@ -872,7 +899,7 @@ export function StaffHomeScreen() {
                               : <TrendingDown className="w-4 h-4 text-rose-500" />}
                           </div>
                           <div>
-                            <p className="text-sm font-semibold text-slate-800 truncate max-w-[170px]">{rec.partyName || rec.categoryName}</p>
+                            <p className="text-sm font-semibold text-slate-800 truncate max-w-[170px]">{(rec.partyName && rec.partyName !== "Tidak Dinyatakan") ? rec.partyName : rec.categoryName}</p>
                             <p className="text-[11px] text-slate-400">{rec.date}</p>
                           </div>
                         </div>
