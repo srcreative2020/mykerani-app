@@ -783,6 +783,8 @@ Provide your output precisely formatted as raw JSON matching exactly this shape,
         });
       }
 
+      const knowledgeBankMatches = await fetchKnowledgeBankMatches(String(query));
+
       const systemPrompt = `You are MYKERANI AI Financial Assistant, a highly trained cognitive co-pilot. Your purpose is to analyze the active workspace financial data and provide Q&A answers, structured searches, analytical summaries, diagnostic health explanations, and evidence retrieval references.
 
 Active Workspace and Tenant context:
@@ -790,6 +792,8 @@ Workspace Name: ${financialContext?.activeWorkspace?.name || "Standard Workspace
 Tenant Name: ${financialContext?.activeTenant?.name || "Standard Tenant"}
 
 User's Query/Question: "${query}"
+
+Financial Knowledge Bank — Matched Reference Scenarios (curated, cross-tenant financial situations matched to this query by keyword; use these to inform your suggested classification, but a matching OCR Learned Vendor Pattern from THIS tenant's own history, section 7 below, always takes priority since it is more specific): ${JSON.stringify(knowledgeBankMatches)}
 
 Here is the structured financial database content of the active workspace:
 1. Financial Records (financialEvents): ${JSON.stringify(financialContext?.financialEvents || [])}
@@ -808,7 +812,7 @@ Here is what you know about the user's life (Profile System — all fields are o
 
 Instructions & Constraints:
 - AI Suggests. User Confirms. AI Learns. (If you identify any unrecognized category, or vendor without a learned profile, ALWAYS generate a 'LEARN_PATTERN' suggestion inside the 'suggestions' array. Do not suggest editing or deleting records. Only recommend classifications that the user can confirm manually.)
-- SUGGEST-FIRST (LOCKED BEHAVIOR): you are a financial clerk, not an interrogation chatbot. The objective is to minimize user effort, not maximize certainty. When the user states a transaction (amount + what it was for), your default action is to ALWAYS attempt a CONFIRM_TRANSACTION suggestion immediately — even when details like the vendor/customer name are missing — by inferring the most likely classification in this priority order: (1) User Profile, (2) Workspace/Tenant context (the single active workspace given above — do not guess at OTHER workspaces you cannot see), (3) Financial History (financialEvents), (4) OCR Learned Vendor Patterns (section 7), (5) general world knowledge of the stated item/keyword (e.g. "ayam" implies raw-material/food-related expense). If the vendor/customer name was not stated, leave "relatedParty" null/empty in the payload and proceed anyway — do NOT block the suggestion or ask "beli dekat mana/dari siapa" just to fill in a party name; the user can add it later by editing the suggestion before confirming. Never respond with a refusal like "saya tidak dapat mengesahkan maklumat" — always give your best suggested classification with an honest confidenceScore instead. Only fall back to asking a clarifying question (and skipping the suggestion) when the AMBIGUITY IS STRUCTURAL and a wrong guess would misclassify the record in a way editing-after-the-fact can't cleanly fix — i.e. the vehicle-disambiguation and owner/business-ambiguity cases described below. A missing vendor name alone is never sufficient reason to ask instead of suggesting.
+- SUGGEST-FIRST (LOCKED BEHAVIOR): you are a financial clerk, not an interrogation chatbot. The objective is to minimize user effort, not maximize certainty. When the user states a transaction (amount + what it was for), your default action is to ALWAYS attempt a CONFIRM_TRANSACTION suggestion immediately — even when details like the vendor/customer name are missing — by inferring the most likely classification in this priority order: (1) User Profile, (2) Workspace/Tenant context (the single active workspace given above — do not guess at OTHER workspaces you cannot see), (3) Financial History (financialEvents), (4) OCR Learned Vendor Patterns (section 7 — this tenant's own confirmed history, highest trust), (5) Financial Knowledge Bank matched scenarios given above (cross-tenant curated reference, use when no learned pattern exists), (6) general world knowledge of the stated item/keyword (e.g. "ayam" implies raw-material/food-related expense). If the vendor/customer name was not stated, leave "relatedParty" null/empty in the payload and proceed anyway — do NOT block the suggestion or ask "beli dekat mana/dari siapa" just to fill in a party name; the user can add it later by editing the suggestion before confirming. Never respond with a refusal like "saya tidak dapat mengesahkan maklumat" — always give your best suggested classification with an honest confidenceScore instead. Only fall back to asking a clarifying question (and skipping the suggestion) when the AMBIGUITY IS STRUCTURAL and a wrong guess would misclassify the record in a way editing-after-the-fact can't cleanly fix — i.e. the vehicle-disambiguation and owner/business-ambiguity cases described below. A missing vendor name alone is never sufficient reason to ask instead of suggesting.
 - AI is strictly advisory. Your recommendations should prioritize safety, financial health, liquidity, and double-entry accuracy.
 - Return references ('linkedRecordIds' and 'linkedEvidenceIds') when queries touch specific events, bills, invoices, receipts, or attachments.
 - Return structured visual metrics in the 'highlights' object. Health Status must be EXCELLENT, STABLE, WARNING, or THREAT.
@@ -863,6 +867,10 @@ Only include a "CONFIRM_TRANSACTION" suggestion entry when financialIntent.detec
       }));
 
       logAiUsage(financialContext?.activeTenant?.id, financialContext?.activeWorkspace?.id, userId, "assistant", usedCandidate!.provider, usedCandidate!.model);
+
+      if (parsedResponse?.financialIntent?.detected && knowledgeBankMatches.length === 0) {
+        logKnowledgeBankGap(financialContext?.activeTenant?.id, financialContext?.activeWorkspace?.id, parsedResponse.financialIntent);
+      }
 
       return res.json(parsedResponse);
 
@@ -985,6 +993,66 @@ Only include a "CONFIRM_TRANSACTION" suggestion entry when financialIntent.detec
       console.error("Failed to fetch AI Router config from Supabase:", err);
       return null;
     }
+  }
+
+  // Financial Knowledge Bank: matches the user's free-text query against
+  // curated cross-tenant financial scenarios (keyword overlap) so the AI
+  // assistant has a concrete suggested classification to fall back on
+  // before resorting to generic guessing. Read-only, best-effort — a lookup
+  // failure must never block the assistant response.
+  async function fetchKnowledgeBankMatches(query: string): Promise<any[]> {
+    const supabaseUrl = process.env.VITE_SUPABASE_URL;
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    if (!supabaseUrl || !serviceRoleKey) return [];
+
+    const STOPWORDS = new Set(["saya", "kena", "kami", "untuk", "dengan", "yang", "dan", "the", "for", "with", "and", "from", "this", "that", "ini", "itu", "ada", "tak", "tidak"]);
+    const keywords = Array.from(new Set(
+      query.toLowerCase()
+        .replace(/rm\s?[\d,.]+/g, " ")
+        .split(/[^a-z0-9à-ÿ]+/)
+        .filter(w => w.length >= 3 && !STOPWORDS.has(w))
+    )).slice(0, 12);
+    if (keywords.length === 0) return [];
+
+    try {
+      const filter = `{${keywords.map(k => k.replace(/[{},"]/g, "")).join(",")}}`;
+      const url = `${supabaseUrl}/rest/v1/knowledge_bank_scenarios?is_active=eq.true&keywords=ov.${encodeURIComponent(filter)}&select=scenario_code,category,title,suggested_type,suggested_category,suggested_documents,base_confidence&limit=8`;
+      const resp = await fetch(url, {
+        headers: { apikey: serviceRoleKey, Authorization: `Bearer ${serviceRoleKey}` },
+      });
+      if (!resp.ok) return [];
+      return await resp.json();
+    } catch (err) {
+      console.error("Knowledge Bank lookup failed:", err);
+      return [];
+    }
+  }
+
+  // Logs a real, detected financial transaction that matched no Knowledge
+  // Bank scenario, so HQ can review and expand the bank over time. Fire-
+  // and-forget — must never block or delay the assistant response.
+  function logKnowledgeBankGap(tenantId: string | undefined | null, workspaceId: string | undefined | null, financialIntent: any): void {
+    if (!tenantId) return;
+    const supabaseUrl = process.env.VITE_SUPABASE_URL;
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    if (!supabaseUrl || !serviceRoleKey) return;
+    fetch(`${supabaseUrl}/rest/v1/knowledge_bank_gaps`, {
+      method: "POST",
+      headers: {
+        apikey: serviceRoleKey,
+        Authorization: `Bearer ${serviceRoleKey}`,
+        "Content-Type": "application/json",
+        Prefer: "return=minimal",
+      },
+      body: JSON.stringify({
+        tenant_id: tenantId,
+        workspace_id: workspaceId || null,
+        raw_text: String(financialIntent?.rawText || "").slice(0, 500),
+        detected_type: financialIntent?.type || null,
+        detected_amount: financialIntent?.amount || null,
+        related_party: financialIntent?.relatedParty || null,
+      }),
+    }).catch(err => console.error("Failed to log knowledge bank gap:", err));
   }
 
   // Records one AI usage credit against a tenant (service-role write — no client
