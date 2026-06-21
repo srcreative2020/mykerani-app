@@ -42,6 +42,14 @@ interface ChatSuggestion {
   businessPicked?: boolean;
   evidenceStatus?: "NONE" | "ATTACHED" | "SKIPPED";
   evidenceFileName?: string;
+  accountingRecommendation?: string;
+  accountingLevel1Group?: string;
+  accountingReason?: string;
+  financialStatementImpact?: string;
+  accountingRiskLevel?: "LOW" | "MEDIUM" | "HIGH";
+  accountingExplanationText?: string;
+  accountingMatchStatus?: "MATCH" | "POSSIBLE_MISMATCH" | "HIGH_RISK_MISMATCH";
+  accountingConfidence?: number;
 }
 type ChatSuggestionRecordType = "INCOME" | "EXPENSE" | "RECEIVABLE" | "PAYABLE" | "DEBT" | "COMMITMENT";
 type ChatSuggestionStatusValue = "pending" | "confirmed" | "rejected";
@@ -202,6 +210,8 @@ export function StaffHomeScreen() {
   const chatEndRef = useRef<HTMLDivElement>(null);
   // Per-suggestion business pick + evidence step, layered on top of the AI suggestion before final Sahkan.
   const [chatSuggestionExtra, setChatSuggestionExtra] = useState<Record<string, { businessId: string | null; businessName: string; businessPicked: boolean; evidenceStatus: "NONE" | "ATTACHED" | "SKIPPED" }>>({});
+  // Accounting Knowledge Base V1: per-suggestion dismissal of the "Cadangan Semakan" review banner.
+  const [accountingBannerDismissed, setAccountingBannerDismissed] = useState<Record<string, boolean>>({});
   const chatEvidenceFilesRef = useRef<Record<string, File>>({});
   const chatEvidenceInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
   const [chatAttaching, setChatAttaching] = useState(false);
@@ -407,6 +417,20 @@ export function StaffHomeScreen() {
     setChatEditDraft({
       amount: String(s.payload?.amount ?? ""),
       category: s.payload?.category || "",
+      relatedParty: s.payload?.relatedParty || "",
+      date: s.payload?.date || new Date().toISOString().split("T")[0],
+    });
+  };
+
+  // Accounting Knowledge Base V1: "Tukar" never auto-applies — it opens the
+  // existing manual category-edit field pre-filled with the recommended
+  // category, exactly like a user-initiated edit. User must still tap Sahkan.
+  const handleChatApplyAccountingRecommendation = (s: ChatSuggestion) => {
+    setAccountingBannerDismissed(prev => ({ ...prev, [s.id]: true }));
+    setEditingChatSuggestionId(s.id);
+    setChatEditDraft({
+      amount: String(s.payload?.amount ?? ""),
+      category: s.accountingRecommendation || s.payload?.category || "",
       relatedParty: s.payload?.relatedParty || "",
       date: s.payload?.date || new Date().toISOString().split("T")[0],
     });
@@ -895,6 +919,36 @@ export function StaffHomeScreen() {
                               <div>Jumlah: RM{Number(statusObj.editedAmount ?? s.payload?.amount ?? 0).toFixed(2)}</div>
                               <div>Confidence: <span className={`font-bold ${confidenceClass}`}>{confidencePct}%</span></div>
                             </div>
+                            {status === "pending" && s.accountingMatchStatus && s.accountingMatchStatus !== "MATCH" && !accountingBannerDismissed[s.id] && (
+                              <div className={`space-y-1 rounded-lg px-2.5 py-1.5 text-2xs border ${s.accountingRiskLevel === "HIGH" ? "bg-rose-50 border-rose-200 text-rose-800" : "bg-amber-50 border-amber-200 text-amber-800"}`}>
+                                <div className="font-bold">Cadangan Semakan</div>
+                                <div>Berdasarkan amalan perakaunan biasa, transaksi ini lazimnya direkodkan sebagai: <strong>{s.accountingRecommendation}</strong></div>
+                                {s.accountingRiskLevel !== "LOW" && (
+                                  <>
+                                    {s.accountingReason && <div>Sebab: {s.accountingReason}</div>}
+                                    {s.financialStatementImpact && <div>Kesan Penyata Kewangan: {s.financialStatementImpact}</div>}
+                                    <div>Tahap Risiko: {s.accountingRiskLevel === "HIGH" ? "🔴 HIGH" : s.accountingRiskLevel === "MEDIUM" ? "🟡 MEDIUM" : "🟢 LOW"}</div>
+                                    {s.accountingExplanationText && <div>Penjelasan: {s.accountingExplanationText}</div>}
+                                  </>
+                                )}
+                                <div className="flex gap-1.5 pt-0.5">
+                                  <button
+                                    type="button"
+                                    onClick={() => setAccountingBannerDismissed(prev => ({ ...prev, [s.id]: true }))}
+                                    className="px-2 py-1 rounded-md bg-slate-200 hover:bg-slate-300 text-slate-800 font-semibold"
+                                  >
+                                    Kekalkan
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleChatApplyAccountingRecommendation(s)}
+                                    className={`px-2 py-1 rounded-md text-white font-semibold ${s.accountingRiskLevel === "HIGH" ? "bg-rose-600 hover:bg-rose-700" : "bg-amber-600 hover:bg-amber-700"}`}
+                                  >
+                                    Tukar ke {s.accountingRecommendation}
+                                  </button>
+                                </div>
+                              </div>
+                            )}
                             {status === "confirmed" && editingChatSuggestionId !== s.id && (
                               <div className="space-y-1.5">
                                 <div className="text-emerald-700 font-bold">

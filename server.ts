@@ -6,6 +6,7 @@ import dotenv from "dotenv";
 import fs from "fs";
 import pg from "pg";
 import { createVerify } from "crypto";
+import { evaluateAccountingSuggestion } from "./src/lib/accountingClassificationMap";
 
 const { Client } = pg;
 
@@ -923,6 +924,33 @@ Only include a "CONFIRM_TRANSACTION" suggestion entry when financialIntent.detec
 
       if (parsedResponse?.financialIntent?.detected && knowledgeBankMatches.length === 0) {
         logKnowledgeBankGap(financialContext?.activeTenant?.id, financialContext?.activeWorkspace?.id, parsedResponse.financialIntent);
+      }
+
+      // Accounting Knowledge Base V1 (Phase 1): stateless post-LLM rules layer.
+      // Never throws/blocks the primary response — best-effort enrichment only.
+      try {
+        if (Array.isArray(parsedResponse?.suggestions)) {
+          for (const suggestion of parsedResponse.suggestions) {
+            if (suggestion?.actionType !== "CONFIRM_TRANSACTION") continue;
+            const payload = suggestion.payload || {};
+            const lookupText = [payload.relatedParty, payload.category, parsedResponse?.financialIntent?.rawText]
+              .filter(Boolean)
+              .join(" ");
+            const evaluation = evaluateAccountingSuggestion(payload.category, lookupText);
+            if (evaluation) {
+              suggestion.accountingRecommendation = evaluation.recommendedCategory;
+              suggestion.accountingLevel1Group = evaluation.level1Group;
+              suggestion.accountingReason = evaluation.accountingReason;
+              suggestion.financialStatementImpact = evaluation.financialStatementImpact;
+              suggestion.accountingRiskLevel = evaluation.riskLevel;
+              suggestion.accountingExplanationText = evaluation.explanationText;
+              suggestion.accountingMatchStatus = evaluation.matchStatus;
+              suggestion.accountingConfidence = evaluation.accountingConfidence;
+            }
+          }
+        }
+      } catch (accountingErr: any) {
+        console.error("Accounting Knowledge Base evaluation failed (non-blocking):", accountingErr?.message || accountingErr);
       }
 
       return res.json(parsedResponse);
