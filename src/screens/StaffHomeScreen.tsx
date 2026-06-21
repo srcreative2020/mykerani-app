@@ -837,6 +837,7 @@ export function StaffHomeScreen() {
                                   <div className="text-[10px] text-slate-400">
                                     {new Date(statusObj.confirmedAt).toLocaleString("ms-MY", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}
                                     {statusObj.confirmedByName && ` · ${statusObj.confirmedByName}`}
+                                    {statusObj.confirmedByUserId && ` · ID: ${statusObj.confirmedByUserId.slice(0, 8)}`}
                                   </div>
                                 )}
                                 <button type="button" onClick={() => handleChatStartEdit(s)}
