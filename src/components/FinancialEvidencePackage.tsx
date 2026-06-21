@@ -2,11 +2,15 @@
 import { type FinancialEvidencePackage, type FinancialEvent, type FinancialCommitment } from "../types";
 import { useFinancials } from "../context/FinancialRecordsContext";
 import { useWorkspace } from "../context/WorkspaceContext";
+import { useTenant } from "../context/TenantContext";
 import { useStorage } from "../context/StorageContext";
 import { supabase, isSupabaseConfigured } from "../lib/supabase";
 import { useAuth } from "../context/AuthContext";
 import { logEvent } from "../lib/eventLog";
 import { AnimatePresence, motion } from "../lib/motionCompat";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
+import JSZip from "jszip";
 import {
   UploadCloud,
   FileText,
@@ -26,7 +30,8 @@ import {
   Check,
   Calendar,
   Building,
-  DollarSign
+  DollarSign,
+  Package
 } from "lucide-react";
 
 export const FinancialEvidencePackageManager: React.FC = () => {
@@ -40,6 +45,7 @@ export const FinancialEvidencePackageManager: React.FC = () => {
   } = useFinancials();
 
   const { activeWorkspace } = useWorkspace();
+  const { activeTenant } = useTenant();
   const { user, isMockUser } = useAuth();
   const { activeProvider } = useStorage();
 
@@ -49,6 +55,116 @@ export const FinancialEvidencePackageManager: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [typeFilter, setTypeFilter] = useState<string>("ALL");
   const [linkFilter, setLinkFilter] = useState<string>("ALL"); // ALL, LINKED, UNLINKED
+
+  // Evidence Package Compiler: bundle reports + documents for a date range
+  // (e.g. "saya nak dokumen untuk bank tahun 2025") into a single downloadable ZIP.
+  const todayIso = new Date().toISOString().split("T")[0];
+  const yearStartIso = `${new Date().getFullYear()}-01-01`;
+  const [packageStartDate, setPackageStartDate] = useState(yearStartIso);
+  const [packageEndDate, setPackageEndDate] = useState(todayIso);
+  const [isCompilingPackage, setIsCompilingPackage] = useState(false);
+  const [compileError, setCompileError] = useState<string>("");
+
+  const compileEvidencePackage = async () => {
+    if (!activeWorkspace) return;
+    setIsCompilingPackage(true);
+    setCompileError("");
+
+    try {
+      const start = new Date(packageStartDate);
+      const end = new Date(packageEndDate);
+      end.setHours(23, 59, 59, 999);
+
+      const docsInRange = financialEvidencePackages.filter((p) => {
+        if (p.workspaceId !== activeWorkspace.id) return false;
+        const d = new Date(p.uploadDate);
+        return !isNaN(d.getTime()) && d >= start && d <= end;
+      });
+
+      const eventsInRange = financialEvents.filter((e) => {
+        if (e.workspaceId !== activeWorkspace.id) return false;
+        const d = new Date(e.date);
+        return !isNaN(d.getTime()) && d >= start && d <= end;
+      });
+
+      const totalIncome = eventsInRange.filter((e) => e.type === "INCOME").reduce((s, e) => s + e.amountMyr, 0);
+      const totalExpense = eventsInRange.filter((e) => e.type === "EXPENSE").reduce((s, e) => s + e.amountMyr, 0);
+      const totalReceivable = eventsInRange.filter((e) => e.type === "RECEIVABLE" && !e.isCompleted).reduce((s, e) => s + e.amountMyr, 0);
+      const totalPayable = eventsInRange.filter((e) => e.type === "PAYABLE" && !e.isCompleted).reduce((s, e) => s + e.amountMyr, 0);
+
+      // 1. Build cover summary PDF
+      const doc = new jsPDF();
+      doc.setFontSize(16);
+      doc.text("MyKerani — Pek Bukti Kewangan (Evidence Package)", 14, 18);
+      doc.setFontSize(10);
+      doc.text(`Workspace: ${activeWorkspace.name}`, 14, 28);
+      doc.text(`Tempoh: ${packageStartDate} hingga ${packageEndDate}`, 14, 34);
+      doc.text(`Dijana pada: ${new Date().toISOString().slice(0, 19).replace("T", " ")}`, 14, 40);
+
+      autoTable(doc, {
+        startY: 48,
+        head: [["Ringkasan", "Jumlah (RM)"]],
+        body: [
+          ["Jumlah Pendapatan", totalIncome.toLocaleString("en-MY", { minimumFractionDigits: 2 })],
+          ["Jumlah Perbelanjaan", totalExpense.toLocaleString("en-MY", { minimumFractionDigits: 2 })],
+          ["Belum Dikutip (Receivable)", totalReceivable.toLocaleString("en-MY", { minimumFractionDigits: 2 })],
+          ["Belum Dibayar (Payable)", totalPayable.toLocaleString("en-MY", { minimumFractionDigits: 2 })],
+        ],
+      });
+
+      const tableY = (doc as any).lastAutoTable?.finalY || 60;
+      autoTable(doc, {
+        startY: tableY + 10,
+        head: [["Dokumen Disertakan", "Jenis", "Tarikh Muat Naik"]],
+        body: docsInRange.length
+          ? docsInRange.map((d) => [d.fileName, d.documentType, d.uploadDate])
+          : [["Tiada dokumen sokongan dalam tempoh ini", "-", "-"]],
+      });
+
+      const coverPdfBlob = doc.output("blob");
+
+      // 2. Bundle cover PDF + actual evidence files into a ZIP
+      const zip = new JSZip();
+      const safeWorkspaceName = activeWorkspace.name.replace(/[^a-z0-9]+/gi, "_");
+      zip.file(`00_Ringkasan_${safeWorkspaceName}.pdf`, coverPdfBlob);
+
+      for (const docItem of docsInRange) {
+        if (!docItem.fileUrl) continue;
+        try {
+          const res = await fetch(docItem.fileUrl);
+          if (!res.ok) continue;
+          const blob = await res.blob();
+          zip.file(docItem.fileName || `dokumen_${docItem.id}`, blob);
+        } catch {
+          // Skip files that can't be fetched (e.g. BYOS reference-only URLs); cover PDF still lists them.
+        }
+      }
+
+      const zipBlob = await zip.generateAsync({ type: "blob" });
+      const url = URL.createObjectURL(zipBlob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `MyKerani_EvidencePackage_${safeWorkspaceName}_${packageStartDate}_${packageEndDate}.zip`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+
+      if (user && activeTenant) {
+        logEvent({
+          tenantId: activeTenant.id, workspaceId: activeWorkspace.id, userId: user.id,
+          userEmail: user.email, userRole: user.role, eventType: "EXPORT",
+          description: `Compiled Evidence Package (${packageStartDate} to ${packageEndDate})`,
+          metadata: { docCount: docsInRange.length, startDate: packageStartDate, endDate: packageEndDate },
+        });
+      }
+    } catch (e: any) {
+      setCompileError(e?.message || "Gagal menyediakan pek bukti kewangan. Sila cuba lagi.");
+    } finally {
+      setIsCompilingPackage(false);
+    }
+  };
+
 
   // Generate safe signed URL for private bucket storage paths when selected
   useEffect(() => {
@@ -641,6 +757,59 @@ export const FinancialEvidencePackageManager: React.FC = () => {
             All uploaded receipts, invoices, and statements are fully scoped to your workspace context (`{activeWorkspace?.name}`). Row-level security blocks all lateral tenant extraction or visibility cross-talk.
           </div>
         </div>
+      </div>
+
+      {/* EVIDENCE PACKAGE COMPILER — bundle reports + documents for bank/LHDN/accountant requests */}
+      <div className="bg-white border border-slate-200 rounded-2xl p-6 space-y-4" id="evidence_package_compiler_panel">
+        <div className="flex items-center space-x-2">
+          <Package className="w-4.5 h-4.5 text-slate-700" />
+          <h4 className="font-display font-semibold text-sm text-slate-900">Sediakan Pek Bukti Kewangan</h4>
+        </div>
+        <p className="text-[11px] text-slate-500 font-sans leading-relaxed">
+          Bila bank, LHDN, atau akauntan minta bukti kewangan, jana satu pek (ZIP) yang mengandungi ringkasan kewangan
+          serta semua dokumen sokongan (resit, invois, penyata) dalam tempoh yang dipilih.
+        </p>
+        <div className="flex flex-col md:flex-row gap-3 items-end">
+          <div className="flex-1 w-full">
+            <label className="text-2xs font-semibold text-slate-600 block mb-1">Dari Tarikh</label>
+            <input
+              type="date"
+              value={packageStartDate}
+              onChange={(e) => setPackageStartDate(e.target.value)}
+              className="w-full text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 outline-hidden text-slate-800 focus:bg-white focus:border-slate-900 transition"
+              id="inp_package_start_date"
+            />
+          </div>
+          <div className="flex-1 w-full">
+            <label className="text-2xs font-semibold text-slate-600 block mb-1">Hingga Tarikh</label>
+            <input
+              type="date"
+              value={packageEndDate}
+              onChange={(e) => setPackageEndDate(e.target.value)}
+              className="w-full text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 outline-hidden text-slate-800 focus:bg-white focus:border-slate-900 transition"
+              id="inp_package_end_date"
+            />
+          </div>
+          <button
+            type="button"
+            onClick={compileEvidencePackage}
+            disabled={isCompilingPackage || !activeWorkspace}
+            className="w-full md:w-auto px-5 py-2.5 bg-slate-900 hover:bg-slate-800 disabled:opacity-50 text-white text-xs font-semibold rounded-xl transition flex items-center justify-center space-x-2"
+            id="btn_compile_evidence_package"
+          >
+            {isCompilingPackage ? (
+              <span>Menyediakan...</span>
+            ) : (
+              <>
+                <Package className="w-3.5 h-3.5" />
+                <span>Jana Pek (ZIP)</span>
+              </>
+            )}
+          </button>
+        </div>
+        {compileError && (
+          <p className="text-2xs text-rose-600 font-sans">{compileError}</p>
+        )}
       </div>
 
       {/* FILTER SEARCH DIRECTORY SHEARED SECTION */}
