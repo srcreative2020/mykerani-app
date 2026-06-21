@@ -6,6 +6,7 @@ import { useTenant } from "../context/TenantContext";
 import { loadChatHistory, saveChatMessage } from "../lib/chatHistory";
 import { supabase, isSupabaseConfigured } from "../lib/supabase";
 import { isDemoWorkspace } from "../lib/seeder";
+import { uploadDocument, getDocumentUrl } from "../lib/documentStorage";
 import {
   loadPersonalProfile, loadBusinessProfile, loadVehicles, loadDependents, loadBusinesses,
   EMPTY_PERSONAL_PROFILE, EMPTY_BUSINESS_PROFILE, type Vehicle, type Dependent, type Business,
@@ -258,8 +259,10 @@ export function StaffHomeScreen() {
   useEffect(() => {
     if (!wsId) return;
     loadChatHistory(wsId, isMockUser).then(history => {
-      if (history.length > 0) {
-        setChatMessages(history.map(h => ({ id: h.id, sender: h.sender, text: h.text, suggestions: h.suggestions, createdAt: h.createdAt, attachmentUrl: h.attachmentUrl, attachmentName: h.attachmentName, attachmentType: h.attachmentType })));
+      const todayStr = new Date().toISOString().slice(0, 10);
+      const todays = history.filter(h => (h.createdAt || "").slice(0, 10) === todayStr);
+      if (todays.length > 0) {
+        setChatMessages(todays.map(h => ({ id: h.id, sender: h.sender, text: h.text, suggestions: h.suggestions, createdAt: h.createdAt, attachmentUrl: h.attachmentUrl, attachmentName: h.attachmentName, attachmentType: h.attachmentType })));
       }
     });
     try {
@@ -617,18 +620,16 @@ export function StaffHomeScreen() {
 
   const canUploadChatAttachment = !!wsId && isSupabaseConfigured() && !isMockUser && !!supabase && !isDemoWorkspace(wsId);
 
+  // Persisted via the same evidence_documents pipeline as the Owner's Dokumen tab
+  // (docType SUPPORTING_DOC/RECEIPT) so the Owner can see staff-uploaded chat
+  // attachments there too, with full uploader/date/size metadata.
   const uploadChatAttachment = async (file: File, kind: "image" | "pdf" | "audio") => {
     setChatAttaching(true);
     try {
       let url = "";
-      if (canUploadChatAttachment && supabase) {
-        const cleanName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
-        const path = `${wsId}/chat/${Date.now()}_${cleanName}`;
-        const { error } = await supabase.storage.from("evidence-packages").upload(path, file);
-        if (!error) {
-          const { data } = await supabase.storage.from("evidence-packages").createSignedUrl(path, 60 * 60 * 24 * 365);
-          url = data?.signedUrl || "";
-        }
+      if (canUploadChatAttachment && user) {
+        const { doc, error } = await uploadDocument(file, wsId, user.id, kind === "audio" ? "SUPPORTING_DOC" : "RECEIPT");
+        if (doc && !error) url = (await getDocumentUrl(doc.file_path_supabase)) || "";
       }
       if (!url) url = URL.createObjectURL(file);
 
@@ -754,6 +755,15 @@ export function StaffHomeScreen() {
         {/* â•â•â•â• HOME â€" AI CONVERSATION â•â•â•â• */}
         {activeTab === "home" && (
           <div className="flex-1 flex flex-col overflow-hidden" id="staff_home_pane">
+
+            {chatMessages.length > 0 && (
+              <div className="px-4 pt-3 flex justify-end shrink-0">
+                <button type="button" onClick={() => setChatMessages([])}
+                  className="text-[11px] font-semibold text-indigo-600 hover:text-indigo-800 cursor-pointer flex items-center gap-1">
+                  <RefreshCw className="w-3 h-3" /> Chat Baharu
+                </button>
+              </div>
+            )}
 
             {/* Conversation area */}
             <div className="flex-1 overflow-y-auto px-4 pt-4 pb-2 space-y-4" id="staff_chat_area">
@@ -968,11 +978,11 @@ export function StaffHomeScreen() {
               <form onSubmit={e => { e.preventDefault(); sendChat(); }}
                 className="flex items-center gap-2 bg-white border border-slate-300 rounded-2xl px-4 py-3 shadow-sm focus-within:border-slate-500 transition">
                 <button type="button" onClick={() => chatFileInputRef.current?.click()} disabled={chatAttaching || chatRecording}
-                  className="text-slate-400 hover:text-slate-700 disabled:opacity-40 cursor-pointer shrink-0">
+                  className="w-7 h-7 rounded-xl flex items-center justify-center text-indigo-600 bg-indigo-50 hover:bg-indigo-100 disabled:opacity-40 cursor-pointer shrink-0">
                   <Paperclip className="w-4 h-4" />
                 </button>
                 <button type="button" onClick={chatRecording ? stopChatVoiceRecording : startChatVoiceRecording} disabled={chatAttaching}
-                  className={`disabled:opacity-40 cursor-pointer shrink-0 ${chatRecording ? "text-rose-500" : "text-slate-400 hover:text-slate-700"}`}>
+                  className={`w-7 h-7 rounded-xl flex items-center justify-center disabled:opacity-40 cursor-pointer shrink-0 ${chatRecording ? "text-white bg-rose-500" : "text-emerald-600 bg-emerald-50 hover:bg-emerald-100"}`}>
                   {chatRecording ? <Square className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
                 </button>
                 <input

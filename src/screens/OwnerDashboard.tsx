@@ -3,6 +3,7 @@ import { useAuth } from "../context/AuthContext";
 import { useWorkspace } from "../context/WorkspaceContext";
 import { useFinancials } from "../context/FinancialRecordsContext";
 import { useTenant } from "../context/TenantContext";
+import { usePermission } from "../context/PermissionContext";
 import { type FinancialEvent } from "../types";
 import {
   Home, LayoutDashboard, FileText, BarChart3, MoreHorizontal,
@@ -178,7 +179,13 @@ export function OwnerDashboard() {
   const { user, signOut, isMockUser } = useAuth();
   const { activeWorkspace, workspaces, selectWorkspace } = useWorkspace();
   const { activeTenant } = useTenant();
-  const { financialEvents, addFinancialEvent, editFinancialEvent, addDebtRecord, editDebtRecord, addFinancialCommitment, editFinancialCommitment, learnOcrPattern, ocrLearnedPatterns, cashAccounts, bankAccounts, debtRecords, financialCommitments } = useFinancials();
+  const { userRoles } = usePermission();
+  const userNameById = useMemo(() => {
+    const map: Record<string, string> = {};
+    userRoles.forEach(r => { map[r.userId] = r.fullName; });
+    return map;
+  }, [userRoles]);
+  const { financialEvents, addFinancialEvent, editFinancialEvent, deleteFinancialEvent, addDebtRecord, editDebtRecord, deleteDebtRecord, addFinancialCommitment, editFinancialCommitment, deleteFinancialCommitment, learnOcrPattern, ocrLearnedPatterns, cashAccounts, bankAccounts, debtRecords, financialCommitments } = useFinancials();
 
   const [activeTab, setActiveTab] = useState<MainTab>("home");
   const [morePage, setMorePage] = useState<MorePage>("menu");
@@ -464,6 +471,8 @@ export function OwnerDashboard() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [pendingDocType, setPendingDocType] = useState<DocType>("SUPPORTING_DOC");
   const [docTypeFilter, setDocTypeFilter] = useState<"ALL" | DocType>("ALL");
+  const [docPageSize, setDocPageSize] = useState<20 | 50 | 100 | 200>(20);
+  const [docPage, setDocPage] = useState(1);
 
   // Evidence Package Compiler: bundle a cover summary + every uploaded document
   // within a date range into one ZIP, for bank/LHDN/accountant requests.
@@ -534,6 +543,12 @@ export function OwnerDashboard() {
       const safeWorkspaceName = activeWorkspace.name.replace(/[^a-z0-9]+/gi, "_");
       zip.file(`00_Ringkasan_${safeWorkspaceName}.pdf`, coverPdfBlob);
 
+      // Organize files into per-type subfolders, each filename date-prefixed, so the
+      // ZIP opens already sorted the way an accountant/bank/LHDN would expect.
+      const folderLabel: Record<string, string> = {
+        RECEIPT: "01_Resit", INVOICE: "02_Invois", BANK_STATEMENT: "03_Penyata_Bank",
+        CONTRACT: "04_Kontrak", SUPPORTING_DOC: "05_Dokumen_Lain",
+      };
       for (const docItem of docsInRange) {
         try {
           const url = await getDocumentUrl(docItem.file_path_supabase);
@@ -541,7 +556,10 @@ export function OwnerDashboard() {
           const res = await fetch(url);
           if (!res.ok) continue;
           const blob = await res.blob();
-          zip.file(docItem.file_name || `dokumen_${docItem.id}`, blob);
+          const folder = folderLabel[docItem.document_type] || "05_Dokumen_Lain";
+          const datePrefix = docItem.created_at.slice(0, 10);
+          const safeFileName = (docItem.file_name || `dokumen_${docItem.id}`).replace(/[\\/]/g, "_");
+          zip.file(`${folder}/${datePrefix}_${safeFileName}`, blob);
         } catch {
           // Skip files that fail to fetch; cover PDF still lists them for reference.
         }
@@ -820,6 +838,9 @@ export function OwnerDashboard() {
   };
 
   const filteredDocs = docTypeFilter === "ALL" ? docs : docs.filter(d => d.document_type === docTypeFilter);
+  const docTotalPages = Math.max(1, Math.ceil(filteredDocs.length / docPageSize));
+  const pagedDocs = filteredDocs.slice((docPage - 1) * docPageSize, docPage * docPageSize);
+  useEffect(() => { setDocPage(1); }, [docTypeFilter, docPageSize]);
 
   // Update activity timestamp on financial events change
   useEffect(() => { if (myEvents.length > 0) storageQuota.touchActive(); }, [myEvents.length]);
@@ -860,8 +881,12 @@ export function OwnerDashboard() {
   useEffect(() => {
     if (!wsId) return;
     loadChatHistory(wsId, isMockUser).then(history => {
-      if (history.length > 0) {
-        setChatMessages(history.map(h => ({ id: h.id, sender: h.sender, text: h.text, suggestions: h.suggestions, createdAt: h.createdAt, attachmentUrl: h.attachmentUrl, attachmentName: h.attachmentName, attachmentType: h.attachmentType })));
+      // Only resume today's conversation on load/login — older messages stay
+      // reachable via Arkib Perbualan instead of re-flooding the active thread.
+      const todayStr = new Date().toISOString().slice(0, 10);
+      const todays = history.filter(h => (h.createdAt || "").slice(0, 10) === todayStr);
+      if (todays.length > 0) {
+        setChatMessages(todays.map(h => ({ id: h.id, sender: h.sender, text: h.text, suggestions: h.suggestions, createdAt: h.createdAt, attachmentUrl: h.attachmentUrl, attachmentName: h.attachmentName, attachmentType: h.attachmentType })));
       }
     });
     try {
@@ -1119,22 +1144,21 @@ export function OwnerDashboard() {
     }
   };
 
-  // Upload a chat attachment (receipt image, PDF, or recorded voice note) to
-  // Supabase Storage and post it as a user chat message, then let the AI
-  // react to it via the normal sendChat() flow.
+  // Upload a chat attachment (receipt image, PDF, or recorded voice note). Persisted
+  // via the same evidence_documents pipeline as the Dokumen tab uploads (docType
+  // SUPPORTING_DOC) so it shows up there too with full uploader/date/size metadata,
+  // not just inside the chat thread.
   const uploadChatAttachment = async (file: File, kind: "image" | "pdf" | "audio") => {
     if (!activeWorkspace) return;
     setChatAttaching(true);
     try {
       let fileUrl = "";
-      if (isSupabaseConfigured() && !isMockUser && supabase && !isDemoWorkspace(activeWorkspace.id)) {
-        const fileExt = file.name.split(".").pop() || (kind === "audio" ? "webm" : "dat");
-        const cleanName = file.name.replace(/[^a-zA-Z0-9.]/g, "_");
-        const filePath = `${activeWorkspace.id}/chat/${Date.now()}_${cleanName}`;
-        const { error: upErr } = await supabase.storage.from("evidence-packages").upload(filePath, file, { cacheControl: "3600", upsert: true });
-        if (!upErr) {
-          const { data: { publicUrl } } = supabase.storage.from("evidence-packages").getPublicUrl(filePath);
-          fileUrl = publicUrl;
+      const canPersistDoc = isSupabaseConfigured() && !isMockUser && supabase && !isDemoWorkspace(activeWorkspace.id) && user;
+      if (canPersistDoc) {
+        const { doc, error } = await uploadDocument(file, activeWorkspace.id, user!.id, kind === "audio" ? "SUPPORTING_DOC" : "RECEIPT");
+        if (doc && !error) {
+          setDocs(prev => [doc, ...prev]);
+          fileUrl = (await getDocumentUrl(doc.file_path_supabase)) || "";
         }
       }
       if (!fileUrl) {
@@ -1432,6 +1456,18 @@ export function OwnerDashboard() {
     setEditingChatSuggestionId(null);
   };
 
+  // Padam (delete) an already-confirmed chat suggestion's saved record, then mark the
+  // suggestion as rejected so it disappears from the thread like a never-confirmed one.
+  const handleChatDeleteConfirmed = (s: ChatSuggestion) => {
+    const current = chatSuggestionStatus[s.id];
+    if (!current?.recordId || !current.recordType) return;
+    if (!window.confirm("Padam rekod ini? Tindakan ini tidak boleh dibatalkan.")) return;
+    if (current.recordType === "DEBT") deleteDebtRecord(current.recordId);
+    else if (current.recordType === "COMMITMENT") deleteFinancialCommitment(current.recordId);
+    else deleteFinancialEvent(current.recordId);
+    markChatSuggestionStatus(s.id, { status: "rejected" });
+  };
+
   const sendSupport = async (text?: string) => {
     const q = (text || supportInput).trim();
     if (!q || supportLoading) return;
@@ -1653,6 +1689,15 @@ export function OwnerDashboard() {
         {activeTab === "home" && (
           <div className="flex-1 flex flex-col overflow-hidden" id="owner_home_pane">
 
+            {chatMessages.length > 0 && (
+              <div className="px-4 pt-3 flex justify-end shrink-0">
+                <button type="button" onClick={() => setChatMessages([])}
+                  className="text-[11px] font-semibold text-indigo-600 hover:text-indigo-800 cursor-pointer flex items-center gap-1">
+                  <RefreshCw className="w-3 h-3" /> Chat Baharu
+                </button>
+              </div>
+            )}
+
             {/* Conversation area */}
             <div className="flex-1 overflow-y-auto px-4 pt-4 pb-2 space-y-4" id="owner_chat_area">
 
@@ -1829,10 +1874,16 @@ export function OwnerDashboard() {
                                     {statusObj.confirmedByName ? ` - ${statusObj.confirmedByName}` : ""}
                                   </div>
                                 )}
-                                <button type="button" onClick={() => handleChatStartEdit(s)}
-                                  className="px-3 py-1.5 rounded-lg bg-slate-200 hover:bg-slate-300 text-slate-800 font-semibold text-xs">
-                                  Edit
-                                </button>
+                                <div className="flex gap-1.5">
+                                  <button type="button" onClick={() => handleChatStartEdit(s)}
+                                    className="px-3 py-1.5 rounded-lg bg-slate-200 hover:bg-slate-300 text-slate-800 font-semibold text-xs">
+                                    Edit
+                                  </button>
+                                  <button type="button" onClick={() => handleChatDeleteConfirmed(s)}
+                                    className="px-3 py-1.5 rounded-lg bg-rose-100 hover:bg-rose-200 text-rose-700 font-semibold text-xs">
+                                    Padam
+                                  </button>
+                                </div>
                               </div>
                             )}
                             {status === "pending" && !extra.businessPicked && activeBusinesses.length > 0 && (
@@ -1872,10 +1923,15 @@ export function OwnerDashboard() {
                                     />
                                   </div>
                                 ) : (
-                                  <div className="text-xs text-slate-500">
-                                    Evidence: {extra.evidenceStatus === "ATTACHED"
-                                      ? <span className="font-semibold text-emerald-700">Resit dilampirkan: {chatEvidenceFilesRef.current[s.id]?.name || "fail"}</span>
-                                      : <span className="font-semibold text-slate-600">Tiada resit</span>}
+                                  <div className="space-y-1.5">
+                                    <div className="text-xs text-slate-500">
+                                      Evidence: {extra.evidenceStatus === "ATTACHED"
+                                        ? <span className="font-semibold text-emerald-700">Resit dilampirkan: {chatEvidenceFilesRef.current[s.id]?.name || "fail"}</span>
+                                        : <span className="font-semibold text-slate-600">Tiada resit</span>}
+                                    </div>
+                                    {extra.evidenceStatus === "ATTACHED" && chatEvidenceFilesRef.current[s.id]?.type.startsWith("image/") && (
+                                      <img src={URL.createObjectURL(chatEvidenceFilesRef.current[s.id])} alt="Pratonton resit" className="max-h-32 rounded-lg border border-slate-200" />
+                                    )}
                                   </div>
                                 )}
                               </div>
@@ -1968,12 +2024,12 @@ export function OwnerDashboard() {
                 className="flex items-center gap-2 bg-white border border-slate-300 rounded-2xl px-4 py-3 shadow-sm focus-within:border-indigo-400 transition">
                 <button type="button" onClick={() => chatFileInputRef.current?.click()} disabled={chatAttaching || chatRecording}
                   title="Lampir resit / PDF" aria-label="Lampir fail"
-                  className="w-7 h-7 rounded-xl flex items-center justify-center text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 transition cursor-pointer disabled:opacity-40 shrink-0">
+                  className="w-7 h-7 rounded-xl flex items-center justify-center text-indigo-600 bg-indigo-50 hover:bg-indigo-100 transition cursor-pointer disabled:opacity-40 shrink-0">
                   <Paperclip className="w-4 h-4" />
                 </button>
                 <button type="button" onClick={chatRecording ? stopChatVoiceRecording : startChatVoiceRecording} disabled={chatAttaching}
                   title="Rekod nota suara" aria-label="Rekod nota suara"
-                  className={`w-7 h-7 rounded-xl flex items-center justify-center transition cursor-pointer disabled:opacity-40 shrink-0 ${chatRecording ? "text-white bg-rose-500" : "text-slate-400 hover:text-indigo-600 hover:bg-indigo-50"}`}>
+                  className={`w-7 h-7 rounded-xl flex items-center justify-center transition cursor-pointer disabled:opacity-40 shrink-0 ${chatRecording ? "text-white bg-rose-500" : "text-emerald-600 bg-emerald-50 hover:bg-emerald-100"}`}>
                   {chatRecording ? <Square className="w-3.5 h-3.5" /> : <Mic className="w-4 h-4" />}
                 </button>
                 <input
@@ -2271,44 +2327,68 @@ export function OwnerDashboard() {
                 <p className="text-[11px] text-slate-300 mt-0.5">Muat naik resit, invois atau penyata bank</p>
               </div>
             ) : (
-              <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
-                <div className="divide-y divide-slate-50">
-                  {filteredDocs.map(doc => {
-                    const typeLabel: Record<string, string> = {
-                      RECEIPT: "Resit", INVOICE: "Invois", BANK_STATEMENT: "Penyata Bank",
-                      CONTRACT: "Kontrak", SUPPORTING_DOC: "Dokumen Lain",
-                    };
-                    const reviewStatus = doc.ocr_parsed_content?.reviewStatus as string | undefined;
-                    return (
-                      <div key={doc.id} className="px-4 py-3.5 flex items-center gap-3">
-                        <div className="w-9 h-9 rounded-xl bg-slate-100 flex items-center justify-center shrink-0">
-                          <FileText className="w-4 h-4 text-slate-500" />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-xs font-bold text-slate-800 truncate">{doc.file_name}</p>
-                          <p className="text-[10px] text-slate-400 mt-0.5">
-                            {typeLabel[doc.document_type] || doc.document_type} &middot; {fmtDocBytes(doc.file_size_bytes)} &middot; {new Date(doc.created_at).toLocaleDateString("ms-MY")}
-                            {reviewStatus === "CONFIRMED" && <span className="text-emerald-600 font-semibold"> &middot; Disahkan</span>}
-                            {reviewStatus === "REJECTED" && <span className="text-rose-500 font-semibold"> &middot; Ditolak</span>}
-                          </p>
-                        </div>
-                        <button onClick={() => handleDownloadDoc(doc)} title="Muat turun"
-                          className="text-slate-300 hover:text-indigo-600 cursor-pointer p-1 shrink-0">
-                          <Download className="w-3.5 h-3.5" />
-                        </button>
-                        <button onClick={() => handlePreviewDoc(doc)} title="Buka"
-                          className="text-slate-300 hover:text-emerald-600 cursor-pointer p-1 shrink-0">
-                          <ExternalLink className="w-3.5 h-3.5" />
-                        </button>
-                        <button onClick={() => handleDeleteDoc(doc)} title="Padam"
-                          className="text-slate-300 hover:text-red-500 cursor-pointer p-1 shrink-0">
-                          <X className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    );
-                  })}
+              <>
+                <div className="flex items-center justify-between">
+                  <p className="text-[10px] text-slate-400">{filteredDocs.length} dokumen &middot; muka {docPage}/{docTotalPages}</p>
+                  <select value={docPageSize} onChange={e => setDocPageSize(Number(e.target.value) as 20 | 50 | 100 | 200)}
+                    className="text-[10px] font-semibold border border-slate-200 rounded-lg px-2 py-1 bg-white outline-none cursor-pointer">
+                    {[20, 50, 100, 200].map(n => <option key={n} value={n}>{n} / muka surat</option>)}
+                  </select>
                 </div>
-              </div>
+                <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
+                  <div className="divide-y divide-slate-50">
+                    {pagedDocs.map(doc => {
+                      const typeLabel: Record<string, string> = {
+                        RECEIPT: "Resit", INVOICE: "Invois", BANK_STATEMENT: "Penyata Bank",
+                        CONTRACT: "Kontrak", SUPPORTING_DOC: "Dokumen Lain",
+                      };
+                      const reviewStatus = doc.ocr_parsed_content?.reviewStatus as string | undefined;
+                      const uploaderName = userNameById[doc.uploaded_by] || (doc.uploaded_by === user?.id ? user?.fullName : undefined);
+                      return (
+                        <div key={doc.id} className="px-4 py-3.5 flex items-center gap-3">
+                          <div className="w-9 h-9 rounded-xl bg-slate-100 flex items-center justify-center shrink-0">
+                            <FileText className="w-4 h-4 text-slate-500" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs font-bold text-slate-800 truncate">{doc.file_name}</p>
+                            <p className="text-[10px] text-slate-400 mt-0.5">
+                              {typeLabel[doc.document_type] || doc.document_type} &middot; {fmtDocBytes(doc.file_size_bytes)} &middot; {new Date(doc.created_at).toLocaleDateString("ms-MY")} {new Date(doc.created_at).toLocaleTimeString("ms-MY", { hour: "2-digit", minute: "2-digit" })}
+                              {reviewStatus === "CONFIRMED" && <span className="text-emerald-600 font-semibold"> &middot; Disahkan</span>}
+                              {reviewStatus === "REJECTED" && <span className="text-rose-500 font-semibold"> &middot; Ditolak</span>}
+                            </p>
+                            <p className="text-[10px] text-slate-300">{uploaderName ? `Dimuat naik oleh: ${uploaderName}` : "Dimuat naik"}</p>
+                          </div>
+                          <button onClick={() => handleDownloadDoc(doc)} title="Muat turun"
+                            className="text-slate-300 hover:text-indigo-600 cursor-pointer p-1 shrink-0">
+                            <Download className="w-3.5 h-3.5" />
+                          </button>
+                          <button onClick={() => handlePreviewDoc(doc)} title="Pratonton"
+                            className="text-slate-300 hover:text-emerald-600 cursor-pointer p-1 shrink-0">
+                            <ExternalLink className="w-3.5 h-3.5" />
+                          </button>
+                          <button onClick={() => handleDeleteDoc(doc)} title="Padam"
+                            className="text-slate-300 hover:text-red-500 cursor-pointer p-1 shrink-0">
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+                {docTotalPages > 1 && (
+                  <div className="flex items-center justify-center gap-3 pt-1">
+                    <button onClick={() => setDocPage(p => Math.max(1, p - 1))} disabled={docPage === 1}
+                      className="px-3 py-1.5 rounded-lg bg-white border border-slate-200 text-xs font-semibold text-slate-600 disabled:opacity-40 cursor-pointer">
+                      Sebelum
+                    </button>
+                    <span className="text-xs text-slate-500">{docPage} / {docTotalPages}</span>
+                    <button onClick={() => setDocPage(p => Math.min(docTotalPages, p + 1))} disabled={docPage === docTotalPages}
+                      className="px-3 py-1.5 rounded-lg bg-white border border-slate-200 text-xs font-semibold text-slate-600 disabled:opacity-40 cursor-pointer">
+                      Seterusnya
+                    </button>
+                  </div>
+                )}
+              </>
             )}
           </div>
         )}
