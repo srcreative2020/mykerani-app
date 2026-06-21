@@ -4,6 +4,8 @@ import { useWorkspace } from "../context/WorkspaceContext";
 import { useFinancials } from "../context/FinancialRecordsContext";
 import { useTenant } from "../context/TenantContext";
 import { loadChatHistory, saveChatMessage } from "../lib/chatHistory";
+import { supabase, isSupabaseConfigured } from "../lib/supabase";
+import { isDemoWorkspace } from "../lib/seeder";
 import {
   loadPersonalProfile, loadBusinessProfile, loadVehicles, loadDependents, loadBusinesses,
   EMPTY_PERSONAL_PROFILE, EMPTY_BUSINESS_PROFILE, type Vehicle, type Dependent, type Business,
@@ -15,6 +17,7 @@ import {
   TrendingUp, TrendingDown, Clock, ChevronRight, X,
   CheckCircle2, LogOut, ClipboardList, HelpCircle,
   MessageCircle, BookOpen, Ticket, Edit3,
+  Paperclip, Mic, Square, File as FileIcon,
 } from "lucide-react";
 
 type StaffTab = "home" | "tambah" | "muat_naik" | "rekod" | "notifikasi" | "profil";
@@ -45,6 +48,9 @@ interface ChatSuggestionStatus {
   status: ChatSuggestionStatusValue;
   recordId?: string;
   recordType?: ChatSuggestionRecordType;
+  confirmedAt?: string;
+  confirmedByName?: string;
+  confirmedByUserId?: string;
 }
 
 function getGreeting() {
@@ -167,10 +173,12 @@ export function StaffHomeScreen() {
   const [addDefaultType, setAddDefaultType] = useState<"INCOME" | "EXPENSE">("EXPENSE");
 
   // â"€â"€ AI Chat â"€â"€
-  const [chatMessages, setChatMessages] = useState<{ id: string; sender: "user" | "ai"; text: string; suggestions?: ChatSuggestion[]; createdAt?: string }[]>([]);
+  const [chatMessages, setChatMessages] = useState<{ id: string; sender: "user" | "ai"; text: string; suggestions?: ChatSuggestion[]; createdAt?: string; attachmentUrl?: string; attachmentName?: string; attachmentType?: "image" | "pdf" | "audio" }[]>([]);
   const [showChatArchive, setShowChatArchive] = useState(false);
   const [showProfileView, setShowProfileView] = useState(false);
   const [chatArchiveDate, setChatArchiveDate] = useState<string | null>(null);
+  const [chatArchiveYear, setChatArchiveYear] = useState<string | null>(null);
+  const [chatArchiveMonth, setChatArchiveMonth] = useState<string | null>(null);
   const [chatInput, setChatInput] = useState("");
   // Persisted (localStorage) so a confirmed/rejected suggestion is not re-actioned (and
   // duplicate-inserted) after a page refresh, remount, or chat history reload.
@@ -187,6 +195,11 @@ export function StaffHomeScreen() {
   const [chatSuggestionExtra, setChatSuggestionExtra] = useState<Record<string, { businessId: string | null; businessName: string; businessPicked: boolean; evidenceStatus: "NONE" | "ATTACHED" | "SKIPPED" }>>({});
   const chatEvidenceFilesRef = useRef<Record<string, File>>({});
   const chatEvidenceInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
+  const [chatAttaching, setChatAttaching] = useState(false);
+  const chatFileInputRef = useRef<HTMLInputElement>(null);
+  const [chatRecording, setChatRecording] = useState(false);
+  const chatMediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const chatRecordedChunksRef = useRef<Blob[]>([]);
 
   // â"€â"€ Support Center â"€â"€
   const [showSupport, setShowSupport] = useState(false);
@@ -246,7 +259,7 @@ export function StaffHomeScreen() {
     if (!wsId) return;
     loadChatHistory(wsId, isMockUser).then(history => {
       if (history.length > 0) {
-        setChatMessages(history.map(h => ({ id: h.id, sender: h.sender, text: h.text, suggestions: h.suggestions, createdAt: h.createdAt })));
+        setChatMessages(history.map(h => ({ id: h.id, sender: h.sender, text: h.text, suggestions: h.suggestions, createdAt: h.createdAt, attachmentUrl: h.attachmentUrl, attachmentName: h.attachmentName, attachmentType: h.attachmentType })));
       }
     });
     try {
@@ -518,7 +531,14 @@ export function StaffHomeScreen() {
 
     // Mark confirmed (and persist) only after the insert succeeded, capturing the new
     // record's id/type so a later post-confirm Edit can UPDATE instead of re-inserting.
-    markChatSuggestionStatus(s.id, { status: "confirmed", recordId: newRecordId, recordType: newRecordType });
+    markChatSuggestionStatus(s.id, {
+      status: "confirmed",
+      recordId: newRecordId,
+      recordType: newRecordType,
+      confirmedAt: new Date().toISOString(),
+      confirmedByName: user?.fullName || undefined,
+      confirmedByUserId: user?.id || undefined,
+    });
 
     if (transactionType !== "ASSET_PURCHASE" && transactionType !== "OWNER_TRANSACTION") learnOcrPattern({
       workspaceId: activeWorkspace.id,
@@ -593,6 +613,76 @@ export function StaffHomeScreen() {
         confidenceScore: 0.9,
       });
     }
+  };
+
+  const canUploadChatAttachment = !!wsId && isSupabaseConfigured() && !isMockUser && !!supabase && !isDemoWorkspace(wsId);
+
+  const uploadChatAttachment = async (file: File, kind: "image" | "pdf" | "audio") => {
+    setChatAttaching(true);
+    try {
+      let url = "";
+      if (canUploadChatAttachment && supabase) {
+        const cleanName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+        const path = `${wsId}/chat/${Date.now()}_${cleanName}`;
+        const { error } = await supabase.storage.from("evidence-packages").upload(path, file);
+        if (!error) {
+          const { data } = await supabase.storage.from("evidence-packages").createSignedUrl(path, 60 * 60 * 24 * 365);
+          url = data?.signedUrl || "";
+        }
+      }
+      if (!url) url = URL.createObjectURL(file);
+
+      const userMsgId = `u-${Date.now()}`;
+      setChatMessages(prev => [...prev, {
+        id: userMsgId, sender: "user", text: kind === "audio" ? "🎤 Nota suara" : `📎 ${file.name}`,
+        createdAt: new Date().toISOString(), attachmentUrl: url, attachmentName: file.name, attachmentType: kind,
+      }]);
+      saveChatMessage(wsId, user?.id, isMockUser, {
+        sender: "user", text: kind === "audio" ? "🎤 Nota suara" : `📎 ${file.name}`,
+        attachmentUrl: url, attachmentName: file.name, attachmentType: kind,
+      });
+      await sendChat(kind === "audio" ? "Saya hantar nota suara berkaitan transaksi. Sila semak dan bantu saya rekod jika perlu." : `Saya muat naik dokumen "${file.name}". Sila semak dan bantu saya rekod transaksi berkaitan jika ada.`);
+    } finally {
+      setChatAttaching(false);
+    }
+  };
+
+  const handleChatFilePicked = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    if (file.size > 10 * 1024 * 1024) {
+      alert("Saiz fail terlalu besar. Maksimum 10MB.");
+      return;
+    }
+    const kind: "image" | "pdf" = file.type.startsWith("image/") ? "image" : "pdf";
+    uploadChatAttachment(file, kind);
+  };
+
+  const startChatVoiceRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const recorder = new MediaRecorder(stream);
+      chatRecordedChunksRef.current = [];
+      recorder.ondataavailable = e => { if (e.data.size > 0) chatRecordedChunksRef.current.push(e.data); };
+      recorder.onstop = () => {
+        stream.getTracks().forEach(t => t.stop());
+        const blob = new Blob(chatRecordedChunksRef.current, { type: "audio/webm" });
+        const file = new File([blob], `nota-suara-${Date.now()}.webm`, { type: "audio/webm" });
+        uploadChatAttachment(file, "audio");
+      };
+      chatMediaRecorderRef.current = recorder;
+      recorder.start();
+      setChatRecording(true);
+    } catch {
+      alert("Tidak dapat mengakses mikrofon. Sila benarkan akses mikrofon.");
+    }
+  };
+
+  const stopChatVoiceRecording = () => {
+    chatMediaRecorderRef.current?.stop();
+    chatMediaRecorderRef.current = null;
+    setChatRecording(false);
   };
 
   const QUICK_PROMPTS = [
@@ -692,6 +782,18 @@ export function StaffHomeScreen() {
                           {isUser ? <UserIcon className="w-3.5 h-3.5" /> : <Brain className="w-3.5 h-3.5" />}
                         </div>
                         <div className={`max-w-[78%] px-4 py-3 rounded-2xl text-sm leading-relaxed ${isUser ? "bg-slate-700 text-white rounded-tr-none" : "bg-white border border-slate-200 text-slate-800 rounded-tl-none whitespace-pre-wrap shadow-sm"}`}>
+                          {msg.attachmentUrl && msg.attachmentType === "image" && (
+                            <img src={msg.attachmentUrl} alt={msg.attachmentName || "lampiran"} className="rounded-xl max-h-48 mb-2" />
+                          )}
+                          {msg.attachmentUrl && msg.attachmentType === "audio" && (
+                            <audio controls src={msg.attachmentUrl} className="mb-2 max-w-full" />
+                          )}
+                          {msg.attachmentUrl && msg.attachmentType === "pdf" && (
+                            <a href={msg.attachmentUrl} target="_blank" rel="noopener noreferrer"
+                              className={`flex items-center gap-2 mb-2 px-3 py-2 rounded-xl text-xs font-semibold ${isUser ? "bg-slate-600" : "bg-slate-100 text-slate-700"}`}>
+                              <FileIcon className="w-4 h-4" /> {msg.attachmentName || "Dokumen"}
+                            </a>
+                          )}
                           {msg.text}
                         </div>
                       </div>
@@ -721,6 +823,12 @@ export function StaffHomeScreen() {
                                 <div className="text-emerald-700 font-bold">
                                   {chatSuggestionJustUpdated[s.id] ? "✅ Dikemaskini." : "✅ Disahkan & direkodkan."}
                                 </div>
+                                {statusObj.confirmedAt && (
+                                  <div className="text-[10px] text-slate-400">
+                                    {new Date(statusObj.confirmedAt).toLocaleString("ms-MY", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}
+                                    {statusObj.confirmedByName && ` · ${statusObj.confirmedByName}`}
+                                  </div>
+                                )}
                                 <button type="button" onClick={() => handleChatStartEdit(s)}
                                   className="px-3 py-1.5 rounded-lg bg-slate-200 hover:bg-slate-300 text-slate-800 font-semibold text-xs">
                                   Edit
@@ -846,8 +954,27 @@ export function StaffHomeScreen() {
 
             {/* Chat input */}
             <div className="px-4 pb-4 shrink-0">
+              {chatRecording && (
+                <div className="flex items-center gap-2 mb-2 px-3 py-2 bg-rose-50 border border-rose-200 rounded-xl">
+                  <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse" />
+                  <span className="text-xs font-semibold text-rose-700 flex-1">Merekod nota suara...</span>
+                  <button type="button" onClick={stopChatVoiceRecording}
+                    className="px-2.5 py-1 rounded-lg bg-rose-600 text-white text-[11px] font-bold cursor-pointer">
+                    Hentikan & Hantar
+                  </button>
+                </div>
+              )}
+              <input ref={chatFileInputRef} type="file" accept="image/*,application/pdf" className="hidden" onChange={handleChatFilePicked} />
               <form onSubmit={e => { e.preventDefault(); sendChat(); }}
                 className="flex items-center gap-2 bg-white border border-slate-300 rounded-2xl px-4 py-3 shadow-sm focus-within:border-slate-500 transition">
+                <button type="button" onClick={() => chatFileInputRef.current?.click()} disabled={chatAttaching || chatRecording}
+                  className="text-slate-400 hover:text-slate-700 disabled:opacity-40 cursor-pointer shrink-0">
+                  <Paperclip className="w-4 h-4" />
+                </button>
+                <button type="button" onClick={chatRecording ? stopChatVoiceRecording : startChatVoiceRecording} disabled={chatAttaching}
+                  className={`disabled:opacity-40 cursor-pointer shrink-0 ${chatRecording ? "text-rose-500" : "text-slate-400 hover:text-slate-700"}`}>
+                  {chatRecording ? <Square className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
+                </button>
                 <input
                   type="text"
                   value={chatInput}
@@ -988,7 +1115,11 @@ export function StaffHomeScreen() {
                           </div>
                           <div>
                             <p className="text-sm font-semibold text-slate-800 truncate max-w-[170px]">{(rec.partyName && rec.partyName !== "Tidak Dinyatakan") ? rec.partyName : rec.categoryName}</p>
-                            <p className="text-[11px] text-slate-400">{rec.date}</p>
+                            <p className="text-[11px] text-slate-400">{rec.categoryName} · {rec.referenceNumber}</p>
+                            <p className="text-[10px] text-slate-300">
+                              {rec.date}{rec.createdAt ? ` ${new Date(rec.createdAt).toLocaleTimeString("ms-MY", { hour: "2-digit", minute: "2-digit" })}` : ""}
+                              {rec.createdByName ? ` · ${rec.createdByName}` : ""}
+                            </p>
                           </div>
                         </div>
                         <div className="flex items-center gap-2">
@@ -1116,7 +1247,7 @@ export function StaffHomeScreen() {
                 <MessageCircle className="w-5 h-5 text-indigo-500" />
                 <h2 className="font-bold text-slate-900 text-base">Arkib Perbualan</h2>
               </div>
-              <button onClick={() => { setShowChatArchive(false); setChatArchiveDate(null); }}
+              <button onClick={() => { setShowChatArchive(false); setChatArchiveDate(null); setChatArchiveYear(null); setChatArchiveMonth(null); }}
                 className="p-1.5 rounded-xl hover:bg-slate-100 transition cursor-pointer">
                 <X className="w-5 h-5 text-slate-500" />
               </button>
@@ -1134,10 +1265,43 @@ export function StaffHomeScreen() {
                   (byDate[d] = byDate[d] || []).push(m);
                 });
                 const dates = Object.keys(byDate).sort((a, b) => b.localeCompare(a));
+                const years = Array.from(new Set(dates.map(d => d.slice(0, 4)))).sort((a, b) => b.localeCompare(a));
+                const monthsInYear = chatArchiveYear ? Array.from(new Set(dates.filter(d => d.startsWith(chatArchiveYear)).map(d => d.slice(0, 7)))).sort((a, b) => b.localeCompare(a)) : [];
+                const daysInMonth = chatArchiveMonth ? dates.filter(d => d.startsWith(chatArchiveMonth)) : [];
+                if (!chatArchiveYear) {
+                  return (
+                    <div className="grid grid-cols-3 gap-2">
+                      {years.map(y => (
+                        <button key={y} onClick={() => setChatArchiveYear(y)}
+                          className="px-2 py-3 rounded-xl text-center border bg-white border-slate-200 text-slate-700 hover:bg-slate-50 cursor-pointer">
+                          <p className="text-sm font-bold">{y}</p>
+                          <p className="text-[9px] text-slate-400">{dates.filter(d => d.startsWith(y)).reduce((n, d) => n + byDate[d].length, 0)} mesej</p>
+                        </button>
+                      ))}
+                    </div>
+                  );
+                }
+                if (!chatArchiveMonth) {
+                  return (
+                    <>
+                      <button onClick={() => setChatArchiveYear(null)} className="text-[11px] text-indigo-500 font-semibold cursor-pointer hover:underline">← Tahun</button>
+                      <div className="grid grid-cols-3 gap-2">
+                        {monthsInYear.map(m => (
+                          <button key={m} onClick={() => setChatArchiveMonth(m)}
+                            className="px-2 py-3 rounded-xl text-center border bg-white border-slate-200 text-slate-700 hover:bg-slate-50 cursor-pointer">
+                            <p className="text-[11px] font-bold">{new Date(`${m}-01`).toLocaleDateString("ms-MY", { month: "long" })}</p>
+                            <p className="text-[9px] text-slate-400">{dates.filter(d => d.startsWith(m)).reduce((n, d) => n + byDate[d].length, 0)} mesej</p>
+                          </button>
+                        ))}
+                      </div>
+                    </>
+                  );
+                }
                 return (
                   <>
+                    <button onClick={() => setChatArchiveMonth(null)} className="text-[11px] text-indigo-500 font-semibold cursor-pointer hover:underline">← Bulan</button>
                     <div className="grid grid-cols-3 gap-2">
-                      {dates.map(d => (
+                      {daysInMonth.map(d => (
                         <button key={d} onClick={() => setChatArchiveDate(chatArchiveDate === d ? null : d)}
                           className={`px-2 py-2.5 rounded-xl text-center border transition cursor-pointer ${chatArchiveDate === d ? "bg-indigo-600 border-indigo-600 text-white" : "bg-white border-slate-200 text-slate-700 hover:bg-slate-50"}`}>
                           <p className="text-[11px] font-bold">{new Date(d).toLocaleDateString("ms-MY", { day: "numeric", month: "short" })}</p>
