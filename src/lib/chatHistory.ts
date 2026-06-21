@@ -7,6 +7,9 @@ export interface PersistedChatMsg {
   text: string;
   suggestions?: any[];
   createdAt: string;
+  attachmentUrl?: string;
+  attachmentName?: string;
+  attachmentType?: "image" | "pdf" | "audio";
 }
 
 const canPersist = (workspaceId: string | undefined, isMockUser: boolean): workspaceId is string =>
@@ -19,7 +22,7 @@ export const loadChatHistory = async (
   if (!canPersist(workspaceId, isMockUser) || !supabase) return [];
   const { data, error } = await supabase
     .from("ai_chat_messages")
-    .select("id,sender,text,suggestions,created_at")
+    .select("id,sender,text,suggestions,created_at,attachment_url,attachment_name,attachment_type")
     .eq("workspace_id", workspaceId)
     .order("created_at", { ascending: true });
   if (error || !data) return [];
@@ -29,6 +32,9 @@ export const loadChatHistory = async (
     text: row.text,
     suggestions: row.suggestions || [],
     createdAt: row.created_at,
+    attachmentUrl: row.attachment_url || undefined,
+    attachmentName: row.attachment_name || undefined,
+    attachmentType: row.attachment_type || undefined,
   }));
 };
 
@@ -36,7 +42,7 @@ export const saveChatMessage = (
   workspaceId: string | undefined,
   userId: string | undefined,
   isMockUser: boolean,
-  msg: { sender: "user" | "ai"; text: string; suggestions?: any[] }
+  msg: { sender: "user" | "ai"; text: string; suggestions?: any[]; attachmentUrl?: string; attachmentName?: string; attachmentType?: "image" | "pdf" | "audio" }
 ) => {
   if (!canPersist(workspaceId, isMockUser) || !supabase) return;
   supabase
@@ -47,6 +53,9 @@ export const saveChatMessage = (
       sender: msg.sender,
       text: msg.text,
       suggestions: msg.suggestions || [],
+      attachment_url: msg.attachmentUrl || null,
+      attachment_name: msg.attachmentName || null,
+      attachment_type: msg.attachmentType || null,
     })
     .then(() => {});
 };

@@ -100,6 +100,9 @@ export interface FinancialEvent {
   bankAccountId?: string;
   isCompleted: boolean; // Paid/repaid status
   businessId?: string; // Which business this belongs to; undefined/null = Personal
+  createdByUserId?: string; // Who recorded this transaction (accounting trail)
+  createdByName?: string;
+  createdAt?: string; // When the record was actually entered (vs. transaction `date`)
 }
 
 export interface CashAccount {

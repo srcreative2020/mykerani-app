@@ -506,6 +506,10 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
               isCompleted: true,
               bankAccountId: row.source_bank_account_id || undefined,
               cashAccountId: row.source_cash_account_id || undefined,
+              businessId: row.business_id || undefined,
+              createdByUserId: row.created_by_user_id || undefined,
+              createdByName: row.created_by_name || undefined,
+              createdAt: row.created_at || undefined,
             });
           });
 
@@ -525,6 +529,10 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
               isCompleted: true,
               bankAccountId: row.payment_bank_account_id || undefined,
               cashAccountId: row.payment_cash_account_id || undefined,
+              businessId: row.business_id || undefined,
+              createdByUserId: row.created_by_user_id || undefined,
+              createdByName: row.created_by_name || undefined,
+              createdAt: row.created_at || undefined,
             });
           });
 
@@ -748,7 +756,13 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
   // --- Financial Events Actions ---
   const addFinancialEvent = (event: Omit<FinancialEvent, "id">): FinancialEvent => {
     const newId = generateUUID();
-    const newEvent: FinancialEvent = { ...event, id: newId };
+    const newEvent: FinancialEvent = {
+      ...event,
+      id: newId,
+      createdByUserId: event.createdByUserId || user?.id || undefined,
+      createdByName: event.createdByName || user?.fullName || undefined,
+      createdAt: event.createdAt || new Date().toISOString(),
+    };
 
     // Update locally optimistically
     const updated = [newEvent, ...financialEvents];
@@ -816,6 +830,8 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
               reference_number: newEvent.referenceNumber,
               description: newEvent.description,
               business_id: newEvent.businessId || null,
+              created_by_user_id: user?.id || null,
+              created_by_name: user?.fullName || null,
             }, isAiConfirmed ? { onConflict: "workspace_id,reference_number", ignoreDuplicates: true } : undefined);
           } else if (newEvent.type === "EXPENSE" || newEvent.type === "DEBT") {
             await supabase.from("expense_records").upsert({
@@ -829,6 +845,8 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
               tax_amount_myr: 0,
               transaction_date: newEvent.date,
               reference_number: newEvent.referenceNumber,
+              created_by_user_id: user?.id || null,
+              created_by_name: user?.fullName || null,
               description: newEvent.type === "DEBT" ? `[DEBT] ${newEvent.description}` : newEvent.description,
               business_id: newEvent.businessId || null,
             }, isAiConfirmed ? { onConflict: "workspace_id,reference_number", ignoreDuplicates: true } : undefined);

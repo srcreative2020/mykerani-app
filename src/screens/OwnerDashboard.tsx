@@ -14,6 +14,7 @@ import {
   BookOpen, Ticket, MessageCircle, Zap, Database, Edit3,
   UserCheck, UserX, KeyRound, AlertCircle, CheckCircle2,
   ToggleLeft, ToggleRight, ExternalLink, Trash2, Download,
+  Paperclip, Mic, Square, File as FileIcon,
 } from "lucide-react";
 import { FinancialEvidencePackageManager } from "../components/FinancialEvidencePackage";
 import { FinancialReportsAnalytics } from "../components/FinancialReportsAnalytics";
@@ -28,6 +29,7 @@ import {
   type UploadedDoc, type DocType,
 } from "../lib/documentStorage";
 import { supabase, isSupabaseConfigured } from "../lib/supabase";
+import { isDemoWorkspace } from "../lib/seeder";
 import { loadChatHistory, saveChatMessage } from "../lib/chatHistory";
 import { logEvent } from "../lib/eventLog";
 import jsPDF from "jspdf";
@@ -80,9 +82,21 @@ interface ChatSuggestionStatus {
   status: ChatSuggestionStatusValue;
   recordId?: string;
   recordType?: ChatSuggestionRecordType;
+  confirmedAt?: string;
+  confirmedByName?: string;
+  confirmedByUserId?: string;
 }
 
-interface ChatMsg { id: string; sender: "user" | "ai"; text: string; suggestions?: ChatSuggestion[]; createdAt?: string; }
+interface ChatMsg {
+  id: string;
+  sender: "user" | "ai";
+  text: string;
+  suggestions?: ChatSuggestion[];
+  createdAt?: string;
+  attachmentUrl?: string;
+  attachmentName?: string;
+  attachmentType?: "image" | "pdf" | "audio";
+}
 
 function getGreeting() {
   const h = new Date().getHours();
@@ -207,6 +221,12 @@ export function OwnerDashboard() {
   const [chatInput, setChatInput] = useState("");
   const [chatLoading, setChatLoading] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
+  // â•â• Chat attachments: receipts/PDFs uploaded directly + recorded voice notes â•â•
+  const [chatAttaching, setChatAttaching] = useState(false);
+  const chatFileInputRef = useRef<HTMLInputElement>(null);
+  const [chatRecording, setChatRecording] = useState(false);
+  const chatMediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const chatRecordedChunksRef = useRef<Blob[]>([]);
 
   // â"€â"€ Invite staff â"€â"€
   const [showInvite, setShowInvite] = useState(false);
@@ -268,10 +288,47 @@ export function OwnerDashboard() {
   const myEvents = useMemo(() => financialEvents.filter(e => e.workspaceId === wsId), [financialEvents, wsId]);
   const [txnFilterFrom, setTxnFilterFrom] = useState("");
   const [txnFilterTo, setTxnFilterTo] = useState("");
-  const filteredEvents = useMemo(
-    () => myEvents.filter(e => (!txnFilterFrom || e.date >= txnFilterFrom) && (!txnFilterTo || e.date <= txnFilterTo)),
-    [myEvents, txnFilterFrom, txnFilterTo]
+  // â•â• Dashboard period (day/week/month/year) + income/expense type filter â•â•
+  const [dashboardPeriod, setDashboardPeriod] = useState<"day" | "week" | "month" | "year">("month");
+  const [dashboardTypeFilter, setDashboardTypeFilter] = useState<"ALL" | "INCOME" | "EXPENSE">("ALL");
+  const periodRange = useMemo(() => {
+    const pad = (n: number) => String(n).padStart(2, "0");
+    const toIso = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    if (dashboardPeriod === "day") {
+      const iso = toIso(today);
+      return { from: iso, to: iso, label: today.toLocaleDateString("ms-MY", { day: "numeric", month: "long", year: "numeric" }) };
+    }
+    if (dashboardPeriod === "week") {
+      const dow = today.getDay(); // 0=Sun
+      const monday = new Date(today);
+      monday.setDate(today.getDate() - ((dow + 6) % 7));
+      const sunday = new Date(monday);
+      sunday.setDate(monday.getDate() + 6);
+      return { from: toIso(monday), to: toIso(sunday), label: `${monday.toLocaleDateString("ms-MY", { day: "numeric", month: "short" })} - ${sunday.toLocaleDateString("ms-MY", { day: "numeric", month: "short" })}` };
+    }
+    if (dashboardPeriod === "year") {
+      return { from: `${today.getFullYear()}-01-01`, to: `${today.getFullYear()}-12-31`, label: String(today.getFullYear()) };
+    }
+    const lastDay = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+    return { from: toIso(new Date(today.getFullYear(), today.getMonth(), 1)), to: toIso(lastDay), label: today.toLocaleDateString("ms-MY", { month: "long", year: "numeric" }) };
+  }, [dashboardPeriod, now]);
+  const periodEvents = useMemo(
+    () => myEvents.filter(e => e.date >= periodRange.from && e.date <= periodRange.to),
+    [myEvents, periodRange]
   );
+  const incomeInPeriod = useMemo(() => periodEvents.filter(e => e.type === "INCOME").reduce((s, e) => s + e.amountMyr, 0), [periodEvents]);
+  const expenseInPeriod = useMemo(() => periodEvents.filter(e => e.type === "EXPENSE").reduce((s, e) => s + e.amountMyr, 0), [periodEvents]);
+  const filteredEvents = useMemo(() => {
+    const usingCustomRange = !!(txnFilterFrom || txnFilterTo);
+    return myEvents.filter(e => {
+      const inRange = usingCustomRange
+        ? (!txnFilterFrom || e.date >= txnFilterFrom) && (!txnFilterTo || e.date <= txnFilterTo)
+        : (e.date >= periodRange.from && e.date <= periodRange.to);
+      const matchesType = dashboardTypeFilter === "ALL" || e.type === dashboardTypeFilter;
+      return inRange && matchesType;
+    });
+  }, [myEvents, txnFilterFrom, txnFilterTo, periodRange, dashboardTypeFilter]);
   const [editingTxnId, setEditingTxnId] = useState<string | null>(null);
   const [editTxnDraft, setEditTxnDraft] = useState({ amountMyr: "", categoryName: "", partyName: "", date: "" });
   const startEditTxn = (ev: typeof myEvents[number]) => {
@@ -804,7 +861,7 @@ export function OwnerDashboard() {
     if (!wsId) return;
     loadChatHistory(wsId, isMockUser).then(history => {
       if (history.length > 0) {
-        setChatMessages(history.map(h => ({ id: h.id, sender: h.sender, text: h.text, suggestions: h.suggestions, createdAt: h.createdAt })));
+        setChatMessages(history.map(h => ({ id: h.id, sender: h.sender, text: h.text, suggestions: h.suggestions, createdAt: h.createdAt, attachmentUrl: h.attachmentUrl, attachmentName: h.attachmentName, attachmentType: h.attachmentType })));
       }
     });
     try {
@@ -1062,6 +1119,85 @@ export function OwnerDashboard() {
     }
   };
 
+  // Upload a chat attachment (receipt image, PDF, or recorded voice note) to
+  // Supabase Storage and post it as a user chat message, then let the AI
+  // react to it via the normal sendChat() flow.
+  const uploadChatAttachment = async (file: File, kind: "image" | "pdf" | "audio") => {
+    if (!activeWorkspace) return;
+    setChatAttaching(true);
+    try {
+      let fileUrl = "";
+      if (isSupabaseConfigured() && !isMockUser && supabase && !isDemoWorkspace(activeWorkspace.id)) {
+        const fileExt = file.name.split(".").pop() || (kind === "audio" ? "webm" : "dat");
+        const cleanName = file.name.replace(/[^a-zA-Z0-9.]/g, "_");
+        const filePath = `${activeWorkspace.id}/chat/${Date.now()}_${cleanName}`;
+        const { error: upErr } = await supabase.storage.from("evidence-packages").upload(filePath, file, { cacheControl: "3600", upsert: true });
+        if (!upErr) {
+          const { data: { publicUrl } } = supabase.storage.from("evidence-packages").getPublicUrl(filePath);
+          fileUrl = publicUrl;
+        }
+      }
+      if (!fileUrl) {
+        // Fallback: embed as a local object URL so the attachment still shows in-session.
+        fileUrl = URL.createObjectURL(file);
+      }
+      const label = kind === "audio" ? "Nota suara" : kind === "pdf" ? "Dokumen PDF" : "Resit";
+      const msgId = `u-${Date.now()}`;
+      const userMsg: ChatMsg = {
+        id: msgId,
+        sender: "user",
+        text: `[Lampiran: ${label} - ${file.name}]`,
+        createdAt: new Date().toISOString(),
+        attachmentUrl: fileUrl,
+        attachmentName: file.name,
+        attachmentType: kind,
+      };
+      setChatMessages(prev => [...prev, userMsg]);
+      saveChatMessage(wsId, user?.id, isMockUser, { sender: "user", text: userMsg.text, attachmentUrl: fileUrl, attachmentName: file.name, attachmentType: kind });
+      // Let the AI clerk acknowledge the attachment and continue the conversation.
+      await sendChat(`Saya telah lampirkan ${label.toLowerCase()} "${file.name}". Sila semak dan bantu saya rekodkan jika berkaitan transaksi.`);
+    } finally {
+      setChatAttaching(false);
+    }
+  };
+
+  const handleChatFilePicked = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    if (file.size > 10 * 1024 * 1024) {
+      setChatMessages(prev => [...prev, { id: `e-${Date.now()}`, sender: "ai", text: "Saiz fail melebihi had 10MB. Sila guna fail yang lebih kecil." }]);
+      return;
+    }
+    const kind: "image" | "pdf" = file.type === "application/pdf" ? "pdf" : "image";
+    uploadChatAttachment(file, kind);
+  };
+
+  const startChatVoiceRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const recorder = new MediaRecorder(stream);
+      chatRecordedChunksRef.current = [];
+      recorder.ondataavailable = (e) => { if (e.data.size > 0) chatRecordedChunksRef.current.push(e.data); };
+      recorder.onstop = () => {
+        stream.getTracks().forEach(t => t.stop());
+        const blob = new Blob(chatRecordedChunksRef.current, { type: "audio/webm" });
+        const file = new File([blob], `nota-suara-${Date.now()}.webm`, { type: "audio/webm" });
+        uploadChatAttachment(file, "audio");
+      };
+      chatMediaRecorderRef.current = recorder;
+      recorder.start();
+      setChatRecording(true);
+    } catch {
+      setChatMessages(prev => [...prev, { id: `e-${Date.now()}`, sender: "ai", text: "Tidak dapat mengakses mikrofon. Sila semak kebenaran pelayar anda." }]);
+    }
+  };
+
+  const stopChatVoiceRecording = () => {
+    chatMediaRecorderRef.current?.stop();
+    setChatRecording(false);
+  };
+
   // Multi-business pattern learning: if this vendor/party has been confirmed
   // repeatedly under a DIFFERENT company workspace, surface that as a hint —
   // the user still picks; AI never auto-switches the workspace.
@@ -1237,7 +1373,14 @@ export function OwnerDashboard() {
 
     // Mark confirmed (and persist) only after the insert succeeded, capturing the new
     // record's id/type so a later post-confirm Edit can UPDATE instead of re-inserting.
-    markChatSuggestionStatus(s.id, { status: "confirmed", recordId: newRecordId, recordType: newRecordType });
+    markChatSuggestionStatus(s.id, {
+      status: "confirmed",
+      recordId: newRecordId,
+      recordType: newRecordType,
+      confirmedAt: new Date().toISOString(),
+      confirmedByName: user?.fullName || undefined,
+      confirmedByUserId: user?.id || undefined,
+    });
 
     if (transactionType !== "ASSET_PURCHASE" && transactionType !== "OWNER_TRANSACTION") learnOcrPattern({
       workspaceId: activeWorkspace.id,
@@ -1612,8 +1755,23 @@ export function OwnerDashboard() {
                         <div className={`w-7 h-7 rounded-xl flex items-center justify-center shrink-0 ${isUser ? "bg-indigo-600 text-white" : "bg-slate-900 text-white"}`}>
                           {isUser ? <UserIcon className="w-3.5 h-3.5" /> : <Brain className="w-3.5 h-3.5" />}
                         </div>
-                        <div className={`max-w-[78%] px-4 py-3 rounded-2xl text-sm leading-relaxed ${isUser ? "bg-indigo-600 text-white rounded-tr-none" : "bg-white border border-slate-200 text-slate-800 rounded-tl-none whitespace-pre-wrap shadow-sm"}`}>
-                          {msg.text}
+                        <div className={`max-w-[78%] space-y-1.5`}>
+                          {msg.attachmentUrl && (
+                            <div className={`rounded-2xl overflow-hidden border ${isUser ? "border-indigo-200" : "border-slate-200"}`}>
+                              {msg.attachmentType === "image" ? (
+                                <img src={msg.attachmentUrl} alt={msg.attachmentName || "Lampiran"} className="max-h-48 w-auto" />
+                              ) : msg.attachmentType === "audio" ? (
+                                <audio controls src={msg.attachmentUrl} className="w-full" />
+                              ) : (
+                                <a href={msg.attachmentUrl} target="_blank" rel="noreferrer" className="flex items-center gap-2 px-3 py-2 bg-white text-xs font-semibold text-indigo-700 hover:underline">
+                                  <FileIcon className="w-4 h-4 shrink-0" /> {msg.attachmentName || "Dokumen"}
+                                </a>
+                              )}
+                            </div>
+                          )}
+                          <div className={`px-4 py-3 rounded-2xl text-sm leading-relaxed ${isUser ? "bg-indigo-600 text-white rounded-tr-none" : "bg-white border border-slate-200 text-slate-800 rounded-tl-none whitespace-pre-wrap shadow-sm"}`}>
+                            {msg.text}
+                          </div>
                         </div>
                       </div>
                     )}
@@ -1664,6 +1822,13 @@ export function OwnerDashboard() {
                                 <div className="text-emerald-700 font-bold">
                                   {chatSuggestionJustUpdated[s.id] ? "✅ Dikemaskini." : "✅ Disahkan & direkodkan."}
                                 </div>
+                                {statusObj.confirmedAt && (
+                                  <div className="text-[10px] text-slate-400">
+                                    {new Date(statusObj.confirmedAt).toLocaleDateString("ms-MY", { day: "numeric", month: "short", year: "numeric" })}{" "}
+                                    {new Date(statusObj.confirmedAt).toLocaleTimeString("ms-MY", { hour: "2-digit", minute: "2-digit" })}
+                                    {statusObj.confirmedByName ? ` - ${statusObj.confirmedByName}` : ""}
+                                  </div>
+                                )}
                                 <button type="button" onClick={() => handleChatStartEdit(s)}
                                   className="px-3 py-1.5 rounded-lg bg-slate-200 hover:bg-slate-300 text-slate-800 font-semibold text-xs">
                                   Edit
@@ -1788,16 +1953,38 @@ export function OwnerDashboard() {
 
             {/* Chat input */}
             <div className="px-4 pb-4 shrink-0">
+              {chatRecording && (
+                <div className="mb-2 flex items-center justify-between bg-rose-50 border border-rose-200 rounded-xl px-3 py-2">
+                  <span className="text-xs font-semibold text-rose-700 flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse" /> Sedang merekod nota suara...
+                  </span>
+                  <button type="button" onClick={stopChatVoiceRecording} className="px-2.5 py-1 rounded-lg bg-rose-600 text-white text-[11px] font-bold cursor-pointer">
+                    Hentikan & Hantar
+                  </button>
+                </div>
+              )}
+              <input ref={chatFileInputRef} type="file" accept="image/*,application/pdf" className="hidden" onChange={handleChatFilePicked} />
               <form onSubmit={e => { e.preventDefault(); sendChat(); }}
                 className="flex items-center gap-2 bg-white border border-slate-300 rounded-2xl px-4 py-3 shadow-sm focus-within:border-indigo-400 transition">
+                <button type="button" onClick={() => chatFileInputRef.current?.click()} disabled={chatAttaching || chatRecording}
+                  title="Lampir resit / PDF" aria-label="Lampir fail"
+                  className="w-7 h-7 rounded-xl flex items-center justify-center text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 transition cursor-pointer disabled:opacity-40 shrink-0">
+                  <Paperclip className="w-4 h-4" />
+                </button>
+                <button type="button" onClick={chatRecording ? stopChatVoiceRecording : startChatVoiceRecording} disabled={chatAttaching}
+                  title="Rekod nota suara" aria-label="Rekod nota suara"
+                  className={`w-7 h-7 rounded-xl flex items-center justify-center transition cursor-pointer disabled:opacity-40 shrink-0 ${chatRecording ? "text-white bg-rose-500" : "text-slate-400 hover:text-indigo-600 hover:bg-indigo-50"}`}>
+                  {chatRecording ? <Square className="w-3.5 h-3.5" /> : <Mic className="w-4 h-4" />}
+                </button>
                 <input
                   type="text"
                   value={chatInput}
                   onChange={e => setChatInput(e.target.value)}
-                  placeholder="Taip di sini... Cth: Saya bayar pembekal RM500"
+                  placeholder={chatAttaching ? "Memuat naik lampiran..." : "Taip di sini... Cth: Saya bayar pembekal RM500"}
+                  disabled={chatAttaching}
                   className="flex-1 text-sm outline-none text-slate-800 placeholder-slate-400 bg-transparent"
                 />
-                <button type="submit" disabled={!chatInput.trim() || chatLoading}
+                <button type="submit" disabled={!chatInput.trim() || chatLoading || chatAttaching}
                   className="w-8 h-8 rounded-xl bg-indigo-600 text-white flex items-center justify-center disabled:bg-slate-200 transition cursor-pointer shrink-0">
                   <Send className="w-3.5 h-3.5" />
                 </button>
@@ -1823,28 +2010,43 @@ export function OwnerDashboard() {
         {/* â•â•â•â• DASHBOARD â•â•â•â• */}
         {activeTab === "dashboard" && (
           <div className="flex-1 overflow-y-auto p-4 space-y-4 max-w-2xl mx-auto w-full pb-20" id="owner_dashboard_pane">
-            <div>
-              <h2 className="text-lg font-bold text-slate-900">Dashboard</h2>
-              <p className="text-xs text-slate-400">{now.toLocaleDateString("ms-MY", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}</p>
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-lg font-bold text-slate-900">Dashboard</h2>
+                <p className="text-xs text-slate-400">{periodRange.label}</p>
+              </div>
+              <div className="flex bg-slate-100 rounded-xl p-0.5 gap-0.5">
+                {([
+                  { key: "day", label: "Harian" },
+                  { key: "week", label: "Mingguan" },
+                  { key: "month", label: "Bulanan" },
+                  { key: "year", label: "Tahunan" },
+                ] as const).map(({ key, label }) => (
+                  <button key={key} onClick={() => setDashboardPeriod(key)}
+                    className={`px-2 py-1.5 rounded-lg text-[10px] font-bold transition cursor-pointer ${dashboardPeriod === key ? "bg-indigo-600 text-white shadow" : "text-slate-500 hover:bg-slate-200"}`}>
+                    {label}
+                  </button>
+                ))}
+              </div>
             </div>
 
             <div className="grid grid-cols-2 gap-3">
               <div className="bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-2xl p-4 text-white shadow">
-                <p className="text-[11px] text-emerald-100">Pendapatan Bulan Ini</p>
-                <p className="text-xl font-bold mt-1">RM {incomeThisMonth.toLocaleString("ms-MY", { minimumFractionDigits: 2 })}</p>
+                <p className="text-[11px] text-emerald-100">Pendapatan</p>
+                <p className="text-xl font-bold mt-1">RM {incomeInPeriod.toLocaleString("ms-MY", { minimumFractionDigits: 2 })}</p>
                 <TrendingUp className="w-4 h-4 text-emerald-200 mt-1" />
               </div>
               <div className="bg-gradient-to-br from-rose-500 to-pink-600 rounded-2xl p-4 text-white shadow">
-                <p className="text-[11px] text-rose-100">Perbelanjaan Bulan Ini</p>
-                <p className="text-xl font-bold mt-1">RM {expenseThisMonth.toLocaleString("ms-MY", { minimumFractionDigits: 2 })}</p>
+                <p className="text-[11px] text-rose-100">Perbelanjaan</p>
+                <p className="text-xl font-bold mt-1">RM {expenseInPeriod.toLocaleString("ms-MY", { minimumFractionDigits: 2 })}</p>
                 <TrendingDown className="w-4 h-4 text-rose-200 mt-1" />
               </div>
             </div>
 
-            <div className={`rounded-2xl p-4 shadow-sm border bg-white ${(incomeThisMonth - expenseThisMonth) >= 0 ? "border-emerald-100" : "border-rose-100"}`}>
-              <p className="text-xs text-slate-500">Untung / Rugi Bulan Ini</p>
-              <p className={`text-2xl font-bold mt-1 ${(incomeThisMonth - expenseThisMonth) >= 0 ? "text-emerald-600" : "text-rose-500"}`}>
-                {(incomeThisMonth - expenseThisMonth) >= 0 ? "+" : "-"}RM {Math.abs(incomeThisMonth - expenseThisMonth).toLocaleString("ms-MY", { minimumFractionDigits: 2 })}
+            <div className={`rounded-2xl p-4 shadow-sm border bg-white ${(incomeInPeriod - expenseInPeriod) >= 0 ? "border-emerald-100" : "border-rose-100"}`}>
+              <p className="text-xs text-slate-500">Untung / Rugi ({periodRange.label})</p>
+              <p className={`text-2xl font-bold mt-1 ${(incomeInPeriod - expenseInPeriod) >= 0 ? "text-emerald-600" : "text-rose-500"}`}>
+                {(incomeInPeriod - expenseInPeriod) >= 0 ? "+" : "-"}RM {Math.abs(incomeInPeriod - expenseInPeriod).toLocaleString("ms-MY", { minimumFractionDigits: 2 })}
               </p>
             </div>
 
@@ -1860,20 +2062,24 @@ export function OwnerDashboard() {
             </div>
 
             <div className="grid grid-cols-2 gap-3">
-              <button onClick={() => setQuickAdd("INCOME")} className="flex items-center space-x-2 bg-emerald-50 border border-emerald-100 rounded-2xl px-4 py-3 transition cursor-pointer hover:bg-emerald-100">
-                <TrendingUp className="w-4 h-4 text-emerald-600" /><span className="text-xs font-bold text-emerald-700">Rekod Pendapatan</span>
+              <button onClick={() => setDashboardTypeFilter(f => f === "INCOME" ? "ALL" : "INCOME")}
+                className={`flex items-center justify-center space-x-2 rounded-2xl px-4 py-3 transition cursor-pointer border ${dashboardTypeFilter === "INCOME" ? "bg-emerald-600 border-emerald-600 text-white shadow" : "bg-emerald-50 border-emerald-100 text-emerald-700 hover:bg-emerald-100"}`}>
+                <TrendingUp className={`w-4 h-4 ${dashboardTypeFilter === "INCOME" ? "text-white" : "text-emerald-600"}`} /><span className="text-xs font-bold">Rekod Pendapatan</span>
               </button>
-              <button onClick={() => setQuickAdd("EXPENSE")} className="flex items-center space-x-2 bg-rose-50 border border-rose-100 rounded-2xl px-4 py-3 transition cursor-pointer hover:bg-rose-100">
-                <TrendingDown className="w-4 h-4 text-rose-500" /><span className="text-xs font-bold text-rose-600">Rekod Perbelanjaan</span>
+              <button onClick={() => setDashboardTypeFilter(f => f === "EXPENSE" ? "ALL" : "EXPENSE")}
+                className={`flex items-center justify-center space-x-2 rounded-2xl px-4 py-3 transition cursor-pointer border ${dashboardTypeFilter === "EXPENSE" ? "bg-rose-600 border-rose-600 text-white shadow" : "bg-rose-50 border-rose-100 text-rose-600 hover:bg-rose-100"}`}>
+                <TrendingDown className={`w-4 h-4 ${dashboardTypeFilter === "EXPENSE" ? "text-white" : "text-rose-500"}`} /><span className="text-xs font-bold">Rekod Perbelanjaan</span>
               </button>
             </div>
 
             {myEvents.length > 0 ? (
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Transaksi Terkini</p>
-                  {(txnFilterFrom || txnFilterTo) && (
-                    <button onClick={() => { setTxnFilterFrom(""); setTxnFilterTo(""); }} className="text-[10px] text-indigo-500 font-semibold cursor-pointer hover:underline">
+                  <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">
+                    {dashboardTypeFilter === "INCOME" ? "Senarai Pendapatan" : dashboardTypeFilter === "EXPENSE" ? "Senarai Perbelanjaan" : "Transaksi Terkini"}
+                  </p>
+                  {(txnFilterFrom || txnFilterTo || dashboardTypeFilter !== "ALL") && (
+                    <button onClick={() => { setTxnFilterFrom(""); setTxnFilterTo(""); setDashboardTypeFilter("ALL"); }} className="text-[10px] text-indigo-500 font-semibold cursor-pointer hover:underline">
                       Kosongkan tapisan
                     </button>
                   )}
@@ -1888,7 +2094,7 @@ export function OwnerDashboard() {
                 {filteredEvents.length === 0 && (
                   <p className="text-[11px] text-slate-400 text-center py-3">Tiada transaksi dalam tempoh ini.</p>
                 )}
-                {filteredEvents.slice(-8).reverse().map(ev => (
+                {filteredEvents.slice(-30).reverse().map(ev => (
                   <div key={ev.id} className="bg-white border border-slate-200 rounded-xl p-3 shadow-sm">
                     {editingTxnId === ev.id ? (
                       <div className="space-y-1.5">
@@ -1903,16 +2109,20 @@ export function OwnerDashboard() {
                       </div>
                     ) : (
                       <div className="flex items-center justify-between">
-                        <div className="flex items-center space-x-3">
-                          <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${ev.type === "INCOME" ? "bg-emerald-50" : "bg-rose-50"}`}>
+                        <div className="flex items-center space-x-3 min-w-0">
+                          <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${ev.type === "INCOME" ? "bg-emerald-50" : "bg-rose-50"}`}>
                             {ev.type === "INCOME" ? <TrendingUp className="w-3.5 h-3.5 text-emerald-500" /> : <TrendingDown className="w-3.5 h-3.5 text-rose-500" />}
                           </div>
-                          <div>
-                            <p className="text-xs font-semibold text-slate-800 truncate max-w-[150px]">{(ev.partyName && ev.partyName !== "Tidak Dinyatakan") ? ev.partyName : ev.categoryName}</p>
-                            <p className="text-[10px] text-slate-400">{ev.date}</p>
+                          <div className="min-w-0">
+                            <p className="text-xs font-semibold text-slate-800 truncate max-w-[160px]">{(ev.partyName && ev.partyName !== "Tidak Dinyatakan") ? ev.partyName : ev.categoryName}</p>
+                            <p className="text-[10px] text-slate-400 truncate max-w-[180px]">{ev.categoryName} - {ev.referenceNumber}</p>
+                            <p className="text-[10px] text-slate-400">
+                              {ev.date}{ev.createdAt ? ` ${new Date(ev.createdAt).toLocaleTimeString("ms-MY", { hour: "2-digit", minute: "2-digit" })}` : ""}
+                              {ev.createdByName ? ` - ${ev.createdByName}` : ""}
+                            </p>
                           </div>
                         </div>
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 shrink-0">
                           <span className={`text-sm font-bold ${ev.type === "INCOME" ? "text-emerald-600" : "text-rose-500"}`}>
                             {ev.type === "INCOME" ? "+" : "-"}RM {ev.amountMyr.toFixed(2)}
                           </span>
