@@ -179,7 +179,7 @@ function AddRecordForm({
 export function StaffHomeScreen() {
   const { user, signOut, isMockUser } = useAuth();
   const { activeWorkspace, workspaces, selectWorkspace } = useWorkspace();
-  const { financialEvents, addFinancialEvent, editFinancialEvent, addDebtRecord, editDebtRecord, addFinancialCommitment, editFinancialCommitment, learnOcrPattern } = useFinancials();
+  const { financialEvents, addFinancialEvent, editFinancialEvent, addDebtRecord, editDebtRecord, addFinancialCommitment, editFinancialCommitment, learnOcrPattern, addFinancialEvidencePackage } = useFinancials();
   const { activeTenant } = useTenant();
 
   const [activeTab, setActiveTab] = useState<StaffTab>("home");
@@ -213,6 +213,9 @@ export function StaffHomeScreen() {
   // Accounting Knowledge Base V1: per-suggestion dismissal of the "Cadangan Semakan" review banner.
   const [accountingBannerDismissed, setAccountingBannerDismissed] = useState<Record<string, boolean>>({});
   const chatEvidenceFilesRef = useRef<Record<string, File>>({});
+  // Holds uploaded-but-not-yet-linked evidence metadata per suggestion id, until
+  // Sahkan creates the underlying financial record and we know its id to link to.
+  const pendingChatEvidenceRef = useRef<Record<string, { documentType: "RECEIPT"; fileName: string; fileUrl: string }>>({});
   const chatEvidenceInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
   const [chatAttaching, setChatAttaching] = useState(false);
   const chatFileInputRef = useRef<HTMLInputElement>(null);
@@ -357,7 +360,7 @@ export function StaffHomeScreen() {
     }
   };
 
-  const sendChat = async (text?: string) => {
+  const sendChat = async (text?: string, attachment?: { documentType: "RECEIPT"; fileName: string; fileUrl: string }) => {
     const q = (text || chatInput).trim();
     if (!q || chatLoading) return;
     setChatInput("");
@@ -392,12 +395,21 @@ export function StaffHomeScreen() {
       setChatMessages(prev => [...prev, { id: aiMsgId, sender: "ai", text: reply, suggestions, createdAt: new Date().toISOString() }]);
       saveChatMessage(wsId, user?.id, isMockUser, { sender: "ai", text: reply, suggestions });
       const activeBusinesses = businesses.filter(b => b.isActive);
+      // If this AI reply was triggered by an OCR/image/PDF attachment upload, that
+      // attachment is the evidence for whatever transaction the AI now suggests —
+      // pre-link it to every suggestion in this batch so confirming creates the
+      // financial_evidence_packages row automatically, with no extra staff action.
+      if (attachment) {
+        suggestions.forEach(s => {
+          pendingChatEvidenceRef.current[s.id] = attachment;
+        });
+      }
       setChatSuggestionExtra(prev => {
         const next = { ...prev };
         suggestions.forEach(s => {
           next[s.id] = activeBusinesses.length > 0
-            ? { businessId: null, businessName: "", businessPicked: false, evidenceStatus: "NONE" }
-            : { businessId: null, businessName: "Personal", businessPicked: true, evidenceStatus: "NONE" };
+            ? { businessId: null, businessName: "", businessPicked: false, evidenceStatus: attachment ? "ATTACHED" : "NONE" }
+            : { businessId: null, businessName: "Personal", businessPicked: true, evidenceStatus: attachment ? "ATTACHED" : "NONE" };
         });
         return next;
       });
@@ -443,8 +455,32 @@ export function StaffHomeScreen() {
     }));
   };
 
-  const handleChatEvidenceAttach = (suggestionId: string, file: File) => {
+  const handleChatEvidenceAttach = async (suggestionId: string, file: File) => {
     chatEvidenceFilesRef.current[suggestionId] = file;
+    if (!activeWorkspace) return;
+
+    let finalUrl: string | null = null;
+    if (isSupabaseConfigured() && !isMockUser && supabase && !isDemoWorkspace(activeWorkspace.id) && user) {
+      const { doc, error } = await uploadDocument(file, activeWorkspace.id, user.id, "RECEIPT");
+      if (!error && doc) finalUrl = doc.file_path_supabase;
+    }
+    if (!finalUrl) {
+      finalUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = (ev) => resolve(ev.target?.result as string);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+    }
+
+    // The financial record doesn't exist yet at this point in the chat flow — the
+    // evidence package gets linked to it (relatedRecordId) once Sahkan creates the
+    // record, via the pending evidence info kept here.
+    pendingChatEvidenceRef.current[suggestionId] = {
+      documentType: "RECEIPT",
+      fileName: file.name,
+      fileUrl: finalUrl,
+    };
     setChatSuggestionExtra(prev => ({
       ...prev,
       [suggestionId]: { ...(prev[suggestionId] || { businessId: null, businessName: "Personal", businessPicked: true, evidenceStatus: "NONE" }), evidenceStatus: "ATTACHED" },
@@ -565,6 +601,25 @@ export function StaffHomeScreen() {
       return;
     }
 
+    // If a receipt/invoice was attached before pressing Sahkan — whether by the
+    // explicit evidence-attach step, or automatically because this suggestion came
+    // from an OCR/image/PDF/attachment upload in the chat itself — link it to the
+    // record that just got created, exactly as Owner/OCREngineConsole do. Skipped
+    // evidence never creates a mapping row.
+    const pendingEvidence = pendingChatEvidenceRef.current[s.id];
+    if (extra.evidenceStatus === "ATTACHED" && pendingEvidence && newRecordId && newRecordType) {
+      addFinancialEvidencePackage({
+        workspaceId: activeWorkspace.id,
+        documentType: pendingEvidence.documentType,
+        uploadDate: new Date().toISOString().split("T")[0],
+        fileName: pendingEvidence.fileName,
+        fileUrl: pendingEvidence.fileUrl,
+        relatedRecordType: newRecordType,
+        relatedRecordId: newRecordId,
+      });
+      delete pendingChatEvidenceRef.current[s.id];
+    }
+
     // Mark confirmed (and persist) only after the insert succeeded, capturing the new
     // record's id/type so a later post-confirm Edit can UPDATE instead of re-inserting.
     markChatSuggestionStatus(s.id, {
@@ -678,11 +733,20 @@ export function StaffHomeScreen() {
     setChatAttaching(true);
     try {
       let url = "";
+      let evidenceFileUrl = "";
       if (canUploadChatAttachment && user) {
         const { doc, error } = await uploadDocument(file, wsId, user.id, kind === "audio" ? "SUPPORTING_DOC" : "RECEIPT");
-        if (doc && !error) url = (await getDocumentUrl(doc.file_path_supabase)) || "";
+        if (doc && !error) {
+          url = (await getDocumentUrl(doc.file_path_supabase)) || "";
+          evidenceFileUrl = url || doc.file_path_supabase;
+        }
       }
       if (!url) url = URL.createObjectURL(file);
+      // Voice notes are transcribed, not filed as accounting evidence — only
+      // OCR/image/PDF/attachment uploads become a linked financial_evidence_packages row.
+      const evidenceAttachment = kind !== "audio"
+        ? { documentType: "RECEIPT" as const, fileName: file.name, fileUrl: evidenceFileUrl || url }
+        : undefined;
 
       const userMsgId = `u-${Date.now()}`;
       setChatMessages(prev => [...prev, {
@@ -732,7 +796,8 @@ export function StaffHomeScreen() {
       await sendChat(
         kind === "audio"
           ? (extractedContext ? `Saya hantar nota suara berkaitan transaksi. ${extractedContext} Sila semak dan bantu saya rekod jika perlu.` : "Saya hantar nota suara berkaitan transaksi. Sila semak dan bantu saya rekod jika perlu.")
-          : (extractedContext ? `Saya muat naik dokumen "${file.name}". ${extractedContext} Sila semak dan bantu saya rekod transaksi berkaitan jika ada.` : `Saya muat naik dokumen "${file.name}". Sila semak dan bantu saya rekod transaksi berkaitan jika ada.`)
+          : (extractedContext ? `Saya muat naik dokumen "${file.name}". ${extractedContext} Sila semak dan bantu saya rekod transaksi berkaitan jika ada.` : `Saya muat naik dokumen "${file.name}". Sila semak dan bantu saya rekod transaksi berkaitan jika ada.`),
+        evidenceAttachment
       );
     } finally {
       setChatAttaching(false);

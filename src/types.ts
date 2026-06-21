@@ -182,7 +182,7 @@ export interface AuditLogEntry {
   userRole: UserRole;
   tenantId: string;
   workspaceId?: string;
-  module: "Financial Records" | "Financial Commitments" | "Financial Evidence Package" | "OCR Learning" | "Backup & Recovery" | "Storage Provider" | "Notifications";
+  module: "Financial Records" | "Financial Commitments" | "Financial Evidence Package" | "OCR Learning" | "Backup & Recovery" | "Storage Provider" | "Notifications" | "Debt Records";
   action: "CREATE" | "UPDATE" | "DELETE";
   oldValue: Record<string, any> | null;
   newValue: Record<string, any> | null;

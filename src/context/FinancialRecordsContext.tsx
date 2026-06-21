@@ -1193,15 +1193,36 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
       })();
     }
 
+    if (activeWorkspace) {
+      writeAuditLog({
+        workspaceId: activeWorkspace.id,
+        module: "Debt Records",
+        action: "CREATE",
+        oldValue: null,
+        newValue: newDebt
+      });
+    }
+
     return newDebt;
   };
 
   const editDebtRecord = (id: string, updated: Partial<DebtRecord>) => {
+    const originalDebt = debtRecords.find((item) => item.id === id);
     const nextList = debtRecords.map((item) =>
       item.id === id ? ({ ...item, ...updated } as DebtRecord) : item
     );
     setDebtRecords(nextList);
     persistCurrentState(financialEvents, cashAccounts, bankAccounts, nextList);
+
+    if (activeWorkspace && originalDebt) {
+      writeAuditLog({
+        workspaceId: activeWorkspace.id,
+        module: "Debt Records",
+        action: "UPDATE",
+        oldValue: originalDebt,
+        newValue: { ...originalDebt, ...updated }
+      });
+    }
 
     if (isSupabaseConfigured() && !isMockUser && supabase && activeWorkspace && !isDemoWorkspace(activeWorkspace.id)) {
       (async () => {
@@ -1233,6 +1254,7 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
   };
 
   const deleteDebtRecord = (id: string) => {
+    const originalDebt = debtRecords.find((item) => item.id === id);
     const nextList = debtRecords.filter((item) => item.id !== id);
     setDebtRecords(nextList);
     persistCurrentState(financialEvents, cashAccounts, bankAccounts, nextList);
@@ -1245,6 +1267,16 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
           console.error("DB persistence delete debt failed:", err.message);
         }
       })();
+    }
+
+    if (activeWorkspace && originalDebt) {
+      writeAuditLog({
+        workspaceId: activeWorkspace.id,
+        module: "Debt Records",
+        action: "DELETE",
+        oldValue: originalDebt,
+        newValue: null
+      });
     }
   };
 
