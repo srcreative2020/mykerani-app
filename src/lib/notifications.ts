@@ -159,6 +159,105 @@ export function buildHQNotifs(ctx: HQNotifContext): Omit<AppNotif, "id" | "at" |
   return notifs;
 }
 
+// ── Financial pattern alerts (real workspace data) ─────────────────────────
+import type { FinancialHealthScoring } from "./financialHealth";
+
+export interface FinancialNotifEvent {
+  id: string;
+  type: string;
+  amountMyr: number;
+  partyName?: string;
+  categoryName?: string;
+  date: string;
+}
+
+export interface FinancialNotifDoc {
+  ocr_parsed_content?: Record<string, any>;
+}
+
+export function buildFinancialNotifs(
+  events: FinancialNotifEvent[],
+  docs: FinancialNotifDoc[],
+  scoring: FinancialHealthScoring,
+  today: Date
+): Omit<AppNotif, "id" | "at" | "read">[] {
+  const notifs: Omit<AppNotif, "id" | "at" | "read">[] = [];
+
+  // Missing evidence — expense/payable >= RM100 with no linked document
+  const linkedEventIds = new Set<string>();
+  docs.forEach(d => {
+    const ids = d.ocr_parsed_content?.linkedEventIds;
+    if (Array.isArray(ids)) ids.forEach((id: string) => linkedEventIds.add(id));
+  });
+  events
+    .filter(e => (e.type === "EXPENSE" || e.type === "PAYABLE") && e.amountMyr >= 100 && !linkedEventIds.has(e.id))
+    .forEach(e => {
+      notifs.push({
+        type: `missing_evidence_${e.id}`,
+        severity: "warn",
+        title: "Dokumen Sokongan Tiada",
+        body: `Rekod ${e.type === "PAYABLE" ? "hutang pembekal" : "perbelanjaan"} "${e.partyName || "-"}" (RM ${e.amountMyr.toLocaleString("en-MY", { minimumFractionDigits: 2 })}) belum ada resit/invois. Muat naik dokumen sokongan.`,
+        action: "dashboard",
+      });
+    });
+
+  // Financial health risk
+  if (scoring.solvencyGrade === "Critical Risk") {
+    notifs.push({
+      type: "health_solvency_critical",
+      severity: "critical",
+      title: "Amaran: Risiko Solvensi Kritikal",
+      body: "Jumlah liabiliti anda jauh melebihi aset. Semak semula hutang dan komitmen kewangan segera.",
+      action: "dashboard",
+    });
+  }
+  if (scoring.runwayGrade === "Immediate Action Required (< 2 Months)") {
+    notifs.push({
+      type: "health_runway_critical",
+      severity: "critical",
+      title: "Amaran: Kelangsungan Operasi Terhad",
+      body: "Tunai/bank anda dijangka tidak mencukupi untuk komitmen bulanan dalam masa 2 bulan. Pertimbangkan langkah kecairan segera.",
+      action: "dashboard",
+    });
+  }
+
+  // Spending anomaly — category month-over-month increase >= 50% and >= RM50
+  const currentMonthKey = `${today.getFullYear()}-${today.getMonth()}`;
+  const byCategory = new Map<string, { currentMonthTotal: number; pastMonthTotals: Map<string, number> }>();
+  events
+    .filter(e => e.type === "EXPENSE" && e.categoryName)
+    .forEach(e => {
+      const d = new Date(e.date);
+      const monthKey = `${d.getFullYear()}-${d.getMonth()}`;
+      const cat = e.categoryName as string;
+      if (!byCategory.has(cat)) byCategory.set(cat, { currentMonthTotal: 0, pastMonthTotals: new Map() });
+      const entry = byCategory.get(cat)!;
+      if (monthKey === currentMonthKey) {
+        entry.currentMonthTotal += e.amountMyr;
+      } else {
+        entry.pastMonthTotals.set(monthKey, (entry.pastMonthTotals.get(monthKey) || 0) + e.amountMyr);
+      }
+    });
+  byCategory.forEach((entry, categoryName) => {
+    const pastMonths = Array.from(entry.pastMonthTotals.values());
+    if (pastMonths.length < 2 || entry.currentMonthTotal === 0) return;
+    const avgPastMonth = pastMonths.reduce((sum, v) => sum + v, 0) / pastMonths.length;
+    if (avgPastMonth <= 0) return;
+    const increasePct = ((entry.currentMonthTotal - avgPastMonth) / avgPastMonth) * 100;
+    if (increasePct >= 50 && (entry.currentMonthTotal - avgPastMonth) >= 50) {
+      notifs.push({
+        type: `spend_anomaly_${categoryName}_${currentMonthKey}`,
+        severity: "warn",
+        title: `Corak Perbelanjaan Luar Biasa: ${categoryName}`,
+        body: `Perbelanjaan kategori "${categoryName}" bulan ini RM ${entry.currentMonthTotal.toFixed(2)}, naik ${increasePct.toFixed(0)}% berbanding purata RM ${avgPastMonth.toFixed(2)}.`,
+        action: "dashboard",
+      });
+    }
+  });
+
+  return notifs;
+}
+
 // ── Time formatter ─────────────────────────────────────────────────────────
 export function fmtNotifTime(iso: string): string {
   const diff = Date.now() - new Date(iso).getTime();

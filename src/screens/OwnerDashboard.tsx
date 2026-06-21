@@ -20,7 +20,8 @@ import { FinancialReportsAnalytics } from "../components/FinancialReportsAnalyti
 import { StorageBar } from "../components/StorageBar";
 import { useStorageQuota, PLAN_QUOTAS, GB } from "../lib/storageQuota";
 import { useAiCredits } from "../lib/aiCredits";
-import { useNotifications, buildTenantNotifs, fmtNotifTime } from "../lib/notifications";
+import { useNotifications, buildTenantNotifs, buildFinancialNotifs, fmtNotifTime } from "../lib/notifications";
+import { computeFinancialHealthScoring } from "../lib/financialHealth";
 import {
   uploadDocument, listDocuments, deleteDocument, getDocumentUrl, updateDocumentReview,
   isAllowedFileType, MAX_FILE_SIZE, fmtBytes as fmtDocBytes,
@@ -149,7 +150,7 @@ export function OwnerDashboard() {
   const { user, signOut, isMockUser } = useAuth();
   const { activeWorkspace, workspaces, selectWorkspace } = useWorkspace();
   const { activeTenant } = useTenant();
-  const { financialEvents, addFinancialEvent, editFinancialEvent, addDebtRecord, addFinancialCommitment, learnOcrPattern, ocrLearnedPatterns } = useFinancials();
+  const { financialEvents, addFinancialEvent, editFinancialEvent, addDebtRecord, addFinancialCommitment, learnOcrPattern, ocrLearnedPatterns, cashAccounts, bankAccounts, debtRecords, financialCommitments } = useFinancials();
 
   const [activeTab, setActiveTab] = useState<MainTab>("home");
   const [morePage, setMorePage] = useState<MorePage>("menu");
@@ -756,6 +757,18 @@ export function OwnerDashboard() {
     };
     buildTenantNotifs(ctx).forEach(n => notif.push(n));
   }, [storageQuota.warnLevel, storageQuota.isFrozen, aiCredits.used, aiCredits.total]);
+
+  // Auto-generate financial-pattern notifications (missing evidence, health risk, spending anomaly)
+  useEffect(() => {
+    if (myEvents.length === 0) return;
+    const myCash = cashAccounts.filter(a => a.workspaceId === wsId);
+    const myBank = bankAccounts.filter(a => a.workspaceId === wsId);
+    const myDebts = debtRecords.filter(d => d.workspaceId === wsId);
+    const myCommitments = financialCommitments.filter(c => c.workspaceId === wsId);
+    const scoring = computeFinancialHealthScoring(myCash, myBank, myEvents, myDebts, myCommitments, new Date());
+    const alerts = buildFinancialNotifs(myEvents, filteredDocs, scoring, new Date());
+    alerts.forEach(n => notif.push(n));
+  }, [myEvents, docs, cashAccounts, bankAccounts, debtRecords, financialCommitments, wsId]);
 
   useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [chatMessages, chatLoading]);
   useEffect(() => { supportEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [supportMessages, supportLoading]);
