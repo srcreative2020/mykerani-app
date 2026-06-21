@@ -39,7 +39,13 @@ interface ChatSuggestion {
   evidenceStatus?: "NONE" | "ATTACHED" | "SKIPPED";
   evidenceFileName?: string;
 }
-type ChatSuggestionStatus = "pending" | "confirmed" | "rejected";
+type ChatSuggestionRecordType = "INCOME" | "EXPENSE" | "RECEIVABLE" | "PAYABLE" | "DEBT" | "COMMITMENT";
+type ChatSuggestionStatusValue = "pending" | "confirmed" | "rejected";
+interface ChatSuggestionStatus {
+  status: ChatSuggestionStatusValue;
+  recordId?: string;
+  recordType?: ChatSuggestionRecordType;
+}
 
 function getGreeting() {
   const h = new Date().getHours();
@@ -154,7 +160,7 @@ function AddRecordForm({
 export function StaffHomeScreen() {
   const { user, signOut, isMockUser } = useAuth();
   const { activeWorkspace, workspaces, selectWorkspace } = useWorkspace();
-  const { financialEvents, addFinancialEvent, editFinancialEvent, addDebtRecord, addFinancialCommitment, learnOcrPattern } = useFinancials();
+  const { financialEvents, addFinancialEvent, editFinancialEvent, addDebtRecord, editDebtRecord, addFinancialCommitment, editFinancialCommitment, learnOcrPattern } = useFinancials();
   const { activeTenant } = useTenant();
 
   const [activeTab, setActiveTab] = useState<StaffTab>("home");
@@ -170,6 +176,9 @@ export function StaffHomeScreen() {
   // duplicate-inserted) after a page refresh, remount, or chat history reload.
   const chatSuggestionStatusKey = (wsId: string) => `mykerani_chat_suggestion_status_${wsId}`;
   const [chatSuggestionStatus, setChatSuggestionStatus] = useState<Record<string, ChatSuggestionStatus>>({});
+  // Tracks which already-confirmed suggestions have had their saved record edited at least
+  // once, purely to switch the status line wording to "Dikemaskini." — not persisted, ephemeral UI only.
+  const [chatSuggestionJustUpdated, setChatSuggestionJustUpdated] = useState<Record<string, boolean>>({});
   const [editingChatSuggestionId, setEditingChatSuggestionId] = useState<string | null>(null);
   const [chatEditDraft, setChatEditDraft] = useState({ amount: "", category: "", relatedParty: "", date: "" });
   const [chatLoading, setChatLoading] = useState(false);
@@ -242,7 +251,19 @@ export function StaffHomeScreen() {
     });
     try {
       const stored = localStorage.getItem(chatSuggestionStatusKey(wsId));
-      setChatSuggestionStatus(stored ? JSON.parse(stored) : {});
+      const parsed = stored ? JSON.parse(stored) : {};
+      // Backward compat: older cached values stored a plain status string
+      // (e.g. "confirmed") instead of the { status, recordId, recordType } object.
+      // Loose-compat them into the new shape (no recordId/recordType available).
+      const normalized: Record<string, ChatSuggestionStatus> = {};
+      Object.entries(parsed || {}).forEach(([id, v]) => {
+        if (v && typeof v === "object" && "status" in (v as any)) {
+          normalized[id] = v as ChatSuggestionStatus;
+        } else if (typeof v === "string") {
+          normalized[id] = { status: v as ChatSuggestionStatusValue };
+        }
+      });
+      setChatSuggestionStatus(normalized);
     } catch {
       setChatSuggestionStatus({});
     }
@@ -353,7 +374,7 @@ export function StaffHomeScreen() {
   };
 
   const handleChatRejectSuggestion = (id: string) => {
-    markChatSuggestionStatus(id, "rejected");
+    markChatSuggestionStatus(id, { status: "rejected" });
   };
 
   const handleChatStartEdit = (s: ChatSuggestion) => {
@@ -389,12 +410,9 @@ export function StaffHomeScreen() {
   };
 
   const handleChatConfirmSuggestion = (s: ChatSuggestion, edited?: typeof chatEditDraft) => {
-    if (!activeWorkspace || chatSuggestionStatus[s.id] === "confirmed") return;
+    if (!activeWorkspace || chatSuggestionStatus[s.id]?.status === "confirmed") return;
     const extra = chatSuggestionExtra[s.id];
     if (!extra || !extra.businessPicked) return;
-    // Mark confirmed immediately (and persist) before any further work — see OwnerDashboard's
-    // identical fix for why this prevents duplicate database inserts of the same transaction.
-    markChatSuggestionStatus(s.id, "confirmed");
     const businessId = extra.businessId;
     const transactionType = s.payload?.transactionType;
     const amount = Number(edited ? edited.amount : s.payload?.amount) || 0;
@@ -403,8 +421,11 @@ export function StaffHomeScreen() {
     const date = (edited ? edited.date : s.payload?.date) || new Date().toISOString().split("T")[0];
     const confidenceScore = s.payload?.confidenceScore ?? 0.7;
 
+    let newRecordId: string | undefined;
+    let newRecordType: ChatSuggestionRecordType | undefined;
+
     if (transactionType === "INCOME" || transactionType === "EXPENSE") {
-      addFinancialEvent({
+      const ev = addFinancialEvent({
         workspaceId: activeWorkspace.id,
         businessId: businessId || undefined,
         type: transactionType,
@@ -416,8 +437,10 @@ export function StaffHomeScreen() {
         description: `Direkodkan melalui pengesahan cadangan Kerani AI: ${s.title}`,
         isCompleted: true,
       });
+      newRecordId = ev.id;
+      newRecordType = transactionType;
     } else if (transactionType === "DEBT") {
-      addDebtRecord({
+      const debt = addDebtRecord({
         workspaceId: activeWorkspace.id,
         businessId: businessId || undefined,
         creditorName: relatedParty,
@@ -427,8 +450,10 @@ export function StaffHomeScreen() {
         status: "ACTIVE",
         description: `Direkodkan melalui pengesahan cadangan Kerani AI: ${s.title}`,
       });
+      newRecordId = debt.id;
+      newRecordType = "DEBT";
     } else if (transactionType === "RECEIVABLE") {
-      addFinancialEvent({
+      const ev = addFinancialEvent({
         workspaceId: activeWorkspace.id,
         businessId: businessId || undefined,
         type: "RECEIVABLE",
@@ -440,8 +465,10 @@ export function StaffHomeScreen() {
         description: `Direkodkan melalui pengesahan cadangan Kerani AI: ${s.title}`,
         isCompleted: false,
       });
+      newRecordId = ev.id;
+      newRecordType = "RECEIVABLE";
     } else if (transactionType === "PAYABLE") {
-      addFinancialEvent({
+      const ev = addFinancialEvent({
         workspaceId: activeWorkspace.id,
         businessId: businessId || undefined,
         type: "PAYABLE",
@@ -453,8 +480,10 @@ export function StaffHomeScreen() {
         description: `Direkodkan melalui pengesahan cadangan Kerani AI: ${s.title}`,
         isCompleted: false,
       });
+      newRecordId = ev.id;
+      newRecordType = "PAYABLE";
     } else if (transactionType === "COMMITMENT") {
-      addFinancialCommitment({
+      const cmt = addFinancialCommitment({
         workspaceId: activeWorkspace.id,
         businessId: businessId || undefined,
         description: `Direkodkan melalui pengesahan cadangan Kerani AI: ${s.title}`,
@@ -465,6 +494,8 @@ export function StaffHomeScreen() {
         isActive: true,
         status: "ACTIVE",
       });
+      newRecordId = cmt.id;
+      newRecordType = "COMMITMENT";
     } else if (transactionType === "ASSET_PURCHASE") {
       addAssetPurchase(activeWorkspace.id, isMockUser, {
         assetName: category,
@@ -485,6 +516,10 @@ export function StaffHomeScreen() {
       return;
     }
 
+    // Mark confirmed (and persist) only after the insert succeeded, capturing the new
+    // record's id/type so a later post-confirm Edit can UPDATE instead of re-inserting.
+    markChatSuggestionStatus(s.id, { status: "confirmed", recordId: newRecordId, recordType: newRecordType });
+
     if (transactionType !== "ASSET_PURCHASE" && transactionType !== "OWNER_TRANSACTION") learnOcrPattern({
       workspaceId: activeWorkspace.id,
       vendorName: relatedParty,
@@ -493,6 +528,45 @@ export function StaffHomeScreen() {
       confidenceScore,
     });
 
+    setEditingChatSuggestionId(null);
+  };
+
+  // Save an edit to an ALREADY-confirmed chat suggestion: update the saved record in place
+  // (instead of inserting a new one) using the recordId/recordType captured at confirm time.
+  const handleChatSaveConfirmedEdit = (s: ChatSuggestion, edited: typeof chatEditDraft) => {
+    const current = chatSuggestionStatus[s.id];
+    if (!current?.recordId || !current.recordType) return;
+    const amountMyr = Number(edited.amount) || 0;
+    const categoryName = edited.category || "Lain-lain";
+    const partyName = edited.relatedParty || "Tidak Dinyatakan";
+    const date = edited.date || new Date().toISOString().split("T")[0];
+
+    if (current.recordType === "DEBT") {
+      editDebtRecord(current.recordId, {
+        creditorName: partyName,
+        totalAmountMyr: amountMyr,
+        borrowedDate: date,
+        description: categoryName,
+      });
+    } else if (current.recordType === "COMMITMENT") {
+      editFinancialCommitment(current.recordId, {
+        obligeeName: partyName,
+        amountPerIntervalMyr: amountMyr,
+        startDate: date,
+        description: categoryName,
+      });
+    } else {
+      // INCOME / EXPENSE / RECEIVABLE / PAYABLE all live in financialEvents.
+      editFinancialEvent(current.recordId, {
+        amountMyr,
+        categoryName,
+        partyName,
+        date,
+      });
+    }
+
+    markChatSuggestionStatus(s.id, { ...current, status: "confirmed" });
+    setChatSuggestionJustUpdated(prev => ({ ...prev, [s.id]: true }));
     setEditingChatSuggestionId(null);
   };
 
@@ -623,7 +697,8 @@ export function StaffHomeScreen() {
                       </div>
                     )}
                     {(msg.suggestions || []).map(s => {
-                      const status = chatSuggestionStatus[s.id] || "pending";
+                      const statusObj = chatSuggestionStatus[s.id] || { status: "pending" as const };
+                      const status = statusObj.status;
                       if (status === "rejected") return null;
                       const extra = chatSuggestionExtra[s.id] || { businessId: null, businessName: "", businessPicked: businesses.filter(b => b.isActive).length === 0, evidenceStatus: "NONE" as const };
                       const confidencePct = Math.round((s.payload?.confidenceScore ?? 0.7) * 100);
@@ -641,8 +716,16 @@ export function StaffHomeScreen() {
                               <div>Jumlah: RM{Number(s.payload?.amount || 0).toFixed(2)}</div>
                               <div>Confidence: <span className={`font-bold ${confidenceClass}`}>{confidencePct}%</span></div>
                             </div>
-                            {status === "confirmed" && (
-                              <div className="text-emerald-700 font-bold">✅ Disahkan & direkodkan.</div>
+                            {status === "confirmed" && editingChatSuggestionId !== s.id && (
+                              <div className="space-y-1.5">
+                                <div className="text-emerald-700 font-bold">
+                                  {chatSuggestionJustUpdated[s.id] ? "✅ Dikemaskini." : "✅ Disahkan & direkodkan."}
+                                </div>
+                                <button type="button" onClick={() => handleChatStartEdit(s)}
+                                  className="px-3 py-1.5 rounded-lg bg-slate-200 hover:bg-slate-300 text-slate-800 font-semibold text-xs">
+                                  Edit
+                                </button>
+                              </div>
                             )}
                             {status === "pending" && !extra.businessPicked && activeBusinesses.length > 0 && (
                               <div className="space-y-1.5 pt-1">
@@ -650,12 +733,13 @@ export function StaffHomeScreen() {
                                 <div className="flex flex-wrap gap-2">
                                   {activeBusinesses.map(b => (
                                     <button key={b.id} type="button" onClick={() => handleChatPickBusiness(s.id, b.id, b.businessName)}
-                                      className="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-700 font-semibold">
+                                      title={b.businessName}
+                                      className="px-3 py-1.5 text-sm rounded-full bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-indigo-700 font-semibold truncate max-w-[160px]">
                                       {b.businessName}
                                     </button>
                                   ))}
                                   <button type="button" onClick={() => handleChatPickBusiness(s.id, null, "Personal")}
-                                    className="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-700 font-semibold">
+                                    className="px-3 py-1.5 text-sm rounded-full bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-700 font-semibold">
                                     Personal
                                   </button>
                                 </div>
@@ -695,14 +779,18 @@ export function StaffHomeScreen() {
                                 <button type="button" onClick={() => handleChatRejectSuggestion(s.id)} className="px-3 py-1.5 rounded-lg bg-rose-100 hover:bg-rose-200 text-rose-700 font-semibold">Tolak</button>
                               </div>
                             )}
-                            {status === "pending" && editingChatSuggestionId === s.id && (
+                            {(status === "pending" || status === "confirmed") && editingChatSuggestionId === s.id && (
                               <div className="space-y-1.5 pt-1">
                                 <input value={chatEditDraft.amount} onChange={e => setChatEditDraft(d => ({ ...d, amount: e.target.value }))} placeholder="Amount (RM)" className="w-full px-2 py-1 rounded border border-slate-300 text-xs" />
                                 <input value={chatEditDraft.category} onChange={e => setChatEditDraft(d => ({ ...d, category: e.target.value }))} placeholder="Category" className="w-full px-2 py-1 rounded border border-slate-300 text-xs" />
                                 <input value={chatEditDraft.relatedParty} onChange={e => setChatEditDraft(d => ({ ...d, relatedParty: e.target.value }))} placeholder="Related Party" className="w-full px-2 py-1 rounded border border-slate-300 text-xs" />
                                 <input value={chatEditDraft.date} onChange={e => setChatEditDraft(d => ({ ...d, date: e.target.value }))} type="date" className="w-full px-2 py-1 rounded border border-slate-300 text-xs" />
                                 <div className="flex gap-2 pt-1">
-                                  <button type="button" onClick={() => handleChatConfirmSuggestion(s, chatEditDraft)} className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-semibold">Sahkan Perubahan</button>
+                                  <button type="button"
+                                    onClick={() => status === "confirmed" ? handleChatSaveConfirmedEdit(s, chatEditDraft) : handleChatConfirmSuggestion(s, chatEditDraft)}
+                                    className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-semibold">
+                                    Sahkan Perubahan
+                                  </button>
                                   <button type="button" onClick={() => setEditingChatSuggestionId(null)} className="px-3 py-1.5 rounded-lg bg-slate-200 hover:bg-slate-300 text-slate-800 font-semibold">Batal</button>
                                 </div>
                               </div>
