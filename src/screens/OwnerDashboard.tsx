@@ -34,10 +34,13 @@ import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import JSZip from "jszip";
 import {
-  loadPersonalProfile, savePersonalProfile, loadBusinessProfile, saveBusinessProfile,
+  loadPersonalProfile, savePersonalProfile,
   loadVehicles, addVehicle, deleteVehicle, loadDependents, addDependent, deleteDependent,
-  EMPTY_PERSONAL_PROFILE, EMPTY_BUSINESS_PROFILE,
-  type PersonalProfile, type BusinessProfile, type Vehicle, type Dependent,
+  loadBusinesses, addBusiness, updateBusiness, deleteBusiness,
+  loadBusinessBranches, addBusinessBranch, deleteBusinessBranch,
+  EMPTY_PERSONAL_PROFILE,
+  type PersonalProfile, type Vehicle, type Dependent,
+  type Business, type BusinessBranch,
 } from "../lib/profileData";
 import {
   addAssetPurchase, addOwnerTransaction, loadAssetPurchases, loadOwnerTransactions,
@@ -783,13 +786,22 @@ export function OwnerDashboard() {
   }, [wsId, isMockUser]);
 
   const [personalProfile, setPersonalProfile] = useState<PersonalProfile>(EMPTY_PERSONAL_PROFILE);
-  const [businessProfile, setBusinessProfile] = useState<BusinessProfile>(EMPTY_BUSINESS_PROFILE);
+  const [businesses, setBusinesses] = useState<Business[]>([]);
+  const [businessBranches, setBusinessBranches] = useState<Record<string, BusinessBranch[]>>({});
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [dependents, setDependents] = useState<Dependent[]>([]);
   const [profileSaving, setProfileSaving] = useState(false);
   const [profileSavedAt, setProfileSavedAt] = useState<number | null>(null);
   const [newVehicle, setNewVehicle] = useState({ name: "", plateNumber: "", vehicleType: "", ownership: "BUSINESS" as "PERSONAL" | "BUSINESS" });
   const [newDependent, setNewDependent] = useState({ name: "", relationship: "", dateOfBirth: "" });
+  const EMPTY_BUSINESS_FORM = { businessName: "", industry: "", businessType: "", registrationNo: "", notes: "" };
+  const [newBusiness, setNewBusiness] = useState(EMPTY_BUSINESS_FORM);
+  const [addingBusiness, setAddingBusiness] = useState(false);
+  const [editingBusinessId, setEditingBusinessId] = useState<string | null>(null);
+  const [editBusinessForm, setEditBusinessForm] = useState(EMPTY_BUSINESS_FORM);
+  const [confirmDeleteBusinessId, setConfirmDeleteBusinessId] = useState<string | null>(null);
+  const [newBranchByBusiness, setNewBranchByBusiness] = useState<Record<string, { branchName: string; location: string }>>({});
+  const [expandedBusinessId, setExpandedBusinessId] = useState<string | null>(null);
   const [assetPurchases, setAssetPurchases] = useState<AssetPurchase[]>([]);
   const [ownerTransactions, setOwnerTransactions] = useState<OwnerTransaction[]>([]);
   const [profileNudgeDismissed, setProfileNudgeDismissed] = useState(false);
@@ -800,7 +812,7 @@ export function OwnerDashboard() {
   const refreshProfileData = () => {
     if (!wsId) return;
     loadPersonalProfile(wsId, isMockUser).then(setPersonalProfile);
-    loadBusinessProfile(wsId, isMockUser).then(setBusinessProfile);
+    loadBusinesses(wsId, isMockUser).then(setBusinesses);
     loadVehicles(wsId, isMockUser).then(setVehicles);
     loadDependents(wsId, isMockUser).then(setDependents);
     loadAssetPurchases(wsId, isMockUser).then(setAssetPurchases);
@@ -812,9 +824,69 @@ export function OwnerDashboard() {
   const saveProfiles = async () => {
     setProfileSaving(true);
     await savePersonalProfile(wsId, isMockUser, personalProfile);
-    await saveBusinessProfile(wsId, isMockUser, businessProfile);
     setProfileSaving(false);
     setProfileSavedAt(Date.now());
+  };
+
+  const submitNewBusiness = async () => {
+    if (!newBusiness.businessName.trim()) return;
+    await addBusiness(wsId, isMockUser, newBusiness);
+    setNewBusiness(EMPTY_BUSINESS_FORM);
+    setAddingBusiness(false);
+    refreshProfileData();
+  };
+
+  const startEditBusiness = (b: Business) => {
+    setEditingBusinessId(b.id);
+    setEditBusinessForm({
+      businessName: b.businessName,
+      industry: b.industry,
+      businessType: b.businessType,
+      registrationNo: b.registrationNo,
+      notes: b.notes,
+    });
+  };
+
+  const submitEditBusiness = async () => {
+    if (!editingBusinessId || !editBusinessForm.businessName.trim()) return;
+    await updateBusiness(wsId, isMockUser, editingBusinessId, editBusinessForm);
+    setEditingBusinessId(null);
+    setEditBusinessForm(EMPTY_BUSINESS_FORM);
+    refreshProfileData();
+  };
+
+  const removeBusiness = async (id: string) => {
+    await deleteBusiness(wsId, isMockUser, id);
+    setConfirmDeleteBusinessId(null);
+    refreshProfileData();
+  };
+
+  const toggleBusinessBranches = (businessId: string) => {
+    if (expandedBusinessId === businessId) {
+      setExpandedBusinessId(null);
+      return;
+    }
+    setExpandedBusinessId(businessId);
+    loadBusinessBranches(wsId, isMockUser, businessId).then(branches => {
+      setBusinessBranches(prev => ({ ...prev, [businessId]: branches }));
+    });
+  };
+
+  const submitNewBranch = async (businessId: string) => {
+    const form = newBranchByBusiness[businessId];
+    if (!form || !form.branchName.trim()) return;
+    await addBusinessBranch(wsId, isMockUser, { businessId, branchName: form.branchName, location: form.location });
+    setNewBranchByBusiness(prev => ({ ...prev, [businessId]: { branchName: "", location: "" } }));
+    loadBusinessBranches(wsId, isMockUser, businessId).then(branches => {
+      setBusinessBranches(prev => ({ ...prev, [businessId]: branches }));
+    });
+  };
+
+  const removeBranch = async (businessId: string, branchId: string) => {
+    await deleteBusinessBranch(wsId, isMockUser, branchId);
+    loadBusinessBranches(wsId, isMockUser, businessId).then(branches => {
+      setBusinessBranches(prev => ({ ...prev, [businessId]: branches }));
+    });
   };
 
   const submitNewVehicle = async () => {
@@ -866,7 +938,7 @@ export function OwnerDashboard() {
         headers: { "Content-Type": "application/json", ...(await getAuthHeader()) },
         body: JSON.stringify({
           query: q,
-          financialContext: { activeTenant, activeWorkspace, financialEvents, personalProfile, businessProfile, vehicles, dependents },
+          financialContext: { activeTenant, activeWorkspace, financialEvents, personalProfile, businesses, vehicles, dependents },
           userId: user?.id,
         }),
       });
@@ -1275,7 +1347,7 @@ export function OwnerDashboard() {
                   </div>
 
                   {/* Onboarding nudge: encourage filling the optional Profile System so AI can disambiguate */}
-                  {!profileNudgeDismissed && !personalProfile.fullName && !businessProfile.industry && vehicles.length === 0 && (
+                  {!profileNudgeDismissed && !personalProfile.fullName && businesses.length === 0 && vehicles.length === 0 && (
                     <div className="bg-indigo-50 border border-indigo-100 rounded-2xl p-4 flex items-start gap-3">
                       <Brain className="w-5 h-5 text-indigo-500 shrink-0 mt-0.5" />
                       <div className="flex-1">
@@ -1942,14 +2014,112 @@ export function OwnerDashboard() {
                 </div>
 
                 <div className="bg-white border border-slate-200 rounded-2xl p-5 space-y-3 shadow-sm">
-                  <h3 className="text-sm font-bold text-slate-800">Profil Perniagaan</h3>
-                  <input value={businessProfile.industry} onChange={e => setBusinessProfile(p => ({ ...p, industry: e.target.value }))} placeholder="Industri (contoh: F&B, Percetakan)" className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm" />
-                  <div className="grid grid-cols-2 gap-2">
-                    <input value={businessProfile.branchName} onChange={e => setBusinessProfile(p => ({ ...p, branchName: e.target.value }))} placeholder="Nama cawangan" className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm" />
-                    <input value={businessProfile.businessType} onChange={e => setBusinessProfile(p => ({ ...p, businessType: e.target.value }))} placeholder="Jenis perniagaan (Sdn Bhd, Enterprise...)" className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm" />
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-sm font-bold text-slate-800">Profil Perniagaan</h3>
+                    {!addingBusiness && (
+                      <button onClick={() => setAddingBusiness(true)} className="text-xs font-semibold text-indigo-600 hover:text-indigo-700 cursor-pointer">+ Tambah Bisnes</button>
+                    )}
                   </div>
-                  <input value={businessProfile.registrationNo} onChange={e => setBusinessProfile(p => ({ ...p, registrationNo: e.target.value }))} placeholder="No. pendaftaran perniagaan" className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm" />
-                  <textarea value={businessProfile.notes} onChange={e => setBusinessProfile(p => ({ ...p, notes: e.target.value }))} placeholder="Nota tambahan" className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm" rows={2} />
+                  <p className="text-xs text-slate-500">Tambah setiap bisnes yang anda uruskan. Setiap bisnes boleh ada beberapa cawangan.</p>
+
+                  {businesses.length === 0 && !addingBusiness && (
+                    <p className="text-xs text-slate-400 italic">Belum ada bisnes ditambah.</p>
+                  )}
+
+                  {businesses.map(b => (
+                    <div key={b.id} className="bg-slate-50 border border-slate-100 rounded-xl p-3 space-y-2">
+                      {editingBusinessId === b.id ? (
+                        <div className="space-y-2">
+                          <input value={editBusinessForm.businessName} onChange={e => setEditBusinessForm(f => ({ ...f, businessName: e.target.value }))} placeholder="Nama bisnes" className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm" />
+                          <input value={editBusinessForm.industry} onChange={e => setEditBusinessForm(f => ({ ...f, industry: e.target.value }))} placeholder="Industri (contoh: F&B, Percetakan)" className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm" />
+                          <div className="grid grid-cols-2 gap-2">
+                            <input value={editBusinessForm.businessType} onChange={e => setEditBusinessForm(f => ({ ...f, businessType: e.target.value }))} placeholder="Jenis perniagaan (Sdn Bhd, Enterprise...)" className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm" />
+                            <input value={editBusinessForm.registrationNo} onChange={e => setEditBusinessForm(f => ({ ...f, registrationNo: e.target.value }))} placeholder="No. pendaftaran" className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm" />
+                          </div>
+                          <textarea value={editBusinessForm.notes} onChange={e => setEditBusinessForm(f => ({ ...f, notes: e.target.value }))} placeholder="Nota tambahan" className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm" rows={2} />
+                          <div className="flex space-x-2">
+                            <button onClick={submitEditBusiness} className="flex-1 px-3 py-2 bg-slate-900 text-white rounded-xl text-sm font-semibold cursor-pointer">Simpan</button>
+                            <button onClick={() => { setEditingBusinessId(null); setEditBusinessForm(EMPTY_BUSINESS_FORM); }} className="flex-1 px-3 py-2 bg-slate-200 text-slate-700 rounded-xl text-sm font-semibold cursor-pointer">Batal</button>
+                          </div>
+                        </div>
+                      ) : (
+                        <>
+                          <div className="flex items-start justify-between">
+                            <div>
+                              <p className="text-sm font-semibold text-slate-800">{b.businessName}</p>
+                              <p className="text-xs text-slate-500">
+                                {[b.industry, b.businessType].filter(Boolean).join(" · ")}
+                                {b.registrationNo && <span className="text-slate-400"> · {b.registrationNo}</span>}
+                              </p>
+                            </div>
+                            <div className="flex items-center space-x-2">
+                              <button onClick={() => startEditBusiness(b)} className="text-slate-400 hover:text-indigo-600 cursor-pointer"><Edit3 className="w-4 h-4" /></button>
+                              <button onClick={() => setConfirmDeleteBusinessId(b.id)} className="text-rose-400 hover:text-rose-600 cursor-pointer"><Trash2 className="w-4 h-4" /></button>
+                            </div>
+                          </div>
+
+                          {confirmDeleteBusinessId === b.id && (
+                            <div className="bg-rose-50 border border-rose-200 rounded-xl p-2 flex items-center justify-between">
+                              <span className="text-xs text-rose-700">Padam "{b.businessName}"?</span>
+                              <div className="flex space-x-2">
+                                <button onClick={() => removeBusiness(b.id)} className="px-2 py-1 bg-rose-600 text-white rounded-lg text-xs font-semibold cursor-pointer">Padam</button>
+                                <button onClick={() => setConfirmDeleteBusinessId(null)} className="px-2 py-1 bg-slate-200 text-slate-700 rounded-lg text-xs font-semibold cursor-pointer">Batal</button>
+                              </div>
+                            </div>
+                          )}
+
+                          <button onClick={() => toggleBusinessBranches(b.id)} className="text-xs font-semibold text-slate-500 hover:text-slate-700 cursor-pointer">
+                            {expandedBusinessId === b.id ? "▼" : "▶"} Cawangan {businessBranches[b.id] ? `(${businessBranches[b.id].length})` : ""}
+                          </button>
+
+                          {expandedBusinessId === b.id && (
+                            <div className="ml-3 pl-3 border-l border-slate-200 space-y-2">
+                              {(businessBranches[b.id] || []).map(br => (
+                                <div key={br.id} className="flex items-center justify-between bg-white border border-slate-100 rounded-lg px-2 py-1.5">
+                                  <div>
+                                    <p className="text-xs font-semibold text-slate-700">{br.branchName}</p>
+                                    {br.location && <p className="text-[10px] text-slate-400">{br.location}</p>}
+                                  </div>
+                                  <button onClick={() => removeBranch(b.id, br.id)} className="text-rose-400 hover:text-rose-600 cursor-pointer"><Trash2 className="w-3.5 h-3.5" /></button>
+                                </div>
+                              ))}
+                              <div className="grid grid-cols-2 gap-2">
+                                <input
+                                  value={newBranchByBusiness[b.id]?.branchName || ""}
+                                  onChange={e => setNewBranchByBusiness(prev => ({ ...prev, [b.id]: { branchName: e.target.value, location: prev[b.id]?.location || "" } }))}
+                                  placeholder="Nama cawangan"
+                                  className="px-2 py-1.5 border border-slate-200 rounded-lg text-xs"
+                                />
+                                <input
+                                  value={newBranchByBusiness[b.id]?.location || ""}
+                                  onChange={e => setNewBranchByBusiness(prev => ({ ...prev, [b.id]: { branchName: prev[b.id]?.branchName || "", location: e.target.value } }))}
+                                  placeholder="Lokasi"
+                                  className="px-2 py-1.5 border border-slate-200 rounded-lg text-xs"
+                                />
+                              </div>
+                              <button onClick={() => submitNewBranch(b.id)} className="px-2 py-1.5 bg-slate-900 text-white rounded-lg text-xs font-semibold cursor-pointer">+ Tambah Cawangan</button>
+                            </div>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  ))}
+
+                  {addingBusiness && (
+                    <div className="bg-slate-50 border border-slate-100 rounded-xl p-3 space-y-2">
+                      <input value={newBusiness.businessName} onChange={e => setNewBusiness(f => ({ ...f, businessName: e.target.value }))} placeholder="Nama bisnes (wajib)" className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm" />
+                      <input value={newBusiness.industry} onChange={e => setNewBusiness(f => ({ ...f, industry: e.target.value }))} placeholder="Industri (contoh: F&B, Percetakan)" className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm" />
+                      <div className="grid grid-cols-2 gap-2">
+                        <input value={newBusiness.businessType} onChange={e => setNewBusiness(f => ({ ...f, businessType: e.target.value }))} placeholder="Jenis perniagaan (Sdn Bhd, Enterprise...)" className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm" />
+                        <input value={newBusiness.registrationNo} onChange={e => setNewBusiness(f => ({ ...f, registrationNo: e.target.value }))} placeholder="No. pendaftaran" className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm" />
+                      </div>
+                      <textarea value={newBusiness.notes} onChange={e => setNewBusiness(f => ({ ...f, notes: e.target.value }))} placeholder="Nota tambahan" className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm" rows={2} />
+                      <div className="flex space-x-2">
+                        <button onClick={submitNewBusiness} className="flex-1 px-3 py-2 bg-slate-900 text-white rounded-xl text-sm font-semibold cursor-pointer">Tambah</button>
+                        <button onClick={() => { setAddingBusiness(false); setNewBusiness(EMPTY_BUSINESS_FORM); }} className="flex-1 px-3 py-2 bg-slate-200 text-slate-700 rounded-xl text-sm font-semibold cursor-pointer">Batal</button>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 <button onClick={saveProfiles} disabled={profileSaving} className="w-full py-3 bg-indigo-600 text-white rounded-xl text-sm font-semibold disabled:opacity-50 cursor-pointer">

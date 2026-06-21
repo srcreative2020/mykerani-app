@@ -806,7 +806,7 @@ Here is the structured financial database content of the active workspace:
 
 Here is what you know about the user's life (Profile System — all fields are optional and may be empty; never assume facts beyond what is given here):
 8. Personal Profile: ${JSON.stringify(financialContext?.personalProfile || {})}
-9. Business Profile: ${JSON.stringify(financialContext?.businessProfile || {})}
+9. Business Profile(s): ${JSON.stringify(financialContext?.businesses || financialContext?.businessProfile || {})}
 10. Vehicles (name, plateNumber, vehicleType, ownership "PERSONAL"|"BUSINESS"): ${JSON.stringify(financialContext?.vehicles || [])}
 11. Dependents: ${JSON.stringify(financialContext?.dependents || [])}
 

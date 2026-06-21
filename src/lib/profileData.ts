@@ -19,6 +19,24 @@ export interface BusinessProfile {
   notes: string;
 }
 
+export interface Business {
+  id: string;
+  businessName: string;
+  industry: string;
+  businessType: string;
+  registrationNo: string;
+  notes: string;
+  isActive: boolean;
+}
+
+export interface BusinessBranch {
+  id: string;
+  businessId: string;
+  branchName: string;
+  location: string;
+  isActive: boolean;
+}
+
 export interface Vehicle {
   id: string;
   name: string;
@@ -130,6 +148,118 @@ export const saveBusinessProfile = async (
     registration_no: profile.registrationNo || null,
     notes: profile.notes || null,
   });
+};
+
+export const loadBusinesses = async (
+  workspaceId: string | undefined,
+  isMockUser: boolean
+): Promise<Business[]> => {
+  if (!canPersist(workspaceId, isMockUser) || !supabase) return [];
+  const { data, error } = await supabase
+    .from("businesses")
+    .select("id,business_name,industry,business_type,registration_no,notes,is_active")
+    .eq("workspace_id", workspaceId)
+    .order("created_at", { ascending: true });
+  if (error || !data) return [];
+  return data.map((row: any) => ({
+    id: row.id,
+    businessName: row.business_name,
+    industry: row.industry || "",
+    businessType: row.business_type || "",
+    registrationNo: row.registration_no || "",
+    notes: row.notes || "",
+    isActive: row.is_active,
+  }));
+};
+
+export const addBusiness = async (
+  workspaceId: string | undefined,
+  isMockUser: boolean,
+  business: Omit<Business, "id" | "isActive">
+): Promise<void> => {
+  if (!canPersist(workspaceId, isMockUser) || !supabase) return;
+  await supabase.from("businesses").insert({
+    workspace_id: workspaceId,
+    business_name: business.businessName,
+    industry: business.industry || null,
+    business_type: business.businessType || null,
+    registration_no: business.registrationNo || null,
+    notes: business.notes || null,
+  });
+};
+
+export const updateBusiness = async (
+  workspaceId: string | undefined,
+  isMockUser: boolean,
+  businessId: string,
+  business: Omit<Business, "id" | "isActive">
+): Promise<void> => {
+  if (!canPersist(workspaceId, isMockUser) || !supabase) return;
+  await supabase
+    .from("businesses")
+    .update({
+      business_name: business.businessName,
+      industry: business.industry || null,
+      business_type: business.businessType || null,
+      registration_no: business.registrationNo || null,
+      notes: business.notes || null,
+    })
+    .eq("id", businessId)
+    .eq("workspace_id", workspaceId);
+};
+
+export const deleteBusiness = async (
+  workspaceId: string | undefined,
+  isMockUser: boolean,
+  businessId: string
+): Promise<void> => {
+  if (!canPersist(workspaceId, isMockUser) || !supabase) return;
+  await supabase.from("businesses").delete().eq("id", businessId).eq("workspace_id", workspaceId);
+};
+
+export const loadBusinessBranches = async (
+  workspaceId: string | undefined,
+  isMockUser: boolean,
+  businessId: string
+): Promise<BusinessBranch[]> => {
+  if (!canPersist(workspaceId, isMockUser) || !supabase) return [];
+  const { data, error } = await supabase
+    .from("business_branches")
+    .select("id,business_id,branch_name,location,is_active")
+    .eq("workspace_id", workspaceId)
+    .eq("business_id", businessId)
+    .order("created_at", { ascending: true });
+  if (error || !data) return [];
+  return data.map((row: any) => ({
+    id: row.id,
+    businessId: row.business_id,
+    branchName: row.branch_name,
+    location: row.location || "",
+    isActive: row.is_active,
+  }));
+};
+
+export const addBusinessBranch = async (
+  workspaceId: string | undefined,
+  isMockUser: boolean,
+  branch: Omit<BusinessBranch, "id" | "isActive">
+): Promise<void> => {
+  if (!canPersist(workspaceId, isMockUser) || !supabase) return;
+  await supabase.from("business_branches").insert({
+    workspace_id: workspaceId,
+    business_id: branch.businessId,
+    branch_name: branch.branchName,
+    location: branch.location || null,
+  });
+};
+
+export const deleteBusinessBranch = async (
+  workspaceId: string | undefined,
+  isMockUser: boolean,
+  branchId: string
+): Promise<void> => {
+  if (!canPersist(workspaceId, isMockUser) || !supabase) return;
+  await supabase.from("business_branches").delete().eq("id", branchId).eq("workspace_id", workspaceId);
 };
 
 export const loadVehicles = async (
