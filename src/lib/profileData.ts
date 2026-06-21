@@ -298,6 +298,25 @@ export const addVehicle = async (
   });
 };
 
+export const updateVehicle = async (
+  workspaceId: string | undefined,
+  isMockUser: boolean,
+  vehicleId: string,
+  vehicle: Omit<Vehicle, "id" | "isActive">
+): Promise<void> => {
+  if (!canPersist(workspaceId, isMockUser) || !supabase) return;
+  await supabase
+    .from("vehicles")
+    .update({
+      name: vehicle.name,
+      plate_number: vehicle.plateNumber || null,
+      vehicle_type: vehicle.vehicleType || null,
+      ownership: vehicle.ownership,
+    })
+    .eq("id", vehicleId)
+    .eq("workspace_id", workspaceId);
+};
+
 export const deleteVehicle = async (
   workspaceId: string | undefined,
   isMockUser: boolean,
@@ -338,6 +357,24 @@ export const addDependent = async (
     relationship: dependent.relationship || null,
     date_of_birth: dependent.dateOfBirth || null,
   });
+};
+
+export const updateDependent = async (
+  workspaceId: string | undefined,
+  isMockUser: boolean,
+  dependentId: string,
+  dependent: Omit<Dependent, "id">
+): Promise<void> => {
+  if (!canPersist(workspaceId, isMockUser) || !supabase) return;
+  await supabase
+    .from("dependents")
+    .update({
+      name: dependent.name,
+      relationship: dependent.relationship || null,
+      date_of_birth: dependent.dateOfBirth || null,
+    })
+    .eq("id", dependentId)
+    .eq("workspace_id", workspaceId);
 };
 
 export const deleteDependent = async (

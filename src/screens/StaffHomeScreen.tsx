@@ -5,8 +5,8 @@ import { useFinancials } from "../context/FinancialRecordsContext";
 import { useTenant } from "../context/TenantContext";
 import { loadChatHistory, saveChatMessage } from "../lib/chatHistory";
 import {
-  loadPersonalProfile, loadBusinessProfile, loadVehicles, loadDependents,
-  EMPTY_PERSONAL_PROFILE, EMPTY_BUSINESS_PROFILE, type Vehicle, type Dependent,
+  loadPersonalProfile, loadBusinessProfile, loadVehicles, loadDependents, loadBusinesses,
+  EMPTY_PERSONAL_PROFILE, EMPTY_BUSINESS_PROFILE, type Vehicle, type Dependent, type Business,
 } from "../lib/profileData";
 import { addAssetPurchase, addOwnerTransaction } from "../lib/assetOwnerData";
 import {
@@ -33,6 +33,11 @@ interface ChatSuggestion {
     confidenceScore?: number;
     ownerTransactionSubtype?: "CAPITAL_INJECTION" | "DRAWING";
   };
+  businessId?: string | null;
+  businessName?: string;
+  businessPicked?: boolean;
+  evidenceStatus?: "NONE" | "ATTACHED" | "SKIPPED";
+  evidenceFileName?: string;
 }
 type ChatSuggestionStatus = "pending" | "confirmed" | "rejected";
 
@@ -166,6 +171,10 @@ export function StaffHomeScreen() {
   const [chatEditDraft, setChatEditDraft] = useState({ amount: "", category: "", relatedParty: "", date: "" });
   const [chatLoading, setChatLoading] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
+  // Per-suggestion business pick + evidence step, layered on top of the AI suggestion before final Sahkan.
+  const [chatSuggestionExtra, setChatSuggestionExtra] = useState<Record<string, { businessId: string | null; businessName: string; businessPicked: boolean; evidenceStatus: "NONE" | "ATTACHED" | "SKIPPED" }>>({});
+  const chatEvidenceFilesRef = useRef<Record<string, File>>({});
+  const chatEvidenceInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
   // â"€â"€ Support Center â"€â"€
   const [showSupport, setShowSupport] = useState(false);
@@ -235,12 +244,14 @@ export function StaffHomeScreen() {
   const [businessProfile, setBusinessProfile] = useState(EMPTY_BUSINESS_PROFILE);
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [dependents, setDependents] = useState<Dependent[]>([]);
+  const [businesses, setBusinesses] = useState<Business[]>([]);
   useEffect(() => {
     if (!wsId) return;
     loadPersonalProfile(wsId, isMockUser).then(setPersonalProfile);
     loadBusinessProfile(wsId, isMockUser).then(setBusinessProfile);
     loadVehicles(wsId, isMockUser).then(setVehicles);
     loadDependents(wsId, isMockUser).then(setDependents);
+    loadBusinesses(wsId, isMockUser).then(setBusinesses);
   }, [wsId, isMockUser]);
 
   const sendSupport = async (text?: string) => {
@@ -299,6 +310,16 @@ export function StaffHomeScreen() {
         : [];
       setChatMessages(prev => [...prev, { id: aiMsgId, sender: "ai", text: reply, suggestions, createdAt: new Date().toISOString() }]);
       saveChatMessage(wsId, user?.id, isMockUser, { sender: "ai", text: reply, suggestions });
+      const activeBusinesses = businesses.filter(b => b.isActive);
+      setChatSuggestionExtra(prev => {
+        const next = { ...prev };
+        suggestions.forEach(s => {
+          next[s.id] = activeBusinesses.length > 0
+            ? { businessId: null, businessName: "", businessPicked: false, evidenceStatus: "NONE" }
+            : { businessId: null, businessName: "Personal", businessPicked: true, evidenceStatus: "NONE" };
+        });
+        return next;
+      });
     } catch {
       setChatMessages(prev => [...prev, { id: `e-${Date.now()}`, sender: "ai", text: "Minta maaf, sambungan terputus. Sila cuba lagi." }]);
     } finally {
@@ -320,8 +341,33 @@ export function StaffHomeScreen() {
     });
   };
 
+  const handleChatPickBusiness = (suggestionId: string, businessId: string | null, businessName: string) => {
+    setChatSuggestionExtra(prev => ({
+      ...prev,
+      [suggestionId]: { ...(prev[suggestionId] || { businessId: null, businessName: "", businessPicked: false, evidenceStatus: "NONE" }), businessId, businessName, businessPicked: true },
+    }));
+  };
+
+  const handleChatEvidenceAttach = (suggestionId: string, file: File) => {
+    chatEvidenceFilesRef.current[suggestionId] = file;
+    setChatSuggestionExtra(prev => ({
+      ...prev,
+      [suggestionId]: { ...(prev[suggestionId] || { businessId: null, businessName: "Personal", businessPicked: true, evidenceStatus: "NONE" }), evidenceStatus: "ATTACHED" },
+    }));
+  };
+
+  const handleChatEvidenceSkip = (suggestionId: string) => {
+    setChatSuggestionExtra(prev => ({
+      ...prev,
+      [suggestionId]: { ...(prev[suggestionId] || { businessId: null, businessName: "Personal", businessPicked: true, evidenceStatus: "NONE" }), evidenceStatus: "SKIPPED" },
+    }));
+  };
+
   const handleChatConfirmSuggestion = (s: ChatSuggestion, edited?: typeof chatEditDraft) => {
     if (!activeWorkspace || chatSuggestionStatus[s.id] === "confirmed") return;
+    const extra = chatSuggestionExtra[s.id];
+    if (!extra || !extra.businessPicked) return;
+    const businessId = extra.businessId;
     const transactionType = s.payload?.transactionType;
     const amount = Number(edited ? edited.amount : s.payload?.amount) || 0;
     const category = (edited ? edited.category : s.payload?.category) || "Lain-lain";
@@ -332,6 +378,7 @@ export function StaffHomeScreen() {
     if (transactionType === "INCOME" || transactionType === "EXPENSE") {
       addFinancialEvent({
         workspaceId: activeWorkspace.id,
+        businessId: businessId || undefined,
         type: transactionType,
         categoryName: category,
         amountMyr: amount,
@@ -344,6 +391,7 @@ export function StaffHomeScreen() {
     } else if (transactionType === "DEBT") {
       addDebtRecord({
         workspaceId: activeWorkspace.id,
+        businessId: businessId || undefined,
         creditorName: relatedParty,
         borrowedDate: date,
         totalAmountMyr: amount,
@@ -354,6 +402,7 @@ export function StaffHomeScreen() {
     } else if (transactionType === "RECEIVABLE") {
       addFinancialEvent({
         workspaceId: activeWorkspace.id,
+        businessId: businessId || undefined,
         type: "RECEIVABLE",
         categoryName: category,
         amountMyr: amount,
@@ -366,6 +415,7 @@ export function StaffHomeScreen() {
     } else if (transactionType === "PAYABLE") {
       addFinancialEvent({
         workspaceId: activeWorkspace.id,
+        businessId: businessId || undefined,
         type: "PAYABLE",
         categoryName: category,
         amountMyr: amount,
@@ -378,6 +428,7 @@ export function StaffHomeScreen() {
     } else if (transactionType === "COMMITMENT") {
       addFinancialCommitment({
         workspaceId: activeWorkspace.id,
+        businessId: businessId || undefined,
         description: `Direkodkan melalui pengesahan cadangan Kerani AI: ${s.title}`,
         obligeeName: relatedParty,
         amountPerIntervalMyr: amount,
@@ -547,6 +598,10 @@ export function StaffHomeScreen() {
                     {(msg.suggestions || []).map(s => {
                       const status = chatSuggestionStatus[s.id] || "pending";
                       if (status === "rejected") return null;
+                      const extra = chatSuggestionExtra[s.id] || { businessId: null, businessName: "", businessPicked: businesses.filter(b => b.isActive).length === 0, evidenceStatus: "NONE" as const };
+                      const confidencePct = Math.round((s.payload?.confidenceScore ?? 0.7) * 100);
+                      const confidenceClass = confidencePct >= 90 ? "text-emerald-700" : confidencePct >= 75 ? "text-amber-700" : "text-rose-700";
+                      const activeBusinesses = businesses.filter(b => b.isActive);
                       return (
                         <div key={s.id} className="flex items-start gap-2.5">
                           <div className="w-7 h-7 rounded-xl flex items-center justify-center shrink-0 bg-slate-900 text-white">
@@ -557,11 +612,56 @@ export function StaffHomeScreen() {
                               <div>Jenis: {TRANSACTION_TYPE_LABEL_MS[s.payload?.transactionType || ""] || s.payload?.transactionType || "-"}</div>
                               <div>Kategori: {s.payload?.category || "-"}</div>
                               <div>Jumlah: RM{Number(s.payload?.amount || 0).toFixed(2)}</div>
+                              <div>Confidence: <span className={`font-bold ${confidenceClass}`}>{confidencePct}%</span></div>
                             </div>
                             {status === "confirmed" && (
                               <div className="text-emerald-700 font-bold">✅ Disahkan & direkodkan.</div>
                             )}
-                            {status === "pending" && editingChatSuggestionId !== s.id && (
+                            {status === "pending" && !extra.businessPicked && activeBusinesses.length > 0 && (
+                              <div className="space-y-1.5 pt-1">
+                                <p className="text-xs text-slate-500">Transaksi ini untuk:</p>
+                                <div className="flex flex-wrap gap-2">
+                                  {activeBusinesses.map(b => (
+                                    <button key={b.id} type="button" onClick={() => handleChatPickBusiness(s.id, b.id, b.businessName)}
+                                      className="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-700 font-semibold">
+                                      {b.businessName}
+                                    </button>
+                                  ))}
+                                  <button type="button" onClick={() => handleChatPickBusiness(s.id, null, "Personal")}
+                                    className="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-700 font-semibold">
+                                    Personal
+                                  </button>
+                                </div>
+                              </div>
+                            )}
+                            {status === "pending" && extra.businessPicked && (
+                              <div className="text-xs text-slate-500">Bisnes: <span className="font-semibold text-slate-700">{extra.businessName || "Personal"}</span></div>
+                            )}
+                            {status === "pending" && extra.businessPicked && (
+                              <div className="space-y-1.5">
+                                {extra.evidenceStatus === "NONE" ? (
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-xs text-slate-500">Evidence:</span>
+                                    <button type="button" onClick={() => chatEvidenceInputRefs.current[s.id]?.click()}
+                                      className="px-2 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold">Lampir Resit</button>
+                                    <button type="button" onClick={() => handleChatEvidenceSkip(s.id)}
+                                      className="px-2 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold">Tiada Resit</button>
+                                    <input
+                                      ref={el => { chatEvidenceInputRefs.current[s.id] = el; }}
+                                      type="file" accept="image/*,.pdf" className="hidden"
+                                      onChange={e => { const f = e.target.files?.[0]; if (f) handleChatEvidenceAttach(s.id, f); }}
+                                    />
+                                  </div>
+                                ) : (
+                                  <div className="text-xs text-slate-500">
+                                    Evidence: {extra.evidenceStatus === "ATTACHED"
+                                      ? <span className="font-semibold text-emerald-700">Resit dilampirkan: {chatEvidenceFilesRef.current[s.id]?.name || "fail"}</span>
+                                      : <span className="font-semibold text-slate-600">Tiada resit</span>}
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                            {status === "pending" && editingChatSuggestionId !== s.id && extra.businessPicked && extra.evidenceStatus !== "NONE" && (
                               <div className="flex gap-2 pt-1">
                                 <button type="button" onClick={() => handleChatConfirmSuggestion(s)} className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-semibold">Sahkan</button>
                                 <button type="button" onClick={() => handleChatStartEdit(s)} className="px-3 py-1.5 rounded-lg bg-slate-200 hover:bg-slate-300 text-slate-800 font-semibold">Edit</button>

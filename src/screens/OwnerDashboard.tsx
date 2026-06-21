@@ -35,7 +35,7 @@ import autoTable from "jspdf-autotable";
 import JSZip from "jszip";
 import {
   loadPersonalProfile, savePersonalProfile,
-  loadVehicles, addVehicle, deleteVehicle, loadDependents, addDependent, deleteDependent,
+  loadVehicles, addVehicle, updateVehicle, deleteVehicle, loadDependents, addDependent, updateDependent, deleteDependent,
   loadBusinesses, addBusiness, updateBusiness, deleteBusiness,
   loadBusinessBranches, addBusinessBranch, deleteBusinessBranch,
   EMPTY_PERSONAL_PROFILE,
@@ -68,6 +68,11 @@ interface ChatSuggestion {
     relatedParty?: string;
     confidenceScore?: number;
   };
+  businessId?: string | null;
+  businessName?: string;
+  businessPicked?: boolean;
+  evidenceStatus?: "NONE" | "ATTACHED" | "SKIPPED";
+  evidenceFileName?: string;
 }
 type ChatSuggestionStatus = "pending" | "confirmed" | "rejected";
 
@@ -161,6 +166,10 @@ export function OwnerDashboard() {
   const [chatSuggestionStatus, setChatSuggestionStatus] = useState<Record<string, ChatSuggestionStatus>>({});
   const [editingChatSuggestionId, setEditingChatSuggestionId] = useState<string | null>(null);
   const [chatEditDraft, setChatEditDraft] = useState({ amount: "", category: "", relatedParty: "", date: "" });
+  // Per-suggestion business pick + evidence step, layered on top of the AI suggestion before final Sahkan.
+  const [chatSuggestionExtra, setChatSuggestionExtra] = useState<Record<string, { businessId: string | null; businessName: string; businessPicked: boolean; evidenceStatus: "NONE" | "ATTACHED" | "SKIPPED" }>>({});
+  const chatEvidenceFilesRef = useRef<Record<string, File>>({});
+  const chatEvidenceInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
   // Cross-workspace learning: suggestionId -> { workspaceName } when AI has learned
   // this vendor is usually recorded under a DIFFERENT company. Suggestion-only, never auto-switched.
   const [crossWorkspaceHints, setCrossWorkspaceHints] = useState<Record<string, { workspaceId: string; workspaceName: string }>>({});
@@ -794,6 +803,10 @@ export function OwnerDashboard() {
   const [profileSavedAt, setProfileSavedAt] = useState<number | null>(null);
   const [newVehicle, setNewVehicle] = useState({ name: "", plateNumber: "", vehicleType: "", ownership: "BUSINESS" as "PERSONAL" | "BUSINESS" });
   const [newDependent, setNewDependent] = useState({ name: "", relationship: "", dateOfBirth: "" });
+  const [editingVehicleId, setEditingVehicleId] = useState<string | null>(null);
+  const [editVehicleForm, setEditVehicleForm] = useState({ name: "", plateNumber: "", vehicleType: "", ownership: "BUSINESS" as "PERSONAL" | "BUSINESS" });
+  const [editingDependentId, setEditingDependentId] = useState<string | null>(null);
+  const [editDependentForm, setEditDependentForm] = useState({ name: "", relationship: "", dateOfBirth: "" });
   const EMPTY_BUSINESS_FORM = { businessName: "", industry: "", businessType: "", registrationNo: "", notes: "" };
   const [newBusiness, setNewBusiness] = useState(EMPTY_BUSINESS_FORM);
   const [addingBusiness, setAddingBusiness] = useState(false);
@@ -901,6 +914,18 @@ export function OwnerDashboard() {
     refreshProfileData();
   };
 
+  const startEditVehicle = (v: Vehicle) => {
+    setEditingVehicleId(v.id);
+    setEditVehicleForm({ name: v.name, plateNumber: v.plateNumber, vehicleType: v.vehicleType, ownership: v.ownership });
+  };
+
+  const submitEditVehicle = async () => {
+    if (!editingVehicleId || !editVehicleForm.name.trim()) return;
+    await updateVehicle(wsId, isMockUser, editingVehicleId, editVehicleForm);
+    setEditingVehicleId(null);
+    refreshProfileData();
+  };
+
   const submitNewDependent = async () => {
     if (!newDependent.name.trim()) return;
     await addDependent(wsId, isMockUser, newDependent);
@@ -910,6 +935,18 @@ export function OwnerDashboard() {
 
   const removeDependent = async (id: string) => {
     await deleteDependent(wsId, isMockUser, id);
+    refreshProfileData();
+  };
+
+  const startEditDependent = (d: Dependent) => {
+    setEditingDependentId(d.id);
+    setEditDependentForm({ name: d.name, relationship: d.relationship, dateOfBirth: d.dateOfBirth });
+  };
+
+  const submitEditDependent = async () => {
+    if (!editingDependentId || !editDependentForm.name.trim()) return;
+    await updateDependent(wsId, isMockUser, editingDependentId, editDependentForm);
+    setEditingDependentId(null);
     refreshProfileData();
   };
 
@@ -959,6 +996,16 @@ export function OwnerDashboard() {
       setChatMessages(prev => [...prev, { id: aiMsgId, sender: "ai", text: reply, suggestions, createdAt: new Date().toISOString() }]);
       saveChatMessage(wsId, user?.id, isMockUser, { sender: "ai", text: reply, suggestions });
       suggestions.forEach(s => checkCrossWorkspacePattern(s));
+      const activeBusinesses = businesses.filter(b => b.isActive);
+      setChatSuggestionExtra(prev => {
+        const next = { ...prev };
+        suggestions.forEach(s => {
+          next[s.id] = activeBusinesses.length > 0
+            ? { businessId: null, businessName: "", businessPicked: false, evidenceStatus: "NONE" }
+            : { businessId: null, businessName: "Personal", businessPicked: true, evidenceStatus: "NONE" };
+        });
+        return next;
+      });
     } catch {
       setChatMessages(prev => [...prev, { id: `e-${Date.now()}`, sender: "ai", text: "Minta maaf, sambungan terputus sebentar. Sila cuba lagi." }]);
     } finally {
@@ -1010,8 +1057,33 @@ export function OwnerDashboard() {
     });
   };
 
+  const handleChatPickBusiness = (suggestionId: string, businessId: string | null, businessName: string) => {
+    setChatSuggestionExtra(prev => ({
+      ...prev,
+      [suggestionId]: { ...(prev[suggestionId] || { businessId: null, businessName: "", businessPicked: false, evidenceStatus: "NONE" }), businessId, businessName, businessPicked: true },
+    }));
+  };
+
+  const handleChatEvidenceAttach = (suggestionId: string, file: File) => {
+    chatEvidenceFilesRef.current[suggestionId] = file;
+    setChatSuggestionExtra(prev => ({
+      ...prev,
+      [suggestionId]: { ...(prev[suggestionId] || { businessId: null, businessName: "Personal", businessPicked: true, evidenceStatus: "NONE" }), evidenceStatus: "ATTACHED" },
+    }));
+  };
+
+  const handleChatEvidenceSkip = (suggestionId: string) => {
+    setChatSuggestionExtra(prev => ({
+      ...prev,
+      [suggestionId]: { ...(prev[suggestionId] || { businessId: null, businessName: "Personal", businessPicked: true, evidenceStatus: "NONE" }), evidenceStatus: "SKIPPED" },
+    }));
+  };
+
   const handleChatConfirmSuggestion = (s: ChatSuggestion, edited?: typeof chatEditDraft) => {
     if (!activeWorkspace || chatSuggestionStatus[s.id] === "confirmed") return;
+    const extra = chatSuggestionExtra[s.id];
+    if (!extra || !extra.businessPicked) return;
+    const businessId = extra.businessId;
     const transactionType = s.payload?.transactionType;
     const amount = Number(edited ? edited.amount : s.payload?.amount) || 0;
     const category = (edited ? edited.category : s.payload?.category) || "Lain-lain";
@@ -1022,6 +1094,7 @@ export function OwnerDashboard() {
     if (transactionType === "INCOME" || transactionType === "EXPENSE") {
       addFinancialEvent({
         workspaceId: activeWorkspace.id,
+        businessId: businessId || undefined,
         type: transactionType,
         categoryName: category,
         amountMyr: amount,
@@ -1034,6 +1107,7 @@ export function OwnerDashboard() {
     } else if (transactionType === "DEBT") {
       addDebtRecord({
         workspaceId: activeWorkspace.id,
+        businessId: businessId || undefined,
         creditorName: relatedParty,
         borrowedDate: date,
         totalAmountMyr: amount,
@@ -1044,6 +1118,7 @@ export function OwnerDashboard() {
     } else if (transactionType === "RECEIVABLE") {
       addFinancialEvent({
         workspaceId: activeWorkspace.id,
+        businessId: businessId || undefined,
         type: "RECEIVABLE",
         categoryName: category,
         amountMyr: amount,
@@ -1056,6 +1131,7 @@ export function OwnerDashboard() {
     } else if (transactionType === "PAYABLE") {
       addFinancialEvent({
         workspaceId: activeWorkspace.id,
+        businessId: businessId || undefined,
         type: "PAYABLE",
         categoryName: category,
         amountMyr: amount,
@@ -1068,6 +1144,7 @@ export function OwnerDashboard() {
     } else if (transactionType === "COMMITMENT") {
       addFinancialCommitment({
         workspaceId: activeWorkspace.id,
+        businessId: businessId || undefined,
         description: `Direkodkan melalui pengesahan cadangan Kerani AI: ${s.title}`,
         obligeeName: relatedParty,
         amountPerIntervalMyr: amount,
@@ -1449,6 +1526,10 @@ export function OwnerDashboard() {
                     {(msg.suggestions || []).map(s => {
                       const status = chatSuggestionStatus[s.id] || "pending";
                       if (status === "rejected") return null;
+                      const extra = chatSuggestionExtra[s.id] || { businessId: null, businessName: "", businessPicked: businesses.filter(b => b.isActive).length === 0, evidenceStatus: "NONE" as const };
+                      const confidencePct = Math.round((s.payload?.confidenceScore ?? 0.7) * 100);
+                      const confidenceClass = confidencePct >= 90 ? "text-emerald-700" : confidencePct >= 75 ? "text-amber-700" : "text-rose-700";
+                      const activeBusinesses = businesses.filter(b => b.isActive);
                       return (
                         <div key={s.id} className="flex items-start gap-2.5">
                           <div className="w-7 h-7 rounded-xl flex items-center justify-center shrink-0 bg-slate-900 text-white">
@@ -1459,6 +1540,7 @@ export function OwnerDashboard() {
                               <div>Jenis: {TRANSACTION_TYPE_LABEL_MS[s.payload?.transactionType || ""] || s.payload?.transactionType || "-"}</div>
                               <div>Kategori: {s.payload?.category || "-"}</div>
                               <div>Jumlah: RM{Number(s.payload?.amount || 0).toFixed(2)}</div>
+                              <div>Confidence: <span className={`font-bold ${confidenceClass}`}>{confidencePct}%</span></div>
                             </div>
                             {status === "pending" && crossWorkspaceHints[s.id] && (
                               <div className="flex items-center justify-between gap-2 bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-1.5 text-2xs text-amber-800">
@@ -1475,7 +1557,51 @@ export function OwnerDashboard() {
                             {status === "confirmed" && (
                               <div className="text-emerald-700 font-bold">✅ Disahkan & direkodkan.</div>
                             )}
-                            {status === "pending" && editingChatSuggestionId !== s.id && (
+                            {status === "pending" && !extra.businessPicked && activeBusinesses.length > 0 && (
+                              <div className="space-y-1.5 pt-1">
+                                <p className="text-xs text-slate-500">Transaksi ini untuk:</p>
+                                <div className="flex flex-wrap gap-2">
+                                  {activeBusinesses.map(b => (
+                                    <button key={b.id} type="button" onClick={() => handleChatPickBusiness(s.id, b.id, b.businessName)}
+                                      className="px-3 py-1.5 rounded-lg bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-indigo-700 font-semibold">
+                                      {b.businessName}
+                                    </button>
+                                  ))}
+                                  <button type="button" onClick={() => handleChatPickBusiness(s.id, null, "Personal")}
+                                    className="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-700 font-semibold">
+                                    Personal
+                                  </button>
+                                </div>
+                              </div>
+                            )}
+                            {status === "pending" && extra.businessPicked && (
+                              <div className="text-xs text-slate-500">Bisnes: <span className="font-semibold text-slate-700">{extra.businessName || "Personal"}</span></div>
+                            )}
+                            {status === "pending" && extra.businessPicked && (
+                              <div className="space-y-1.5">
+                                {extra.evidenceStatus === "NONE" ? (
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-xs text-slate-500">Evidence:</span>
+                                    <button type="button" onClick={() => chatEvidenceInputRefs.current[s.id]?.click()}
+                                      className="px-2 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold">Lampir Resit</button>
+                                    <button type="button" onClick={() => handleChatEvidenceSkip(s.id)}
+                                      className="px-2 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold">Tiada Resit</button>
+                                    <input
+                                      ref={el => { chatEvidenceInputRefs.current[s.id] = el; }}
+                                      type="file" accept="image/*,.pdf" className="hidden"
+                                      onChange={e => { const f = e.target.files?.[0]; if (f) handleChatEvidenceAttach(s.id, f); }}
+                                    />
+                                  </div>
+                                ) : (
+                                  <div className="text-xs text-slate-500">
+                                    Evidence: {extra.evidenceStatus === "ATTACHED"
+                                      ? <span className="font-semibold text-emerald-700">Resit dilampirkan: {chatEvidenceFilesRef.current[s.id]?.name || "fail"}</span>
+                                      : <span className="font-semibold text-slate-600">Tiada resit</span>}
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                            {status === "pending" && editingChatSuggestionId !== s.id && extra.businessPicked && extra.evidenceStatus !== "NONE" && (
                               <div className="flex gap-2 pt-1">
                                 <button type="button" onClick={() => handleChatConfirmSuggestion(s)} className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-semibold">Sahkan</button>
                                 <button type="button" onClick={() => handleChatStartEdit(s)} className="px-3 py-1.5 rounded-lg bg-slate-200 hover:bg-slate-300 text-slate-800 font-semibold">Edit</button>
@@ -2131,12 +2257,37 @@ export function OwnerDashboard() {
                   <h3 className="text-sm font-bold text-slate-800">Kenderaan</h3>
                   <p className="text-xs text-slate-500">Tambah kenderaan supaya AI boleh tanya "Hilux atau Myvi?" bila anda rekod belian minyak/tol/servis.</p>
                   {vehicles.map(v => (
-                    <div key={v.id} className="flex items-center justify-between bg-slate-50 border border-slate-100 rounded-xl px-3 py-2">
-                      <div>
-                        <p className="text-sm font-semibold text-slate-800">{v.name} {v.plateNumber && <span className="text-slate-400 font-normal">· {v.plateNumber}</span>}</p>
-                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${v.ownership === "BUSINESS" ? "bg-indigo-100 text-indigo-700" : "bg-amber-100 text-amber-700"}`}>{v.ownership === "BUSINESS" ? "Perniagaan" : "Peribadi"}</span>
-                      </div>
-                      <button onClick={() => removeVehicle(v.id)} className="text-rose-400 hover:text-rose-600 cursor-pointer"><Trash2 className="w-4 h-4" /></button>
+                    <div key={v.id} className="bg-slate-50 border border-slate-100 rounded-xl px-3 py-2 space-y-2">
+                      {editingVehicleId === v.id ? (
+                        <div className="space-y-2">
+                          <div className="grid grid-cols-2 gap-2">
+                            <input value={editVehicleForm.name} onChange={e => setEditVehicleForm(f => ({ ...f, name: e.target.value }))} placeholder="Nama (contoh: Hilux)" className="px-3 py-2 border border-slate-200 rounded-xl text-sm" />
+                            <input value={editVehicleForm.plateNumber} onChange={e => setEditVehicleForm(f => ({ ...f, plateNumber: e.target.value }))} placeholder="No. plat" className="px-3 py-2 border border-slate-200 rounded-xl text-sm" />
+                          </div>
+                          <div className="grid grid-cols-2 gap-2">
+                            <select value={editVehicleForm.ownership} onChange={e => setEditVehicleForm(f => ({ ...f, ownership: e.target.value as "PERSONAL" | "BUSINESS" }))} className="px-3 py-2 border border-slate-200 rounded-xl text-sm">
+                              <option value="BUSINESS">Perniagaan</option>
+                              <option value="PERSONAL">Peribadi</option>
+                            </select>
+                            <input value={editVehicleForm.vehicleType} onChange={e => setEditVehicleForm(f => ({ ...f, vehicleType: e.target.value }))} placeholder="Jenis kenderaan" className="px-3 py-2 border border-slate-200 rounded-xl text-sm" />
+                          </div>
+                          <div className="flex space-x-2">
+                            <button onClick={submitEditVehicle} className="flex-1 px-3 py-2 bg-slate-900 text-white rounded-xl text-sm font-semibold cursor-pointer">Simpan</button>
+                            <button onClick={() => setEditingVehicleId(null)} className="flex-1 px-3 py-2 bg-slate-200 text-slate-700 rounded-xl text-sm font-semibold cursor-pointer">Batal</button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="text-sm font-semibold text-slate-800">{v.name} {v.plateNumber && <span className="text-slate-400 font-normal">· {v.plateNumber}</span>}</p>
+                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${v.ownership === "BUSINESS" ? "bg-indigo-100 text-indigo-700" : "bg-amber-100 text-amber-700"}`}>{v.ownership === "BUSINESS" ? "Perniagaan" : "Peribadi"}</span>
+                          </div>
+                          <div className="flex items-center space-x-2">
+                            <button onClick={() => startEditVehicle(v)} className="text-slate-400 hover:text-indigo-600 cursor-pointer"><Edit3 className="w-4 h-4" /></button>
+                            <button onClick={() => removeVehicle(v.id)} className="text-rose-400 hover:text-rose-600 cursor-pointer"><Trash2 className="w-4 h-4" /></button>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   ))}
                   <div className="grid grid-cols-2 gap-2">
@@ -2155,12 +2306,31 @@ export function OwnerDashboard() {
                 <div className="bg-white border border-slate-200 rounded-2xl p-5 space-y-3 shadow-sm">
                   <h3 className="text-sm font-bold text-slate-800">Tanggungan</h3>
                   {dependents.map(d => (
-                    <div key={d.id} className="flex items-center justify-between bg-slate-50 border border-slate-100 rounded-xl px-3 py-2">
-                      <div>
-                        <p className="text-sm font-semibold text-slate-800">{d.name}</p>
-                        <span className="text-xs text-slate-500">{d.relationship}</span>
-                      </div>
-                      <button onClick={() => removeDependent(d.id)} className="text-rose-400 hover:text-rose-600 cursor-pointer"><Trash2 className="w-4 h-4" /></button>
+                    <div key={d.id} className="bg-slate-50 border border-slate-100 rounded-xl px-3 py-2 space-y-2">
+                      {editingDependentId === d.id ? (
+                        <div className="space-y-2">
+                          <div className="grid grid-cols-2 gap-2">
+                            <input value={editDependentForm.name} onChange={e => setEditDependentForm(f => ({ ...f, name: e.target.value }))} placeholder="Nama" className="px-3 py-2 border border-slate-200 rounded-xl text-sm" />
+                            <input value={editDependentForm.relationship} onChange={e => setEditDependentForm(f => ({ ...f, relationship: e.target.value }))} placeholder="Hubungan (anak, ibu...)" className="px-3 py-2 border border-slate-200 rounded-xl text-sm" />
+                          </div>
+                          <input type="date" value={editDependentForm.dateOfBirth} onChange={e => setEditDependentForm(f => ({ ...f, dateOfBirth: e.target.value }))} className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm" />
+                          <div className="flex space-x-2">
+                            <button onClick={submitEditDependent} className="flex-1 px-3 py-2 bg-slate-900 text-white rounded-xl text-sm font-semibold cursor-pointer">Simpan</button>
+                            <button onClick={() => setEditingDependentId(null)} className="flex-1 px-3 py-2 bg-slate-200 text-slate-700 rounded-xl text-sm font-semibold cursor-pointer">Batal</button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="text-sm font-semibold text-slate-800">{d.name}</p>
+                            <span className="text-xs text-slate-500">{d.relationship}</span>
+                          </div>
+                          <div className="flex items-center space-x-2">
+                            <button onClick={() => startEditDependent(d)} className="text-slate-400 hover:text-indigo-600 cursor-pointer"><Edit3 className="w-4 h-4" /></button>
+                            <button onClick={() => removeDependent(d.id)} className="text-rose-400 hover:text-rose-600 cursor-pointer"><Trash2 className="w-4 h-4" /></button>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   ))}
                   <div className="grid grid-cols-2 gap-2">
