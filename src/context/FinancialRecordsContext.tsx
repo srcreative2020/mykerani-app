@@ -797,8 +797,14 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
         try {
           const catId = await getOrCreateCategoryId(activeWorkspace.id, newEvent.categoryName, newEvent.type);
 
+          // AI-confirmed records carry a deterministic 'AI-<suggestionId>'
+          // reference so re-confirming the same chat suggestion (e.g. from a
+          // second browser/session) upserts idempotently instead of
+          // duplicating the record.
+          const isAiConfirmed = (newEvent.referenceNumber || "").startsWith("AI-");
+
           if (newEvent.type === "INCOME") {
-            await supabase.from("income_records").insert({
+            await supabase.from("income_records").upsert({
               id: newId,
               workspace_id: activeWorkspace.id,
               category_id: catId,
@@ -810,9 +816,9 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
               reference_number: newEvent.referenceNumber,
               description: newEvent.description,
               business_id: newEvent.businessId || null,
-            });
+            }, isAiConfirmed ? { onConflict: "workspace_id,reference_number", ignoreDuplicates: true } : undefined);
           } else if (newEvent.type === "EXPENSE" || newEvent.type === "DEBT") {
-            await supabase.from("expense_records").insert({
+            await supabase.from("expense_records").upsert({
               id: newId,
               workspace_id: activeWorkspace.id,
               category_id: catId,
@@ -825,9 +831,9 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
               reference_number: newEvent.referenceNumber,
               description: newEvent.type === "DEBT" ? `[DEBT] ${newEvent.description}` : newEvent.description,
               business_id: newEvent.businessId || null,
-            });
+            }, isAiConfirmed ? { onConflict: "workspace_id,reference_number", ignoreDuplicates: true } : undefined);
           } else if (newEvent.type === "RECEIVABLE") {
-            await supabase.from("receivables").insert({
+            await supabase.from("receivables").upsert({
               id: newId,
               workspace_id: activeWorkspace.id,
               customer_name: newEvent.partyName,
@@ -839,9 +845,9 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
               status: newEvent.isCompleted ? "PAID" : "UNPAID",
               category_id: catId,
               business_id: newEvent.businessId || null,
-            });
+            }, isAiConfirmed ? { onConflict: "workspace_id,invoice_number", ignoreDuplicates: true } : undefined);
           } else if (newEvent.type === "PAYABLE") {
-            await supabase.from("payables").insert({
+            await supabase.from("payables").upsert({
               id: newId,
               workspace_id: activeWorkspace.id,
               vendor_name: newEvent.partyName,
@@ -853,7 +859,7 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
               status: newEvent.isCompleted ? "PAID" : "UNPAID",
               category_id: catId,
               business_id: newEvent.businessId || null,
-            });
+            }, isAiConfirmed ? { onConflict: "workspace_id,bill_number", ignoreDuplicates: true } : undefined);
           }
         } catch (err: any) {
           console.error("DB persistence insert record failed:", err.message);
