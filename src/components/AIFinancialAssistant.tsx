@@ -5,6 +5,8 @@ import { useTenant } from "../context/TenantContext";
 import { useWorkspace } from "../context/WorkspaceContext";
 import { useAuth } from "../context/AuthContext";
 import { motion } from "../lib/motionCompat";
+import { loadBusinesses, type Business } from "../lib/profileData";
+import { isSupabaseConfigured, supabase } from "../lib/supabase";
 import {
   Brain,
   Send,
@@ -33,6 +35,13 @@ interface AISuggestion {
     date?: string;
     relatedParty?: string;
   };
+  // Local-only frontend state added between "AI returns suggestion" and
+  // "render confirmation card" — the LLM never picks the business, the user does.
+  businessId?: string | null;
+  businessName?: string;
+  businessPicked?: boolean;
+  evidenceStatus?: "NONE" | "ATTACHED" | "SKIPPED";
+  evidenceFileName?: string;
 }
 
 const TRANSACTION_TYPE_LABEL_MS: Record<string, string> = {
@@ -75,12 +84,13 @@ export const AIFinancialAssistant: React.FC<AIFinancialAssistantProps> = ({ onTr
     learnOcrPattern,
     addFinancialEvent,
     addDebtRecord,
-    addFinancialCommitment
+    addFinancialCommitment,
+    addFinancialEvidencePackage
   } = useFinancials();
 
   const { activeTenant } = useTenant();
   const { activeWorkspace } = useWorkspace();
-  const { user } = useAuth();
+  const { user, isMockUser } = useAuth();
 
   // Component state
   const [query, setQuery] = useState("");
@@ -91,7 +101,29 @@ export const AIFinancialAssistant: React.FC<AIFinancialAssistantProps> = ({ onTr
   const [editDraft, setEditDraft] = useState<{ amount: string; category: string; relatedParty: string; date: string }>({
     amount: "", category: "", relatedParty: "", date: ""
   });
-  
+  const [businesses, setBusinesses] = useState<Business[]>([]);
+  const evidenceFileInputRef = useRef<HTMLInputElement>(null);
+  const [evidenceTargetSuggestionId, setEvidenceTargetSuggestionId] = useState<string | null>(null);
+  const [uploadingEvidenceFor, setUploadingEvidenceFor] = useState<string | null>(null);
+  // Holds uploaded-but-not-yet-linked evidence metadata per suggestion id, until
+  // Sahkan creates the underlying financial record and we know its id to link to.
+  const pendingEvidenceBySuggestionRef = useRef<Record<string, { documentType: "RECEIPT"; fileName: string; fileUrl: string }>>({});
+
+  useEffect(() => {
+    let isCurrent = true;
+    (async () => {
+      if (!activeWorkspace?.id) {
+        setBusinesses([]);
+        return;
+      }
+      const list = await loadBusinesses(activeWorkspace.id, !!isMockUser);
+      if (isCurrent) setBusinesses(list.filter(b => b.isActive));
+    })();
+    return () => { isCurrent = false; };
+  }, [activeWorkspace?.id, isMockUser]);
+
+  const activeBusinesses = businesses;
+
   // Start with the specific requested welcome message
   const [chatHistory, setChatHistory] = useState<ChatMessage[]>([
     {
@@ -179,7 +211,15 @@ export const AIFinancialAssistant: React.FC<AIFinancialAssistantProps> = ({ onTr
       const transactionSuggestions: AISuggestion[] = Array.isArray(data.suggestions)
         ? data.suggestions
             .filter((s: AISuggestion) => s.actionType === "CONFIRM_TRANSACTION")
-            .map((s: AISuggestion, idx: number) => ({ ...s, id: `${systemMessageId}-sugg-${idx}` }))
+            .map((s: AISuggestion, idx: number) => ({
+              ...s,
+              id: `${systemMessageId}-sugg-${idx}`,
+              // No active businesses configured: silently default to Personal, skip the picker.
+              businessId: activeBusinesses.length > 0 ? undefined : null,
+              businessName: activeBusinesses.length > 0 ? undefined : "Personal",
+              businessPicked: activeBusinesses.length === 0,
+              evidenceStatus: "NONE" as const,
+            }))
         : [];
       console.log("[AI_ASSISTANT_DEBUG] confirmSuggestions (filtered+remapped):", transactionSuggestions, "length:", transactionSuggestions.length);
       setChatHistory(prev => [...prev, { id: systemMessageId, sender: "assistant", text: cleanText, suggestions: transactionSuggestions }]);
@@ -208,6 +248,90 @@ export const AIFinancialAssistant: React.FC<AIFinancialAssistantProps> = ({ onTr
     setQuery("");
   };
 
+  // Mutates one suggestion's local-only fields (business pick / evidence status)
+  // in place wherever it lives inside chatHistory.
+  const updateSuggestion = (id: string, patch: Partial<AISuggestion>) => {
+    setChatHistory(prev => prev.map(item => {
+      if (!item.suggestions || item.suggestions.length === 0) return item;
+      const hasMatch = item.suggestions.some(s => s.id === id);
+      if (!hasMatch) return item;
+      return {
+        ...item,
+        suggestions: item.suggestions.map(s => (s.id === id ? { ...s, ...patch } : s))
+      };
+    }));
+  };
+
+  const handlePickBusiness = (suggestionId: string, business: Business | null) => {
+    updateSuggestion(suggestionId, {
+      businessId: business ? business.id : null,
+      businessName: business ? business.businessName : "Personal",
+      businessPicked: true
+    });
+  };
+
+  const handleSkipEvidence = (suggestionId: string) => {
+    updateSuggestion(suggestionId, { evidenceStatus: "SKIPPED" });
+  };
+
+  const handleRequestAttachEvidence = (suggestionId: string) => {
+    setEvidenceTargetSuggestionId(suggestionId);
+    evidenceFileInputRef.current?.click();
+  };
+
+  const handleEvidenceFileSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    const suggestionId = evidenceTargetSuggestionId;
+    e.target.value = "";
+    if (!file || !suggestionId || !activeWorkspace) return;
+
+    setUploadingEvidenceFor(suggestionId);
+    try {
+      const dataUrl: string = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = (ev) => resolve(ev.target?.result as string);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+
+      let finalUrl = dataUrl;
+      if (isSupabaseConfigured() && !isMockUser && supabase) {
+        try {
+          const fileExt = file.name.split(".").pop();
+          const cleanName = file.name.replace(/[^a-zA-Z0-9]/g, "_");
+          const filePath = `${activeWorkspace.id}/${Date.now()}_${cleanName}.${fileExt}`;
+          const { data, error: storageError } = await supabase.storage
+            .from("evidence-packages")
+            .upload(filePath, file, { cacheControl: "3600", upsert: true });
+          if (!storageError && data) {
+            const { data: { publicUrl } } = supabase.storage.from("evidence-packages").getPublicUrl(filePath);
+            if (publicUrl) finalUrl = publicUrl;
+          }
+        } catch (stEx: any) {
+          console.warn("Evidence storage upload exception, using fallback:", stEx?.message);
+        }
+      }
+
+      // The financial record doesn't exist yet at this point in the chat flow — the
+      // evidence package gets linked to it (relatedRecordId) once Sahkan creates the
+      // record, via the pending evidence info kept on the suggestion itself.
+      updateSuggestion(suggestionId, {
+        evidenceStatus: "ATTACHED",
+        evidenceFileName: file.name
+      });
+      (pendingEvidenceBySuggestionRef.current)[suggestionId] = {
+        documentType: "RECEIPT",
+        fileName: file.name,
+        fileUrl: finalUrl
+      };
+    } catch (err) {
+      console.error("Failed to attach evidence:", err);
+    } finally {
+      setUploadingEvidenceFor(null);
+      setEvidenceTargetSuggestionId(null);
+    }
+  };
+
   // Module 3 (Confirmation Engine) + Module 4 (Auto Recording) + Module 5 (Learning):
   // a CONFIRM_TRANSACTION suggestion never writes a record by itself — it is only
   // finalized once the user explicitly presses Confirm here (optionally after Edit).
@@ -233,10 +357,14 @@ export const AIFinancialAssistant: React.FC<AIFinancialAssistantProps> = ({ onTr
     const relatedParty = (edited ? edited.relatedParty : s.payload?.relatedParty) || "Tidak Dinyatakan";
     const date = (edited ? edited.date : s.payload?.date) || new Date().toISOString().split("T")[0];
     const confidenceScore = s.payload?.confidenceScore ?? 0.7;
+    const businessId = s.businessId || undefined;
 
     try {
+      let newRecordId: string | undefined;
+      let evidenceRelatedType: string | undefined;
+
       if (transactionType === "INCOME" || transactionType === "EXPENSE") {
-        addFinancialEvent({
+        const rec = addFinancialEvent({
           workspaceId: activeWorkspace.id,
           type: transactionType,
           categoryName: category,
@@ -245,20 +373,26 @@ export const AIFinancialAssistant: React.FC<AIFinancialAssistantProps> = ({ onTr
           date,
           referenceNumber: `AI-${s.id}`,
           description: `Direkodkan melalui pengesahan cadangan Kerani AI: ${s.title}`,
-          isCompleted: true
+          isCompleted: true,
+          businessId
         });
+        newRecordId = rec.id;
+        evidenceRelatedType = transactionType;
       } else if (transactionType === "DEBT") {
-        addDebtRecord({
+        const rec = addDebtRecord({
           workspaceId: activeWorkspace.id,
           creditorName: relatedParty,
           borrowedDate: date,
           totalAmountMyr: amount,
           repaidAmountMyr: 0,
           status: "ACTIVE",
-          description: `Direkodkan melalui pengesahan cadangan Kerani AI: ${s.title}`
+          description: `Direkodkan melalui pengesahan cadangan Kerani AI: ${s.title}`,
+          businessId
         });
+        newRecordId = rec.id;
+        evidenceRelatedType = "DEBT";
       } else if (transactionType === "RECEIVABLE") {
-        addFinancialEvent({
+        const rec = addFinancialEvent({
           workspaceId: activeWorkspace.id,
           type: "RECEIVABLE",
           categoryName: category,
@@ -267,10 +401,13 @@ export const AIFinancialAssistant: React.FC<AIFinancialAssistantProps> = ({ onTr
           date,
           referenceNumber: `AI-${s.id}`,
           description: `Direkodkan melalui pengesahan cadangan Kerani AI: ${s.title}`,
-          isCompleted: false
+          isCompleted: false,
+          businessId
         });
+        newRecordId = rec.id;
+        evidenceRelatedType = "RECEIVABLE";
       } else if (transactionType === "COMMITMENT") {
-        addFinancialCommitment({
+        const rec = addFinancialCommitment({
           workspaceId: activeWorkspace.id,
           description: `Direkodkan melalui pengesahan cadangan Kerani AI: ${s.title}`,
           obligeeName: relatedParty,
@@ -278,10 +415,30 @@ export const AIFinancialAssistant: React.FC<AIFinancialAssistantProps> = ({ onTr
           recurrence: "MONTHLY",
           startDate: date,
           isActive: true,
-          status: "ACTIVE"
+          status: "ACTIVE",
+          businessId
         });
+        newRecordId = rec.id;
+        evidenceRelatedType = "COMMITMENT";
       } else {
         return;
+      }
+
+      // If the user attached a receipt/invoice before pressing Sahkan, link it to
+      // the record that just got created. If evidence was skipped, no mapping row
+      // is created at all.
+      const pendingEvidence = pendingEvidenceBySuggestionRef.current[s.id];
+      if (s.evidenceStatus === "ATTACHED" && pendingEvidence && newRecordId) {
+        addFinancialEvidencePackage({
+          workspaceId: activeWorkspace.id,
+          documentType: pendingEvidence.documentType,
+          uploadDate: new Date().toISOString().split("T")[0],
+          fileName: pendingEvidence.fileName,
+          fileUrl: pendingEvidence.fileUrl,
+          relatedRecordType: evidenceRelatedType,
+          relatedRecordId: newRecordId,
+        });
+        delete pendingEvidenceBySuggestionRef.current[s.id];
       }
 
       // Module 5: improve future suggestions for this party/category — never creates a record.
@@ -303,7 +460,7 @@ export const AIFinancialAssistant: React.FC<AIFinancialAssistantProps> = ({ onTr
           userRole: user.role,
           eventType: "AI_ANALYSIS",
           description: `User confirmed AI-suggested ${transactionType} transaction: ${s.title}`,
-          metadata: { suggestionId: s.id, transactionType, amount, category, relatedParty }
+          metadata: { suggestionId: s.id, transactionType, amount, category, relatedParty, businessId: businessId || null, businessName: s.businessName || "Personal", confidenceScore, evidenceStatus: s.evidenceStatus || "NONE" }
         });
       }
 
@@ -324,7 +481,14 @@ export const AIFinancialAssistant: React.FC<AIFinancialAssistantProps> = ({ onTr
 
   return (
     <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm flex flex-col h-[650px]" id="ai_conversation_deck">
-      
+      <input
+        ref={evidenceFileInputRef}
+        type="file"
+        accept="image/*,application/pdf"
+        className="hidden"
+        onChange={handleEvidenceFileSelected}
+      />
+
       {/* 1. AI Conversation Area */}
       <h3 className="text-xs font-semibold text-indigo-900 tracking-wider uppercase mb-3 flex items-center shrink-0">
         <Sparkles className="w-4 h-4 mr-2 text-indigo-500" />
@@ -376,37 +540,101 @@ export const AIFinancialAssistant: React.FC<AIFinancialAssistantProps> = ({ onTr
           const status = suggestionStatus[s.id] || "pending";
           console.log(`[AI_ASSISTANT_DEBUG] suggestion ${s.id} resolved status:`, status);
           if (status === "rejected") return null;
+          const needsBusinessPick = status === "pending" && !s.businessPicked;
+          const confidencePct = Math.round((s.payload?.confidenceScore ?? 0) * 100);
+          const confidenceColorClass = confidencePct >= 90
+            ? "text-emerald-700"
+            : confidencePct >= 75
+              ? "text-amber-700"
+              : "text-rose-700";
           return (
             <div key={s.id} className="self-start max-w-[85%] ml-11 p-3.5 bg-white border border-slate-200 rounded-2xl text-sm space-y-2 shadow-sm">
-              <div className="font-mono text-slate-800 space-y-0.5">
-                <div>Jenis: {TRANSACTION_TYPE_LABEL_MS[s.payload?.transactionType || ""] || s.payload?.transactionType || "-"}</div>
-                <div>Kategori: {s.payload?.category || "-"}</div>
-                <div>Jumlah: RM{Number(s.payload?.amount || 0).toFixed(2)}</div>
-              </div>
-
-              {status === "confirmed" && (
-                <div className="text-emerald-700 font-bold">✅ Disahkan & direkodkan.</div>
-              )}
-
-              {status === "pending" && editingSuggestionId !== s.id && (
-                <div className="flex gap-2 pt-1">
-                  <button type="button" onClick={() => handleConfirmSuggestion(s)} className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-semibold">Sahkan</button>
-                  <button type="button" onClick={() => handleStartEdit(s)} className="px-3 py-1.5 rounded-lg bg-slate-200 hover:bg-slate-300 text-slate-800 font-semibold">Edit</button>
-                  <button type="button" onClick={() => handleRejectSuggestion(s.id)} className="px-3 py-1.5 rounded-lg bg-rose-100 hover:bg-rose-200 text-rose-700 font-semibold">Tolak</button>
-                </div>
-              )}
-
-              {status === "pending" && editingSuggestionId === s.id && (
-                <div className="space-y-1.5 pt-1">
-                  <input value={editDraft.amount} onChange={e => setEditDraft(d => ({ ...d, amount: e.target.value }))} placeholder="Amount (RM)" className="w-full px-2 py-1 rounded border border-amber-300 text-xs" />
-                  <input value={editDraft.category} onChange={e => setEditDraft(d => ({ ...d, category: e.target.value }))} placeholder="Category" className="w-full px-2 py-1 rounded border border-amber-300 text-xs" />
-                  <input value={editDraft.relatedParty} onChange={e => setEditDraft(d => ({ ...d, relatedParty: e.target.value }))} placeholder="Related Party" className="w-full px-2 py-1 rounded border border-amber-300 text-xs" />
-                  <input value={editDraft.date} onChange={e => setEditDraft(d => ({ ...d, date: e.target.value }))} type="date" className="w-full px-2 py-1 rounded border border-amber-300 text-xs" />
-                  <div className="flex gap-2 pt-1">
-                    <button type="button" onClick={() => handleConfirmSuggestion(s, editDraft)} className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-semibold">Sahkan Perubahan</button>
-                    <button type="button" onClick={() => setEditingSuggestionId(null)} className="px-3 py-1.5 rounded-lg bg-slate-200 hover:bg-slate-300 text-slate-800 font-semibold">Batal</button>
+              {needsBusinessPick ? (
+                <div className="space-y-2">
+                  <div className="font-semibold text-slate-700">Transaksi ini untuk:</div>
+                  <div className="flex flex-wrap gap-2">
+                    {activeBusinesses.map((b) => (
+                      <button
+                        key={b.id}
+                        type="button"
+                        onClick={() => handlePickBusiness(s.id, b)}
+                        className="px-3 py-1.5 rounded-lg bg-indigo-50 hover:bg-indigo-100 border border-indigo-150 text-indigo-700 font-semibold text-xs"
+                      >
+                        {b.businessName}
+                      </button>
+                    ))}
+                    <button
+                      type="button"
+                      onClick={() => handlePickBusiness(s.id, null)}
+                      className="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-700 font-semibold text-xs"
+                    >
+                      Personal
+                    </button>
                   </div>
                 </div>
+              ) : (
+                <>
+                  <div className="font-mono text-slate-800 space-y-0.5">
+                    <div>Jenis: {TRANSACTION_TYPE_LABEL_MS[s.payload?.transactionType || ""] || s.payload?.transactionType || "-"}</div>
+                    <div>Kategori: {s.payload?.category || "-"}</div>
+                    <div>Jumlah: RM{Number(s.payload?.amount || 0).toFixed(2)}</div>
+                    <div>Untuk: {s.businessName || "Personal"}</div>
+                    <div>Confidence: <span className={`font-bold ${confidenceColorClass}`}>{confidencePct}%</span></div>
+                    <div className="flex items-center gap-2">
+                      <span>Evidence:</span>
+                      {s.evidenceStatus === "ATTACHED" && (
+                        <span className="text-emerald-700 font-bold">Resit/invois dilampirkan{s.evidenceFileName ? ` (${s.evidenceFileName})` : ""}</span>
+                      )}
+                      {s.evidenceStatus === "SKIPPED" && (
+                        <span className="text-slate-500">Tiada resit</span>
+                      )}
+                      {(s.evidenceStatus === "NONE" || !s.evidenceStatus) && status === "pending" && (
+                        <span className="flex gap-2">
+                          <button
+                            type="button"
+                            onClick={() => handleRequestAttachEvidence(s.id)}
+                            disabled={uploadingEvidenceFor === s.id}
+                            className="px-2 py-1 rounded-md bg-indigo-50 hover:bg-indigo-100 border border-indigo-150 text-indigo-700 font-semibold text-[11px] disabled:opacity-50"
+                          >
+                            {uploadingEvidenceFor === s.id ? "Memuat naik..." : "Lampir Resit"}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleSkipEvidence(s.id)}
+                            className="px-2 py-1 rounded-md bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-700 font-semibold text-[11px]"
+                          >
+                            Tiada Resit
+                          </button>
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  {status === "confirmed" && (
+                    <div className="text-emerald-700 font-bold">✅ Disahkan & direkodkan.</div>
+                  )}
+
+                  {status === "pending" && editingSuggestionId !== s.id && (
+                    <div className="flex gap-2 pt-1">
+                      <button type="button" onClick={() => handleConfirmSuggestion(s)} className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-semibold">Sahkan</button>
+                      <button type="button" onClick={() => handleStartEdit(s)} className="px-3 py-1.5 rounded-lg bg-slate-200 hover:bg-slate-300 text-slate-800 font-semibold">Edit</button>
+                      <button type="button" onClick={() => handleRejectSuggestion(s.id)} className="px-3 py-1.5 rounded-lg bg-rose-100 hover:bg-rose-200 text-rose-700 font-semibold">Tolak</button>
+                    </div>
+                  )}
+
+                  {status === "pending" && editingSuggestionId === s.id && (
+                    <div className="space-y-1.5 pt-1">
+                      <input value={editDraft.amount} onChange={e => setEditDraft(d => ({ ...d, amount: e.target.value }))} placeholder="Amount (RM)" className="w-full px-2 py-1 rounded border border-amber-300 text-xs" />
+                      <input value={editDraft.category} onChange={e => setEditDraft(d => ({ ...d, category: e.target.value }))} placeholder="Category" className="w-full px-2 py-1 rounded border border-amber-300 text-xs" />
+                      <input value={editDraft.relatedParty} onChange={e => setEditDraft(d => ({ ...d, relatedParty: e.target.value }))} placeholder="Related Party" className="w-full px-2 py-1 rounded border border-amber-300 text-xs" />
+                      <input value={editDraft.date} onChange={e => setEditDraft(d => ({ ...d, date: e.target.value }))} type="date" className="w-full px-2 py-1 rounded border border-amber-300 text-xs" />
+                      <div className="flex gap-2 pt-1">
+                        <button type="button" onClick={() => handleConfirmSuggestion(s, editDraft)} className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-semibold">Sahkan Perubahan</button>
+                        <button type="button" onClick={() => setEditingSuggestionId(null)} className="px-3 py-1.5 rounded-lg bg-slate-200 hover:bg-slate-300 text-slate-800 font-semibold">Batal</button>
+                      </div>
+                    </div>
+                  )}
+                </>
               )}
             </div>
           );

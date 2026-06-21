@@ -809,6 +809,7 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
               transaction_date: newEvent.date,
               reference_number: newEvent.referenceNumber,
               description: newEvent.description,
+              business_id: newEvent.businessId || null,
             });
           } else if (newEvent.type === "EXPENSE" || newEvent.type === "DEBT") {
             await supabase.from("expense_records").insert({
@@ -823,6 +824,7 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
               transaction_date: newEvent.date,
               reference_number: newEvent.referenceNumber,
               description: newEvent.type === "DEBT" ? `[DEBT] ${newEvent.description}` : newEvent.description,
+              business_id: newEvent.businessId || null,
             });
           } else if (newEvent.type === "RECEIVABLE") {
             await supabase.from("receivables").insert({
@@ -836,6 +838,7 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
               paid_amount_myr: newEvent.isCompleted ? newEvent.amountMyr : 0,
               status: newEvent.isCompleted ? "PAID" : "UNPAID",
               category_id: catId,
+              business_id: newEvent.businessId || null,
             });
           } else if (newEvent.type === "PAYABLE") {
             await supabase.from("payables").insert({
@@ -849,6 +852,7 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
               paid_amount_myr: newEvent.isCompleted ? newEvent.amountMyr : 0,
               status: newEvent.isCompleted ? "PAID" : "UNPAID",
               category_id: catId,
+              business_id: newEvent.businessId || null,
             });
           }
         } catch (err: any) {
@@ -1157,6 +1161,7 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
             maturity_date: newDebt.repaymentDueDate || null,
             monthly_payment_myr: 0,
             description: newDebt.description,
+            business_id: newDebt.businessId || null,
           });
         } catch (err: any) {
           console.error("DB persistence insert debt failed:", err.message);
@@ -1256,6 +1261,7 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
             start_date: newCommitment.startDate,
             end_date: newCommitment.endDate || null,
             is_active: newCommitment.isActive,
+            business_id: newCommitment.businessId || null,
           });
         } catch (err: any) {
           console.error("DB persistence insert commitment failed:", err.message);

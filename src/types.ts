@@ -99,6 +99,7 @@ export interface FinancialEvent {
   cashAccountId?: string;
   bankAccountId?: string;
   isCompleted: boolean; // Paid/repaid status
+  businessId?: string; // Which business this belongs to; undefined/null = Personal
 }
 
 export interface CashAccount {
@@ -130,6 +131,7 @@ export interface DebtRecord {
   interestRateAnnualPercent?: number;
   status: "ACTIVE" | "FULLY_REPAID";
   description: string;
+  businessId?: string; // Which business this belongs to; undefined/null = Personal
 }
 
 export interface FinancialCommitment {
@@ -144,6 +146,7 @@ export interface FinancialCommitment {
   endDate?: string;
   isActive: boolean;
   status: "ACTIVE" | "COMPLETED" | "PAUSED" | "PENDING";
+  businessId?: string; // Which business this belongs to; undefined/null = Personal
 }
 
 export interface FinancialEvidencePackage {
