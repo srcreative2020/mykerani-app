@@ -17,6 +17,7 @@ interface AuthContextType extends AuthState {
   signUp: (email: string, password: string, fullName: string, initialRole?: UserRole) => Promise<void>;
   signOut: () => Promise<void>;
   resetPassword: (email: string) => Promise<{ success: boolean; message: string }>;
+  updateProfile: (fullName: string, email: string) => Promise<{ success: boolean; message: string }>;
   clearError: () => void;
   toggleBypassAuth: (enabled: boolean) => void;
   isMockUser: boolean;
@@ -303,6 +304,44 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const updateProfile = async (fullName: string, email: string): Promise<{ success: boolean; message: string }> => {
+    if (!state.user) return { success: false, message: "Tiada sesi aktif." };
+    const cleanName = fullName.trim();
+    const cleanEmail = email.trim().toLowerCase();
+    if (!cleanName) return { success: false, message: "Nama tidak boleh kosong." };
+
+    if (state.isMockUser) {
+      setState(prev => ({ ...prev, user: prev.user ? { ...prev.user, fullName: cleanName } : prev.user }));
+      return { success: false, message: "Akaun demo tidak boleh kemas kini profil." };
+    }
+
+    if (!isSupabaseConfigured() || !supabase) {
+      return { success: false, message: "Sistem tidak dikonfigurasi. Sila hubungi pentadbir." };
+    }
+
+    try {
+      const emailChanged = cleanEmail !== state.user.email.toLowerCase();
+      const { error: authErr } = await supabase.auth.updateUser({
+        data: { fullName: cleanName },
+        ...(emailChanged ? { email: cleanEmail } : {}),
+      });
+      if (authErr) return { success: false, message: authErr.message };
+
+      await supabase.from("user_role_assignments").update({ full_name: cleanName }).eq("user_id", state.user.id);
+
+      setState(prev => ({ ...prev, user: prev.user ? { ...prev.user, fullName: cleanName } : prev.user }));
+
+      return {
+        success: true,
+        message: emailChanged
+          ? "Nama dikemas kini. Sila semak e-mel baharu anda untuk sahkan pertukaran e-mel."
+          : "Profil dikemas kini.",
+      };
+    } catch (err: any) {
+      return { success: false, message: "Ralat sambungan. Sila cuba lagi." };
+    }
+  };
+
   const signOut = async () => {
     isMockRef.current = false; // reset ref dulu supaya onAuthStateChange boleh fire
     setState(prev => ({ ...prev, loading: true }));
@@ -326,6 +365,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         signUp,
         signOut,
         resetPassword,
+        updateProfile,
         clearError,
         toggleBypassAuth,
       }}

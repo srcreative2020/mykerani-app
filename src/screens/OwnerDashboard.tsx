@@ -55,7 +55,7 @@ import {
 } from "../lib/paymentService";
 
 type MainTab = "home" | "dashboard" | "documents" | "reports" | "more";
-type MorePage = "menu" | "team" | "history" | "settings" | "profile" | "myProfile" | "support" | "billing" | "resources" | "chatArchive";
+type MorePage = "menu" | "team" | "history" | "settings" | "myProfile" | "support" | "billing" | "resources" | "chatArchive";
 
 interface ChatSuggestion {
   id: string;
@@ -86,6 +86,10 @@ interface ChatSuggestionStatus {
   confirmedAt?: string;
   confirmedByName?: string;
   confirmedByUserId?: string;
+  editedAmount?: number;
+  editedCategory?: string;
+  editedRelatedParty?: string;
+  editedDate?: string;
 }
 
 interface ChatMsg {
@@ -176,7 +180,7 @@ function QuickAddModal({
 
 // â"€â"€â"€ Main Component â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 export function OwnerDashboard() {
-  const { user, signOut, isMockUser } = useAuth();
+  const { user, signOut, isMockUser, updateProfile } = useAuth();
   const { activeWorkspace, workspaces, selectWorkspace } = useWorkspace();
   const { activeTenant } = useTenant();
   const { userRoles } = usePermission();
@@ -978,6 +982,18 @@ export function OwnerDashboard() {
   const [dependents, setDependents] = useState<Dependent[]>([]);
   const [profileSaving, setProfileSaving] = useState(false);
   const [profileSavedAt, setProfileSavedAt] = useState<number | null>(null);
+  const [editingAccount, setEditingAccount] = useState(false);
+  const [accountDraft, setAccountDraft] = useState({ fullName: "", email: "" });
+  const [accountSaving, setAccountSaving] = useState(false);
+  const [accountMsg, setAccountMsg] = useState<string | null>(null);
+  const startEditAccount = () => { setAccountDraft({ fullName: user?.fullName || "", email: user?.email || "" }); setAccountMsg(null); setEditingAccount(true); };
+  const saveAccount = async () => {
+    setAccountSaving(true);
+    const res = await updateProfile(accountDraft.fullName, accountDraft.email);
+    setAccountSaving(false);
+    setAccountMsg(res.message);
+    if (res.success) setEditingAccount(false);
+  };
   const [newVehicle, setNewVehicle] = useState({ name: "", plateNumber: "", vehicleType: "", ownership: "BUSINESS" as "PERSONAL" | "BUSINESS" });
   const [newDependent, setNewDependent] = useState({ name: "", relationship: "", dateOfBirth: "" });
   const [editingVehicleId, setEditingVehicleId] = useState<string | null>(null);
@@ -1448,6 +1464,10 @@ export function OwnerDashboard() {
       recordId: newRecordId,
       recordType: newRecordType,
       confirmedAt: new Date().toISOString(),
+      editedAmount: amount,
+      editedCategory: category,
+      editedRelatedParty: relatedParty,
+      editedDate: date,
       confirmedByName: user?.fullName || undefined,
       confirmedByUserId: user?.id || undefined,
     });
@@ -1497,7 +1517,14 @@ export function OwnerDashboard() {
       });
     }
 
-    markChatSuggestionStatus(s.id, { ...current, status: "confirmed" });
+    markChatSuggestionStatus(s.id, {
+      ...current,
+      status: "confirmed",
+      editedAmount: amountMyr,
+      editedCategory: categoryName,
+      editedRelatedParty: partyName,
+      editedDate: date,
+    });
     setChatSuggestionJustUpdated(prev => ({ ...prev, [s.id]: true }));
     setEditingChatSuggestionId(null);
   };
@@ -1892,8 +1919,8 @@ export function OwnerDashboard() {
                           <div className="max-w-[78%] p-3.5 bg-white border border-slate-200 rounded-2xl text-sm space-y-2 shadow-sm">
                             <div className="font-mono text-slate-800 space-y-0.5">
                               <div>Jenis: {TRANSACTION_TYPE_LABEL_MS[s.payload?.transactionType || ""] || s.payload?.transactionType || "-"}</div>
-                              <div>Kategori: {s.payload?.category || "-"}</div>
-                              <div>Jumlah: RM{Number(s.payload?.amount || 0).toFixed(2)}</div>
+                              <div>Kategori: {statusObj.editedCategory ?? s.payload?.category ?? "-"}</div>
+                              <div>Jumlah: RM{Number(statusObj.editedAmount ?? s.payload?.amount ?? 0).toFixed(2)}</div>
                               <div>Confidence: <span className={`font-bold ${confidenceClass}`}>{confidencePct}%</span></div>
                             </div>
                             {status === "pending" && crossWorkspaceHints[s.id] && (
@@ -2497,9 +2524,8 @@ export function OwnerDashboard() {
                     { id: "support" as MorePage,   label: "Pusat Sokongan",    desc: "Bantuan, FAQ & tiket sokongan",         icon: HelpCircle },
                     { id: "history" as MorePage,   label: "Sejarah Aktiviti",  desc: "Log semua transaksi & aktiviti",        icon: History },
                     { id: "chatArchive" as MorePage, label: "Arkib Perbualan", desc: "Sejarah perbualan dengan MYKERANI ikut tarikh", icon: MessageCircle },
-                    { id: "myProfile" as MorePage, label: "Profil Kewangan AI", desc: "Maklumat peribadi, perniagaan & kenderaan", icon: Brain },
+                    { id: "myProfile" as MorePage, label: "Profil Saya & Kewangan AI", desc: user?.email || "Akaun, perniagaan & kenderaan", icon: User },
                     { id: "settings" as MorePage,  label: "Tetapan",           desc: "Konfigurasi & peringatan",              icon: Settings },
-                    { id: "profile" as MorePage,   label: "Profil Saya",       desc: user?.email || "",                       icon: User },
                   ]).map(({ id, label, desc, icon: Icon }) => (
                     <button key={id} onClick={() => setMorePage(id)}
                       className="w-full flex items-center space-x-4 px-4 py-4 hover:bg-slate-50 transition cursor-pointer text-left">
@@ -2610,8 +2636,52 @@ export function OwnerDashboard() {
 
             {morePage === "myProfile" && (
               <div className="space-y-4">
-                <h2 className="text-lg font-bold text-slate-900">Profil Kewangan AI</h2>
-                <p className="text-xs text-slate-500">Semua maklumat di sini adalah <span className="font-semibold">pilihan (optional)</span> — boleh dilangkau atau dikemas kini bila-bila masa. Lebih lengkap maklumat, lebih pintar MYKERANI AI membantu anda.</p>
+                <h2 className="text-lg font-bold text-slate-900">Profil Saya & Kewangan AI</h2>
+
+                <div className="bg-white border border-slate-200 rounded-2xl p-6 space-y-4 shadow-sm">
+                  <div className="flex items-center space-x-4">
+                    <div className="w-14 h-14 rounded-2xl bg-indigo-600 text-white flex items-center justify-center text-2xl font-bold shadow shrink-0">
+                      {firstName.charAt(0).toUpperCase()}
+                    </div>
+                    {!editingAccount ? (
+                      <div className="min-w-0">
+                        <p className="font-bold text-slate-900 truncate">{user?.fullName}</p>
+                        <p className="text-xs text-slate-500 truncate">{user?.email}</p>
+                        <span className="text-[10px] bg-indigo-100 text-indigo-700 font-bold px-2 py-0.5 rounded-full mt-1 inline-block">Pemilik Syarikat</span>
+                      </div>
+                    ) : (
+                      <div className="min-w-0 flex-1 space-y-1.5">
+                        <input value={accountDraft.fullName} onChange={e => setAccountDraft(d => ({ ...d, fullName: e.target.value }))} placeholder="Nama penuh" className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg text-sm" />
+                        <input value={accountDraft.email} onChange={e => setAccountDraft(d => ({ ...d, email: e.target.value }))} placeholder="Email" type="email" className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg text-sm" />
+                      </div>
+                    )}
+                  </div>
+
+                  {accountMsg && (
+                    <p className={`text-xs ${accountMsg.startsWith("Profil") || accountMsg.startsWith("Nama") ? "text-emerald-600" : "text-rose-500"}`}>{accountMsg}</p>
+                  )}
+
+                  {!editingAccount ? (
+                    <button onClick={startEditAccount} className="w-full py-2.5 border border-slate-200 text-slate-700 rounded-xl text-sm font-semibold hover:bg-slate-50 transition cursor-pointer">
+                      Edit Profil
+                    </button>
+                  ) : (
+                    <div className="flex gap-2">
+                      <button onClick={saveAccount} disabled={accountSaving} className="flex-1 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-semibold disabled:opacity-50 cursor-pointer">
+                        {accountSaving ? "Menyimpan..." : "Simpan"}
+                      </button>
+                      <button onClick={() => setEditingAccount(false)} className="flex-1 py-2.5 bg-slate-200 hover:bg-slate-300 text-slate-800 rounded-xl text-sm font-semibold cursor-pointer">
+                        Batal
+                      </button>
+                    </div>
+                  )}
+
+                  <button onClick={() => signOut()} className="w-full py-3 border border-rose-200 text-rose-500 rounded-xl text-sm font-semibold hover:bg-rose-50 transition cursor-pointer">
+                    Log Keluar
+                  </button>
+                </div>
+
+                <p className="text-xs text-slate-500">Maklumat di bawah adalah <span className="font-semibold">pilihan (optional)</span> — boleh dilangkau atau dikemas kini bila-bila masa. Lebih lengkap maklumat, lebih pintar MYKERANI AI membantu anda.</p>
 
                 <div className="bg-white border border-slate-200 rounded-2xl p-5 space-y-3 shadow-sm">
                   <h3 className="text-sm font-bold text-slate-800">Profil Peribadi</h3>
@@ -2958,28 +3028,6 @@ export function OwnerDashboard() {
                   ))}
                   <button className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition cursor-pointer">
                     Simpan Peringatan
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* Profile */}
-            {morePage === "profile" && (
-              <div className="space-y-4">
-                <h2 className="text-lg font-bold text-slate-900">Profil Saya</h2>
-                <div className="bg-white border border-slate-200 rounded-2xl p-6 space-y-4 shadow-sm">
-                  <div className="flex items-center space-x-4">
-                    <div className="w-14 h-14 rounded-2xl bg-indigo-600 text-white flex items-center justify-center text-2xl font-bold shadow">
-                      {firstName.charAt(0).toUpperCase()}
-                    </div>
-                    <div>
-                      <p className="font-bold text-slate-900">{user?.fullName}</p>
-                      <p className="text-xs text-slate-500">{user?.email}</p>
-                      <span className="text-[10px] bg-indigo-100 text-indigo-700 font-bold px-2 py-0.5 rounded-full mt-1 inline-block">Pemilik Syarikat</span>
-                    </div>
-                  </div>
-                  <button onClick={() => signOut()} className="w-full py-3 border border-rose-200 text-rose-500 rounded-xl text-sm font-semibold hover:bg-rose-50 transition cursor-pointer">
-                    Log Keluar
                   </button>
                 </div>
               </div>

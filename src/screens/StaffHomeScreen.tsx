@@ -52,6 +52,10 @@ interface ChatSuggestionStatus {
   confirmedAt?: string;
   confirmedByName?: string;
   confirmedByUserId?: string;
+  editedAmount?: number;
+  editedCategory?: string;
+  editedRelatedParty?: string;
+  editedDate?: string;
 }
 
 function getGreeting() {
@@ -539,6 +543,10 @@ export function StaffHomeScreen() {
       recordId: newRecordId,
       recordType: newRecordType,
       confirmedAt: new Date().toISOString(),
+      editedAmount: amount,
+      editedCategory: category,
+      editedRelatedParty: relatedParty,
+      editedDate: date,
       confirmedByName: user?.fullName || undefined,
       confirmedByUserId: user?.id || undefined,
     });
@@ -588,7 +596,14 @@ export function StaffHomeScreen() {
       });
     }
 
-    markChatSuggestionStatus(s.id, { ...current, status: "confirmed" });
+    markChatSuggestionStatus(s.id, {
+      ...current,
+      status: "confirmed",
+      editedAmount: amountMyr,
+      editedCategory: categoryName,
+      editedRelatedParty: partyName,
+      editedDate: date,
+    });
     setChatSuggestionJustUpdated(prev => ({ ...prev, [s.id]: true }));
     setEditingChatSuggestionId(null);
   };
@@ -824,8 +839,8 @@ export function StaffHomeScreen() {
                           <div className="max-w-[78%] p-3.5 bg-white border border-slate-200 rounded-2xl text-sm space-y-2 shadow-sm">
                             <div className="font-mono text-slate-800 space-y-0.5">
                               <div>Jenis: {TRANSACTION_TYPE_LABEL_MS[s.payload?.transactionType || ""] || s.payload?.transactionType || "-"}</div>
-                              <div>Kategori: {s.payload?.category || "-"}</div>
-                              <div>Jumlah: RM{Number(s.payload?.amount || 0).toFixed(2)}</div>
+                              <div>Kategori: {statusObj.editedCategory ?? s.payload?.category ?? "-"}</div>
+                              <div>Jumlah: RM{Number(statusObj.editedAmount ?? s.payload?.amount ?? 0).toFixed(2)}</div>
                               <div>Confidence: <span className={`font-bold ${confidenceClass}`}>{confidencePct}%</span></div>
                             </div>
                             {status === "confirmed" && editingChatSuggestionId !== s.id && (
