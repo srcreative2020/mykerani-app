@@ -491,6 +491,10 @@ export function OwnerDashboard() {
         }
       });
     } else {
+      // Invois/bil yang baru disahkan masih TERTUNGGAK (belum dibayar/dikutip)
+      // melainkan ia direkodkan terus sebagai Pendapatan/Perbelanjaan sebenar —
+      // supaya "Perlu Dibayar"/"Perlu Dikutip" di Dashboard betul-betul tepat.
+      const isOutstanding = docReview.recordType === "PAYABLE" || docReview.recordType === "RECEIVABLE";
       const ev = addFinancialEvent({
         workspaceId: activeWorkspace.id,
         type: docReview.recordType,
@@ -500,7 +504,7 @@ export function OwnerDashboard() {
         date: docReview.date,
         referenceNumber: `DOC-${doc.id.substring(0, 8)}`,
         description: `Daripada dokumen dimuat naik: ${doc.file_name}`,
-        isCompleted: true,
+        isCompleted: !isOutstanding,
       });
       createdEvents.push(ev);
       if (merchantName.trim()) {
