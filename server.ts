@@ -622,10 +622,6 @@ async function startServer() {
       if (await isUserSuspended(userId)) {
         return res.status(403).json({ error: "Akaun anda telah disekat oleh pentadbir HQ. Sila hubungi sokongan." });
       }
-      if (!(await consumeResourceCredit(tenantId, workspaceId, "OCR", `OCR analysis: ${fileName || "document"}`))) {
-        return res.status(402).json({ error: "Kredit OCR anda telah habis. Sila beli tambahan kredit atau naik taraf pelan anda." });
-      }
-
       const access = await verifyTenantAccess(req, tenantId, workspaceId);
       if (!access.ok) {
         return res.status(403).json({ error: "Sesi tidak sah atau tidak mempunyai akses kepada syarikat ini." });

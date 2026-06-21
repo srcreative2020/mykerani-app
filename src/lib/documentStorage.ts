@@ -12,7 +12,10 @@ export interface UploadedDoc {
   file_path_supabase: string;
   uploaded_by: string;
   created_at: string;
+  ocr_parsed_content?: Record<string, any>;
 }
+
+export type DocReviewStatus = "PENDING" | "CONFIRMED" | "REJECTED";
 
 export interface StorageUsage {
   workspace_id: string;
@@ -82,6 +85,19 @@ export async function uploadDocument(
   }
 
   return { doc: data as UploadedDoc, error: null };
+}
+
+// Simpan keputusan semakan AI (sahkan/edit/tolak) + nama fail yang dikemas kini
+// supaya senang dikenal pasti semula (cth: vendor + tarikh) bila tenant owner
+// nak rujuk balik untuk bank/LHDN.
+export async function updateDocumentReview(
+  docId: string,
+  updates: { fileName?: string; ocrParsedContent: Record<string, any> }
+): Promise<string | null> {
+  const payload: Record<string, any> = { ocr_parsed_content: updates.ocrParsedContent };
+  if (updates.fileName) payload.file_name = updates.fileName;
+  const { error } = await supabase.from("evidence_documents").update(payload).eq("id", docId);
+  return error ? error.message : null;
 }
 
 // Dapatkan semua dokumen dalam satu workspace

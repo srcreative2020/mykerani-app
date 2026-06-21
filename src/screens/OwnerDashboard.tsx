@@ -12,7 +12,7 @@ import {
   HelpCircle, CreditCard, Cpu, HardDrive, Bell, Shield,
   BookOpen, Ticket, MessageCircle, Zap, Database, Edit3,
   UserCheck, UserX, KeyRound, AlertCircle, CheckCircle2,
-  ToggleLeft, ToggleRight, ExternalLink, Trash2,
+  ToggleLeft, ToggleRight, ExternalLink, Trash2, Download,
 } from "lucide-react";
 import { FinancialEvidencePackageManager } from "../components/FinancialEvidencePackage";
 import { FinancialReportsAnalytics } from "../components/FinancialReportsAnalytics";
@@ -21,7 +21,7 @@ import { useStorageQuota, PLAN_QUOTAS, GB } from "../lib/storageQuota";
 import { useAiCredits } from "../lib/aiCredits";
 import { useNotifications, buildTenantNotifs, fmtNotifTime } from "../lib/notifications";
 import {
-  uploadDocument, listDocuments, deleteDocument, getDocumentUrl,
+  uploadDocument, listDocuments, deleteDocument, getDocumentUrl, updateDocumentReview,
   isAllowedFileType, MAX_FILE_SIZE, fmtBytes as fmtDocBytes,
   type UploadedDoc, type DocType,
 } from "../lib/documentStorage";
@@ -144,7 +144,7 @@ export function OwnerDashboard() {
   const { user, signOut, isMockUser } = useAuth();
   const { activeWorkspace, workspaces, selectWorkspace } = useWorkspace();
   const { activeTenant } = useTenant();
-  const { financialEvents, addFinancialEvent, editFinancialEvent, addDebtRecord, addFinancialCommitment, learnOcrPattern } = useFinancials();
+  const { financialEvents, addFinancialEvent, editFinancialEvent, addDebtRecord, addFinancialCommitment, learnOcrPattern, ocrLearnedPatterns } = useFinancials();
 
   const [activeTab, setActiveTab] = useState<MainTab>("home");
   const [morePage, setMorePage] = useState<MorePage>("menu");
@@ -370,6 +370,24 @@ export function OwnerDashboard() {
   const [uploadError, setUploadError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [pendingDocType, setPendingDocType] = useState<DocType>("SUPPORTING_DOC");
+  const [docTypeFilter, setDocTypeFilter] = useState<"ALL" | DocType>("ALL");
+
+  // AI document reading: AI Suggests -> Tenant Confirms/Edits/Rejects, mirroring
+  // the same pattern used by OCREngineConsole/chat suggestions elsewhere in the app.
+  type DocReviewLine = { date: string; description: string; amount: number; type: "CREDIT" | "DEBIT"; suggestedCategory: string; confidenceScore: number; include: boolean };
+  const [docAnalyzing, setDocAnalyzing] = useState(false);
+  const [docReviewError, setDocReviewError] = useState<string | null>(null);
+  const [docReview, setDocReview] = useState<null | {
+    doc: UploadedDoc;
+    merchantName: string;
+    amount: string;
+    date: string;
+    category: string;
+    recordType: "INCOME" | "EXPENSE" | "RECEIVABLE" | "PAYABLE" | "DEBT";
+    confidenceScore: number;
+    rawExtractedText: string;
+    lines?: DocReviewLine[];
+  }>(null);
 
   // Load documents when workspace ready
   useEffect(() => {
@@ -377,6 +395,137 @@ export function OwnerDashboard() {
     setDocsLoading(true);
     listDocuments(wsId).then(d => { setDocs(d); setDocsLoading(false); });
   }, [wsId]);
+
+  const fileToDataUrl = (file: File): Promise<string> => new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+
+  // Invoke the real AI OCR pipeline (/api/ocr/analyze, same endpoint OCREngineConsole uses)
+  // on a freshly uploaded document, then open the confirm/edit/reject review panel.
+  const analyzeUploadedDoc = async (doc: UploadedDoc, file: File) => {
+    if (!activeWorkspace || !user) return;
+    setDocAnalyzing(true);
+    setDocReviewError(null);
+    try {
+      const fileDataUrl = await fileToDataUrl(file);
+      const serverDocType = doc.document_type === "BANK_STATEMENT" ? "STATEMENT" : doc.document_type === "CONTRACT" ? "SUPPORTING_DOC" : doc.document_type;
+      const { getAuthHeader } = await import("../lib/supabase");
+      const response = await fetch("/api/ocr/analyze", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...(await getAuthHeader()) },
+        body: JSON.stringify({
+          fileDataUrl, fileName: file.name, documentType: serverDocType,
+          tenantId: activeWorkspace.tenantId, workspaceId: activeWorkspace.id, userId: user.id,
+        }),
+      });
+      if (!response.ok) {
+        const errBody = await response.json().catch(() => ({}));
+        setDocReviewError(errBody.error || "AI tidak dapat membaca dokumen ini. Cuba lagi.");
+        return;
+      }
+      const payload = await response.json();
+
+      if (doc.document_type === "BANK_STATEMENT" && Array.isArray(payload.transactions)) {
+        setDocReview({
+          doc,
+          merchantName: payload.merchantName || "",
+          amount: "0",
+          date: payload.date || new Date().toISOString().split("T")[0],
+          category: "",
+          recordType: "EXPENSE",
+          confidenceScore: payload.confidenceScore || 0.7,
+          rawExtractedText: payload.rawExtractedText || "",
+          lines: payload.transactions.map((t: any) => ({
+            date: t.date || "", description: t.description || "", amount: Number(t.amount) || 0,
+            type: t.type === "CREDIT" ? "CREDIT" : "DEBIT",
+            suggestedCategory: t.suggestedCategory || "Lain-lain",
+            confidenceScore: Number(t.confidenceScore) || 0.7,
+            include: true,
+          })),
+        });
+      } else {
+        const matchedPattern = ocrLearnedPatterns.find(p => p.vendorName.toLowerCase() === (payload.merchantName || "").toLowerCase());
+        setDocReview({
+          doc,
+          merchantName: matchedPattern?.vendorName || payload.merchantName || "",
+          amount: String(payload.amount || 0),
+          date: payload.date || new Date().toISOString().split("T")[0],
+          category: matchedPattern?.category || payload.suggestedCategory || "Lain-lain",
+          recordType: matchedPattern?.recordType || (doc.document_type === "INVOICE" ? "PAYABLE" : "EXPENSE"),
+          confidenceScore: matchedPattern?.confidenceScore || payload.confidenceScore || 0.7,
+          rawExtractedText: payload.rawExtractedText || "",
+        });
+      }
+    } catch (ex: any) {
+      setDocReviewError("AI tidak dapat membaca dokumen ini. Anda boleh cuba semula atau abaikan (dokumen tetap disimpan).");
+    } finally {
+      setDocAnalyzing(false);
+    }
+  };
+
+  const confirmDocReview = async () => {
+    if (!docReview || !activeWorkspace) return;
+    const { doc, merchantName, lines } = docReview;
+    const createdEvents: { id: string }[] = [];
+
+    if (lines) {
+      // Bank statement: create one financial event per included transaction line.
+      lines.filter(l => l.include).forEach(l => {
+        const ev = addFinancialEvent({
+          workspaceId: activeWorkspace.id,
+          type: l.type === "CREDIT" ? "INCOME" : "EXPENSE",
+          categoryName: l.suggestedCategory,
+          amountMyr: l.amount,
+          partyName: l.description,
+          date: l.date || new Date().toISOString().split("T")[0],
+          referenceNumber: `STMT-${doc.id.substring(0, 8)}`,
+          description: `Daripada penyata bank: ${doc.file_name}`,
+          isCompleted: true,
+        });
+        createdEvents.push(ev);
+        if (l.description.trim()) {
+          learnOcrPattern({ workspaceId: activeWorkspace.id, vendorName: l.description.trim(), category: l.suggestedCategory, recordType: l.type === "CREDIT" ? "INCOME" : "EXPENSE", confidenceScore: l.confidenceScore });
+        }
+      });
+    } else {
+      const ev = addFinancialEvent({
+        workspaceId: activeWorkspace.id,
+        type: docReview.recordType,
+        categoryName: docReview.category,
+        amountMyr: Number(docReview.amount) || 0,
+        partyName: merchantName || "Tidak dinyatakan",
+        date: docReview.date,
+        referenceNumber: `DOC-${doc.id.substring(0, 8)}`,
+        description: `Daripada dokumen dimuat naik: ${doc.file_name}`,
+        isCompleted: true,
+      });
+      createdEvents.push(ev);
+      if (merchantName.trim()) {
+        learnOcrPattern({ workspaceId: activeWorkspace.id, vendorName: merchantName.trim(), category: docReview.category, recordType: docReview.recordType, confidenceScore: docReview.confidenceScore });
+      }
+    }
+
+    const renamedLabel = (merchantName || (lines ? "Penyata" : "Dokumen")).replace(/[^a-zA-Z0-9 ]/g, "").trim().replace(/\s+/g, "_");
+    const ext = doc.file_name.split(".").pop();
+    const newFileName = `${docReview.date}_${renamedLabel}${lines ? "" : `_RM${(Number(docReview.amount) || 0).toFixed(2)}`}.${ext}`;
+
+    await updateDocumentReview(doc.id, {
+      fileName: newFileName,
+      ocrParsedContent: { reviewStatus: "CONFIRMED", extracted: docReview, linkedEventIds: createdEvents.map(e => e.id), confirmedAt: new Date().toISOString() },
+    });
+    setDocs(prev => prev.map(d => d.id === doc.id ? { ...d, file_name: newFileName, ocr_parsed_content: { reviewStatus: "CONFIRMED" } } : d));
+    setDocReview(null);
+  };
+
+  const rejectDocReview = async () => {
+    if (!docReview) return;
+    await updateDocumentReview(docReview.doc.id, { ocrParsedContent: { reviewStatus: "REJECTED", extracted: docReview, rejectedAt: new Date().toISOString() } });
+    setDocs(prev => prev.map(d => d.id === docReview.doc.id ? { ...d, ocr_parsed_content: { reviewStatus: "REJECTED" } } : d));
+    setDocReview(null);
+  };
 
   const triggerUpload = (docType: DocType) => {
     if (user?.email?.endsWith(".demo") || (user as any)?.isMockUser) {
@@ -402,7 +551,13 @@ export function OwnerDashboard() {
     const { doc, error } = await uploadDocument(file, wsId, user.id, pendingDocType);
     setUploadingDoc(null);
     if (error) { setUploadError(error); return; }
-    if (doc) { setDocs(prev => [doc, ...prev]); storageQuota.refresh(); }
+    if (doc) {
+      setDocs(prev => [doc, ...prev]);
+      storageQuota.refresh();
+      if (doc.document_type !== "CONTRACT") {
+        analyzeUploadedDoc(doc, file);
+      }
+    }
   };
 
   const handleDeleteDoc = async (doc: UploadedDoc) => {
@@ -416,6 +571,20 @@ export function OwnerDashboard() {
     const url = await getDocumentUrl(doc.file_path_supabase);
     if (url) window.open(url, "_blank");
   };
+
+  const handleDownloadDoc = async (doc: UploadedDoc) => {
+    const url = await getDocumentUrl(doc.file_path_supabase);
+    if (!url) return;
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = doc.file_name;
+    a.target = "_blank";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  };
+
+  const filteredDocs = docTypeFilter === "ALL" ? docs : docs.filter(d => d.document_type === docTypeFilter);
 
   // Update activity timestamp on financial events change
   useEffect(() => { if (myEvents.length > 0) storageQuota.touchActive(); }, [myEvents.length]);
@@ -1298,13 +1467,44 @@ export function OwnerDashboard() {
               <span className="text-xs text-slate-500 font-semibold">Muat naik dokumen lain (Kontrak, dsb.)</span>
             </button>
 
+            {docAnalyzing && (
+              <div className="bg-indigo-50 border border-indigo-200 rounded-xl px-4 py-3 flex items-center gap-2">
+                <RefreshCw className="w-4 h-4 text-indigo-500 animate-spin shrink-0" />
+                <p className="text-xs text-indigo-700 font-semibold">AI sedang membaca dokumen anda...</p>
+              </div>
+            )}
+            {docReviewError && (
+              <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 flex items-center justify-between">
+                <p className="text-xs text-red-600 font-semibold">{docReviewError}</p>
+                <button onClick={() => setDocReviewError(null)} className="text-red-400 hover:text-red-600 cursor-pointer"><X className="w-4 h-4" /></button>
+              </div>
+            )}
+
+            {/* Category filter — recall by category or all, for easy bank/LHDN reference */}
+            {docs.length > 0 && (
+              <div className="flex items-center gap-2 overflow-x-auto pb-1">
+                {([
+                  { id: "ALL" as const, label: "Semua" },
+                  { id: "RECEIPT" as const, label: "Resit" },
+                  { id: "INVOICE" as const, label: "Invois" },
+                  { id: "BANK_STATEMENT" as const, label: "Penyata Bank" },
+                  { id: "SUPPORTING_DOC" as const, label: "Lain-lain" },
+                ]).map(f => (
+                  <button key={f.id} onClick={() => setDocTypeFilter(f.id)}
+                    className={`shrink-0 px-3 py-1.5 rounded-full text-[11px] font-semibold cursor-pointer transition ${docTypeFilter === f.id ? "bg-indigo-600 text-white" : "bg-white border border-slate-200 text-slate-500 hover:bg-slate-50"}`}>
+                    {f.label}
+                  </button>
+                ))}
+              </div>
+            )}
+
             {/* Document list */}
             {docsLoading ? (
               <div className="py-8 text-center">
                 <RefreshCw className="w-5 h-5 text-slate-300 animate-spin mx-auto mb-2" />
                 <p className="text-xs text-slate-400">Memuatkan dokumen...</p>
               </div>
-            ) : docs.length === 0 ? (
+            ) : filteredDocs.length === 0 ? (
               <div className="py-10 text-center bg-white border border-slate-100 rounded-2xl">
                 <FileText className="w-8 h-8 text-slate-200 mx-auto mb-2" />
                 <p className="text-xs font-semibold text-slate-400">Belum ada dokumen</p>
@@ -1313,11 +1513,12 @@ export function OwnerDashboard() {
             ) : (
               <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
                 <div className="divide-y divide-slate-50">
-                  {docs.map(doc => {
+                  {filteredDocs.map(doc => {
                     const typeLabel: Record<string, string> = {
                       RECEIPT: "Resit", INVOICE: "Invois", BANK_STATEMENT: "Penyata Bank",
                       CONTRACT: "Kontrak", SUPPORTING_DOC: "Dokumen Lain",
                     };
+                    const reviewStatus = doc.ocr_parsed_content?.reviewStatus as string | undefined;
                     return (
                       <div key={doc.id} className="px-4 py-3.5 flex items-center gap-3">
                         <div className="w-9 h-9 rounded-xl bg-slate-100 flex items-center justify-center shrink-0">
@@ -1327,8 +1528,14 @@ export function OwnerDashboard() {
                           <p className="text-xs font-bold text-slate-800 truncate">{doc.file_name}</p>
                           <p className="text-[10px] text-slate-400 mt-0.5">
                             {typeLabel[doc.document_type] || doc.document_type} &middot; {fmtDocBytes(doc.file_size_bytes)} &middot; {new Date(doc.created_at).toLocaleDateString("ms-MY")}
+                            {reviewStatus === "CONFIRMED" && <span className="text-emerald-600 font-semibold"> &middot; Disahkan</span>}
+                            {reviewStatus === "REJECTED" && <span className="text-rose-500 font-semibold"> &middot; Ditolak</span>}
                           </p>
                         </div>
+                        <button onClick={() => handleDownloadDoc(doc)} title="Muat turun"
+                          className="text-slate-300 hover:text-indigo-600 cursor-pointer p-1 shrink-0">
+                          <Download className="w-3.5 h-3.5" />
+                        </button>
                         <button onClick={() => handlePreviewDoc(doc)} title="Buka"
                           className="text-slate-300 hover:text-emerald-600 cursor-pointer p-1 shrink-0">
                           <ExternalLink className="w-3.5 h-3.5" />
@@ -2335,6 +2542,93 @@ export function OwnerDashboard() {
 
       {/* Quick Add Modals */}
       {quickAdd && <QuickAddModal type={quickAdd} onClose={() => setQuickAdd(null)} onSave={handleSaveRecord} />}
+
+      {/* AI Document Review: tenant owner confirms, edits, or rejects what AI read from the upload */}
+      {docReview && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div className="bg-white rounded-t-3xl sm:rounded-3xl w-full max-w-md shadow-2xl overflow-hidden max-h-[90vh] flex flex-col">
+            <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between shrink-0">
+              <div>
+                <h3 className="text-sm font-bold text-slate-900">AI Membaca Dokumen</h3>
+                <p className="text-[11px] text-slate-400 mt-0.5">{docReview.doc.file_name}</p>
+              </div>
+              <button onClick={() => setDocReview(null)} className="text-slate-300 hover:text-slate-600 cursor-pointer"><X className="w-5 h-5" /></button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-5 space-y-3">
+              {docReview.lines ? (
+                <>
+                  <p className="text-[11px] text-slate-500">AI mengesan {docReview.lines.length} transaksi dalam penyata ini. Sahkan yang betul, batalkan tanda untuk yang tidak mahu direkod.</p>
+                  {docReview.lines.map((l, i) => (
+                    <div key={i} className="border border-slate-200 rounded-xl p-3 space-y-1.5">
+                      <div className="flex items-center gap-2">
+                        <input type="checkbox" checked={l.include}
+                          onChange={e => setDocReview(d => d ? { ...d, lines: d.lines!.map((x, xi) => xi === i ? { ...x, include: e.target.checked } : x) } : d)}
+                          className="w-4 h-4 accent-indigo-600" />
+                        <input value={l.description} onChange={e => setDocReview(d => d ? { ...d, lines: d.lines!.map((x, xi) => xi === i ? { ...x, description: e.target.value } : x) } : d)}
+                          className="flex-1 px-2 py-1 rounded border border-slate-200 text-xs" placeholder="Penerangan" />
+                        <span className={`text-xs font-bold ${l.type === "CREDIT" ? "text-emerald-600" : "text-rose-500"}`}>{l.type === "CREDIT" ? "+" : "-"}RM{l.amount.toFixed(2)}</span>
+                      </div>
+                      <div className="flex items-center gap-2 pl-6">
+                        <input value={l.suggestedCategory} onChange={e => setDocReview(d => d ? { ...d, lines: d.lines!.map((x, xi) => xi === i ? { ...x, suggestedCategory: e.target.value } : x) } : d)}
+                          className="flex-1 px-2 py-1 rounded border border-slate-200 text-[11px]" placeholder="Kategori" />
+                        <input type="date" value={l.date} onChange={e => setDocReview(d => d ? { ...d, lines: d.lines!.map((x, xi) => xi === i ? { ...x, date: e.target.value } : x) } : d)}
+                          className="px-2 py-1 rounded border border-slate-200 text-[11px]" />
+                      </div>
+                    </div>
+                  ))}
+                </>
+              ) : (
+                <>
+                  <p className="text-[11px] text-slate-500">Sahkan atau betulkan apa yang AI kenal pasti daripada dokumen ini sebelum direkodkan.</p>
+                  <div>
+                    <label className="text-[11px] font-semibold text-slate-500">Pihak Berkaitan / Vendor</label>
+                    <input value={docReview.merchantName} onChange={e => setDocReview(d => d ? { ...d, merchantName: e.target.value } : d)}
+                      className="w-full mt-1 px-3 py-2 rounded-lg border border-slate-200 text-sm" />
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="text-[11px] font-semibold text-slate-500">Jumlah (RM)</label>
+                      <input type="number" value={docReview.amount} onChange={e => setDocReview(d => d ? { ...d, amount: e.target.value } : d)}
+                        className="w-full mt-1 px-3 py-2 rounded-lg border border-slate-200 text-sm" />
+                    </div>
+                    <div>
+                      <label className="text-[11px] font-semibold text-slate-500">Tarikh</label>
+                      <input type="date" value={docReview.date} onChange={e => setDocReview(d => d ? { ...d, date: e.target.value } : d)}
+                        className="w-full mt-1 px-3 py-2 rounded-lg border border-slate-200 text-sm" />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-[11px] font-semibold text-slate-500">Kategori</label>
+                    <input value={docReview.category} onChange={e => setDocReview(d => d ? { ...d, category: e.target.value } : d)}
+                      className="w-full mt-1 px-3 py-2 rounded-lg border border-slate-200 text-sm" />
+                  </div>
+                  <div>
+                    <label className="text-[11px] font-semibold text-slate-500">Jenis Transaksi</label>
+                    <select value={docReview.recordType} onChange={e => setDocReview(d => d ? { ...d, recordType: e.target.value as any } : d)}
+                      className="w-full mt-1 px-3 py-2 rounded-lg border border-slate-200 text-sm">
+                      <option value="INCOME">Pendapatan</option>
+                      <option value="EXPENSE">Perbelanjaan</option>
+                      <option value="RECEIVABLE">Belum Terima (Receivable)</option>
+                      <option value="PAYABLE">Belum Bayar (Payable)</option>
+                      <option value="DEBT">Hutang</option>
+                    </select>
+                  </div>
+                </>
+              )}
+            </div>
+
+            <div className="px-5 py-4 border-t border-slate-100 flex gap-2 shrink-0">
+              <button onClick={rejectDocReview} className="flex-1 py-2.5 rounded-xl border border-rose-200 text-rose-500 text-sm font-bold cursor-pointer hover:bg-rose-50">
+                Tolak
+              </button>
+              <button onClick={confirmDocReview} className="flex-1 py-2.5 rounded-xl bg-indigo-600 text-white text-sm font-bold cursor-pointer hover:bg-indigo-700">
+                Sahkan &amp; Rekod
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Onboarding Wizard */}
       {showOnboard && (
