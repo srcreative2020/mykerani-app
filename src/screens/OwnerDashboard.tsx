@@ -1243,8 +1243,48 @@ export function OwnerDashboard() {
       };
       setChatMessages(prev => [...prev, userMsg]);
       saveChatMessage(wsId, user?.id, isMockUser, { sender: "user", text: userMsg.text, attachmentUrl: fileUrl, attachmentName: file.name, attachmentType: kind });
+
+      // Actually read the attachment's content before asking the AI to act on it —
+      // otherwise the assistant only sees a filename and can only say "please wait"
+      // (image/pdf) or "I can't listen to audio" (voice notes), as it had no real
+      // content to reason about.
+      let extractedContext = "";
+      try {
+        if (kind === "audio") {
+          const audioDataUrl = await fileToDataUrl(file);
+          const { getAuthHeader } = await import("../lib/supabase");
+          const res = await fetch("/api/ai/transcribe", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", ...(await getAuthHeader()) },
+            body: JSON.stringify({ fileDataUrl: audioDataUrl, fileName: file.name, tenantId: activeWorkspace.tenantId, workspaceId: activeWorkspace.id, userId: user?.id }),
+          });
+          if (res.ok) {
+            const { text } = await res.json();
+            if (text) extractedContext = `Transkripsi nota suara: "${text}"`;
+          }
+        } else {
+          const fileDataUrl = await fileToDataUrl(file);
+          const { getAuthHeader } = await import("../lib/supabase");
+          const res = await fetch("/api/ocr/analyze", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", ...(await getAuthHeader()) },
+            body: JSON.stringify({ fileDataUrl, fileName: file.name, documentType: "RECEIPT", tenantId: activeWorkspace.tenantId, workspaceId: activeWorkspace.id, userId: user?.id }),
+          });
+          if (res.ok) {
+            const payload = await res.json();
+            extractedContext = `Maklumat dibaca daripada dokumen: merchant=${payload.merchantName || "-"}, tarikh=${payload.date || "-"}, jumlah=${payload.amount ?? "-"}, kategori cadangan=${payload.suggestedCategory || "-"}.`;
+          }
+        }
+      } catch {
+        // best-effort — fall back to the plain attachment label below
+      }
+
       // Let the AI clerk acknowledge the attachment and continue the conversation.
-      await sendChat(`Saya telah lampirkan ${label.toLowerCase()} "${file.name}". Sila semak dan bantu saya rekodkan jika berkaitan transaksi.`);
+      await sendChat(
+        extractedContext
+          ? `Saya telah lampirkan ${label.toLowerCase()} "${file.name}". ${extractedContext} Sila semak dan bantu saya rekodkan jika berkaitan transaksi.`
+          : `Saya telah lampirkan ${label.toLowerCase()} "${file.name}". Sila semak dan bantu saya rekodkan jika berkaitan transaksi.`
+      );
     } finally {
       setChatAttaching(false);
     }

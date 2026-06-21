@@ -733,6 +733,59 @@ Provide your output precisely formatted as raw JSON matching exactly this shape,
     }
   });
 
+  // Voice note transcription (Whisper) — lets a chat-attached audio recording
+  // actually be understood instead of the assistant just saying it can't listen.
+  app.post("/api/ai/transcribe", async (req, res) => {
+    try {
+      const { fileDataUrl, fileName, tenantId, workspaceId, userId } = req.body || {};
+      if (!fileDataUrl) {
+        return res.status(400).json({ error: "No audio data provided." });
+      }
+      if (await isUserSuspended(userId)) {
+        return res.status(403).json({ error: "Akaun anda telah disekat oleh pentadbir HQ. Sila hubungi sokongan." });
+      }
+      const access = await verifyTenantAccess(req, tenantId, workspaceId);
+      if (!access.ok) {
+        return res.status(403).json({ error: "Sesi tidak sah atau tidak mempunyai akses kepada syarikat ini." });
+      }
+
+      const candidates = await getAiProviderCandidates();
+      const openaiCandidate = candidates.find(c => c.provider === "openai") || (process.env.OPENAI_API_KEY ? { apiKey: process.env.OPENAI_API_KEY } as any : null);
+      if (!openaiCandidate) {
+        return res.status(503).json({ error: "Transkripsi nota suara belum dikonfigurasikan (perlukan pembekal OpenAI)." });
+      }
+
+      const hasCredit = await consumeResourceCredit(tenantId, workspaceId, "AI", `Voice transcription: ${fileName || "nota-suara"}`);
+      if (!hasCredit) {
+        return res.status(402).json({ error: "Kredit AI syarikat anda telah digunakan sepenuhnya untuk tempoh semasa.", code: "AI_CREDITS_EXHAUSTED" });
+      }
+
+      const match = fileDataUrl.match(/^data:([^;]+);base64,(.+)$/);
+      const mimeType = match ? match[1] : "audio/webm";
+      const base64Data = match ? match[2] : fileDataUrl;
+      const audioBuffer = Buffer.from(base64Data, "base64");
+
+      const form = new FormData();
+      form.append("file", new Blob([audioBuffer], { type: mimeType }), fileName || "nota-suara.webm");
+      form.append("model", "whisper-1");
+
+      const whisperRes = await fetch("https://api.openai.com/v1/audio/transcriptions", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${openaiCandidate.apiKey}` },
+        body: form,
+      });
+      if (!whisperRes.ok) {
+        const errBody = await whisperRes.json().catch(() => ({}));
+        return res.status(400).json({ error: errBody?.error?.message || "Gagal transkripsi nota suara." });
+      }
+      const result = await whisperRes.json() as any;
+      return res.json({ text: result.text || "" });
+    } catch (error: any) {
+      console.error("Voice transcription failed:", error?.message || error);
+      return res.status(500).json({ error: "Ralat sistem transkripsi nota suara." });
+    }
+  });
+
   // AI FINANCIAL ASSISTANT SECURE PROXY ROUTE
   app.post("/api/ai/assistant", async (req, res) => {
     try {

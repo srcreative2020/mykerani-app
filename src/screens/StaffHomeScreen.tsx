@@ -643,6 +643,13 @@ export function StaffHomeScreen() {
   // Persisted via the same evidence_documents pipeline as the Owner's Dokumen tab
   // (docType SUPPORTING_DOC/RECEIPT) so the Owner can see staff-uploaded chat
   // attachments there too, with full uploader/date/size metadata.
+  const fileToDataUrl = (file: File): Promise<string> => new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+
   const uploadChatAttachment = async (file: File, kind: "image" | "pdf" | "audio") => {
     setChatAttaching(true);
     try {
@@ -662,7 +669,47 @@ export function StaffHomeScreen() {
         sender: "user", text: kind === "audio" ? "🎤 Nota suara" : `📎 ${file.name}`,
         attachmentUrl: url, attachmentName: file.name, attachmentType: kind,
       });
-      await sendChat(kind === "audio" ? "Saya hantar nota suara berkaitan transaksi. Sila semak dan bantu saya rekod jika perlu." : `Saya muat naik dokumen "${file.name}". Sila semak dan bantu saya rekod transaksi berkaitan jika ada.`);
+
+      // Actually read the attachment's content before asking the AI to act on it —
+      // otherwise the assistant only sees a filename and can only say "please wait"
+      // (image/pdf) or "I can't listen to audio" (voice notes), as it had no real
+      // content to reason about.
+      let extractedContext = "";
+      try {
+        if (kind === "audio") {
+          const audioDataUrl = await fileToDataUrl(file);
+          const { getAuthHeader } = await import("../lib/supabase");
+          const res = await fetch("/api/ai/transcribe", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", ...(await getAuthHeader()) },
+            body: JSON.stringify({ fileDataUrl: audioDataUrl, fileName: file.name, tenantId: activeWorkspace?.tenantId, workspaceId: wsId, userId: user?.id }),
+          });
+          if (res.ok) {
+            const { text } = await res.json();
+            if (text) extractedContext = `Transkripsi nota suara: "${text}"`;
+          }
+        } else {
+          const fileDataUrl = await fileToDataUrl(file);
+          const { getAuthHeader } = await import("../lib/supabase");
+          const res = await fetch("/api/ocr/analyze", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", ...(await getAuthHeader()) },
+            body: JSON.stringify({ fileDataUrl, fileName: file.name, documentType: "RECEIPT", tenantId: activeWorkspace?.tenantId, workspaceId: wsId, userId: user?.id }),
+          });
+          if (res.ok) {
+            const payload = await res.json();
+            extractedContext = `Maklumat dibaca daripada dokumen: merchant=${payload.merchantName || "-"}, tarikh=${payload.date || "-"}, jumlah=${payload.amount ?? "-"}, kategori cadangan=${payload.suggestedCategory || "-"}.`;
+          }
+        }
+      } catch {
+        // best-effort — fall back to the plain acknowledgment below
+      }
+
+      await sendChat(
+        kind === "audio"
+          ? (extractedContext ? `Saya hantar nota suara berkaitan transaksi. ${extractedContext} Sila semak dan bantu saya rekod jika perlu.` : "Saya hantar nota suara berkaitan transaksi. Sila semak dan bantu saya rekod jika perlu.")
+          : (extractedContext ? `Saya muat naik dokumen "${file.name}". ${extractedContext} Sila semak dan bantu saya rekod transaksi berkaitan jika ada.` : `Saya muat naik dokumen "${file.name}". Sila semak dan bantu saya rekod transaksi berkaitan jika ada.`)
+      );
     } finally {
       setChatAttaching(false);
     }
