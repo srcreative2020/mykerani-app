@@ -3,6 +3,7 @@ import { useAuth } from "../context/AuthContext";
 import { useWorkspace } from "../context/WorkspaceContext";
 import { useFinancials } from "../context/FinancialRecordsContext";
 import { useTenant } from "../context/TenantContext";
+import { type FinancialEvent } from "../types";
 import {
   Home, LayoutDashboard, FileText, BarChart3, MoreHorizontal,
   Send, Receipt, FileSpreadsheet, Landmark, Brain, User as UserIcon,
@@ -374,7 +375,28 @@ export function OwnerDashboard() {
 
   // AI document reading: AI Suggests -> Tenant Confirms/Edits/Rejects, mirroring
   // the same pattern used by OCREngineConsole/chat suggestions elsewhere in the app.
-  type DocReviewLine = { date: string; description: string; amount: number; type: "CREDIT" | "DEBIT"; suggestedCategory: string; confidenceScore: number; include: boolean };
+  type DocReviewLine = {
+    date: string; description: string; amount: number; type: "CREDIT" | "DEBIT";
+    suggestedCategory: string; confidenceScore: number; include: boolean;
+    matchedEventId?: string; matchedLabel?: string;
+  };
+
+  // Padankan satu baris transaksi penyata bank dengan rekod sedia ada (yang
+  // user dah masukkan sendiri melalui chat/manual) — ikut jenis (in/out),
+  // jumlah (toleransi RM0.01) dan tarikh (toleransi 3 hari) — supaya
+  // transaksi yang sama tak direkod dua kali bila penyata bank disahkan.
+  const findMatchingEvent = (line: { amount: number; type: "CREDIT" | "DEBIT"; date: string }, candidates: FinancialEvent[]) => {
+    const wantType = line.type === "CREDIT" ? "INCOME" : "EXPENSE";
+    const lineDate = new Date(line.date).getTime();
+    return candidates.find(ev => {
+      if (ev.type !== wantType) return false;
+      if (Math.abs(ev.amountMyr - line.amount) > 0.01) return false;
+      if (!line.date || isNaN(lineDate)) return true;
+      const evDate = new Date(ev.date).getTime();
+      if (isNaN(evDate)) return true;
+      return Math.abs(evDate - lineDate) <= 3 * 24 * 60 * 60 * 1000;
+    });
+  };
   const [docAnalyzing, setDocAnalyzing] = useState(false);
   const [docReviewError, setDocReviewError] = useState<string | null>(null);
   const [docReview, setDocReview] = useState<null | {
@@ -438,13 +460,23 @@ export function OwnerDashboard() {
           recordType: "EXPENSE",
           confidenceScore: payload.confidenceScore || 0.7,
           rawExtractedText: payload.rawExtractedText || "",
-          lines: payload.transactions.map((t: any) => ({
-            date: t.date || "", description: t.description || "", amount: Number(t.amount) || 0,
-            type: t.type === "CREDIT" ? "CREDIT" : "DEBIT",
-            suggestedCategory: t.suggestedCategory || "Lain-lain",
-            confidenceScore: Number(t.confidenceScore) || 0.7,
-            include: true,
-          })),
+          lines: payload.transactions.map((t: any) => {
+            const line = {
+              date: t.date || "", description: t.description || "", amount: Number(t.amount) || 0,
+              type: (t.type === "CREDIT" ? "CREDIT" : "DEBIT") as "CREDIT" | "DEBIT",
+              suggestedCategory: t.suggestedCategory || "Lain-lain",
+              confidenceScore: Number(t.confidenceScore) || 0.7,
+            };
+            // Padankan dengan rekod sedia ada (cth: dimasukkan sendiri oleh
+            // user melalui chat) supaya transaksi yang sama tak direkod dua kali.
+            const matched = findMatchingEvent(line, myEvents);
+            return {
+              ...line,
+              include: !matched,
+              matchedEventId: matched?.id,
+              matchedLabel: matched ? `${matched.partyName} · RM${matched.amountMyr.toFixed(2)} · ${matched.date}` : undefined,
+            };
+          }),
         });
       } else {
         const matchedPattern = ocrLearnedPatterns.find(p => p.vendorName.toLowerCase() === (payload.merchantName || "").toLowerCase());
@@ -2562,9 +2594,12 @@ export function OwnerDashboard() {
             <div className="flex-1 overflow-y-auto p-5 space-y-3">
               {docReview.lines ? (
                 <>
-                  <p className="text-[11px] text-slate-500">AI mengesan {docReview.lines.length} transaksi dalam penyata ini. Sahkan yang betul, batalkan tanda untuk yang tidak mahu direkod.</p>
+                  <p className="text-[11px] text-slate-500">
+                    AI mengesan {docReview.lines.length} transaksi dalam penyata ini, dan padankan dengan rekod yang anda dah masukkan sendiri.
+                    {" "}Transaksi yang <span className="font-semibold text-emerald-600">sudah sepadan</span> tak akan direkod dua kali — batalkan tanda untuk yang tidak mahu direkod, atau tanda balik jika padanan tersilap.
+                  </p>
                   {docReview.lines.map((l, i) => (
-                    <div key={i} className="border border-slate-200 rounded-xl p-3 space-y-1.5">
+                    <div key={i} className={`border rounded-xl p-3 space-y-1.5 ${l.matchedEventId ? "border-emerald-200 bg-emerald-50/40" : "border-slate-200"}`}>
                       <div className="flex items-center gap-2">
                         <input type="checkbox" checked={l.include}
                           onChange={e => setDocReview(d => d ? { ...d, lines: d.lines!.map((x, xi) => xi === i ? { ...x, include: e.target.checked } : x) } : d)}
@@ -2573,6 +2608,11 @@ export function OwnerDashboard() {
                           className="flex-1 px-2 py-1 rounded border border-slate-200 text-xs" placeholder="Penerangan" />
                         <span className={`text-xs font-bold ${l.type === "CREDIT" ? "text-emerald-600" : "text-rose-500"}`}>{l.type === "CREDIT" ? "+" : "-"}RM{l.amount.toFixed(2)}</span>
                       </div>
+                      {l.matchedEventId && (
+                        <p className="pl-6 text-[10px] font-semibold text-emerald-600">
+                          ✓ Sudah sepadan dengan rekod sedia ada ({l.matchedLabel}) — tidak akan direkod semula
+                        </p>
+                      )}
                       <div className="flex items-center gap-2 pl-6">
                         <input value={l.suggestedCategory} onChange={e => setDocReview(d => d ? { ...d, lines: d.lines!.map((x, xi) => xi === i ? { ...x, suggestedCategory: e.target.value } : x) } : d)}
                           className="flex-1 px-2 py-1 rounded border border-slate-200 text-[11px]" placeholder="Kategori" />
