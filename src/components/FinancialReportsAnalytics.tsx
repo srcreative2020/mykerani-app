@@ -1532,7 +1532,7 @@ export const FinancialReportsAnalytics: React.FC = () => {
                     <span className="text-[10px] font-mono font-bold uppercase tracking-wide">
                       Aset vs Liabiliti (Solvency)
                     </span>
-                    <span className="text-xs font-mono font-bold">Grade A-</span>
+                    <span className="text-xs font-mono font-bold">{healthScoring.solvencyGrade}</span>
                   </div>
                   <div>
                     <span className="text-[10px] block opacity-80 font-medium">Nisbah Pelindung</span>
@@ -1551,7 +1551,7 @@ export const FinancialReportsAnalytics: React.FC = () => {
                     <span className="text-[10px] font-mono font-bold uppercase tracking-wide">
                       Mudah Tunai vs Bil (Quick Ratio)
                     </span>
-                    <span className="text-xs font-mono font-bold">Liquidity Float</span>
+                    <span className="text-xs font-mono font-bold">{healthScoring.quickGrade}</span>
                   </div>
                   <div>
                     <span className="text-[10px] block opacity-80 font-medium">Liquid Quotient</span>
@@ -1570,7 +1570,7 @@ export const FinancialReportsAnalytics: React.FC = () => {
                     <span className="text-[10px] font-mono font-bold uppercase tracking-wide">
                       Kelangsungan Operasi (Runway)
                     </span>
-                    <span className="text-xs font-mono font-bold">Buffer Months</span>
+                    <span className="text-xs font-mono font-bold">{healthScoring.runwayGrade}</span>
                   </div>
                   <div>
                     <span className="text-[10px] block opacity-80 font-medium font-semibold">Tahan Tanpa Jualan</span>
