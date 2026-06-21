@@ -933,7 +933,10 @@ Only include a "CONFIRM_TRANSACTION" suggestion entry when financialIntent.detec
           for (const suggestion of parsedResponse.suggestions) {
             if (suggestion?.actionType !== "CONFIRM_TRANSACTION") continue;
             const payload = suggestion.payload || {};
-            const lookupText = [payload.relatedParty, payload.category, parsedResponse?.financialIntent?.rawText]
+            // Lookup text intentionally excludes payload.category: the chosen
+            // category label must never contaminate vendor/description matching,
+            // or it can self-match a keyword and mask a genuine mismatch.
+            const lookupText = [payload.relatedParty, parsedResponse?.financialIntent?.rawText]
               .filter(Boolean)
               .join(" ");
             const evaluation = evaluateAccountingSuggestion(payload.category, lookupText);
