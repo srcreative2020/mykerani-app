@@ -57,7 +57,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
   const { activeWorkspace } = useWorkspace();
   const { writeAuditLog } = useAudit();
   const { activeProvider } = useStorage();
-  const { financialEvents, financialCommitments } = useFinancials();
+  const { financialEvents, financialCommitments, financialEvidencePackages } = useFinancials();
 
   const [notifications, setNotifications] = useState<WorkspaceNotification[]>([]);
   const [preferences, setPreferences] = useState<WorkspaceNotificationPreferences | null>(null);
@@ -646,6 +646,28 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
         });
       }
     });
+
+    // 3b. --- Missing Evidence Detector ---
+    // Vision requirement: AI must detect missing supporting documents ("kesan dokumen hilang").
+    // Flag any EXPENSE or PAYABLE event above RM100 with no linked evidence document.
+    const recordsWithEvidence = new Set(
+      financialEvidencePackages
+        .map(doc => doc.relatedRecordId)
+        .filter((id): id is string => !!id)
+    );
+    financialEvents
+      .filter(e => (e.type === "EXPENSE" || e.type === "PAYABLE") && e.amountMyr >= 100 && !recordsWithEvidence.has(e.id))
+      .forEach(e => {
+        proposedAlerts.push({
+          workspaceId,
+          tenantId,
+          category: "FINANCIAL_RECORD",
+          title: "Dokumen Sokongan Tiada (Missing Evidence)",
+          message: `Rekod ${e.type === "PAYABLE" ? "hutang pembekal" : "perbelanjaan"} untuk "${e.partyName}" (RM ${e.amountMyr.toLocaleString("en-MY", { minimumFractionDigits: 2 })}) belum mempunyai resit/invois disahkan. Sila muat naik dokumen sokongan untuk rekod lengkap.`,
+          status: "UNREAD",
+          metadata: { alert_key: `missing_evidence_${e.id}`, financial_event_id: e.id }
+        });
+      });
 
     // 4. --- Backup Detector ---
     const backupsRepoRaw = localStorage.getItem("mykerani_backups_repository");
