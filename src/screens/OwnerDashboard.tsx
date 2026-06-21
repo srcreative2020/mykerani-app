@@ -153,6 +153,9 @@ export function OwnerDashboard() {
   const [chatSuggestionStatus, setChatSuggestionStatus] = useState<Record<string, ChatSuggestionStatus>>({});
   const [editingChatSuggestionId, setEditingChatSuggestionId] = useState<string | null>(null);
   const [chatEditDraft, setChatEditDraft] = useState({ amount: "", category: "", relatedParty: "", date: "" });
+  // Cross-workspace learning: suggestionId -> { workspaceName } when AI has learned
+  // this vendor is usually recorded under a DIFFERENT company. Suggestion-only, never auto-switched.
+  const [crossWorkspaceHints, setCrossWorkspaceHints] = useState<Record<string, { workspaceId: string; workspaceName: string }>>({});
 
   // â"€â"€ Onboarding Wizard â"€â"€
   const onboardKey = `mykerani_onboarded_${user?.id ?? "guest"}`;
@@ -759,10 +762,41 @@ export function OwnerDashboard() {
         : [];
       setChatMessages(prev => [...prev, { id: aiMsgId, sender: "ai", text: reply, suggestions, createdAt: new Date().toISOString() }]);
       saveChatMessage(wsId, user?.id, isMockUser, { sender: "ai", text: reply, suggestions });
+      suggestions.forEach(s => checkCrossWorkspacePattern(s));
     } catch {
       setChatMessages(prev => [...prev, { id: `e-${Date.now()}`, sender: "ai", text: "Minta maaf, sambungan terputus sebentar. Sila cuba lagi." }]);
     } finally {
       setChatLoading(false);
+    }
+  };
+
+  // Multi-business pattern learning: if this vendor/party has been confirmed
+  // repeatedly under a DIFFERENT company workspace, surface that as a hint —
+  // the user still picks; AI never auto-switches the workspace.
+  const checkCrossWorkspacePattern = async (s: ChatSuggestion) => {
+    const vendorName = s.payload?.relatedParty;
+    if (!vendorName || !activeTenant || !activeWorkspace || isMockUser || !isSupabaseConfigured() || !supabase) return;
+    const otherWorkspaceIds = workspaces.filter(w => w.id !== activeWorkspace.id).map(w => w.id);
+    if (otherWorkspaceIds.length === 0) return;
+
+    try {
+      const { data, error } = await supabase
+        .from("ocr_learned_patterns")
+        .select("workspace_id, vendor_name, confidence_score, occurrence_count")
+        .in("workspace_id", otherWorkspaceIds)
+        .ilike("vendor_name", vendorName)
+        .gte("confidence_score", 0.7)
+        .gte("occurrence_count", 2)
+        .order("occurrence_count", { ascending: false })
+        .limit(1);
+      if (error || !data || data.length === 0) return;
+
+      const matchWorkspace = workspaces.find(w => w.id === data[0].workspace_id);
+      if (!matchWorkspace) return;
+
+      setCrossWorkspaceHints(prev => ({ ...prev, [s.id]: { workspaceId: matchWorkspace.id, workspaceName: matchWorkspace.name } }));
+    } catch {
+      // Best-effort hint only — never block the underlying suggestion flow.
     }
   };
 
@@ -1230,6 +1264,18 @@ export function OwnerDashboard() {
                               <div>Kategori: {s.payload?.category || "-"}</div>
                               <div>Jumlah: RM{Number(s.payload?.amount || 0).toFixed(2)}</div>
                             </div>
+                            {status === "pending" && crossWorkspaceHints[s.id] && (
+                              <div className="flex items-center justify-between gap-2 bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-1.5 text-2xs text-amber-800">
+                                <span>Berdasarkan sejarah, "{s.payload?.relatedParty}" biasa direkodkan di bawah <strong>{crossWorkspaceHints[s.id].workspaceName}</strong>.</span>
+                                <button
+                                  type="button"
+                                  onClick={() => selectWorkspace(crossWorkspaceHints[s.id].workspaceId)}
+                                  className="shrink-0 px-2 py-1 rounded-md bg-amber-600 hover:bg-amber-700 text-white font-semibold"
+                                >
+                                  Tukar
+                                </button>
+                              </div>
+                            )}
                             {status === "confirmed" && (
                               <div className="text-emerald-700 font-bold">✅ Disahkan & direkodkan.</div>
                             )}
