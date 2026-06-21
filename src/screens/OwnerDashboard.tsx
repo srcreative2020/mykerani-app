@@ -185,7 +185,7 @@ export function OwnerDashboard() {
     userRoles.forEach(r => { map[r.userId] = r.fullName; });
     return map;
   }, [userRoles]);
-  const { financialEvents, addFinancialEvent, editFinancialEvent, deleteFinancialEvent, addDebtRecord, editDebtRecord, deleteDebtRecord, addFinancialCommitment, editFinancialCommitment, deleteFinancialCommitment, learnOcrPattern, ocrLearnedPatterns, cashAccounts, bankAccounts, debtRecords, financialCommitments } = useFinancials();
+  const { financialEvents, addFinancialEvent, editFinancialEvent, deleteFinancialEvent, addDebtRecord, editDebtRecord, deleteDebtRecord, addFinancialCommitment, editFinancialCommitment, deleteFinancialCommitment, learnOcrPattern, ocrLearnedPatterns, cashAccounts, bankAccounts, debtRecords, financialCommitments, financialEvidencePackages, addFinancialEvidencePackage } = useFinancials();
 
   const [activeTab, setActiveTab] = useState<MainTab>("home");
   const [morePage, setMorePage] = useState<MorePage>("menu");
@@ -338,9 +338,55 @@ export function OwnerDashboard() {
   }, [myEvents, txnFilterFrom, txnFilterTo, periodRange, dashboardTypeFilter]);
   const [editingTxnId, setEditingTxnId] = useState<string | null>(null);
   const [editTxnDraft, setEditTxnDraft] = useState({ amountMyr: "", categoryName: "", partyName: "", date: "" });
+  const txnReceiptInputRef = useRef<HTMLInputElement>(null);
+  const [uploadingTxnReceipt, setUploadingTxnReceipt] = useState(false);
+  const evidenceByRecordId = useMemo(() => {
+    const map: Record<string, typeof financialEvidencePackages> = {};
+    financialEvidencePackages.forEach(pkg => {
+      if (!pkg.relatedRecordId) return;
+      (map[pkg.relatedRecordId] ||= []).push(pkg);
+    });
+    return map;
+  }, [financialEvidencePackages]);
+  const findTxnConfidence = (ev: typeof myEvents[number]) => {
+    const match = ocrLearnedPatterns.find(p => p.vendorName.toLowerCase() === ev.partyName.toLowerCase() && p.category === ev.categoryName && p.recordType === ev.type);
+    return match ? Math.round(match.confidenceScore * 100) : null;
+  };
+  const previewTxnEvidence = async (pkg: { fileUrl: string }) => {
+    const url = pkg.fileUrl.startsWith("http") ? pkg.fileUrl : await getDocumentUrl(pkg.fileUrl);
+    if (url) window.open(url, "_blank");
+  };
   const startEditTxn = (ev: typeof myEvents[number]) => {
     setEditingTxnId(ev.id);
     setEditTxnDraft({ amountMyr: String(ev.amountMyr), categoryName: ev.categoryName, partyName: ev.partyName, date: ev.date });
+  };
+  const attachTxnReceipt = async (ev: typeof myEvents[number], file: File) => {
+    if (!activeWorkspace) return;
+    setUploadingTxnReceipt(true);
+    try {
+      const canPersist = isSupabaseConfigured() && !isMockUser && !!supabase && !isDemoWorkspace(activeWorkspace.id) && !!user;
+      if (!canPersist) {
+        setUploadError("Akaun demo tidak boleh melampirkan resit. Log masuk dengan akaun sebenar.");
+        return;
+      }
+      const { doc, error } = await uploadDocument(file, activeWorkspace.id, user!.id, "RECEIPT");
+      if (error || !doc) {
+        setUploadError(error || "Gagal memuat naik resit.");
+        return;
+      }
+      setDocs(prev => [doc, ...prev]);
+      addFinancialEvidencePackage({
+        workspaceId: activeWorkspace.id,
+        documentType: "RECEIPT",
+        uploadDate: new Date().toISOString().slice(0, 10),
+        fileName: doc.file_name,
+        fileUrl: doc.file_path_supabase,
+        relatedRecordType: ev.type,
+        relatedRecordId: ev.id,
+      });
+    } finally {
+      setUploadingTxnReceipt(false);
+    }
   };
   const saveEditTxn = () => {
     if (!editingTxnId) return;
@@ -2154,10 +2200,33 @@ export function OwnerDashboard() {
                   <div key={ev.id} className="bg-white border border-slate-200 rounded-xl p-3 shadow-sm">
                     {editingTxnId === ev.id ? (
                       <div className="space-y-1.5">
+                        <div className="flex items-center justify-between text-[10px] text-slate-400">
+                          <span className={`px-1.5 py-0.5 rounded font-bold ${ev.type === "INCOME" ? "bg-emerald-50 text-emerald-600" : "bg-rose-50 text-rose-500"}`}>
+                            {ev.type === "INCOME" ? "Pendapatan" : "Perbelanjaan"}
+                          </span>
+                          {ev.createdByName && <span>Direkod oleh: {ev.createdByName}</span>}
+                        </div>
                         <input value={editTxnDraft.partyName} onChange={e => setEditTxnDraft(d => ({ ...d, partyName: e.target.value }))} placeholder="Pihak Berkaitan" className="w-full px-2 py-1 rounded border border-slate-300 text-xs" />
                         <input value={editTxnDraft.categoryName} onChange={e => setEditTxnDraft(d => ({ ...d, categoryName: e.target.value }))} placeholder="Kategori" className="w-full px-2 py-1 rounded border border-slate-300 text-xs" />
                         <input value={editTxnDraft.amountMyr} onChange={e => setEditTxnDraft(d => ({ ...d, amountMyr: e.target.value }))} type="number" placeholder="Jumlah (RM)" className="w-full px-2 py-1 rounded border border-slate-300 text-xs" />
                         <input value={editTxnDraft.date} onChange={e => setEditTxnDraft(d => ({ ...d, date: e.target.value }))} type="date" className="w-full px-2 py-1 rounded border border-slate-300 text-xs" />
+
+                        {/* Lampiran resit */}
+                        <div className="pt-1">
+                          <input ref={txnReceiptInputRef} type="file" className="hidden" accept=".pdf,.png,.jpg,.jpeg,.webp"
+                            onChange={(e) => { const f = e.target.files?.[0]; if (f) attachTxnReceipt(ev, f); e.target.value = ""; }} />
+                          {(evidenceByRecordId[ev.id] || []).map(pkg => (
+                            <button key={pkg.id} type="button" onClick={() => previewTxnEvidence(pkg)}
+                              className="w-full flex items-center gap-2 px-2 py-1.5 mb-1 rounded border border-emerald-200 bg-emerald-50 text-emerald-700 text-[11px] font-semibold cursor-pointer hover:bg-emerald-100">
+                              <Receipt className="w-3 h-3 shrink-0" /> <span className="truncate">{pkg.fileName}</span> <span className="ml-auto text-[10px] text-emerald-500">Lihat</span>
+                            </button>
+                          ))}
+                          <button type="button" onClick={() => txnReceiptInputRef.current?.click()} disabled={uploadingTxnReceipt}
+                            className="w-full flex items-center justify-center gap-1.5 px-2 py-1.5 rounded border border-dashed border-slate-300 text-[11px] font-semibold text-slate-500 hover:border-indigo-400 hover:text-indigo-600 cursor-pointer disabled:opacity-50">
+                            <Paperclip className="w-3 h-3" /> {uploadingTxnReceipt ? "Memuat naik..." : "Lampirkan Resit"}
+                          </button>
+                        </div>
+
                         <div className="flex gap-2 pt-1">
                           <button onClick={saveEditTxn} className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold cursor-pointer">Simpan</button>
                           <button onClick={() => setEditingTxnId(null)} className="px-3 py-1.5 rounded-lg bg-slate-200 hover:bg-slate-300 text-slate-800 text-xs font-semibold cursor-pointer">Batal</button>
@@ -2176,6 +2245,17 @@ export function OwnerDashboard() {
                               {ev.date}{ev.createdAt ? ` ${new Date(ev.createdAt).toLocaleTimeString("ms-MY", { hour: "2-digit", minute: "2-digit" })}` : ""}
                               {ev.createdByName ? ` - ${ev.createdByName}` : ""}
                             </p>
+                            <div className="flex items-center gap-2 mt-0.5">
+                              {findTxnConfidence(ev) !== null && (
+                                <span className="text-[9px] px-1 py-0.5 rounded bg-indigo-50 text-indigo-500 font-semibold">Confiden {findTxnConfidence(ev)}%</span>
+                              )}
+                              {(evidenceByRecordId[ev.id] || []).length > 0 && (
+                                <button type="button" onClick={() => previewTxnEvidence(evidenceByRecordId[ev.id][0])}
+                                  className="text-[9px] px-1 py-0.5 rounded bg-emerald-50 text-emerald-600 font-semibold cursor-pointer hover:bg-emerald-100 flex items-center gap-0.5">
+                                  <Receipt className="w-2.5 h-2.5" /> Resit
+                                </button>
+                              )}
+                            </div>
                           </div>
                         </div>
                         <div className="flex items-center gap-2 shrink-0">
