@@ -164,3 +164,34 @@ export function getBalanceSheetSubtotals(buckets: ReportBuckets): {
 export function flattenBuckets(buckets: ReportBuckets): BucketedRecord[] {
   return (Object.keys(buckets) as FinancialStatementGroup[]).flatMap((group) => buckets[group]);
 }
+
+/**
+ * Retained Earnings tie-out (Report Completion Sprint V1, closes Sprint V1
+ * blocker #2). RETAINED_EARNINGS is system-derived, not resolved from any
+ * single transaction — it is the cumulative Operating Profit of every
+ * FinancialEvent the workspace has ever recorded (all-time buckets, not a
+ * date-filtered period), the same figure getProfitAndLossSubtotals() already
+ * computes. Balance Sheet equity is then Equity (owner capital/drawings
+ * buckets) + this derived Retained Earnings, and the balance check becomes
+ * Assets === Liabilities + Equity + RetainedEarnings.
+ */
+export function getRetainedEarnings(allTimeBuckets: ReportBuckets): number {
+  return getProfitAndLossSubtotals(allTimeBuckets).operatingProfit;
+}
+
+/** Balance check tolerance-aware helper — Assets vs Liabilities + Equity + Retained Earnings. */
+export function getBalanceSheetTieOut(allTimeBuckets: ReportBuckets): {
+  assets: number;
+  liabilities: number;
+  equity: number;
+  retainedEarnings: number;
+  totalEquityAndLiabilities: number;
+  difference: number;
+  isBalanced: boolean;
+} {
+  const { assets, liabilities, equity } = getBalanceSheetSubtotals(allTimeBuckets);
+  const retainedEarnings = getRetainedEarnings(allTimeBuckets);
+  const totalEquityAndLiabilities = liabilities + equity + retainedEarnings;
+  const difference = assets - totalEquityAndLiabilities;
+  return { assets, liabilities, equity, retainedEarnings, totalEquityAndLiabilities, difference, isBalanced: Math.abs(difference) < 0.01 };
+}

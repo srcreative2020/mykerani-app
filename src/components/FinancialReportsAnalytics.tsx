@@ -23,12 +23,17 @@ import {
   FileText,
   PieChart,
   BarChart4,
-  Activity
+  Activity,
+  Landmark
 } from "lucide-react";
 import { type FinancialEvent, type FinancialCommitment } from "../types";
 import { exportToCSV, exportToExcel, exportToJSON, exportToPDF, type ExportColumn } from "../lib/exportUtils";
 import { computeFinancialHealthScoring } from "../lib/financialHealth";
+import { computeLoanReadiness } from "../lib/loanReadiness";
+import { computeLhdnReadiness } from "../lib/lhdnReadiness";
 import { ProfitLossReport } from "./ProfitLossReport";
+import { BalanceSheetReport } from "./BalanceSheetReport";
+import { CashFlowReport } from "./CashFlowReport";
 
 export const FinancialReportsAnalytics: React.FC = () => {
   const { activeWorkspace } = useWorkspace();
@@ -45,7 +50,7 @@ export const FinancialReportsAnalytics: React.FC = () => {
 
   // Active Report Selection state: 9 reports
   const [selectedReport, setSelectedReport] = useState<
-    "summary" | "cashflow" | "receivables_aging" | "payables_aging" | "commitments" | "health" | "tax_readiness" | "bank_readiness" | "profit_loss"
+    "summary" | "cashflow" | "receivables_aging" | "payables_aging" | "commitments" | "health" | "tax_readiness" | "bank_readiness" | "profit_loss" | "balance_sheet" | "cash_flow_v1"
   >("summary");
 
   const [businessProfile, setBusinessProfile] = useState<BusinessProfile>(EMPTY_BUSINESS_PROFILE);
@@ -282,178 +287,20 @@ export const FinancialReportsAnalytics: React.FC = () => {
 
   // LHDN Tax Readiness checklist — computed purely from existing income/expense
   // records, evidence linkage, and business profile completeness. No mock data.
-  const taxReadiness = useMemo(() => {
-    const incomeRecords = financialEvents.filter(e => e.type === "INCOME");
-    const expenseRecords = financialEvents.filter(e => e.type === "EXPENSE");
-
-    const hasEvidence = (e: FinancialEvent) =>
-      financialEvidencePackages.some(p => p.relatedRecordId === e.id && p.relatedRecordType === e.type);
-
-    const incomeWithEvidence = incomeRecords.filter(hasEvidence).length;
-    const expenseWithEvidence = expenseRecords.filter(hasEvidence).length;
-    const incomeEvidencePct = incomeRecords.length === 0 ? 0 : (incomeWithEvidence / incomeRecords.length) * 100;
-    const expenseEvidencePct = expenseRecords.length === 0 ? 0 : (expenseWithEvidence / expenseRecords.length) * 100;
-
-    const uncategorized = financialEvents.filter(e => !e.categoryName || e.categoryName.trim() === "" || e.categoryName === "Lain-lain").length;
-    const categorizedPct = financialEvents.length === 0 ? 0 : ((financialEvents.length - uncategorized) / financialEvents.length) * 100;
-
-    // Bookkeeping coverage: % of the last 12 calendar months (up to current month)
-    // with at least one income or expense record — flags gaps in record-keeping.
-    const monthsWithRecords = new Set(
-      [...incomeRecords, ...expenseRecords].map(e => e.date?.slice(0, 7)).filter(Boolean)
-    );
-    const monthKeys: string[] = [];
-    for (let i = 0; i < 12; i++) {
-      const d = new Date(baseDate.getFullYear(), baseDate.getMonth() - i, 1);
-      monthKeys.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
-    }
-    const monthsCovered = monthKeys.filter(m => monthsWithRecords.has(m)).length;
-    const coveragePct = (monthsCovered / monthKeys.length) * 100;
-
-    const checks = [
-      {
-        id: "registration",
-        label: "No. Pendaftaran Perniagaan Direkodkan",
-        pass: Boolean(businessProfile.registrationNo && businessProfile.registrationNo.trim()),
-        detail: businessProfile.registrationNo
-          ? `No. pendaftaran: ${businessProfile.registrationNo}`
-          : "Sila lengkapkan No. Pendaftaran Perniagaan dalam Profil Kewangan AI — diperlukan untuk pengisian cukai LHDN.",
-      },
-      {
-        id: "income_evidence",
-        label: "Resit/Invois Pendapatan Disokong Bukti",
-        pass: incomeEvidencePct >= 70,
-        detail: `${incomeWithEvidence}/${incomeRecords.length} rekod pendapatan (${incomeEvidencePct.toFixed(0)}%) mempunyai dokumen sokongan dimuat naik.`,
-      },
-      {
-        id: "expense_evidence",
-        label: "Resit Perbelanjaan Disokong Bukti",
-        pass: expenseEvidencePct >= 70,
-        detail: `${expenseWithEvidence}/${expenseRecords.length} rekod perbelanjaan (${expenseEvidencePct.toFixed(0)}%) mempunyai dokumen sokongan dimuat naik.`,
-      },
-      {
-        id: "categorized",
-        label: "Rekod Kewangan Dikategorikan dengan Betul",
-        pass: categorizedPct >= 90,
-        detail: `${categorizedPct.toFixed(0)}% rekod mempunyai kategori spesifik (bukan "Lain-lain" atau kosong).`,
-      },
-      {
-        id: "coverage",
-        label: "Tiada Jurang Rekod Bulanan (12 Bulan Lepas)",
-        pass: coveragePct >= 80,
-        detail: `${monthsCovered}/${monthKeys.length} bulan dalam tempoh 12 bulan lepas mempunyai sekurang-kurangnya satu rekod pendapatan/perbelanjaan.`,
-      },
-      {
-        id: "industry",
-        label: "Industri/Jenis Perniagaan Ditetapkan",
-        pass: Boolean(businessProfile.industry && businessProfile.industry.trim()),
-        detail: businessProfile.industry
-          ? `Industri: ${businessProfile.industry}`
-          : "Sila lengkapkan Industri dalam Profil Kewangan AI — membantu pengkategorian cukai yang betul.",
-      },
-    ];
-
-    const passedCount = checks.filter(c => c.pass).length;
-    const scorePct = (passedCount / checks.length) * 100;
-
-    let scoreGrade = "Sedia";
-    let scoreColor = "text-emerald-600 bg-emerald-50 border-emerald-150";
-    if (scorePct < 50) {
-      scoreGrade = "Belum Sedia";
-      scoreColor = "text-rose-600 bg-rose-50 border-rose-150";
-    } else if (scorePct < 85) {
-      scoreGrade = "Sebahagian Sedia";
-      scoreColor = "text-amber-600 bg-amber-50 border-amber-100";
-    }
-
-    return { checks, passedCount, totalChecks: checks.length, scorePct, scoreGrade, scoreColor, incomeEvidencePct, expenseEvidencePct, categorizedPct, coveragePct };
-  }, [financialEvents, financialEvidencePackages, businessProfile, baseDate]);
+  const taxReadiness = useMemo(
+    () => computeLhdnReadiness(financialEvents, financialEvidencePackages, businessProfile, baseDate),
+    [financialEvents, financialEvidencePackages, businessProfile, baseDate]
+  );
 
   // Bank/Financing Readiness checklist — a generic, bank-agnostic
   // creditworthiness checklist computed from existing solvency, liquidity,
   // collections and debt-repayment data. Real banks vary in exact criteria,
   // so this surfaces the underlying signals lenders commonly check rather
   // than a single institution's rule set.
-  const bankReadiness = useMemo(() => {
-    const incomeRecords = financialEvents.filter(e => e.type === "INCOME");
-    const monthsWithIncome = new Set(incomeRecords.map(e => e.date?.slice(0, 7)).filter(Boolean));
-    const monthKeys: string[] = [];
-    for (let i = 0; i < 6; i++) {
-      const d = new Date(baseDate.getFullYear(), baseDate.getMonth() - i, 1);
-      monthKeys.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
-    }
-    const incomeMonthsCovered = monthKeys.filter(m => monthsWithIncome.has(m)).length;
-    const incomeConsistencyPct = (incomeMonthsCovered / monthKeys.length) * 100;
-
-    const overdueDebts = debtRecords.filter(d =>
-      d.status === "ACTIVE" &&
-      d.repaymentDueDate &&
-      new Date(d.repaymentDueDate).getTime() < baseDate.getTime() &&
-      d.repaidAmountMyr < d.totalAmountMyr
-    );
-
-    const checks = [
-      {
-        id: "registration",
-        label: "No. Pendaftaran Perniagaan Direkodkan",
-        pass: Boolean(businessProfile.registrationNo && businessProfile.registrationNo.trim()),
-        detail: businessProfile.registrationNo
-          ? `No. pendaftaran: ${businessProfile.registrationNo}`
-          : "Sila lengkapkan No. Pendaftaran Perniagaan dalam Profil Kewangan AI — biasanya diperlukan dalam permohonan pembiayaan.",
-      },
-      {
-        id: "solvency",
-        label: "Nisbah Aset/Liabiliti Sihat",
-        pass: healthScoring.solvencyRatio >= 1.5,
-        detail: `Nisbah solvensi semasa: ${healthScoring.solvencyRatio.toFixed(2)}x (gred: ${healthScoring.solvencyGrade}). Kebanyakan pemberi pinjaman mahukan sekurang-kurangnya 1.5x.`,
-      },
-      {
-        id: "runway",
-        label: "Penampan Mudah Tunai Mencukupi",
-        pass: healthScoring.runwayMonths >= 3,
-        detail: healthScoring.runwayMonths === 999
-          ? "Tiada komitmen bulanan aktif direkodkan — tidak boleh dinilai sepenuhnya."
-          : `Penampan kelangsungan semasa: ${healthScoring.runwayMonths.toFixed(1)} bulan. Disasarkan sekurang-kurangnya 3 bulan.`,
-      },
-      {
-        id: "debt_repayment",
-        label: "Tiada Hutang Tertunggak Lewat Bayar",
-        pass: overdueDebts.length === 0,
-        detail: overdueDebts.length === 0
-          ? "Tiada rekod hutang yang melepasi tarikh matang tanpa dibayar penuh."
-          : `${overdueDebts.length} rekod hutang telah melepasi tarikh matang tanpa dibayar penuh — ini menjejaskan rekod pembayaran kredit anda.`,
-      },
-      {
-        id: "receivables_quality",
-        label: "Kutipan Piutang Lancar (Tiada Lapuk >60 Hari)",
-        pass: receivablesAgingData.b61_plus === 0,
-        detail: receivablesAgingData.b61_plus === 0
-          ? "Tiada baki piutang lapuk melebihi 60 hari."
-          : `RM ${receivablesAgingData.b61_plus.toLocaleString()} piutang telah lapuk melebihi 60 hari — pemberi pinjaman melihat ini sebagai risiko aliran tunai.`,
-      },
-      {
-        id: "income_consistency",
-        label: "Pendapatan Konsisten (6 Bulan Lepas)",
-        pass: incomeConsistencyPct >= 80,
-        detail: `${incomeMonthsCovered}/${monthKeys.length} bulan dalam tempoh 6 bulan lepas mempunyai sekurang-kurangnya satu rekod pendapatan.`,
-      },
-    ];
-
-    const passedCount = checks.filter(c => c.pass).length;
-    const scorePct = (passedCount / checks.length) * 100;
-
-    let scoreGrade = "Sedia";
-    let scoreColor = "text-emerald-600 bg-emerald-50 border-emerald-150";
-    if (scorePct < 50) {
-      scoreGrade = "Belum Sedia";
-      scoreColor = "text-rose-600 bg-rose-50 border-rose-150";
-    } else if (scorePct < 85) {
-      scoreGrade = "Sebahagian Sedia";
-      scoreColor = "text-amber-600 bg-amber-50 border-amber-100";
-    }
-
-    return { checks, passedCount, totalChecks: checks.length, scorePct, scoreGrade, scoreColor };
-  }, [financialEvents, debtRecords, receivablesAgingData, healthScoring, businessProfile, baseDate]);
+  const bankReadiness = useMemo(
+    () => computeLoanReadiness(financialEvents, debtRecords, businessProfile, healthScoring, receivablesAgingData.b61_plus, baseDate),
+    [financialEvents, debtRecords, receivablesAgingData, healthScoring, businessProfile, baseDate]
+  );
 
   // Build the export dataset for the currently selected report
   const exportDataset = useMemo((): { columns: ExportColumn[]; rows: Record<string, unknown>[]; title: string } => {
@@ -771,6 +618,36 @@ export const FinancialReportsAnalytics: React.FC = () => {
             </div>
           </button>
 
+          <button
+            onClick={() => { setSelectedReport("balance_sheet"); setSearchTerm(""); }}
+            className={`w-full text-left px-3.5 py-3 rounded-xl text-xs font-semibold flex items-center justify-between transition border ${
+              selectedReport === "balance_sheet"
+                ? "bg-slate-950 border-slate-950 text-white shadow-xs"
+                : "bg-white border-slate-200 text-slate-700 hover:bg-slate-50 hover:text-slate-950"
+            }`}
+            id="nav_report_balance_sheet"
+          >
+            <div className="flex items-center space-x-2">
+              <Landmark className="w-4 h-4 text-violet-600" />
+              <span>10. Kunci Kira-Kira (Balance Sheet)</span>
+            </div>
+          </button>
+
+          <button
+            onClick={() => { setSelectedReport("cash_flow_v1"); setSearchTerm(""); }}
+            className={`w-full text-left px-3.5 py-3 rounded-xl text-xs font-semibold flex items-center justify-between transition border ${
+              selectedReport === "cash_flow_v1"
+                ? "bg-slate-950 border-slate-950 text-white shadow-xs"
+                : "bg-white border-slate-200 text-slate-700 hover:bg-slate-50 hover:text-slate-950"
+            }`}
+            id="nav_report_cash_flow_v1"
+          >
+            <div className="flex items-center space-x-2">
+              <Activity className="w-4 h-4 text-sky-600" />
+              <span>11. Penyata Aliran Tunai (Cash Flow V1)</span>
+            </div>
+          </button>
+
           <div className="p-4 bg-indigo-50 rounded-xl space-y-2.5 mt-4 border border-indigo-100">
             <span className="text-[10px] font-mono uppercase bg-indigo-100 text-indigo-800 px-1.5 py-0.5 rounded font-bold">
               Nota Kedaulatan Data
@@ -799,6 +676,8 @@ export const FinancialReportsAnalytics: React.FC = () => {
               {selectedReport === "tax_readiness" && "7. Senarai Semak Kesediaan Cukai LHDN"}
               {selectedReport === "bank_readiness" && "8. Senarai Semak Kesediaan Pembiayaan/Pinjaman"}
               {selectedReport === "profit_loss" && "9. Penyata Untung Rugi (Profit & Loss Statement)"}
+              {selectedReport === "balance_sheet" && "10. Kunci Kira-Kira (Balance Sheet Statement)"}
+              {selectedReport === "cash_flow_v1" && "11. Penyata Aliran Tunai (Cash Flow Statement)"}
             </h3>
             <p className="text-xs text-slate-500 mt-0.5 font-sans">
               Sektor perakaunan pintar bertauliah dari platform MYKERANI.
@@ -1740,6 +1619,32 @@ export const FinancialReportsAnalytics: React.FC = () => {
               <ProfitLossReport
                 financialEvents={financialEvents}
                 financialEvidencePackages={financialEvidencePackages}
+              />
+            </div>
+          )}
+
+          {selectedReport === "balance_sheet" && (
+            <div className="animate-fade-in" id="report_balance_sheet_view">
+              <BalanceSheetReport
+                financialEvents={financialEvents}
+                debtRecords={debtRecords}
+                financialCommitments={financialCommitments}
+                financialEvidencePackages={financialEvidencePackages}
+                workspaceId={activeWorkspace?.id}
+                isMockUser={isMockUser}
+              />
+            </div>
+          )}
+
+          {selectedReport === "cash_flow_v1" && (
+            <div className="animate-fade-in" id="report_cash_flow_v1_view">
+              <CashFlowReport
+                financialEvents={financialEvents}
+                debtRecords={debtRecords}
+                financialCommitments={financialCommitments}
+                financialEvidencePackages={financialEvidencePackages}
+                workspaceId={activeWorkspace?.id}
+                isMockUser={isMockUser}
               />
             </div>
           )}

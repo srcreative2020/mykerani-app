@@ -93,3 +93,47 @@ export function computeFinancialHealthScoring(
 
   return { solvencyRatio, solvencyGrade, quickRatio, quickGrade, runwayMonths, runwayGrade };
 }
+
+export interface FinancialHealthV1 {
+  cashHealth: { totalLiquidAssets: number; quickRatio: number; quickGrade: FinancialHealthScoring["quickGrade"] };
+  debtHealth: { totalActiveDebt: number; overdueDebtCount: number; solvencyRatio: number; solvencyGrade: FinancialHealthScoring["solvencyGrade"] };
+  commitmentHealth: { monthlyCommitmentBurn: number; runwayMonths: number; runwayGrade: FinancialHealthScoring["runwayGrade"] };
+  evidenceCoveragePct: number;
+  dataCompletenessPct: number;
+}
+
+/**
+ * Financial Health V1 (Report Completion Sprint V1) — wraps the existing,
+ * already-shipped computeFinancialHealthScoring() (unchanged, still used by
+ * the live Health tab and the advisory alert engine) and adds the two
+ * sub-metrics the sprint asked for that did not exist yet: Evidence Coverage
+ * and Data Completeness. Additive only — no existing field/behavior changed.
+ */
+export function computeFinancialHealthV1(
+  cashAccounts: CashAccount[],
+  bankAccounts: BankAccount[],
+  financialEvents: FinancialEvent[],
+  debtRecords: DebtRecord[],
+  financialCommitments: FinancialCommitment[],
+  evidenceCoverageRatio: number,
+  baseDate: Date = new Date()
+): FinancialHealthV1 {
+  const base = computeFinancialHealthScoring(cashAccounts, bankAccounts, financialEvents, debtRecords, financialCommitments, baseDate);
+  const totalLiquidAssets = cashAccounts.reduce((sum, c) => sum + c.currentBalanceMyr, 0) + bankAccounts.reduce((sum, b) => sum + b.currentBalanceMyr, 0);
+  const totalActiveDebt = debtRecords.filter((d) => d.status === "ACTIVE").reduce((sum, d) => sum + (d.totalAmountMyr - d.repaidAmountMyr), 0);
+  const overdueDebtCount = debtRecords.filter(
+    (d) => d.status === "ACTIVE" && d.repaymentDueDate && new Date(d.repaymentDueDate).getTime() < baseDate.getTime() && d.repaidAmountMyr < d.totalAmountMyr
+  ).length;
+  const monthlyCommitmentBurnAmt = monthlyCommitmentBurn(financialCommitments, baseDate);
+
+  const uncategorized = financialEvents.filter((e) => !e.categoryName || e.categoryName.trim() === "" || e.categoryName === "Lain-lain").length;
+  const dataCompletenessPct = financialEvents.length === 0 ? 0 : ((financialEvents.length - uncategorized) / financialEvents.length) * 100;
+
+  return {
+    cashHealth: { totalLiquidAssets, quickRatio: base.quickRatio, quickGrade: base.quickGrade },
+    debtHealth: { totalActiveDebt, overdueDebtCount, solvencyRatio: base.solvencyRatio, solvencyGrade: base.solvencyGrade },
+    commitmentHealth: { monthlyCommitmentBurn: monthlyCommitmentBurnAmt, runwayMonths: base.runwayMonths, runwayGrade: base.runwayGrade },
+    evidenceCoveragePct: evidenceCoverageRatio * 100,
+    dataCompletenessPct,
+  };
+}
