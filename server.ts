@@ -7,6 +7,7 @@ import fs from "fs";
 import pg from "pg";
 import { createVerify } from "crypto";
 import { evaluateAccountingSuggestion } from "./src/lib/accountingClassificationMap";
+import { PDFParse } from "pdf-parse";
 
 const { Client } = pg;
 
@@ -643,11 +644,10 @@ async function startServer() {
         providerOrder: process.env.AI_PROVIDER_ORDER || null,
       }));
       if (candidates.length === 0) {
-        console.info("[AI_ROUTER_DEBUG][OCR] fallbackTriggerReason=NO_CANDIDATES — checked HQ Console AI Router settings (ai_router_settings/ai_provider_configs via SUPABASE_SERVICE_ROLE_KEY), then OPENAI_API_KEY/GEMINI_API_KEY/ANTHROPIC_API_KEY/DEEPSEEK_API_KEY env vars. Using sandbox OCR fallback.");
-        const mockResult = generateMockOcr(fileName, documentType);
-        return res.json({
-          ...mockResult,
-          warning: "Tiada pembekal AI dikonfigurasikan — keputusan ini adalah data sandbox, bukan hasil sebenar daripada dokumen anda.",
+        console.info("[AI_ROUTER_DEBUG][OCR] fallbackTriggerReason=NO_CANDIDATES — checked HQ Console AI Router settings (ai_router_settings/ai_provider_configs via SUPABASE_SERVICE_ROLE_KEY), then OPENAI_API_KEY/GEMINI_API_KEY/ANTHROPIC_API_KEY/DEEPSEEK_API_KEY env vars.");
+        return res.status(503).json({
+          error: "Tiada pembekal AI dikonfigurasikan. Dokumen ini tidak dapat dianalisis. Sila konfigurasikan AI Router (HQ Console) atau cuba lagi kemudian.",
+          code: "NO_AI_PROVIDER_CONFIGURED",
         });
       }
 
@@ -666,6 +666,34 @@ async function startServer() {
       if (match) {
         mimeType = match[1];
         base64Data = match[2];
+      }
+
+      // PDFs cannot be sent via the vision `image_url`/`image` content blocks AI
+      // providers expose — those only accept raster image formats (png/jpeg/webp/gif).
+      // Sending a PDF that way is rejected by the provider and previously caused every
+      // candidate to throw, exhausting the loop and falling back to fabricated mock data.
+      // Extract the PDF's real text layer locally instead, and send that as plain text —
+      // every provider's standard chat-completions endpoint already supports text input.
+      let extractedPdfText: string | null = null;
+      if (mimeType === "application/pdf") {
+        try {
+          const pdfBuffer = Buffer.from(base64Data, "base64");
+          const parser = new PDFParse({ data: pdfBuffer });
+          const result = await parser.getText();
+          extractedPdfText = (result.text || "").trim();
+        } catch (pdfErr: any) {
+          console.error("PDF text extraction failed:", pdfErr?.message || pdfErr);
+          return res.status(422).json({
+            error: "Gagal mengekstrak teks daripada fail PDF ini. Fail mungkin rosak atau dilindungi kata laluan.",
+            code: "PDF_EXTRACTION_FAILED",
+          });
+        }
+        if (!extractedPdfText) {
+          return res.status(422).json({
+            error: "PDF ini tidak mengandungi teks yang boleh dibaca (mungkin hasil imbasan/scan tanpa lapisan teks). Sila muat naik versi PDF yang mengandungi teks sebenar, atau gunakan format CSV/Excel.",
+            code: "PDF_NO_TEXT_LAYER",
+          });
+        }
       }
 
       const isInvoice = documentType === "INVOICE";
@@ -711,7 +739,9 @@ Provide your output precisely formatted as raw JSON matching exactly this shape,
       let usedCandidate: AiCandidate | null = null;
       for (const candidate of candidates) {
         try {
-          parsedResult = await callAiProviderOcr(candidate, mimeType, base64Data, ocrPrompt);
+          parsedResult = extractedPdfText !== null
+            ? await callAiProviderTextOcr(candidate, extractedPdfText, ocrPrompt)
+            : await callAiProviderOcr(candidate, mimeType, base64Data, ocrPrompt);
           usedCandidate = candidate;
           break;
         } catch (err: any) {
@@ -724,7 +754,7 @@ Provide your output precisely formatted as raw JSON matching exactly this shape,
         throw lastErr || new Error("All configured AI providers failed for OCR");
       }
 
-      console.info(`[AI_ROUTER_DEBUG][OCR] servedBy=${usedCandidate!.provider}:${usedCandidate!.model}`);
+      console.info(`[AI_ROUTER_DEBUG][OCR] servedBy=${usedCandidate!.provider}:${usedCandidate!.model} mode=${extractedPdfText !== null ? "pdf-text" : "vision"}`);
       logAiUsage(tenantId, workspaceId, userId, "ocr", usedCandidate!.provider, usedCandidate!.model);
 
       return res.json(parsedResult);
@@ -733,20 +763,13 @@ Provide your output precisely formatted as raw JSON matching exactly this shape,
       const errStr = error?.message || (typeof error === 'object' ? JSON.stringify(error) : String(error));
       const isBillingOrCreditIssue = /depleted|exhausted|billing|prepay|429|credit/i.test(errStr);
 
-      console.error("AI OCR call failed:", errStr);
-      if (isBillingOrCreditIssue) {
-        console.info("AI provider billing limits/credits reached. Smoothly transitioning to MYKERANI OCR Sandbox Simulator.");
-      } else {
-        console.info("AI OCR extraction resolved seamlessly to robust local cognitive fallback.");
-      }
+      console.error("AI OCR call failed — no fallback data will be returned:", errStr);
 
-      const mockResult = generateMockOcr(req.body.fileName || "document.png", req.body.documentType || "RECEIPT");
-      return res.json({
-        ...mockResult,
-        confidenceScore: Math.min(mockResult.confidenceScore, 0.82),
-        warning: isBillingOrCreditIssue
-          ? "Successfully processed via high-fidelity sandbox OCR simulator. (API limits reached)"
-          : "Successfully completed with cognitive fallback extraction."
+      return res.status(502).json({
+        error: isBillingOrCreditIssue
+          ? "Pembekal AI tidak dapat diakses sekarang (had penggunaan/bil dicapai). Dokumen ini TIDAK dapat dianalisis. Sila cuba lagi kemudian."
+          : "AI tidak dapat membaca dokumen ini. Dokumen ini TIDAK dapat dianalisis. Sila cuba semula atau muat naik fail yang lebih jelas.",
+        code: isBillingOrCreditIssue ? "AI_PROVIDER_UNAVAILABLE" : "OCR_FAILED",
       });
     }
   });
@@ -1704,6 +1727,55 @@ Only include a "CONFIRM_TRANSACTION" suggestion entry when financialIntent.detec
     return parseJsonLoose(content);
   }
 
+  // Text-based extraction path for PDF bank statements. AI provider chat-completion
+  // `image_url`/`image` content blocks only accept raster image formats (png/jpeg/etc) —
+  // sending a PDF that way is silently rejected by the provider, which previously caused
+  // every PDF upload to exhaust all candidates and fall back to fabricated mock data.
+  // Instead, the PDF's text layer is extracted locally (pdf-parse) and sent as plain text,
+  // which every provider's standard chat-completions endpoint already supports natively.
+  async function callAiProviderTextOcr(candidate: AiCandidate, extractedText: string, ocrPrompt: string): Promise<any> {
+    const fullPrompt = `${ocrPrompt}\n\nDocument text extracted from the PDF:\n"""\n${extractedText}\n"""`;
+    if (candidate.provider === "gemini") {
+      const ai = new GoogleGenAI({ apiKey: candidate.apiKey, httpOptions: { headers: { 'User-Agent': 'aistudio-build' } } });
+      const response = await ai.models.generateContent({
+        model: candidate.model,
+        contents: fullPrompt,
+        config: { responseMimeType: "application/json" },
+      });
+      const responseText = response.text;
+      if (!responseText) throw new Error("No response text returned from Gemini API");
+      return JSON.parse(responseText);
+    }
+    if (candidate.provider === "anthropic") {
+      const resp = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-api-key": candidate.apiKey, "anthropic-version": "2023-06-01" },
+        body: JSON.stringify({ model: candidate.model, max_tokens: 4096, messages: [{ role: "user", content: fullPrompt }] }),
+      });
+      if (!resp.ok) throw new Error(`Anthropic text OCR API error ${resp.status}: ${await resp.text()}`);
+      const data: any = await resp.json();
+      const content = data.content?.[0]?.text;
+      if (!content) throw new Error("No response content returned from Anthropic text OCR API");
+      return parseJsonLoose(content);
+    }
+    const baseUrl = OPENAI_COMPATIBLE_BASE_URLS[candidate.provider];
+    const resp = await fetch(`${baseUrl}/chat/completions`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${candidate.apiKey}` },
+      body: JSON.stringify({
+        model: candidate.model,
+        messages: [{ role: "user", content: fullPrompt }],
+        response_format: { type: "json_object" },
+        temperature: 0.2,
+      }),
+    });
+    if (!resp.ok) throw new Error(`AI provider text OCR API error ${resp.status}: ${await resp.text()}`);
+    const data: any = await resp.json();
+    const content = data.choices?.[0]?.message?.content;
+    if (!content) throw new Error("No response content returned from AI provider text OCR API");
+    return parseJsonLoose(content);
+  }
+
   async function callGeminiAssistant(apiKey: string, model: string, systemPrompt: string) {
     const ai = new GoogleGenAI({
       apiKey,
@@ -1913,87 +1985,6 @@ Only include a "CONFIRM_TRANSACTION" suggestion entry when financialIntent.detec
       },
       linkedRecordIds,
       linkedEvidenceIds
-    };
-  }
-
-  function generateMockOcr(fileName: string, documentType: string) {
-    const fName = (fileName || "").toLowerCase();
-    
-    let merchantName = "Global Telecom Bhd";
-    let amount = 340.00;
-    let currency = "MYR";
-    let suggestedCategory = "Utilities";
-    let documentNumber = "TXN-2026-9901";
-    
-    if (fName.includes("aws") || fName.includes("cloud") || fName.includes("server")) {
-      merchantName = "Amazon Web Services Inc.";
-      amount = 1450.00;
-      currency = "USD";
-      suggestedCategory = "Saas";
-      documentNumber = "INV-AWS-7762";
-    } else if (fName.includes("grab") || fName.includes("ride") || fName.includes("transport")) {
-      merchantName = "GrabCar Sdn Bhd";
-      amount = 45.00;
-      currency = "MYR";
-      suggestedCategory = "Travel";
-      documentNumber = "GRB-998162";
-    } else if (fName.includes("starbucks") || fName.includes("coffee") || fName.includes("caf") || fName.includes("meal") || fName.includes("food")) {
-      merchantName = "Starbucks Coffee Company";
-      amount = 58.50;
-      currency = "MYR";
-      suggestedCategory = "Meals";
-      documentNumber = "SBC-0918-622";
-    } else if (fName.includes("adobe") || fName.includes("figma") || fName.includes("software") || fName.includes("saas")) {
-      merchantName = "Adobe Systems Software";
-      amount = 139.90;
-      currency = "MYR";
-      suggestedCategory = "Saas";
-      documentNumber = "ADB-2026-098";
-    } else if (documentType === "STATEMENT") {
-      merchantName = "Maybank Berhad";
-      amount = 5000.00;
-      currency = "MYR";
-      suggestedCategory = "Utilities";
-      documentNumber = "STM-MAY-8872";
-      // A real bank statement is a multi-transaction document — the sandbox
-      // fallback must mirror that shape too, or any caller gating on
-      // payload.transactions silently collapses to a single fabricated line.
-      const today = new Date();
-      const isoDaysAgo = (n: number) => new Date(today.getTime() - n * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
-      return {
-        merchantName,
-        documentNumber,
-        date: isoDaysAgo(0),
-        amount,
-        currency,
-        suggestedCategory,
-        confidenceScore: 0.94,
-        rawExtractedText: `Cognitive OCR scanned ${documentType} file: '${fileName}'. Automatically verified key signatures.`,
-        transactions: [
-          { date: isoDaysAgo(14), description: "Gaji Masuk", amount: 8500.00, type: "CREDIT", suggestedCategory: "Income", confidenceScore: 0.9 },
-          { date: isoDaysAgo(12), description: "Bayaran Sewa Pejabat", amount: 2200.00, type: "DEBIT", suggestedCategory: "Rent", confidenceScore: 0.88 },
-          { date: isoDaysAgo(9), description: "TNB Tenaga Nasional", amount: 340.50, type: "DEBIT", suggestedCategory: "Utilities", confidenceScore: 0.91 },
-          { date: isoDaysAgo(7), description: "Bayaran Dari Pelanggan ABC Sdn Bhd", amount: 5000.00, type: "CREDIT", suggestedCategory: "Sales", confidenceScore: 0.87 },
-          { date: isoDaysAgo(3), description: "Caj Perkhidmatan Bank", amount: 12.00, type: "DEBIT", suggestedCategory: "Bank Charges", confidenceScore: 0.93 },
-        ],
-      };
-    } else if (documentType === "INVOICE") {
-      merchantName = "Modern Workspace Supplies Ltd";
-      amount = 1200.00;
-      currency = "MYR";
-      suggestedCategory = "Office Supplies";
-      documentNumber = "INV-MWS-2026-904";
-    }
-
-    return {
-      merchantName,
-      documentNumber,
-      date: new Date().toISOString().split("T")[0],
-      amount,
-      currency,
-      suggestedCategory,
-      confidenceScore: 0.94,
-      rawExtractedText: `Cognitive OCR scanned ${documentType} file: '${fileName}'. Automatically verified key signatures.`
     };
   }
 
