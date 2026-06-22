@@ -13,6 +13,14 @@ const { Client } = pg;
 
 dotenv.config();
 
+// MyKerani operates exclusively in Malaysia; "today" must always be the
+// Asia/Kuala_Lumpur calendar date, not server UTC — using UTC causes a
+// one-day-stale default during the ~8-hour nightly window where UTC's date
+// still lags MYT's (UTC+8, no DST).
+function todayMyt(): string {
+  return new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kuala_Lumpur" });
+}
+
 async function startServer() {
   const app = express();
   const PORT = 3000;
@@ -1234,7 +1242,7 @@ Instructions & Constraints:
 - Return references ('linkedRecordIds' and 'linkedEvidenceIds') when queries touch specific events, bills, invoices, receipts, or attachments.
 - Return structured visual metrics in the 'highlights' object. Health Status must be EXCELLENT, STABLE, WARNING, or THREAT.
 - FINANCIAL INTENT DETECTION: if the user's query describes a real-world financial transaction (in Malay or English) rather than a question, detect it and populate 'financialIntent'. Examples: "Pelanggan bayar RM500" / "Customer paid RM500" -> INCOME; "Saya isi minyak RM50" / "Filled petrol RM50" -> EXPENSE; "Saya hutang pembekal RM300" / "Borrowed RM1000 from Ali" -> DEBT; "Customer owes RM500" / "Pelanggan berhutang RM500" -> RECEIVABLE; "Saya kena bayar pembekal RM300 bulan depan" / "I owe my supplier RM300 due next month" -> PAYABLE; "Rental RM1200 monthly" / "Sewa RM1200 sebulan" -> COMMITMENT; "Saya beli mesin jahit baru RM2000" / "Bought a new printer RM1500 for the shop" -> ASSET_PURCHASE; "Saya masukkan modal RM5000 ke bisnes" / "Owner injected RM5000 capital" -> OWNER_TRANSACTION (subtype CAPITAL_INJECTION); "Saya ambil RM300 dari bisnes untuk guna sendiri" / "Withdrew RM300 from the business for personal use" -> OWNER_TRANSACTION (subtype DRAWING). If no transaction is described, set "detected": false and leave the other financialIntent fields null.
-- When financialIntent.detected is true, you MUST ALSO add exactly one suggestion to the 'suggestions' array with "actionType": "CONFIRM_TRANSACTION" whose payload carries the structured transaction fields below. This is a SUGGESTION ONLY — you never write the record yourself; the user must explicitly Confirm (optionally after editing) before anything is saved. Default "date" to today (${new Date().toISOString().split("T")[0]}) if the user didn't state one.
+- When financialIntent.detected is true, you MUST ALSO add exactly one suggestion to the 'suggestions' array with "actionType": "CONFIRM_TRANSACTION" whose payload carries the structured transaction fields below. This is a SUGGESTION ONLY — you never write the record yourself; the user must explicitly Confirm (optionally after editing) before anything is saved. Default "date" to today (${todayMyt()}) if the user didn't state one.
 - DISAMBIGUATION: if there are 2+ Vehicles listed above (section 10) and the user's transaction text plausibly relates to a vehicle (petrol, toll, parking, service, repair, road tax, insurance) but does NOT name which vehicle, do NOT guess. Instead set financialIntent.detected to false, leave 'suggestions' empty, and in 'text' ask a short clarifying question listing the vehicle names and their ownership (e.g. "Untuk kenderaan mana — Hilux (Perniagaan) atau Myvi (Peribadi)?"). Once the user's NEXT message names the vehicle, treat it as the missing detail for the same transaction and proceed normally (detect + CONFIRM_TRANSACTION), using that vehicle's ownership to decide whether it is a business EXPENSE or a personal/owner-drawing transaction. The same pattern applies if Business Profile / multiple businesses make the transaction's owner ambiguous: ask, don't guess.
 - DEPENDENTS CONTEXT: if Dependents (section 11) is non-empty and the user describes income/expense tied to a family member by relationship or name (e.g. "duit poket anak", "yuran sekolah Aiman", "emak bagi RM200") without saying whose money it is, you may use the dependents list to recognize the name/relationship and set relatedParty accordingly — but if the transaction's classification (e.g. whether it is the business's or personal) is still ambiguous, ask rather than guess, same as the vehicle rule above.
 - ASSET_PURCHASE vs OWNER_TRANSACTION: a purchase of a durable item the business will use for a while (machine, equipment, furniture, computer, vehicle) is ASSET_PURCHASE, not EXPENSE. Money the owner personally puts into or takes out of the business with no goods/service exchanged (modal, drawing/ambil duit guna sendiri) is OWNER_TRANSACTION — set "category" to "CAPITAL_INJECTION" or "DRAWING" in the payload to mirror "ownerTransactionSubtype". If it is unclear whether a withdrawal is a legitimate business EXPENSE or an OWNER_TRANSACTION drawing, ask rather than guess.

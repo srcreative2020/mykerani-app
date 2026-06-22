@@ -64,6 +64,17 @@ import {
 type MainTab = "home" | "dashboard" | "documents" | "reports" | "more";
 type MorePage = "menu" | "team" | "history" | "settings" | "myProfile" | "support" | "billing" | "resources" | "chatArchive";
 
+// AI chat suggestions may carry a server-computed default date; if the AI
+// didn't extract a date from the user's message, normalize to the user's
+// OWN browser-local date rather than trusting the AI's default, so it always
+// matches the Dashboard's local-date-based period filters (avoids UTC vs
+// Asia/Kuala_Lumpur skew during the nightly window where they disagree).
+const todayLocalIso = (): string => {
+  const d = new Date();
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+};
+
 interface ChatSuggestion {
   id: string;
   title: string;
@@ -149,7 +160,7 @@ function QuickAddModal({
   const [category, setCategory] = useState("");
   const [description, setDescription] = useState("");
   const [party, setParty] = useState("");
-  const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
+  const [date, setDate] = useState(todayLocalIso());
   const isIncome = type === "INCOME";
 
   const handleSave = (e: React.FormEvent) => {
@@ -698,7 +709,7 @@ export function OwnerDashboard() {
 
   // Evidence Package Compiler: bundle a cover summary + every uploaded document
   // within a date range into one ZIP, for bank/LHDN/accountant requests.
-  const todayIsoForPackage = new Date().toISOString().split("T")[0];
+  const todayIsoForPackage = todayLocalIso();
   const yearStartIsoForPackage = `${new Date().getFullYear()}-01-01`;
   const [packageStartDate, setPackageStartDate] = useState(yearStartIsoForPackage);
   const [packageEndDate, setPackageEndDate] = useState(todayIsoForPackage);
@@ -937,7 +948,7 @@ export function OwnerDashboard() {
         doc,
         merchantName: payload.merchantName || "",
         amount: "0",
-        date: payload.date || new Date().toISOString().split("T")[0],
+        date: payload.date || todayLocalIso(),
         category: "",
         recordType: "EXPENSE",
         confidenceScore: payload.confidenceScore || 0.7,
@@ -1004,7 +1015,7 @@ export function OwnerDashboard() {
       doc,
       merchantName,
       amount: String(payload.amount || 0),
-      date: payload.date || new Date().toISOString().split("T")[0],
+      date: payload.date || todayLocalIso(),
       category: matchedPattern?.category || payload.suggestedCategory || "Lain-lain",
       recordType: matchedPattern?.recordType || (doc.document_type === "INVOICE" ? "PAYABLE" : "EXPENSE"),
       confidenceScore: matchedPattern?.confidenceScore || payload.confidenceScore || 0.7,
@@ -1151,7 +1162,7 @@ export function OwnerDashboard() {
             categoryName: l.suggestedCategory,
             amountMyr: l.amount,
             partyName: l.description,
-            date: l.date || new Date().toISOString().split("T")[0],
+            date: l.date || todayLocalIso(),
             referenceNumber: `STMT-${doc.id.substring(0, 8)}-${idx}`,
             description: `Daripada penyata bank: ${doc.file_name}`,
             isCompleted: true,
@@ -1819,7 +1830,7 @@ export function OwnerDashboard() {
       amount: String(s.payload?.amount ?? ""),
       category: s.payload?.category || "",
       relatedParty: s.payload?.relatedParty || "",
-      date: s.payload?.date || new Date().toISOString().split("T")[0],
+      date: s.payload?.date || todayLocalIso(),
     });
   };
 
@@ -1833,7 +1844,7 @@ export function OwnerDashboard() {
       amount: String(s.payload?.amount ?? ""),
       category: s.accountingRecommendation || s.payload?.category || "",
       relatedParty: s.payload?.relatedParty || "",
-      date: s.payload?.date || new Date().toISOString().split("T")[0],
+      date: s.payload?.date || todayLocalIso(),
     });
   };
 
@@ -1883,7 +1894,7 @@ export function OwnerDashboard() {
     const amount = Number(edited ? edited.amount : s.payload?.amount) || 0;
     const category = (edited ? edited.category : s.payload?.category) || "Lain-lain";
     const relatedParty = (edited ? edited.relatedParty : s.payload?.relatedParty) || "Tidak Dinyatakan";
-    const date = (edited ? edited.date : s.payload?.date) || new Date().toISOString().split("T")[0];
+    const date = (edited ? edited.date : s.payload?.date) || todayLocalIso();
     const confidenceScore = s.payload?.confidenceScore ?? 0.7;
 
     let newRecordId: string | undefined;
@@ -2036,7 +2047,7 @@ export function OwnerDashboard() {
     const amountMyr = Number(edited.amount) || 0;
     const categoryName = edited.category || "Lain-lain";
     const partyName = edited.relatedParty || "Tidak Dinyatakan";
-    const date = edited.date || new Date().toISOString().split("T")[0];
+    const date = edited.date || todayLocalIso();
 
     if (current.recordType === "DEBT") {
       editDebtRecord(current.recordId, {
