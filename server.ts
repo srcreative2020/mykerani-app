@@ -632,7 +632,10 @@ async function startServer() {
       if (candidates.length === 0) {
         console.info("No AI provider configured (checked HQ Console AI Router settings, then OPENAI_API_KEY/GEMINI_API_KEY/ANTHROPIC_API_KEY env vars). Using realistic sandbox OCR fallback.");
         const mockResult = generateMockOcr(fileName, documentType);
-        return res.json(mockResult);
+        return res.json({
+          ...mockResult,
+          warning: "Tiada pembekal AI dikonfigurasikan — keputusan ini adalah data sandbox, bukan hasil sebenar daripada dokumen anda.",
+        });
       }
 
       const hasCredit = await consumeResourceCredit(tenantId, workspaceId, "OCR", `OCR analyze: ${fileName || "document"}`);
@@ -1938,6 +1941,28 @@ Only include a "CONFIRM_TRANSACTION" suggestion entry when financialIntent.detec
       currency = "MYR";
       suggestedCategory = "Utilities";
       documentNumber = "STM-MAY-8872";
+      // A real bank statement is a multi-transaction document — the sandbox
+      // fallback must mirror that shape too, or any caller gating on
+      // payload.transactions silently collapses to a single fabricated line.
+      const today = new Date();
+      const isoDaysAgo = (n: number) => new Date(today.getTime() - n * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
+      return {
+        merchantName,
+        documentNumber,
+        date: isoDaysAgo(0),
+        amount,
+        currency,
+        suggestedCategory,
+        confidenceScore: 0.94,
+        rawExtractedText: `Cognitive OCR scanned ${documentType} file: '${fileName}'. Automatically verified key signatures.`,
+        transactions: [
+          { date: isoDaysAgo(14), description: "Gaji Masuk", amount: 8500.00, type: "CREDIT", suggestedCategory: "Income", confidenceScore: 0.9 },
+          { date: isoDaysAgo(12), description: "Bayaran Sewa Pejabat", amount: 2200.00, type: "DEBIT", suggestedCategory: "Rent", confidenceScore: 0.88 },
+          { date: isoDaysAgo(9), description: "TNB Tenaga Nasional", amount: 340.50, type: "DEBIT", suggestedCategory: "Utilities", confidenceScore: 0.91 },
+          { date: isoDaysAgo(7), description: "Bayaran Dari Pelanggan ABC Sdn Bhd", amount: 5000.00, type: "CREDIT", suggestedCategory: "Sales", confidenceScore: 0.87 },
+          { date: isoDaysAgo(3), description: "Caj Perkhidmatan Bank", amount: 12.00, type: "DEBIT", suggestedCategory: "Bank Charges", confidenceScore: 0.93 },
+        ],
+      };
     } else if (documentType === "INVOICE") {
       merchantName = "Modern Workspace Supplies Ltd";
       amount = 1200.00;

@@ -758,6 +758,10 @@ export function OwnerDashboard() {
       }
       const payload = await response.json();
 
+      if (payload.warning) {
+        setDocReviewError(payload.warning);
+      }
+
       if (doc.document_type === "BANK_STATEMENT" && Array.isArray(payload.transactions)) {
         setDocReview({
           doc,
