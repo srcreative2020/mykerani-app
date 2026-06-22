@@ -1259,6 +1259,7 @@ Only include a "CONFIRM_TRANSACTION" suggestion entry when financialIntent.detec
       let parsedResponse: any = null;
       let lastErr: any = null;
       let usedCandidate: AiCandidate | null = null;
+      const attemptErrors: { provider: string; model: string; error: string }[] = [];
       for (const candidate of candidates) {
         try {
           parsedResponse = await callAiProvider(candidate, systemPrompt);
@@ -1266,12 +1267,14 @@ Only include a "CONFIRM_TRANSACTION" suggestion entry when financialIntent.detec
           break;
         } catch (err: any) {
           lastErr = err;
+          attemptErrors.push({ provider: candidate.provider, model: candidate.model, error: String(err?.message || err).slice(0, 500) });
           console.error(`AI provider "${candidate.provider}" failed, trying next candidate:`, err?.message || err);
         }
       }
 
       if (!parsedResponse) {
         console.info("[AI_ROUTER_DEBUG] fallbackTriggerReason=ALL_CANDIDATES_FAILED", lastErr?.message || lastErr);
+        (lastErr as any).attemptErrors = attemptErrors;
         throw lastErr || new Error("All configured AI providers failed");
       }
 
@@ -1335,7 +1338,7 @@ Only include a "CONFIRM_TRANSACTION" suggestion entry when financialIntent.detec
         req.body.financialContext?.activeTenant?.id,
         req.body.financialContext?.activeWorkspace?.id,
         req.body.userId,
-        candidates.map(c => ({ provider: c.provider, model: c.model })),
+        (error as any)?.attemptErrors || candidates.map(c => ({ provider: c.provider, model: c.model, error: errStr })),
         errStr
       );
 
@@ -1384,8 +1387,8 @@ Only include a "CONFIRM_TRANSACTION" suggestion entry when financialIntent.detec
       { id: "claude-sonnet-4-6", inputPer1M: 3.00, outputPer1M: 15.00, tier: "pro" },
     ],
     deepseek: [
-      { id: "deepseek-v3", inputPer1M: 0.27, outputPer1M: 1.10, tier: "balanced" },
-      { id: "deepseek-r1", inputPer1M: 0.55, outputPer1M: 2.19, tier: "pro" },
+      { id: "deepseek-v4-flash", inputPer1M: 0.27, outputPer1M: 1.10, tier: "balanced" },
+      { id: "deepseek-v4-pro", inputPer1M: 0.55, outputPer1M: 2.19, tier: "pro" },
     ],
     xai: [
       { id: "grok-3-mini", inputPer1M: 0.30, outputPer1M: 0.50, tier: "fast" },
@@ -1564,7 +1567,7 @@ Only include a "CONFIRM_TRANSACTION" suggestion entry when financialIntent.detec
   // host log access. Best-effort — never blocks the fallback response.
   // errStr is the thrown error's message only (status code + provider
   // response body), never request headers, so it cannot leak an API key.
-  function logAiFallback(tenantId: string | undefined | null, workspaceId: string | undefined | null, userId: string | undefined | null, candidates: { provider: string; model: string }[], errStr: string): void {
+  function logAiFallback(tenantId: string | undefined | null, workspaceId: string | undefined | null, userId: string | undefined | null, attemptErrors: { provider: string; model: string; error: string }[], errStr: string): void {
     if (!tenantId) return;
     const supabaseUrl = process.env.VITE_SUPABASE_URL;
     const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -1583,7 +1586,7 @@ Only include a "CONFIRM_TRANSACTION" suggestion entry when financialIntent.detec
         user_id: userId || null,
         event_type: "AI_ANALYSIS",
         description: "AI Assistant fell back to Simulator Mode (all candidate providers failed)",
-        metadata: { outcome: "SIMULATOR_FALLBACK", candidatesTried: candidates, lastError: String(errStr).slice(0, 500) },
+        metadata: { outcome: "SIMULATOR_FALLBACK", attemptErrors, lastError: String(errStr).slice(0, 500) },
       }),
     }).catch(err => console.error("Failed to log AI fallback diagnostic:", err));
   }
