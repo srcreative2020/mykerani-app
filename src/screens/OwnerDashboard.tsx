@@ -201,7 +201,7 @@ export function OwnerDashboard() {
     userRoles.forEach(r => { map[r.userId] = r.fullName; });
     return map;
   }, [userRoles]);
-  const { financialEvents, addFinancialEvent, editFinancialEvent, deleteFinancialEvent, addDebtRecord, editDebtRecord, deleteDebtRecord, addFinancialCommitment, editFinancialCommitment, deleteFinancialCommitment, learnOcrPattern, ocrLearnedPatterns, cashAccounts, bankAccounts, debtRecords, financialCommitments, financialEvidencePackages, addFinancialEvidencePackage } = useFinancials();
+  const { financialEvents, addFinancialEvent, addFinancialEventsBatch, editFinancialEvent, deleteFinancialEvent, addDebtRecord, editDebtRecord, deleteDebtRecord, addFinancialCommitment, editFinancialCommitment, deleteFinancialCommitment, learnOcrPattern, learnOcrPatternsBatch, ocrLearnedPatterns, cashAccounts, bankAccounts, debtRecords, financialCommitments, financialEvidencePackages, addFinancialEvidencePackage } = useFinancials();
 
   const [activeTab, setActiveTab] = useState<MainTab>("home");
   const [morePage, setMorePage] = useState<MorePage>("menu");
@@ -727,6 +727,9 @@ export function OwnerDashboard() {
   const [docAnalyzing, setDocAnalyzing] = useState(false);
   const [docOcrJob, setDocOcrJob] = useState<OcrJobState | null>(null);
   const [docReviewError, setDocReviewError] = useState<string | null>(null);
+  const [importProgress, setImportProgress] = useState<null | {
+    submitted: number; inserted: number; failed: number; batchNumber: number; totalBatches: number;
+  }>(null);
   const [docReview, setDocReview] = useState<null | {
     doc: UploadedDoc;
     merchantName: string;
@@ -878,27 +881,42 @@ export function OwnerDashboard() {
   const confirmDocReview = async () => {
     if (!docReview || !activeWorkspace) return;
     const { doc, merchantName, lines } = docReview;
-    const createdEvents: { id: string }[] = [];
+    let createdEvents: { id: string }[] = [];
 
     if (lines) {
       // Bank statement: create one financial event per included transaction line.
-      lines.filter(l => l.include).forEach(l => {
-        const ev = addFinancialEvent({
-          workspaceId: activeWorkspace.id,
-          type: l.type === "CREDIT" ? "INCOME" : "EXPENSE",
-          categoryName: l.suggestedCategory,
-          amountMyr: l.amount,
-          partyName: l.description,
-          date: l.date || new Date().toISOString().split("T")[0],
-          referenceNumber: `STMT-${doc.id.substring(0, 8)}`,
-          description: `Daripada penyata bank: ${doc.file_name}`,
-          isCompleted: true,
-        });
-        createdEvents.push(ev);
-        if (l.description.trim()) {
-          learnOcrPattern({ workspaceId: activeWorkspace.id, vendorName: l.description.trim(), category: l.suggestedCategory, recordType: l.type === "CREDIT" ? "INCOME" : "EXPENSE", confidenceScore: l.confidenceScore });
-        }
-      });
+      // Done as a single batched write (not a per-line addFinancialEvent loop) so
+      // that large statements (hundreds/thousands of lines) don't block the main
+      // thread re-serializing the whole financial state on every line, and so
+      // Supabase writes go out in controlled chunks instead of N unbounded
+      // concurrent requests.
+      const includedLines = lines.filter(l => l.include);
+      setImportProgress({ submitted: includedLines.length, inserted: 0, failed: 0, batchNumber: 0, totalBatches: 0 });
+
+      try {
+        const newEvents = await addFinancialEventsBatch(
+          includedLines.map((l, idx) => ({
+            workspaceId: activeWorkspace.id,
+            type: l.type === "CREDIT" ? "INCOME" as const : "EXPENSE" as const,
+            categoryName: l.suggestedCategory,
+            amountMyr: l.amount,
+            partyName: l.description,
+            date: l.date || new Date().toISOString().split("T")[0],
+            referenceNumber: `STMT-${doc.id.substring(0, 8)}-${idx}`,
+            description: `Daripada penyata bank: ${doc.file_name}`,
+            isCompleted: true,
+          })),
+          (progress) => setImportProgress(progress)
+        );
+        createdEvents = newEvents.map(e => ({ id: e.id }));
+
+        const patternsToLearn = includedLines
+          .filter(l => l.description.trim())
+          .map(l => ({ workspaceId: activeWorkspace.id, vendorName: l.description.trim(), category: l.suggestedCategory, recordType: (l.type === "CREDIT" ? "INCOME" : "EXPENSE") as "INCOME" | "EXPENSE", confidenceScore: l.confidenceScore }));
+        await learnOcrPatternsBatch(patternsToLearn);
+      } finally {
+        setImportProgress(null);
+      }
     } else {
       // Invois/bil yang baru disahkan masih TERTUNGGAK (belum dibayar/dikutip)
       // melainkan ia direkodkan terus sebagai Pendapatan/Perbelanjaan sebenar —
@@ -3962,12 +3980,26 @@ export function OwnerDashboard() {
               )}
             </div>
 
+            {importProgress && (
+              <div className="px-5 pt-3 shrink-0 space-y-1">
+                <div className="flex items-center justify-between text-[11px] font-semibold text-slate-600">
+                  <span>Merekod transaksi... ({importProgress.inserted + importProgress.failed}/{importProgress.submitted})</span>
+                  <span>Bahagian {importProgress.batchNumber}/{importProgress.totalBatches || "—"}</span>
+                </div>
+                <div className="h-1.5 bg-slate-200 rounded-full overflow-hidden">
+                  <div className="h-full bg-indigo-600 transition-all" style={{ width: `${importProgress.submitted ? Math.round(((importProgress.inserted + importProgress.failed) / importProgress.submitted) * 100) : 0}%` }} />
+                </div>
+                {importProgress.failed > 0 && (
+                  <p className="text-[11px] text-red-600 font-semibold">{importProgress.failed} transaksi gagal disimpan ke pangkalan data (disimpan tempatan).</p>
+                )}
+              </div>
+            )}
             <div className="px-5 py-4 border-t border-slate-100 flex gap-2 shrink-0">
-              <button onClick={rejectDocReview} className="flex-1 py-2.5 rounded-xl border border-rose-200 text-rose-500 text-sm font-bold cursor-pointer hover:bg-rose-50">
+              <button onClick={rejectDocReview} disabled={!!importProgress} className="flex-1 py-2.5 rounded-xl border border-rose-200 text-rose-500 text-sm font-bold cursor-pointer hover:bg-rose-50 disabled:opacity-50 disabled:cursor-not-allowed">
                 Tolak
               </button>
-              <button onClick={confirmDocReview} className="flex-1 py-2.5 rounded-xl bg-indigo-600 text-white text-sm font-bold cursor-pointer hover:bg-indigo-700">
-                Sahkan &amp; Rekod
+              <button onClick={confirmDocReview} disabled={!!importProgress} className="flex-1 py-2.5 rounded-xl bg-indigo-600 text-white text-sm font-bold cursor-pointer hover:bg-indigo-700 disabled:opacity-60 disabled:cursor-not-allowed">
+                {importProgress ? "Merekod..." : "Sahkan & Rekod"}
               </button>
             </div>
           </div>

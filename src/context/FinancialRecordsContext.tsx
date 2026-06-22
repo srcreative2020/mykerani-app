@@ -18,6 +18,10 @@ interface FinancialRecordsContextType {
   error: string | null;
   
   addFinancialEvent: (event: Omit<FinancialEvent, "id">) => FinancialEvent;
+  addFinancialEventsBatch: (
+    events: Omit<FinancialEvent, "id">[],
+    onProgress?: (progress: { submitted: number; inserted: number; failed: number; batchNumber: number; totalBatches: number; batchDurationMs: number }) => void
+  ) => Promise<FinancialEvent[]>;
   editFinancialEvent: (id: string, updated: Partial<FinancialEvent>) => void;
   deleteFinancialEvent: (id: string) => void;
   
@@ -42,6 +46,7 @@ interface FinancialRecordsContextType {
   deleteFinancialEvidencePackage: (id: string) => void;
   
   learnOcrPattern: (pattern: Omit<OcrLearnedPattern, "id" | "occurrenceCount" | "lastUpdated">) => void;
+  learnOcrPatternsBatch: (patterns: Omit<OcrLearnedPattern, "id" | "occurrenceCount" | "lastUpdated">[]) => Promise<void>;
   deleteOcrLearnedPattern: (id: string) => void;
 
   resetWorkspaceData: () => void;
@@ -754,6 +759,80 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
 
 
   // --- Financial Events Actions ---
+  // Shared upsert logic used by both the single-record addFinancialEvent and
+  // the bulk addFinancialEventsBatch path, so the column mapping stays in
+  // exactly one place.
+  const persistEventToSupabase = async (newEvent: FinancialEvent, catId: string) => {
+    if (!supabase || !activeWorkspace) return;
+    // AI-confirmed records (and bank-statement imports, which share the same
+    // idempotency need) carry a deterministic reference number so re-confirming
+    // the same suggestion/import upserts idempotently instead of duplicating.
+    const isAiConfirmed = (newEvent.referenceNumber || "").startsWith("AI-") || (newEvent.referenceNumber || "").startsWith("STMT-");
+
+    if (newEvent.type === "INCOME") {
+      await supabase.from("income_records").upsert({
+        id: newEvent.id,
+        workspace_id: activeWorkspace.id,
+        category_id: catId,
+        source_bank_account_id: newEvent.bankAccountId || null,
+        source_cash_account_id: newEvent.cashAccountId || null,
+        payer_name: newEvent.partyName,
+        amount_myr: newEvent.amountMyr,
+        transaction_date: newEvent.date,
+        reference_number: newEvent.referenceNumber,
+        description: newEvent.description,
+        business_id: newEvent.businessId || null,
+        created_by_user_id: newEvent.createdByUserId || null,
+        created_by_name: newEvent.createdByName || null,
+      }, isAiConfirmed ? { onConflict: "workspace_id,reference_number", ignoreDuplicates: true } : undefined);
+    } else if (newEvent.type === "EXPENSE" || newEvent.type === "DEBT") {
+      await supabase.from("expense_records").upsert({
+        id: newEvent.id,
+        workspace_id: activeWorkspace.id,
+        category_id: catId,
+        payment_bank_account_id: newEvent.bankAccountId || null,
+        payment_cash_account_id: newEvent.cashAccountId || null,
+        recipient_vendor_name: newEvent.partyName,
+        amount_myr: newEvent.amountMyr,
+        tax_amount_myr: 0,
+        transaction_date: newEvent.date,
+        reference_number: newEvent.referenceNumber,
+        created_by_user_id: newEvent.createdByUserId || null,
+        created_by_name: newEvent.createdByName || null,
+        description: newEvent.type === "DEBT" ? `[DEBT] ${newEvent.description}` : newEvent.description,
+        business_id: newEvent.businessId || null,
+      }, isAiConfirmed ? { onConflict: "workspace_id,reference_number", ignoreDuplicates: true } : undefined);
+    } else if (newEvent.type === "RECEIVABLE") {
+      await supabase.from("receivables").upsert({
+        id: newEvent.id,
+        workspace_id: activeWorkspace.id,
+        customer_name: newEvent.partyName,
+        invoice_number: newEvent.referenceNumber,
+        invoice_date: newEvent.date,
+        due_date: newEvent.dueDate || newEvent.date,
+        total_amount_myr: newEvent.amountMyr,
+        paid_amount_myr: newEvent.isCompleted ? newEvent.amountMyr : 0,
+        status: newEvent.isCompleted ? "PAID" : "UNPAID",
+        category_id: catId,
+        business_id: newEvent.businessId || null,
+      }, isAiConfirmed ? { onConflict: "workspace_id,invoice_number", ignoreDuplicates: true } : undefined);
+    } else if (newEvent.type === "PAYABLE") {
+      await supabase.from("payables").upsert({
+        id: newEvent.id,
+        workspace_id: activeWorkspace.id,
+        vendor_name: newEvent.partyName,
+        bill_number: newEvent.referenceNumber,
+        bill_date: newEvent.date,
+        due_date: newEvent.dueDate || newEvent.date,
+        total_amount_myr: newEvent.amountMyr,
+        paid_amount_myr: newEvent.isCompleted ? newEvent.amountMyr : 0,
+        status: newEvent.isCompleted ? "PAID" : "UNPAID",
+        category_id: catId,
+        business_id: newEvent.businessId || null,
+      }, isAiConfirmed ? { onConflict: "workspace_id,bill_number", ignoreDuplicates: true } : undefined);
+    }
+  };
+
   const addFinancialEvent = (event: Omit<FinancialEvent, "id">): FinancialEvent => {
     const newId = generateUUID();
     const newEvent: FinancialEvent = {
@@ -810,75 +889,7 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
       (async () => {
         try {
           const catId = await getOrCreateCategoryId(activeWorkspace.id, newEvent.categoryName, newEvent.type);
-
-          // AI-confirmed records carry a deterministic 'AI-<suggestionId>'
-          // reference so re-confirming the same chat suggestion (e.g. from a
-          // second browser/session) upserts idempotently instead of
-          // duplicating the record.
-          const isAiConfirmed = (newEvent.referenceNumber || "").startsWith("AI-");
-
-          if (newEvent.type === "INCOME") {
-            await supabase.from("income_records").upsert({
-              id: newId,
-              workspace_id: activeWorkspace.id,
-              category_id: catId,
-              source_bank_account_id: newEvent.bankAccountId || null,
-              source_cash_account_id: newEvent.cashAccountId || null,
-              payer_name: newEvent.partyName,
-              amount_myr: newEvent.amountMyr,
-              transaction_date: newEvent.date,
-              reference_number: newEvent.referenceNumber,
-              description: newEvent.description,
-              business_id: newEvent.businessId || null,
-              created_by_user_id: user?.id || null,
-              created_by_name: user?.fullName || null,
-            }, isAiConfirmed ? { onConflict: "workspace_id,reference_number", ignoreDuplicates: true } : undefined);
-          } else if (newEvent.type === "EXPENSE" || newEvent.type === "DEBT") {
-            await supabase.from("expense_records").upsert({
-              id: newId,
-              workspace_id: activeWorkspace.id,
-              category_id: catId,
-              payment_bank_account_id: newEvent.bankAccountId || null,
-              payment_cash_account_id: newEvent.cashAccountId || null,
-              recipient_vendor_name: newEvent.partyName,
-              amount_myr: newEvent.amountMyr,
-              tax_amount_myr: 0,
-              transaction_date: newEvent.date,
-              reference_number: newEvent.referenceNumber,
-              created_by_user_id: user?.id || null,
-              created_by_name: user?.fullName || null,
-              description: newEvent.type === "DEBT" ? `[DEBT] ${newEvent.description}` : newEvent.description,
-              business_id: newEvent.businessId || null,
-            }, isAiConfirmed ? { onConflict: "workspace_id,reference_number", ignoreDuplicates: true } : undefined);
-          } else if (newEvent.type === "RECEIVABLE") {
-            await supabase.from("receivables").upsert({
-              id: newId,
-              workspace_id: activeWorkspace.id,
-              customer_name: newEvent.partyName,
-              invoice_number: newEvent.referenceNumber,
-              invoice_date: newEvent.date,
-              due_date: newEvent.dueDate || newEvent.date,
-              total_amount_myr: newEvent.amountMyr,
-              paid_amount_myr: newEvent.isCompleted ? newEvent.amountMyr : 0,
-              status: newEvent.isCompleted ? "PAID" : "UNPAID",
-              category_id: catId,
-              business_id: newEvent.businessId || null,
-            }, isAiConfirmed ? { onConflict: "workspace_id,invoice_number", ignoreDuplicates: true } : undefined);
-          } else if (newEvent.type === "PAYABLE") {
-            await supabase.from("payables").upsert({
-              id: newId,
-              workspace_id: activeWorkspace.id,
-              vendor_name: newEvent.partyName,
-              bill_number: newEvent.referenceNumber,
-              bill_date: newEvent.date,
-              due_date: newEvent.dueDate || newEvent.date,
-              total_amount_myr: newEvent.amountMyr,
-              paid_amount_myr: newEvent.isCompleted ? newEvent.amountMyr : 0,
-              status: newEvent.isCompleted ? "PAID" : "UNPAID",
-              category_id: catId,
-              business_id: newEvent.businessId || null,
-            }, isAiConfirmed ? { onConflict: "workspace_id,bill_number", ignoreDuplicates: true } : undefined);
-          }
+          await persistEventToSupabase(newEvent, catId);
         } catch (err: any) {
           console.error("DB persistence insert record failed:", err.message);
         }
@@ -886,6 +897,114 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
     }
 
     return newEvent;
+  };
+
+  // Bulk variant of addFinancialEvent for imports (e.g. confirming a bank
+  // statement with hundreds/thousands of lines). Unlike calling
+  // addFinancialEvent in a loop, this updates React state and localStorage
+  // ONCE for the whole batch (avoiding O(n^2) full-state re-serialization on
+  // every line) and sends Supabase writes in small concurrency-limited
+  // chunks with a per-category-name cache, instead of firing N unbounded
+  // concurrent requests. onProgress (optional) is called after each chunk so
+  // callers can show live "X of Y inserted" diagnostics.
+  const addFinancialEventsBatch = async (
+    events: Omit<FinancialEvent, "id">[],
+    onProgress?: (progress: {
+      submitted: number;
+      inserted: number;
+      failed: number;
+      batchNumber: number;
+      totalBatches: number;
+      batchDurationMs: number;
+    }) => void
+  ): Promise<FinancialEvent[]> => {
+    const newEvents: FinancialEvent[] = events.map((event) => ({
+      ...event,
+      id: generateUUID(),
+      createdByUserId: event.createdByUserId || user?.id || undefined,
+      createdByName: event.createdByName || user?.fullName || undefined,
+      createdAt: event.createdAt || new Date().toISOString(),
+    }));
+
+    // Single optimistic local state update for the whole batch.
+    const updated = [...newEvents, ...financialEvents];
+    setFinancialEvents(updated);
+
+    let updatedCash = [...cashAccounts];
+    let updatedBank = [...bankAccounts];
+    for (const newEvent of newEvents) {
+      if (!newEvent.isCompleted) continue;
+      const isIngress = newEvent.type === "INCOME" || newEvent.type === "RECEIVABLE";
+      const factor = isIngress ? 1 : -1;
+      const amt = newEvent.amountMyr * factor;
+      if (newEvent.cashAccountId) {
+        updatedCash = updatedCash.map((acct) =>
+          acct.id === newEvent.cashAccountId ? { ...acct, currentBalanceMyr: acct.currentBalanceMyr + amt } : acct
+        );
+      } else if (newEvent.bankAccountId) {
+        updatedBank = updatedBank.map((acct) =>
+          acct.id === newEvent.bankAccountId ? { ...acct, currentBalanceMyr: acct.currentBalanceMyr + amt } : acct
+        );
+      }
+    }
+    setCashAccounts(updatedCash);
+    setBankAccounts(updatedBank);
+
+    // Single localStorage write for the whole batch, instead of one per line.
+    persistCurrentState(updated, updatedCash, updatedBank);
+
+    if (activeWorkspace) {
+      writeAuditLog({
+        workspaceId: activeWorkspace.id,
+        module: "Financial Records",
+        action: "CREATE",
+        oldValue: null,
+        newValue: { batchImport: true, count: newEvents.length, sampleIds: newEvents.slice(0, 5).map((e) => e.id) },
+      });
+    }
+
+    let inserted = 0;
+    let failed = 0;
+
+    if (isSupabaseConfigured() && !isMockUser && supabase && activeWorkspace && !isDemoWorkspace(activeWorkspace.id)) {
+      const BATCH_SIZE = 40;
+      const totalBatches = Math.max(1, Math.ceil(newEvents.length / BATCH_SIZE));
+      const categoryCache = new Map<string, string>();
+
+      for (let b = 0; b < totalBatches; b++) {
+        const chunk = newEvents.slice(b * BATCH_SIZE, (b + 1) * BATCH_SIZE);
+        const chunkStart = Date.now();
+
+        await Promise.all(
+          chunk.map(async (newEvent) => {
+            try {
+              const cacheKey = `${newEvent.categoryName}::${newEvent.type}`;
+              let catId = categoryCache.get(cacheKey);
+              if (!catId) {
+                catId = await getOrCreateCategoryId(activeWorkspace.id, newEvent.categoryName, newEvent.type);
+                categoryCache.set(cacheKey, catId);
+              }
+              await persistEventToSupabase(newEvent, catId);
+              inserted++;
+            } catch (err: any) {
+              failed++;
+              console.error(`Batch DB persistence insert failed for event ${newEvent.id}:`, err.message);
+            }
+          })
+        );
+
+        onProgress?.({
+          submitted: newEvents.length,
+          inserted,
+          failed,
+          batchNumber: b + 1,
+          totalBatches,
+          batchDurationMs: Date.now() - chunkStart,
+        });
+      }
+    }
+
+    return newEvents;
   };
 
   const editFinancialEvent = (id: string, updated: Partial<FinancialEvent>) => {
@@ -1663,6 +1782,118 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
     }
   };
 
+  // Bulk variant of learnOcrPattern for imports with many lines (e.g. a bank
+  // statement). Folds all pattern updates into the in-memory list first, then
+  // does ONE state update, ONE localStorage persist, and ONE summary audit
+  // log entry for the whole batch — instead of re-serializing the entire
+  // financial state and writing an audit row per line.
+  const learnOcrPatternsBatch = async (
+    patterns: Omit<OcrLearnedPattern, "id" | "occurrenceCount" | "lastUpdated">[]
+  ) => {
+    if (!activeWorkspace || patterns.length === 0) return;
+
+    let workingPatterns = [...ocrLearnedPatterns];
+    const dirty: OcrLearnedPattern[] = [];
+    const timestamp = new Date().toISOString();
+
+    for (const pattern of patterns) {
+      const normalizedVendorInput = pattern.vendorName.trim();
+      const vendorLower = normalizedVendorInput.toLowerCase();
+      const vendorKey = vendorMatchKey(normalizedVendorInput);
+
+      let existingIndex = workingPatterns.findIndex(
+        (p) => p.vendorName.toLowerCase() === vendorLower && p.workspaceId === activeWorkspace.id
+      );
+      if (existingIndex === -1) {
+        existingIndex = workingPatterns.findIndex(
+          (p) => p.workspaceId === activeWorkspace.id && isFuzzyVendorMatch(vendorKey, vendorMatchKey(p.vendorName))
+        );
+      }
+
+      let newValue: OcrLearnedPattern;
+      if (existingIndex !== -1) {
+        const oldElement = workingPatterns[existingIndex];
+        const newOccurrence = oldElement.occurrenceCount + 1;
+        const newConfidence = parseFloat(
+          ((oldElement.confidenceScore * oldElement.occurrenceCount + pattern.confidenceScore) / newOccurrence).toFixed(4)
+        );
+        newValue = {
+          ...oldElement,
+          vendorName: normalizedVendorInput,
+          category: pattern.category,
+          recordType: pattern.recordType,
+          confidenceScore: newConfidence,
+          occurrenceCount: newOccurrence,
+          lastUpdated: timestamp,
+        };
+        workingPatterns[existingIndex] = newValue;
+      } else {
+        newValue = {
+          id: generateUUID(),
+          workspaceId: activeWorkspace.id,
+          vendorName: normalizedVendorInput,
+          category: pattern.category,
+          recordType: pattern.recordType,
+          confidenceScore: pattern.confidenceScore,
+          occurrenceCount: 1,
+          lastUpdated: timestamp,
+        };
+        workingPatterns = [newValue, ...workingPatterns];
+      }
+      dirty.push(newValue);
+    }
+
+    setOcrLearnedPatterns(workingPatterns);
+    persistCurrentState(
+      financialEvents,
+      cashAccounts,
+      bankAccounts,
+      debtRecords,
+      financialCommitments,
+      financialEvidencePackages,
+      workingPatterns
+    );
+
+    writeAuditLog({
+      workspaceId: activeWorkspace.id,
+      module: "OCR Learning",
+      action: "UPDATE",
+      oldValue: null,
+      newValue: { batchImport: true, count: patterns.length },
+    });
+
+    if (isSupabaseConfigured() && !isMockUser && supabase) {
+      const BATCH_SIZE = 40;
+      // De-dupe by final pattern id — multiple lines for the same vendor
+      // collapse to a single upsert with the latest rolling values.
+      const finalById = new Map<string, OcrLearnedPattern>();
+      for (const p of dirty) finalById.set(p.id, p);
+      const toWrite = Array.from(finalById.values());
+
+      for (let b = 0; b < toWrite.length; b += BATCH_SIZE) {
+        const chunk = toWrite.slice(b, b + BATCH_SIZE);
+        await Promise.all(
+          chunk.map(async (p) => {
+            try {
+              await supabase.from("ocr_learned_patterns").upsert({
+                id: p.id,
+                workspace_id: p.workspaceId,
+                vendor_name: p.vendorName,
+                category: p.category,
+                record_type: p.recordType,
+                confidence_score: p.confidenceScore,
+                occurrence_count: p.occurrenceCount,
+                last_updated: p.lastUpdated,
+              });
+            } catch (ex: any) {
+              console.warn("DB learn batch upsert skipped:", ex.message);
+            }
+          })
+        );
+      }
+    }
+  };
+
   const deleteOcrLearnedPattern = (id: string) => {
     if (!activeWorkspace) return;
     const original = ocrLearnedPatterns.find((item) => item.id === id);
@@ -1994,6 +2225,7 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
         loading,
         error,
         addFinancialEvent,
+        addFinancialEventsBatch,
         editFinancialEvent,
         deleteFinancialEvent,
         addCashAccount,
@@ -2012,6 +2244,7 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
         editFinancialEvidencePackage,
         deleteFinancialEvidencePackage,
         learnOcrPattern,
+        learnOcrPatternsBatch,
         deleteOcrLearnedPattern,
         resetWorkspaceData,
         restoreWorkspaceData,
