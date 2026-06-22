@@ -13,6 +13,10 @@ import {
   EMPTY_PERSONAL_PROFILE, EMPTY_BUSINESS_PROFILE, type Vehicle, type Dependent, type Business,
 } from "../lib/profileData";
 import { addAssetPurchase, addOwnerTransaction } from "../lib/assetOwnerData";
+import { matchOwnBusiness, matchOwnBusinessAndBranch } from "../lib/businessMatching";
+import { loadBusinessBranches, type BusinessBranch } from "../lib/profileData";
+import { useConfirmChatSuggestion } from "../hooks/useConfirmChatSuggestion";
+import type { ChatSuggestion, ChatSuggestionExtra, ChatSuggestionRecordType, ChatSuggestionStatus, ChatSuggestionStatusValue, PendingChatEvidence } from "../lib/chatSuggestionTypes";
 import {
   Home, Plus, Upload, Search, Bell, User as UserIcon,
   Send, Brain, RefreshCw, Receipt, FileSpreadsheet, Landmark,
@@ -23,49 +27,6 @@ import {
 } from "lucide-react";
 
 type StaffTab = "home" | "tambah" | "muat_naik" | "rekod" | "notifikasi" | "profil";
-
-interface ChatSuggestion {
-  id: string;
-  title: string;
-  description: string;
-  actionType: string;
-  payload: {
-    transactionType?: "INCOME" | "EXPENSE" | "DEBT" | "RECEIVABLE" | "PAYABLE" | "COMMITMENT" | "ASSET_PURCHASE" | "OWNER_TRANSACTION";
-    category?: string;
-    amount?: number;
-    date?: string;
-    relatedParty?: string;
-    confidenceScore?: number;
-    ownerTransactionSubtype?: "CAPITAL_INJECTION" | "DRAWING";
-  };
-  businessId?: string | null;
-  businessName?: string;
-  businessPicked?: boolean;
-  evidenceStatus?: "NONE" | "ATTACHED" | "SKIPPED";
-  evidenceFileName?: string;
-  accountingRecommendation?: string;
-  accountingLevel1Group?: string;
-  accountingReason?: string;
-  financialStatementImpact?: string;
-  accountingRiskLevel?: "LOW" | "MEDIUM" | "HIGH";
-  accountingExplanationText?: string;
-  accountingMatchStatus?: "MATCH" | "POSSIBLE_MISMATCH" | "HIGH_RISK_MISMATCH";
-  accountingConfidence?: number;
-}
-type ChatSuggestionRecordType = "INCOME" | "EXPENSE" | "RECEIVABLE" | "PAYABLE" | "DEBT" | "COMMITMENT";
-type ChatSuggestionStatusValue = "pending" | "confirmed" | "rejected";
-interface ChatSuggestionStatus {
-  status: ChatSuggestionStatusValue;
-  recordId?: string;
-  recordType?: ChatSuggestionRecordType;
-  confirmedAt?: string;
-  confirmedByName?: string;
-  confirmedByUserId?: string;
-  editedAmount?: number;
-  editedCategory?: string;
-  editedRelatedParty?: string;
-  editedDate?: string;
-}
 
 function getGreeting() {
   const h = new Date().getHours();
@@ -180,8 +141,9 @@ function AddRecordForm({
 export function StaffHomeScreen() {
   const { user, signOut, isMockUser } = useAuth();
   const { activeWorkspace, workspaces, selectWorkspace } = useWorkspace();
-  const { financialEvents, addFinancialEvent, editFinancialEvent, addDebtRecord, editDebtRecord, addFinancialCommitment, editFinancialCommitment, learnOcrPattern, addFinancialEvidencePackage } = useFinancials();
+  const { financialEvents, addFinancialEvent, editFinancialEvent, addDebtRecord, addDebtRecordAwaited, editDebtRecord, addFinancialCommitment, addFinancialCommitmentAwaited, editFinancialCommitment, learnOcrPattern, addFinancialEvidencePackage, linkEvidenceToRecord } = useFinancials();
   const { activeTenant } = useTenant();
+  const { confirmChatSuggestion } = useConfirmChatSuggestion();
 
   const [activeTab, setActiveTab] = useState<StaffTab>("home");
   const [addDefaultType, setAddDefaultType] = useState<"INCOME" | "EXPENSE">("EXPENSE");
@@ -211,13 +173,15 @@ export function StaffHomeScreen() {
   const [chatLoading, setChatLoading] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
   // Per-suggestion business pick + evidence step, layered on top of the AI suggestion before final Sahkan.
-  const [chatSuggestionExtra, setChatSuggestionExtra] = useState<Record<string, { businessId: string | null; businessName: string; businessPicked: boolean; evidenceStatus: "NONE" | "ATTACHED" | "SKIPPED" }>>({});
+  const [chatSuggestionExtra, setChatSuggestionExtra] = useState<Record<string, ChatSuggestionExtra>>({});
   // Accounting Knowledge Base V1: per-suggestion dismissal of the "Cadangan Semakan" review banner.
   const [accountingBannerDismissed, setAccountingBannerDismissed] = useState<Record<string, boolean>>({});
   const chatEvidenceFilesRef = useRef<Record<string, File>>({});
   // Holds uploaded-but-not-yet-linked evidence metadata per suggestion id, until
   // Sahkan creates the underlying financial record and we know its id to link to.
-  const pendingChatEvidenceRef = useRef<Record<string, { documentType: "RECEIPT"; fileName: string; fileUrl: string }>>({});
+  const pendingChatEvidenceRef = useRef<Record<string, PendingChatEvidence>>({});
+  const [chatActionErrors, setChatActionErrors] = useState<Record<string, string>>({});
+  const [businessBranches, setBusinessBranches] = useState<Record<string, BusinessBranch[]>>({});
   const chatEvidenceInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
   const [chatAttaching, setChatAttaching] = useState(false);
   const chatFileInputRef = useRef<HTMLInputElement>(null);
@@ -345,6 +309,26 @@ export function StaffHomeScreen() {
     loadBusinesses(wsId, isMockUser).then(setBusinesses);
   }, [wsId, isMockUser]);
 
+  const [allBranchesLoaded, setAllBranchesLoaded] = useState(false);
+  // Branch Mapping needs every active business's branches available up front,
+  // same as OwnerDashboard.tsx, so the shared matching engine below can check
+  // a chat suggestion's text against the full branch list before Sahkan.
+  useEffect(() => {
+    if (!wsId || allBranchesLoaded) return;
+    const activeBusinesses = businesses.filter((b) => b.isActive);
+    if (activeBusinesses.length === 0) return;
+    setAllBranchesLoaded(true);
+    Promise.all(activeBusinesses.map((b) => loadBusinessBranches(wsId, isMockUser, b.id).then((branches) => ({ id: b.id, branches }))))
+      .then((results) => {
+        setBusinessBranches((prev) => {
+          const next = { ...prev };
+          results.forEach(({ id, branches }) => { next[id] = branches; });
+          return next;
+        });
+      })
+      .catch(() => { /* best-effort only */ });
+  }, [wsId, businesses, allBranchesLoaded]);
+
   const sendSupport = async (text?: string) => {
     const q = (text || supportInput).trim();
     if (!q || supportLoading) return;
@@ -414,9 +398,41 @@ export function StaffHomeScreen() {
       setChatSuggestionExtra(prev => {
         const next = { ...prev };
         suggestions.forEach(s => {
-          next[s.id] = activeBusinesses.length > 0
-            ? { businessId: null, businessName: "", businessPicked: false, evidenceStatus: attachment ? "ATTACHED" : "NONE" }
-            : { businessId: null, businessName: "Personal", businessPicked: true, evidenceStatus: attachment ? "ATTACHED" : "NONE" };
+          const evidenceStatus: ChatSuggestionExtra["evidenceStatus"] = attachment ? "ATTACHED" : "NONE";
+          if (activeBusinesses.length === 0) {
+            next[s.id] = { businessId: null, businessName: "Personal", businessPicked: true, evidenceStatus };
+            return;
+          }
+          // Reuse the same Business/Branch Mapping engine as OwnerDashboard.tsx —
+          // never duplicate the matching logic for AI Chat.
+          const chatMatchText = [s.payload?.relatedParty, s.description, s.payload?.category].filter(Boolean).join(" ");
+          const branchMatch = matchOwnBusinessAndBranch(chatMatchText, activeBusinesses, businessBranches);
+          if (branchMatch && !branchMatch.ambiguous) {
+            next[s.id] = {
+              businessId: branchMatch.business.id,
+              businessName: branchMatch.business.businessName,
+              businessPicked: true,
+              evidenceStatus,
+              branchId: branchMatch.branch?.id ?? null,
+              branchName: branchMatch.branch?.branchName ?? "",
+              branchPicked: true,
+              autoMapped: true,
+            };
+          } else if (branchMatch && branchMatch.ambiguous) {
+            next[s.id] = {
+              businessId: branchMatch.business.id,
+              businessName: branchMatch.business.businessName,
+              businessPicked: true,
+              evidenceStatus,
+              branchId: null,
+              branchName: "",
+              branchPicked: false,
+              autoMapped: true,
+              branchCandidates: branchMatch.candidateLabels,
+            };
+          } else {
+            next[s.id] = { businessId: null, businessName: "", businessPicked: false, evidenceStatus };
+          }
         });
         return next;
       });
@@ -458,7 +474,20 @@ export function StaffHomeScreen() {
   const handleChatPickBusiness = (suggestionId: string, businessId: string | null, businessName: string) => {
     setChatSuggestionExtra(prev => ({
       ...prev,
-      [suggestionId]: { ...(prev[suggestionId] || { businessId: null, businessName: "", businessPicked: false, evidenceStatus: "NONE" }), businessId, businessName, businessPicked: true },
+      [suggestionId]: {
+        ...(prev[suggestionId] || { businessId: null, businessName: "", businessPicked: false, evidenceStatus: "NONE" }),
+        businessId, businessName, businessPicked: true,
+        // Manual business pick overrides any auto-mapping; branch must be re-resolved for the new business.
+        branchId: null, branchName: "", branchPicked: !businessId || (businessBranches[businessId] || []).filter(br => br.isActive).length === 0,
+        autoMapped: false, branchCandidates: undefined,
+      },
+    }));
+  };
+
+  const handleChatPickBranch = (suggestionId: string, branchId: string | null, branchName: string) => {
+    setChatSuggestionExtra(prev => ({
+      ...prev,
+      [suggestionId]: { ...(prev[suggestionId] || { businessId: null, businessName: "", businessPicked: false, evidenceStatus: "NONE" }), branchId, branchName, branchPicked: true },
     }));
   };
 
@@ -501,153 +530,32 @@ export function StaffHomeScreen() {
     }));
   };
 
-  const handleChatConfirmSuggestion = (s: ChatSuggestion, edited?: typeof chatEditDraft) => {
+  const handleChatConfirmSuggestion = async (s: ChatSuggestion, edited?: typeof chatEditDraft) => {
     if (!activeWorkspace || chatSuggestionStatus[s.id]?.status === "confirmed") return;
+    setChatActionErrors(prev => { const next = { ...prev }; delete next[s.id]; return next; });
     const extra = chatSuggestionExtra[s.id];
     if (!extra || !extra.businessPicked) return;
-    const businessId = extra.businessId;
-    const transactionType = s.payload?.transactionType;
-    const amount = Number(edited ? edited.amount : s.payload?.amount) || 0;
-    const category = (edited ? edited.category : s.payload?.category) || "Lain-lain";
-    const relatedParty = (edited ? edited.relatedParty : s.payload?.relatedParty) || "Tidak Dinyatakan";
-    const date = (edited ? edited.date : s.payload?.date) || new Date().toISOString().split("T")[0];
-    const confidenceScore = s.payload?.confidenceScore ?? 0.7;
 
-    let newRecordId: string | undefined;
-    let newRecordType: ChatSuggestionRecordType | undefined;
-
-    if (transactionType === "INCOME" || transactionType === "EXPENSE") {
-      const ev = addFinancialEvent({
-        workspaceId: activeWorkspace.id,
-        businessId: businessId || undefined,
-        type: transactionType,
-        categoryName: category,
-        amountMyr: amount,
-        partyName: relatedParty,
-        date,
-        referenceNumber: `AI-${s.id}`,
-        description: `Direkodkan melalui pengesahan cadangan Kerani AI: ${s.title}`,
-        isCompleted: true,
-      });
-      newRecordId = ev.id;
-      newRecordType = transactionType;
-    } else if (transactionType === "DEBT") {
-      const debt = addDebtRecord({
-        workspaceId: activeWorkspace.id,
-        businessId: businessId || undefined,
-        creditorName: relatedParty,
-        borrowedDate: date,
-        totalAmountMyr: amount,
-        repaidAmountMyr: 0,
-        status: "ACTIVE",
-        description: `Direkodkan melalui pengesahan cadangan Kerani AI: ${s.title}`,
-      });
-      newRecordId = debt.id;
-      newRecordType = "DEBT";
-    } else if (transactionType === "RECEIVABLE") {
-      const ev = addFinancialEvent({
-        workspaceId: activeWorkspace.id,
-        businessId: businessId || undefined,
-        type: "RECEIVABLE",
-        categoryName: category,
-        amountMyr: amount,
-        partyName: relatedParty,
-        date,
-        referenceNumber: `AI-${s.id}`,
-        description: `Direkodkan melalui pengesahan cadangan Kerani AI: ${s.title}`,
-        isCompleted: false,
-      });
-      newRecordId = ev.id;
-      newRecordType = "RECEIVABLE";
-    } else if (transactionType === "PAYABLE") {
-      const ev = addFinancialEvent({
-        workspaceId: activeWorkspace.id,
-        businessId: businessId || undefined,
-        type: "PAYABLE",
-        categoryName: category,
-        amountMyr: amount,
-        partyName: relatedParty,
-        date,
-        referenceNumber: `AI-${s.id}`,
-        description: `Direkodkan melalui pengesahan cadangan Kerani AI: ${s.title}`,
-        isCompleted: false,
-      });
-      newRecordId = ev.id;
-      newRecordType = "PAYABLE";
-    } else if (transactionType === "COMMITMENT") {
-      const cmt = addFinancialCommitment({
-        workspaceId: activeWorkspace.id,
-        businessId: businessId || undefined,
-        description: `Direkodkan melalui pengesahan cadangan Kerani AI: ${s.title}`,
-        obligeeName: relatedParty,
-        amountPerIntervalMyr: amount,
-        recurrence: "MONTHLY",
-        startDate: date,
-        isActive: true,
-        status: "ACTIVE",
-      });
-      newRecordId = cmt.id;
-      newRecordType = "COMMITMENT";
-    } else if (transactionType === "ASSET_PURCHASE") {
-      addAssetPurchase(activeWorkspace.id, isMockUser, {
-        assetName: category,
-        category,
-        purchaseAmountMyr: amount,
-        purchaseDate: date,
-        vendorName: relatedParty,
-        notes: `Direkodkan melalui pengesahan cadangan Kerani AI: ${s.title}`,
-      });
-    } else if (transactionType === "OWNER_TRANSACTION") {
-      addOwnerTransaction(activeWorkspace.id, isMockUser, {
-        type: s.payload?.ownerTransactionSubtype || (category.toUpperCase().includes("DRAWING") ? "DRAWING" : "CAPITAL_INJECTION"),
-        amountMyr: amount,
-        transactionDate: date,
-        description: `Direkodkan melalui pengesahan cadangan Kerani AI: ${s.title}`,
-      });
-    } else {
+    const result = await confirmChatSuggestion(s, extra, edited, pendingChatEvidenceRef.current[s.id]);
+    if (!result.ok) {
+      setChatActionErrors(prev => ({ ...prev, [s.id]: result.error || "Ralat tidak diketahui." }));
       return;
     }
-
-    // If a receipt/invoice was attached before pressing Sahkan — whether by the
-    // explicit evidence-attach step, or automatically because this suggestion came
-    // from an OCR/image/PDF/attachment upload in the chat itself — link it to the
-    // record that just got created, exactly as Owner/OCREngineConsole do. Skipped
-    // evidence never creates a mapping row.
-    const pendingEvidence = pendingChatEvidenceRef.current[s.id];
-    if (extra.evidenceStatus === "ATTACHED" && pendingEvidence && newRecordId && newRecordType) {
-      addFinancialEvidencePackage({
-        workspaceId: activeWorkspace.id,
-        documentType: pendingEvidence.documentType,
-        uploadDate: new Date().toISOString().split("T")[0],
-        fileName: pendingEvidence.fileName,
-        fileUrl: pendingEvidence.fileUrl,
-        relatedRecordType: newRecordType,
-        relatedRecordId: newRecordId,
-      });
-      delete pendingChatEvidenceRef.current[s.id];
-    }
+    delete pendingChatEvidenceRef.current[s.id];
 
     // Mark confirmed (and persist) only after the insert succeeded, capturing the new
     // record's id/type so a later post-confirm Edit can UPDATE instead of re-inserting.
     markChatSuggestionStatus(s.id, {
       status: "confirmed",
-      recordId: newRecordId,
-      recordType: newRecordType,
+      recordId: result.recordId,
+      recordType: result.recordType,
       confirmedAt: new Date().toISOString(),
-      editedAmount: amount,
-      editedCategory: category,
-      editedRelatedParty: relatedParty,
-      editedDate: date,
+      editedAmount: result.amount,
+      editedCategory: result.category,
+      editedRelatedParty: result.relatedParty,
+      editedDate: result.date,
       confirmedByName: user?.fullName || undefined,
       confirmedByUserId: user?.id || undefined,
-    });
-
-    if (transactionType !== "ASSET_PURCHASE" && transactionType !== "OWNER_TRANSACTION") learnOcrPattern({
-      workspaceId: activeWorkspace.id,
-      vendorName: relatedParty,
-      category,
-      recordType: transactionType === "COMMITMENT" ? "EXPENSE" : transactionType,
-      confidenceScore,
     });
 
     setEditingChatSuggestionId(null);
@@ -1058,7 +966,32 @@ export function StaffHomeScreen() {
                               </div>
                             )}
                             {status === "pending" && extra.businessPicked && (
-                              <div className="text-xs text-slate-500">Bisnes: <span className="font-semibold text-slate-700">{extra.businessName || "Personal"}</span></div>
+                              <div className="text-xs text-slate-500">
+                                Bisnes: <span className="font-semibold text-slate-700">{extra.branchName ? `${extra.businessName} - ${extra.branchName}` : (extra.businessName || "Personal")}</span>
+                                {extra.autoMapped && <span className="ml-1.5 text-[10px] text-emerald-600 font-semibold">✓ Auto-mapped</span>}
+                              </div>
+                            )}
+                            {status === "pending" && extra.businessPicked && extra.businessId && !extra.branchPicked && (
+                              <div className="space-y-1.5 pt-1">
+                                <p className="text-xs text-amber-600">
+                                  {(extra.branchCandidates && extra.branchCandidates.length > 0)
+                                    ? `Lebih daripada satu cawangan sepadan (${extra.branchCandidates.join(", ")}) — sila pilih cawangan:`
+                                    : "Pilih cawangan (jika berkaitan):"}
+                                </p>
+                                <div className="flex flex-wrap gap-2">
+                                  {(businessBranches[extra.businessId] || []).filter(br => br.isActive).map(br => (
+                                    <button key={br.id} type="button" onClick={() => handleChatPickBranch(s.id, br.id, br.branchName)}
+                                      title={br.branchName}
+                                      className="px-3 py-1.5 text-sm rounded-full bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-700 font-semibold truncate max-w-[160px]">
+                                      {br.branchName}
+                                    </button>
+                                  ))}
+                                  <button type="button" onClick={() => handleChatPickBranch(s.id, null, "")}
+                                    className="px-3 py-1.5 text-sm rounded-full bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-700 font-semibold">
+                                    Tiada Cawangan Tertentu
+                                  </button>
+                                </div>
+                              </div>
                             )}
                             {status === "pending" && extra.businessPicked && (
                               <div className="space-y-1.5">
@@ -1084,7 +1017,12 @@ export function StaffHomeScreen() {
                                 )}
                               </div>
                             )}
-                            {status === "pending" && editingChatSuggestionId !== s.id && extra.businessPicked && extra.evidenceStatus !== "NONE" && (
+                            {chatActionErrors[s.id] && (
+                              <div className="flex items-start gap-1.5 text-xs text-rose-700 bg-rose-50 border border-rose-200 rounded-lg px-2 py-1.5">
+                                <span>{chatActionErrors[s.id]}</span>
+                              </div>
+                            )}
+                            {status === "pending" && editingChatSuggestionId !== s.id && extra.businessPicked && !!extra.branchPicked && extra.evidenceStatus !== "NONE" && (
                               <div className="flex gap-2 pt-1">
                                 <button type="button" onClick={() => handleChatConfirmSuggestion(s)} className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-semibold">Sahkan</button>
                                 <button type="button" onClick={() => handleChatStartEdit(s)} className="px-3 py-1.5 rounded-lg bg-slate-200 hover:bg-slate-300 text-slate-800 font-semibold">Edit</button>

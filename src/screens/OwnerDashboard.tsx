@@ -75,48 +75,8 @@ const todayLocalIso = (): string => {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 };
 
-interface ChatSuggestion {
-  id: string;
-  title: string;
-  description: string;
-  actionType: string;
-  payload: {
-    transactionType?: "INCOME" | "EXPENSE" | "DEBT" | "RECEIVABLE" | "PAYABLE" | "COMMITMENT" | "ASSET_PURCHASE" | "OWNER_TRANSACTION";
-    ownerTransactionSubtype?: "CAPITAL_INJECTION" | "DRAWING";
-    category?: string;
-    amount?: number;
-    date?: string;
-    relatedParty?: string;
-    confidenceScore?: number;
-  };
-  businessId?: string | null;
-  businessName?: string;
-  businessPicked?: boolean;
-  evidenceStatus?: "NONE" | "ATTACHED" | "SKIPPED";
-  evidenceFileName?: string;
-  accountingRecommendation?: string;
-  accountingLevel1Group?: string;
-  accountingReason?: string;
-  financialStatementImpact?: string;
-  accountingRiskLevel?: "LOW" | "MEDIUM" | "HIGH";
-  accountingExplanationText?: string;
-  accountingMatchStatus?: "MATCH" | "POSSIBLE_MISMATCH" | "HIGH_RISK_MISMATCH";
-  accountingConfidence?: number;
-}
-type ChatSuggestionRecordType = "INCOME" | "EXPENSE" | "RECEIVABLE" | "PAYABLE" | "DEBT" | "COMMITMENT";
-type ChatSuggestionStatusValue = "pending" | "confirmed" | "rejected";
-interface ChatSuggestionStatus {
-  status: ChatSuggestionStatusValue;
-  recordId?: string;
-  recordType?: ChatSuggestionRecordType;
-  confirmedAt?: string;
-  confirmedByName?: string;
-  confirmedByUserId?: string;
-  editedAmount?: number;
-  editedCategory?: string;
-  editedRelatedParty?: string;
-  editedDate?: string;
-}
+import type { ChatSuggestion, ChatSuggestionExtra, ChatSuggestionRecordType, ChatSuggestionStatus, ChatSuggestionStatusValue, PendingChatEvidence } from "../lib/chatSuggestionTypes";
+import { useConfirmChatSuggestion } from "../hooks/useConfirmChatSuggestion";
 
 interface ChatMsg {
   id: string;
@@ -216,6 +176,7 @@ export function OwnerDashboard() {
     return map;
   }, [userRoles]);
   const { financialEvents, addFinancialEvent, addFinancialEventAwaited, addFinancialEventsBatch, editFinancialEvent, deleteFinancialEvent, addDebtRecord, addDebtRecordAwaited, editDebtRecord, deleteDebtRecord, addFinancialCommitment, addFinancialCommitmentAwaited, editFinancialCommitment, deleteFinancialCommitment, learnOcrPattern, learnOcrPatternsBatch, ocrLearnedPatterns, cashAccounts, bankAccounts, debtRecords, financialCommitments, financialEvidencePackages, addFinancialEvidencePackage } = useFinancials();
+  const { confirmChatSuggestion } = useConfirmChatSuggestion();
 
   const [activeTab, setActiveTab] = useState<MainTab>("home");
   const [morePage, setMorePage] = useState<MorePage>("menu");
@@ -233,11 +194,9 @@ export function OwnerDashboard() {
   const [editingChatSuggestionId, setEditingChatSuggestionId] = useState<string | null>(null);
   const [chatEditDraft, setChatEditDraft] = useState({ amount: "", category: "", relatedParty: "", date: "" });
   // Per-suggestion business pick + evidence step, layered on top of the AI suggestion before final Sahkan.
-  const [chatSuggestionExtra, setChatSuggestionExtra] = useState<Record<string, {
-    businessId: string | null; businessName: string; businessPicked: boolean; evidenceStatus: "NONE" | "ATTACHED" | "SKIPPED";
-    branchId?: string | null; branchName?: string; branchPicked?: boolean; autoMapped?: boolean; branchCandidates?: string[];
-  }>>({});
+  const [chatSuggestionExtra, setChatSuggestionExtra] = useState<Record<string, ChatSuggestionExtra>>({});
   const chatEvidenceFilesRef = useRef<Record<string, File>>({});
+  const pendingChatEvidenceRef = useRef<Record<string, PendingChatEvidence>>({});
   const chatEvidenceInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
   // Cross-workspace learning: suggestionId -> { workspaceName } when AI has learned
   // this vendor is usually recorded under a DIFFERENT company. Suggestion-only, never auto-switched.
@@ -1903,8 +1862,19 @@ export function OwnerDashboard() {
     }));
   };
 
-  const handleChatEvidenceAttach = (suggestionId: string, file: File) => {
+  const handleChatEvidenceAttach = async (suggestionId: string, file: File) => {
     chatEvidenceFilesRef.current[suggestionId] = file;
+    let fileUrl = "";
+    const canPersistDoc = activeWorkspace && isSupabaseConfigured() && !isMockUser && supabase && !isDemoWorkspace(activeWorkspace.id) && user;
+    if (canPersistDoc) {
+      const { doc, error } = await uploadDocument(file, activeWorkspace!.id, user!.id, "RECEIPT");
+      if (doc && !error) {
+        setDocs(prev => [doc, ...prev]);
+        fileUrl = (await getDocumentUrl(doc.file_path_supabase)) || "";
+      }
+    }
+    if (!fileUrl) fileUrl = URL.createObjectURL(file);
+    pendingChatEvidenceRef.current[suggestionId] = { documentType: "RECEIPT", fileName: file.name, fileUrl };
     setChatSuggestionExtra(prev => ({
       ...prev,
       [suggestionId]: { ...(prev[suggestionId] || { businessId: null, businessName: "Personal", businessPicked: true, evidenceStatus: "NONE" }), evidenceStatus: "ATTACHED" },
@@ -1923,140 +1893,10 @@ export function OwnerDashboard() {
     setChatActionErrors(prev => { const next = { ...prev }; delete next[s.id]; return next; });
     const extra = chatSuggestionExtra[s.id];
     if (!extra || !extra.businessPicked) return;
-    const businessId = extra.businessId;
-    const branchId = extra.branchId;
-    const transactionType = s.payload?.transactionType;
-    const amount = Number(edited ? edited.amount : s.payload?.amount) || 0;
-    const category = (edited ? edited.category : s.payload?.category) || "Lain-lain";
-    const relatedParty = (edited ? edited.relatedParty : s.payload?.relatedParty) || "Tidak Dinyatakan";
-    const date = (edited ? edited.date : s.payload?.date) || todayLocalIso();
-    const confidenceScore = s.payload?.confidenceScore ?? 0.7;
 
-    let newRecordId: string | undefined;
-    let newRecordType: ChatSuggestionRecordType | undefined;
-
-    if (transactionType === "INCOME" || transactionType === "EXPENSE") {
-      let ev;
-      try {
-        ev = await addFinancialEventAwaited({
-          workspaceId: activeWorkspace.id,
-          businessId: businessId || undefined,
-          branchId: branchId || undefined,
-          type: transactionType,
-          categoryName: category,
-          amountMyr: amount,
-          partyName: relatedParty,
-          date,
-          referenceNumber: `AI-${s.id}`,
-          description: `Direkodkan melalui pengesahan cadangan Kerani AI: ${s.title}`,
-          isCompleted: true,
-        });
-      } catch (err: any) {
-        setChatActionErrors(prev => ({ ...prev, [s.id]: `Gagal menyimpan rekod ke pangkalan data: ${err?.message || "ralat tidak diketahui"}. Cadangan TIDAK disahkan, sila cuba lagi.` }));
-        return;
-      }
-      newRecordId = ev.id;
-      newRecordType = transactionType;
-    } else if (transactionType === "DEBT") {
-      let debt;
-      try {
-        debt = await addDebtRecordAwaited({
-          workspaceId: activeWorkspace.id,
-          businessId: businessId || undefined,
-          creditorName: relatedParty,
-          borrowedDate: date,
-          totalAmountMyr: amount,
-          repaidAmountMyr: 0,
-          status: "ACTIVE",
-          description: `Direkodkan melalui pengesahan cadangan Kerani AI: ${s.title}`,
-        });
-      } catch (err: any) {
-        setChatActionErrors(prev => ({ ...prev, [s.id]: `Gagal menyimpan rekod ke pangkalan data: ${err?.message || "ralat tidak diketahui"}. Cadangan TIDAK disahkan, sila cuba lagi.` }));
-        return;
-      }
-      newRecordId = debt.id;
-      newRecordType = "DEBT";
-    } else if (transactionType === "RECEIVABLE") {
-      let ev;
-      try {
-        ev = await addFinancialEventAwaited({
-          workspaceId: activeWorkspace.id,
-          businessId: businessId || undefined,
-          branchId: branchId || undefined,
-          type: "RECEIVABLE",
-          categoryName: category,
-          amountMyr: amount,
-          partyName: relatedParty,
-          date,
-          referenceNumber: `AI-${s.id}`,
-          description: `Direkodkan melalui pengesahan cadangan Kerani AI: ${s.title}`,
-          isCompleted: false,
-        });
-      } catch (err: any) {
-        setChatActionErrors(prev => ({ ...prev, [s.id]: `Gagal menyimpan rekod ke pangkalan data: ${err?.message || "ralat tidak diketahui"}. Cadangan TIDAK disahkan, sila cuba lagi.` }));
-        return;
-      }
-      newRecordId = ev.id;
-      newRecordType = "RECEIVABLE";
-    } else if (transactionType === "PAYABLE") {
-      let ev;
-      try {
-        ev = await addFinancialEventAwaited({
-          workspaceId: activeWorkspace.id,
-          businessId: businessId || undefined,
-          branchId: branchId || undefined,
-          type: "PAYABLE",
-          categoryName: category,
-          amountMyr: amount,
-          partyName: relatedParty,
-          date,
-          referenceNumber: `AI-${s.id}`,
-          description: `Direkodkan melalui pengesahan cadangan Kerani AI: ${s.title}`,
-          isCompleted: false,
-        });
-      } catch (err: any) {
-        setChatActionErrors(prev => ({ ...prev, [s.id]: `Gagal menyimpan rekod ke pangkalan data: ${err?.message || "ralat tidak diketahui"}. Cadangan TIDAK disahkan, sila cuba lagi.` }));
-        return;
-      }
-      newRecordId = ev.id;
-      newRecordType = "PAYABLE";
-    } else if (transactionType === "COMMITMENT") {
-      let cmt;
-      try {
-        cmt = await addFinancialCommitmentAwaited({
-          workspaceId: activeWorkspace.id,
-          businessId: businessId || undefined,
-          description: `Direkodkan melalui pengesahan cadangan Kerani AI: ${s.title}`,
-          obligeeName: relatedParty,
-          amountPerIntervalMyr: amount,
-          recurrence: "MONTHLY",
-          startDate: date,
-          isActive: true,
-          status: "ACTIVE",
-        });
-      } catch (err: any) {
-        setChatActionErrors(prev => ({ ...prev, [s.id]: `Gagal menyimpan rekod ke pangkalan data: ${err?.message || "ralat tidak diketahui"}. Cadangan TIDAK disahkan, sila cuba lagi.` }));
-        return;
-      }
-      newRecordId = cmt.id;
-      newRecordType = "COMMITMENT";
-    } else if (transactionType === "ASSET_PURCHASE") {
-      addAssetPurchase(activeWorkspace.id, isMockUser, {
-        assetName: category,
-        category,
-        purchaseAmountMyr: amount,
-        purchaseDate: date,
-        vendorName: relatedParty,
-        notes: `Direkodkan melalui pengesahan cadangan Kerani AI: ${s.title}`,
-      });
-    } else if (transactionType === "OWNER_TRANSACTION") {
-      addOwnerTransaction(activeWorkspace.id, isMockUser, {
-        type: s.payload?.ownerTransactionSubtype || (category.toUpperCase().includes("DRAWING") ? "DRAWING" : "CAPITAL_INJECTION"),
-        amountMyr: amount,
-        transactionDate: date,
-        description: `Direkodkan melalui pengesahan cadangan Kerani AI: ${s.title}`,
-      });
-    } else {
+    const result = await confirmChatSuggestion(s, extra, edited, pendingChatEvidenceRef.current[s.id]);
+    if (!result.ok) {
+      setChatActionErrors(prev => ({ ...prev, [s.id]: result.error || "Ralat tidak diketahui." }));
       return;
     }
 
@@ -2064,23 +1904,15 @@ export function OwnerDashboard() {
     // record's id/type so a later post-confirm Edit can UPDATE instead of re-inserting.
     markChatSuggestionStatus(s.id, {
       status: "confirmed",
-      recordId: newRecordId,
-      recordType: newRecordType,
+      recordId: result.recordId,
+      recordType: result.recordType,
       confirmedAt: new Date().toISOString(),
-      editedAmount: amount,
-      editedCategory: category,
-      editedRelatedParty: relatedParty,
-      editedDate: date,
+      editedAmount: result.amount,
+      editedCategory: result.category,
+      editedRelatedParty: result.relatedParty,
+      editedDate: result.date,
       confirmedByName: user?.fullName || undefined,
       confirmedByUserId: user?.id || undefined,
-    });
-
-    if (transactionType !== "ASSET_PURCHASE" && transactionType !== "OWNER_TRANSACTION") learnOcrPattern({
-      workspaceId: activeWorkspace.id,
-      vendorName: relatedParty,
-      category,
-      recordType: transactionType === "COMMITMENT" ? "EXPENSE" : transactionType,
-      confidenceScore,
     });
 
     setEditingChatSuggestionId(null);

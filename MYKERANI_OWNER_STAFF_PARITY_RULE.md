@@ -68,23 +68,29 @@ NOT inside Owner-only screens. Screen files (`OwnerDashboard.tsx`,
 
 One Financial Engine. Many Users. Different UI. Same Financial Logic.
 
-## Known Open Divergences (as of Phase 2A.1 audit)
+## Known Open Divergences
 
-Tracked here so they aren't silently re-introduced or forgotten — see
-`MYKERANI_PHASE2A1_OWNER_STAFF_AUDIT.md` (if present) for full evidence:
+Tracked here so they aren't silently re-introduced or forgotten.
 
-- Business/Branch Mapping: Owner-only (`matchOwnBusiness`/
-  `matchOwnBusinessAndBranch` not called from `StaffHomeScreen.tsx`).
-- AI Chat Confirmation: forked implementation
-  (`handleChatConfirmSuggestion` exists separately in both screens);
-  Staff's DEBT/COMMITMENT branches use the non-awaited, non-error-surfacing
-  `addDebtRecord`/`addFinancialCommitment` instead of the `*Awaited`
-  variants Owner uses.
-- Evidence Linking: two independent call sites (Owner's `linkDocEvidence`
-  in doc-review, Staff's inline block in chat-confirm) with no shared
-  helper; Owner's chat-confirm path has no evidence-linking step at all.
+Resolved (Owner/Staff Pipeline Unification):
+- AI Chat Confirmation: both screens now call the shared
+  `useConfirmChatSuggestion()` hook (`src/hooks/useConfirmChatSuggestion.ts`)
+  instead of separate `handleChatConfirmSuggestion` implementations. Staff's
+  DEBT/COMMITMENT branches now use the `*Awaited` variants with the same
+  try/catch error-surfacing Owner uses.
+- Evidence Linking: both screens call the shared `linkEvidenceToRecord()`
+  (`src/context/FinancialRecordsContext.tsx`) via the same hook.
+- Business/Branch Mapping for AI Chat: Staff's `sendChat` now calls
+  `matchOwnBusinessAndBranch` (same engine as Owner), and
+  `StaffHomeScreen.tsx` now fetches `businessBranches` the same way
+  `OwnerDashboard.tsx` does.
+
+Still open:
 - Import Recovery / Bulk Bank Statement Import: Owner-only; no Staff
   equivalent exists.
+- Business/Branch Mapping for OCR Receipt/Invoice review and Voice Note
+  confirmation flows: still Owner-only; Staff's OCR/voice-note confirm
+  paths have not yet been audited against this rule.
 
 These must be resolved (or explicitly deferred with owner sign-off)
 before any further feature work touches the affected engines.

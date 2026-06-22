@@ -53,6 +53,20 @@ interface FinancialRecordsContextType {
   deleteFinancialCommitment: (id: string) => void;
 
   addFinancialEvidencePackage: (pkg: Omit<FinancialEvidencePackage, "id">) => FinancialEvidencePackage;
+  // Single shared entry point for "link this already-uploaded document to a
+  // just-created financial record" -- the one and only evidence-linking
+  // engine. Every confirm flow (Owner doc-review, Owner/Staff chat-confirm)
+  // must call this instead of constructing a FinancialEvidencePackage
+  // object inline, so Owner and Staff never diverge on evidence linking.
+  linkEvidenceToRecord: (link: {
+    workspaceId: string;
+    documentType: FinancialEvidencePackage["documentType"];
+    fileName: string;
+    fileUrl: string;
+    relatedRecordType: string;
+    relatedRecordId: string;
+    uploadDate?: string;
+  }) => FinancialEvidencePackage;
   editFinancialEvidencePackage: (id: string, updated: Partial<FinancialEvidencePackage>) => void;
   deleteFinancialEvidencePackage: (id: string) => void;
   
@@ -1754,6 +1768,26 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
     return newPkg;
   };
 
+  const linkEvidenceToRecord = (link: {
+    workspaceId: string;
+    documentType: FinancialEvidencePackage["documentType"];
+    fileName: string;
+    fileUrl: string;
+    relatedRecordType: string;
+    relatedRecordId: string;
+    uploadDate?: string;
+  }): FinancialEvidencePackage => {
+    return addFinancialEvidencePackage({
+      workspaceId: link.workspaceId,
+      documentType: link.documentType,
+      uploadDate: link.uploadDate || new Date().toISOString().slice(0, 10),
+      fileName: link.fileName,
+      fileUrl: link.fileUrl,
+      relatedRecordType: link.relatedRecordType,
+      relatedRecordId: link.relatedRecordId,
+    });
+  };
+
   const editFinancialEvidencePackage = (id: string, updatedFields: Partial<FinancialEvidencePackage>) => {
     const original = financialEvidencePackages.find((item) => item.id === id);
     const nextList = financialEvidencePackages.map((item) =>
@@ -2423,6 +2457,7 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
         editFinancialCommitment,
         deleteFinancialCommitment,
         addFinancialEvidencePackage,
+        linkEvidenceToRecord,
         editFinancialEvidencePackage,
         deleteFinancialEvidencePackage,
         learnOcrPattern,
