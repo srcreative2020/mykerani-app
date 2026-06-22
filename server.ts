@@ -629,8 +629,21 @@ async function startServer() {
       }
 
       const candidates = await getAiProviderCandidates();
+      console.info("[AI_ROUTER_DEBUG][OCR]", JSON.stringify({
+        candidateCount: candidates.length,
+        candidateProviders: candidates.map(c => `${c.provider}:${c.model}`),
+        dbConfigReachable: Boolean(process.env.VITE_SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY),
+        envFallbackKeysPresent: {
+          gemini: Boolean(process.env.GEMINI_API_KEY),
+          openai: Boolean(process.env.OPENAI_API_KEY),
+          deepseek: Boolean(process.env.DEEPSEEK_API_KEY),
+          anthropic: Boolean(process.env.ANTHROPIC_API_KEY),
+        },
+        forcedProvider: process.env.AI_PROVIDER || null,
+        providerOrder: process.env.AI_PROVIDER_ORDER || null,
+      }));
       if (candidates.length === 0) {
-        console.info("No AI provider configured (checked HQ Console AI Router settings, then OPENAI_API_KEY/GEMINI_API_KEY/ANTHROPIC_API_KEY env vars). Using realistic sandbox OCR fallback.");
+        console.info("[AI_ROUTER_DEBUG][OCR] fallbackTriggerReason=NO_CANDIDATES — checked HQ Console AI Router settings (ai_router_settings/ai_provider_configs via SUPABASE_SERVICE_ROLE_KEY), then OPENAI_API_KEY/GEMINI_API_KEY/ANTHROPIC_API_KEY/DEEPSEEK_API_KEY env vars. Using sandbox OCR fallback.");
         const mockResult = generateMockOcr(fileName, documentType);
         return res.json({
           ...mockResult,
@@ -711,6 +724,7 @@ Provide your output precisely formatted as raw JSON matching exactly this shape,
         throw lastErr || new Error("All configured AI providers failed for OCR");
       }
 
+      console.info(`[AI_ROUTER_DEBUG][OCR] servedBy=${usedCandidate!.provider}:${usedCandidate!.model}`);
       logAiUsage(tenantId, workspaceId, userId, "ocr", usedCandidate!.provider, usedCandidate!.model);
 
       return res.json(parsedResult);
