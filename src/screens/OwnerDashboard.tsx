@@ -31,7 +31,8 @@ import {
 } from "../lib/documentStorage";
 import { supabase, isSupabaseConfigured } from "../lib/supabase";
 import { isDemoWorkspace } from "../lib/seeder";
-import { loadChatHistory, saveChatMessage } from "../lib/chatHistory";
+import { loadChatHistory, loadActiveSessionMessages, saveChatMessage } from "../lib/chatHistory";
+import { getOrCreateActiveSession } from "../lib/chatSession";
 import { logEvent } from "../lib/eventLog";
 import { detectInternalTransfers } from "../lib/internalTransferDetection";
 import { pollOcrJob, type OcrJobState } from "../lib/ocrJobTypes";
@@ -247,6 +248,9 @@ export function OwnerDashboard() {
   // still has access to everything that was ever said.
   const [chatHistoryAll, setChatHistoryAll] = useState<ChatMsg[]>([]);
   const [chatArchiveDate, setChatArchiveDate] = useState<string | null>(null);
+  // Current active chat session: created fresh on login, reused across a
+  // page refresh (see getOrCreateActiveSession), archived on logout.
+  const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [chatInput, setChatInput] = useState("");
   const [chatLoading, setChatLoading] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
@@ -761,6 +765,98 @@ export function OwnerDashboard() {
     reader.readAsDataURL(file);
   });
 
+  // localStorage key for the document/OCR job currently in flight or awaiting
+  // confirmation, scoped to the active chat session so it survives a page
+  // refresh (which reuses the same session) but not a fresh login/logout
+  // (which clears the session pointer and, with it, this key).
+  const activeDocKey = (uid: string, sid: string) => `mykerani_active_doc_${uid}_${sid}`;
+
+  const persistActiveDoc = (snapshot: { jobId?: string; doc: UploadedDoc; review?: NonNullable<typeof docReview> }) => {
+    if (!user || !activeSessionId) return;
+    try { localStorage.setItem(activeDocKey(user.id, activeSessionId), JSON.stringify(snapshot)); } catch { /* best-effort */ }
+  };
+
+  const clearActiveDoc = () => {
+    if (!user || !activeSessionId) return;
+    try { localStorage.removeItem(activeDocKey(user.id, activeSessionId)); } catch { /* best-effort */ }
+  };
+
+  // Builds the review-panel state from a completed OCR job's payload. Pulled
+  // out of analyzeUploadedDoc so the same logic can re-run after a page
+  // refresh resumes a job that was still processing (see the resume effect
+  // below), without duplicating the transaction-line normalization.
+  const buildReviewFromPayload = (doc: UploadedDoc, payload: any): NonNullable<typeof docReview> => {
+    if (doc.document_type === "BANK_STATEMENT" && Array.isArray(payload.transactions)) {
+      return {
+        doc,
+        merchantName: payload.merchantName || "",
+        amount: "0",
+        date: payload.date || new Date().toISOString().split("T")[0],
+        category: "",
+        recordType: "EXPENSE",
+        confidenceScore: payload.confidenceScore || 0.7,
+        rawExtractedText: payload.rawExtractedText || "",
+        pagesFound: payload.pagesFound ?? null,
+        transactionsFound: payload.transactionsFound ?? payload.transactions.length,
+        chunksTotal: payload.chunksTotal ?? null,
+        chunksFailed: payload.chunksFailed ?? null,
+        extractionIncomplete: Boolean(payload.extractionIncomplete),
+        lines: (() => {
+          const rawLines = payload.transactions.map((t: any) => ({
+            date: t.date || "", description: t.description || "", amount: Number(t.amount) || 0,
+            type: (t.type === "CREDIT" ? "CREDIT" : "DEBIT") as "CREDIT" | "DEBIT",
+            suggestedCategory: t.suggestedCategory || "Lain-lain",
+            confidenceScore: Number(t.confidenceScore) || 0.7,
+          }));
+          // Internal Transfer Detection — debit/credit pairs of matching
+          // amount within this statement must not double-count as Income+Expense.
+          const transferPairByIndex = detectTransferPairsInLines(rawLines);
+          const activeOwnBusinesses = businesses.filter((b) => b.isActive);
+          return rawLines.map((line, i) => {
+            const transferPairLabel = transferPairByIndex.get(i);
+            if (transferPairLabel) {
+              return {
+                ...line,
+                include: false,
+                isInternalTransfer: true,
+                transferPairLabel,
+              };
+            }
+            const ownBusinessMatch = matchOwnBusiness(line.description, activeOwnBusinesses);
+            if (ownBusinessMatch) {
+              return {
+                ...line,
+                include: false,
+                isOwnBusinessMatch: true,
+                ownBusinessMatchLabel: `Padanan dengan bisnes anda sendiri: ${ownBusinessMatch.businessName}`,
+              };
+            }
+            // Padankan dengan rekod sedia ada (cth: dimasukkan sendiri oleh
+            // user melalui chat) supaya transaksi yang sama tak direkod dua kali.
+            const matched = findMatchingEvent(line, myEvents);
+            return {
+              ...line,
+              include: !matched,
+              matchedEventId: matched?.id,
+              matchedLabel: matched ? `${matched.partyName} · RM${matched.amountMyr.toFixed(2)} · ${matched.date}` : undefined,
+            };
+          });
+        })(),
+      };
+    }
+    const matchedPattern = ocrLearnedPatterns.find(p => p.vendorName.toLowerCase() === (payload.merchantName || "").toLowerCase());
+    return {
+      doc,
+      merchantName: matchedPattern?.vendorName || payload.merchantName || "",
+      amount: String(payload.amount || 0),
+      date: payload.date || new Date().toISOString().split("T")[0],
+      category: matchedPattern?.category || payload.suggestedCategory || "Lain-lain",
+      recordType: matchedPattern?.recordType || (doc.document_type === "INVOICE" ? "PAYABLE" : "EXPENSE"),
+      confidenceScore: matchedPattern?.confidenceScore || payload.confidenceScore || 0.7,
+      rawExtractedText: payload.rawExtractedText || "",
+    };
+  };
+
   // Invoke the real AI OCR pipeline (/api/ocr/analyze, same endpoint OCREngineConsole uses)
   // on a freshly uploaded document, then open the confirm/edit/reject review panel.
   const analyzeUploadedDoc = async (doc: UploadedDoc, file: File) => {
@@ -786,97 +882,85 @@ export function OwnerDashboard() {
         return;
       }
       const { jobId } = await startResponse.json();
+      // The job runs server-side keyed by jobId — persisting this pointer
+      // means a page refresh mid-processing can re-attach to the SAME job
+      // and resume polling instead of losing all progress.
+      persistActiveDoc({ jobId, doc });
       const finalJob = await pollOcrJob(jobId, setDocOcrJob);
 
       if (finalJob.status === "FAILED") {
         const baseMsg = finalJob.error || "AI tidak dapat membaca dokumen ini. Cuba lagi.";
         setDocReviewError(finalJob.errorDetail ? `${baseMsg} [${finalJob.errorDetail}]` : baseMsg);
+        clearActiveDoc();
         return;
       }
 
       const payload = finalJob.result;
-
       if (payload.warning) {
         setDocReviewError(payload.warning);
       }
 
-      if (doc.document_type === "BANK_STATEMENT" && Array.isArray(payload.transactions)) {
-        setDocReview({
-          doc,
-          merchantName: payload.merchantName || "",
-          amount: "0",
-          date: payload.date || new Date().toISOString().split("T")[0],
-          category: "",
-          recordType: "EXPENSE",
-          confidenceScore: payload.confidenceScore || 0.7,
-          rawExtractedText: payload.rawExtractedText || "",
-          pagesFound: payload.pagesFound ?? null,
-          transactionsFound: payload.transactionsFound ?? payload.transactions.length,
-          chunksTotal: payload.chunksTotal ?? null,
-          chunksFailed: payload.chunksFailed ?? null,
-          extractionIncomplete: Boolean(payload.extractionIncomplete),
-          lines: (() => {
-            const rawLines = payload.transactions.map((t: any) => ({
-              date: t.date || "", description: t.description || "", amount: Number(t.amount) || 0,
-              type: (t.type === "CREDIT" ? "CREDIT" : "DEBIT") as "CREDIT" | "DEBIT",
-              suggestedCategory: t.suggestedCategory || "Lain-lain",
-              confidenceScore: Number(t.confidenceScore) || 0.7,
-            }));
-            // Internal Transfer Detection — debit/credit pairs of matching
-            // amount within this statement must not double-count as Income+Expense.
-            const transferPairByIndex = detectTransferPairsInLines(rawLines);
-            const activeOwnBusinesses = businesses.filter((b) => b.isActive);
-            return rawLines.map((line, i) => {
-              const transferPairLabel = transferPairByIndex.get(i);
-              if (transferPairLabel) {
-                return {
-                  ...line,
-                  include: false,
-                  isInternalTransfer: true,
-                  transferPairLabel,
-                };
-              }
-              const ownBusinessMatch = matchOwnBusiness(line.description, activeOwnBusinesses);
-              if (ownBusinessMatch) {
-                return {
-                  ...line,
-                  include: false,
-                  isOwnBusinessMatch: true,
-                  ownBusinessMatchLabel: `Padanan dengan bisnes anda sendiri: ${ownBusinessMatch.businessName}`,
-                };
-              }
-              // Padankan dengan rekod sedia ada (cth: dimasukkan sendiri oleh
-              // user melalui chat) supaya transaksi yang sama tak direkod dua kali.
-              const matched = findMatchingEvent(line, myEvents);
-              return {
-                ...line,
-                include: !matched,
-                matchedEventId: matched?.id,
-                matchedLabel: matched ? `${matched.partyName} · RM${matched.amountMyr.toFixed(2)} · ${matched.date}` : undefined,
-              };
-            });
-          })(),
-        });
-      } else {
-        const matchedPattern = ocrLearnedPatterns.find(p => p.vendorName.toLowerCase() === (payload.merchantName || "").toLowerCase());
-        setDocReview({
-          doc,
-          merchantName: matchedPattern?.vendorName || payload.merchantName || "",
-          amount: String(payload.amount || 0),
-          date: payload.date || new Date().toISOString().split("T")[0],
-          category: matchedPattern?.category || payload.suggestedCategory || "Lain-lain",
-          recordType: matchedPattern?.recordType || (doc.document_type === "INVOICE" ? "PAYABLE" : "EXPENSE"),
-          confidenceScore: matchedPattern?.confidenceScore || payload.confidenceScore || 0.7,
-          rawExtractedText: payload.rawExtractedText || "",
-        });
-      }
+      const review = buildReviewFromPayload(doc, payload);
+      setDocReview(review);
+      // Keep the resolved review (not just the job pointer) so it survives a
+      // refresh even after the job itself is no longer pollable.
+      persistActiveDoc({ jobId, doc, review });
     } catch (ex: any) {
       const baseMsg = "AI tidak dapat membaca dokumen ini. Anda boleh cuba semula atau abaikan (dokumen tetap disimpan).";
       setDocReviewError(ex?.message ? `${baseMsg} [${ex.message}]` : baseMsg);
+      clearActiveDoc();
     } finally {
       setDocAnalyzing(false);
     }
   };
+
+  // Refresh-safe document/OCR recovery: once the active session is known,
+  // check whether a document upload was in flight or awaiting confirmation
+  // when the page was last reloaded, and resume it instead of dropping it.
+  useEffect(() => {
+    if (!user || !activeSessionId) return;
+    let snapshot: { jobId?: string; doc: UploadedDoc; review?: NonNullable<typeof docReview> } | null = null;
+    try {
+      const raw = localStorage.getItem(activeDocKey(user.id, activeSessionId));
+      snapshot = raw ? JSON.parse(raw) : null;
+    } catch {
+      snapshot = null;
+    }
+    if (!snapshot) return;
+
+    if (snapshot.review) {
+      setDocReview(snapshot.review);
+      return;
+    }
+
+    if (snapshot.jobId) {
+      setDocAnalyzing(true);
+      setDocOcrJob(null);
+      pollOcrJob(snapshot.jobId, setDocOcrJob)
+        .then((finalJob) => {
+          if (finalJob.status === "FAILED") {
+            const baseMsg = finalJob.error || "AI tidak dapat membaca dokumen ini. Cuba lagi.";
+            setDocReviewError(finalJob.errorDetail ? `${baseMsg} [${finalJob.errorDetail}]` : baseMsg);
+            clearActiveDoc();
+            return;
+          }
+          const payload = finalJob.result;
+          if (payload.warning) setDocReviewError(payload.warning);
+          const review = buildReviewFromPayload(snapshot!.doc, payload);
+          setDocReview(review);
+          persistActiveDoc({ jobId: snapshot!.jobId, doc: snapshot!.doc, review });
+        })
+        .catch(() => {
+          setDocReviewError("AI tidak dapat menyambung semula pemprosesan dokumen ini. Sila muat naik semula.");
+          clearActiveDoc();
+        })
+        .finally(() => setDocAnalyzing(false));
+    }
+    // Intentionally only runs once activeSessionId/user settle, not on every
+    // docReview change — this is a one-shot recovery for the session, not a
+    // continuous sync.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, activeSessionId]);
 
   const confirmDocReview = async () => {
     if (!docReview || !activeWorkspace) return;
@@ -949,6 +1033,7 @@ export function OwnerDashboard() {
     });
     setDocs(prev => prev.map(d => d.id === doc.id ? { ...d, file_name: newFileName, ocr_parsed_content: { reviewStatus: "CONFIRMED" } } : d));
     setDocReview(null);
+    clearActiveDoc();
   };
 
   const rejectDocReview = async () => {
@@ -956,6 +1041,7 @@ export function OwnerDashboard() {
     await updateDocumentReview(docReview.doc.id, { ocrParsedContent: { reviewStatus: "REJECTED", extracted: docReview, rejectedAt: new Date().toISOString() } });
     setDocs(prev => prev.map(d => d.id === docReview.doc.id ? { ...d, ocr_parsed_content: { reviewStatus: "REJECTED" } } : d));
     setDocReview(null);
+    clearActiveDoc();
   };
 
   const triggerUpload = (docType: DocType) => {
@@ -1057,12 +1143,17 @@ export function OwnerDashboard() {
   useEffect(() => { supportEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [supportMessages, supportLoading]);
 
   useEffect(() => {
-    if (!wsId) return;
-    // Every login/page-load starts on a fresh chat home view — previous
-    // conversations (today's or older) stay reachable via Arkib Perbualan
-    // instead of auto-resuming and silently replacing whatever the user
-    // was just typing into a "Chat Baharu".
-    setChatMessages([]);
+    if (!wsId || !user) return;
+    // A fresh login already archived the previous session and cleared the
+    // local pointer (see AuthContext signIn/endActiveSession), so this either
+    // resumes the same session across a page refresh or starts a new one —
+    // older conversations stay reachable via Arkib Perbualan either way.
+    getOrCreateActiveSession(user.id, wsId, isMockUser).then(sessionId => {
+      setActiveSessionId(sessionId);
+      loadActiveSessionMessages(sessionId, isMockUser, wsId).then(history => {
+        setChatMessages(history.map(h => ({ id: h.id, sender: h.sender, text: h.text, suggestions: h.suggestions, createdAt: h.createdAt, attachmentUrl: h.attachmentUrl, attachmentName: h.attachmentName, attachmentType: h.attachmentType })));
+      });
+    });
     loadChatHistory(wsId, isMockUser).then(history => {
       setChatHistoryAll(history.map(h => ({ id: h.id, sender: h.sender, text: h.text, suggestions: h.suggestions, createdAt: h.createdAt, attachmentUrl: h.attachmentUrl, attachmentName: h.attachmentName, attachmentType: h.attachmentType })));
     });
@@ -1084,7 +1175,7 @@ export function OwnerDashboard() {
     } catch {
       setChatSuggestionStatus({});
     }
-  }, [wsId, isMockUser]);
+  }, [wsId, isMockUser, user]);
 
   // Persist confirmed/rejected suggestion status to localStorage so refresh/remount cannot
   // forget it and re-trigger a duplicate database insert via handleChatConfirmSuggestion.
@@ -1286,7 +1377,7 @@ export function OwnerDashboard() {
     setChatInput("");
     const userMsg: ChatMsg = { id: `u-${Date.now()}`, sender: "user", text: q, createdAt: new Date().toISOString() };
     setChatMessages(prev => [...prev, userMsg]);
-    saveChatMessage(wsId, user?.id, isMockUser, { sender: "user", text: q });
+    saveChatMessage(wsId, user?.id, isMockUser, { sender: "user", text: q }, activeSessionId ?? undefined);
     setChatLoading(true);
     try {
       const { getAuthHeader } = await import("../lib/supabase");
@@ -1314,7 +1405,7 @@ export function OwnerDashboard() {
             .map((s: ChatSuggestion, idx: number) => ({ ...s, id: `${aiMsgId}-sugg-${idx}` }))
         : [];
       setChatMessages(prev => [...prev, { id: aiMsgId, sender: "ai", text: reply, suggestions, createdAt: new Date().toISOString() }]);
-      saveChatMessage(wsId, user?.id, isMockUser, { sender: "ai", text: reply, suggestions });
+      saveChatMessage(wsId, user?.id, isMockUser, { sender: "ai", text: reply, suggestions }, activeSessionId ?? undefined);
       suggestions.forEach(s => checkCrossWorkspacePattern(s));
       const activeBusinesses = businesses.filter(b => b.isActive);
       setChatSuggestionExtra(prev => {
@@ -1366,7 +1457,7 @@ export function OwnerDashboard() {
         attachmentType: kind,
       };
       setChatMessages(prev => [...prev, userMsg]);
-      saveChatMessage(wsId, user?.id, isMockUser, { sender: "user", text: userMsg.text, attachmentUrl: fileUrl, attachmentName: file.name, attachmentType: kind });
+      saveChatMessage(wsId, user?.id, isMockUser, { sender: "user", text: userMsg.text, attachmentUrl: fileUrl, attachmentName: file.name, attachmentType: kind }, activeSessionId ?? undefined);
 
       // Actually read the attachment's content before asking the AI to act on it —
       // otherwise the assistant only sees a filename and can only say "please wait"

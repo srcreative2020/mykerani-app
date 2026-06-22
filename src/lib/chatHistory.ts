@@ -15,6 +15,7 @@ export interface PersistedChatMsg {
 const canPersist = (workspaceId: string | undefined, isMockUser: boolean): workspaceId is string =>
   Boolean(workspaceId) && isSupabaseConfigured() && !isMockUser && !!supabase && !isDemoWorkspace(workspaceId as string);
 
+// Full workspace history (all sessions, all time) — backs "Arkib Perbualan".
 export const loadChatHistory = async (
   workspaceId: string | undefined,
   isMockUser: boolean
@@ -38,17 +39,46 @@ export const loadChatHistory = async (
   }));
 };
 
+// Just the current active session's messages — backs the live chat view, so
+// a refresh resumes exactly where the user left off without also pulling in
+// every older archived conversation.
+export const loadActiveSessionMessages = async (
+  sessionId: string | undefined,
+  isMockUser: boolean,
+  workspaceId: string | undefined
+): Promise<PersistedChatMsg[]> => {
+  if (!sessionId || sessionId.startsWith("local-") || !canPersist(workspaceId, isMockUser) || !supabase) return [];
+  const { data, error } = await supabase
+    .from("ai_chat_messages")
+    .select("id,sender,text,suggestions,created_at,attachment_url,attachment_name,attachment_type")
+    .eq("session_id", sessionId)
+    .order("created_at", { ascending: true });
+  if (error || !data) return [];
+  return data.map((row: any) => ({
+    id: row.id,
+    sender: row.sender,
+    text: row.text,
+    suggestions: row.suggestions || [],
+    createdAt: row.created_at,
+    attachmentUrl: row.attachment_url || undefined,
+    attachmentName: row.attachment_name || undefined,
+    attachmentType: row.attachment_type || undefined,
+  }));
+};
+
 export const saveChatMessage = (
   workspaceId: string | undefined,
   userId: string | undefined,
   isMockUser: boolean,
-  msg: { sender: "user" | "ai"; text: string; suggestions?: any[]; attachmentUrl?: string; attachmentName?: string; attachmentType?: "image" | "pdf" | "audio" }
+  msg: { sender: "user" | "ai"; text: string; suggestions?: any[]; attachmentUrl?: string; attachmentName?: string; attachmentType?: "image" | "pdf" | "audio" },
+  sessionId?: string
 ) => {
   if (!canPersist(workspaceId, isMockUser) || !supabase) return;
   supabase
     .from("ai_chat_messages")
     .insert({
       workspace_id: workspaceId,
+      session_id: sessionId && !sessionId.startsWith("local-") ? sessionId : null,
       user_id: userId || null,
       sender: msg.sender,
       text: msg.text,

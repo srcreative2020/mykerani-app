@@ -3,7 +3,8 @@ import { useAuth } from "../context/AuthContext";
 import { useWorkspace } from "../context/WorkspaceContext";
 import { useFinancials } from "../context/FinancialRecordsContext";
 import { useTenant } from "../context/TenantContext";
-import { loadChatHistory, saveChatMessage } from "../lib/chatHistory";
+import { loadChatHistory, loadActiveSessionMessages, saveChatMessage } from "../lib/chatHistory";
+import { getOrCreateActiveSession } from "../lib/chatSession";
 import { supabase, isSupabaseConfigured } from "../lib/supabase";
 import { isDemoWorkspace } from "../lib/seeder";
 import { uploadDocument, getDocumentUrl } from "../lib/documentStorage";
@@ -191,6 +192,7 @@ export function StaffHomeScreen() {
   // active home thread can always start fresh on login/refresh while Arkib Perbualan
   // still has access to everything that was ever said.
   const [chatHistoryAll, setChatHistoryAll] = useState<typeof chatMessages>([]);
+  const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [showChatArchive, setShowChatArchive] = useState(false);
   const [showProfileView, setShowProfileView] = useState(false);
   const [chatArchiveDate, setChatArchiveDate] = useState<string | null>(null);
@@ -278,12 +280,17 @@ export function StaffHomeScreen() {
   useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [chatMessages, chatLoading]);
 
   useEffect(() => {
-    if (!wsId) return;
-    // Every login/page-load starts on a fresh chat home view — previous
-    // conversations (today's or older) stay reachable via Arkib Perbualan
-    // instead of auto-resuming and silently replacing whatever the user
-    // was just typing into a "Chat Baharu".
-    setChatMessages([]);
+    if (!wsId || !user) return;
+    // A fresh login already archived the previous session and cleared the
+    // local pointer (see AuthContext signIn/endActiveSession), so this either
+    // resumes the same session across a page refresh or starts a new one —
+    // older conversations stay reachable via Arkib Perbualan either way.
+    getOrCreateActiveSession(user.id, wsId, isMockUser).then(sessionId => {
+      setActiveSessionId(sessionId);
+      loadActiveSessionMessages(sessionId, isMockUser, wsId).then(history => {
+        setChatMessages(history.map(h => ({ id: h.id, sender: h.sender, text: h.text, suggestions: h.suggestions, createdAt: h.createdAt, attachmentUrl: h.attachmentUrl, attachmentName: h.attachmentName, attachmentType: h.attachmentType })));
+      });
+    });
     loadChatHistory(wsId, isMockUser).then(history => {
       setChatHistoryAll(history.map(h => ({ id: h.id, sender: h.sender, text: h.text, suggestions: h.suggestions, createdAt: h.createdAt, attachmentUrl: h.attachmentUrl, attachmentName: h.attachmentName, attachmentType: h.attachmentType })));
     });
@@ -305,7 +312,7 @@ export function StaffHomeScreen() {
     } catch {
       setChatSuggestionStatus({});
     }
-  }, [wsId, isMockUser]);
+  }, [wsId, isMockUser, user]);
 
   // Persist confirmed/rejected suggestion status to localStorage so refresh/remount cannot
   // forget it and re-trigger a duplicate database insert via handleChatConfirmSuggestion.
@@ -365,7 +372,7 @@ export function StaffHomeScreen() {
     if (!q || chatLoading) return;
     setChatInput("");
     setChatMessages(prev => [...prev, { id: `u-${Date.now()}`, sender: "user", text: q, createdAt: new Date().toISOString() }]);
-    saveChatMessage(wsId, user?.id, isMockUser, { sender: "user", text: q });
+    saveChatMessage(wsId, user?.id, isMockUser, { sender: "user", text: q }, activeSessionId ?? undefined);
     setChatLoading(true);
     try {
       const { getAuthHeader } = await import("../lib/supabase");
@@ -393,7 +400,7 @@ export function StaffHomeScreen() {
             .map((s: ChatSuggestion, idx: number) => ({ ...s, id: `${aiMsgId}-sugg-${idx}` }))
         : [];
       setChatMessages(prev => [...prev, { id: aiMsgId, sender: "ai", text: reply, suggestions, createdAt: new Date().toISOString() }]);
-      saveChatMessage(wsId, user?.id, isMockUser, { sender: "ai", text: reply, suggestions });
+      saveChatMessage(wsId, user?.id, isMockUser, { sender: "ai", text: reply, suggestions }, activeSessionId ?? undefined);
       const activeBusinesses = businesses.filter(b => b.isActive);
       // If this AI reply was triggered by an OCR/image/PDF attachment upload, that
       // attachment is the evidence for whatever transaction the AI now suggests —
@@ -756,7 +763,7 @@ export function StaffHomeScreen() {
       saveChatMessage(wsId, user?.id, isMockUser, {
         sender: "user", text: kind === "audio" ? "🎤 Nota suara" : `📎 ${file.name}`,
         attachmentUrl: url, attachmentName: file.name, attachmentType: kind,
-      });
+      }, activeSessionId ?? undefined);
 
       // Actually read the attachment's content before asking the AI to act on it —
       // otherwise the assistant only sees a filename and can only say "please wait"

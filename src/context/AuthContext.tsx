@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useRef } from "r
 import { supabase, isSupabaseConfigured } from "../lib/supabase";
 import { type UserSessionProfile, type AuthState, type UserRole } from "../types";
 import { logEvent } from "../lib/eventLog";
+import { endActiveSession } from "../lib/chatSession";
 
 // Akaun demo untuk presentation/sales — hanya aktif bila user ketap butang secara
 // eksplisit. Tidak boleh auto-login. Tenant ID diselaraskan dengan DEFAULT_MOCK_TENANTS.
@@ -130,6 +131,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         role: demoAccount.role,
         tenantId: demoAccount.tenantId,
       };
+      // Every explicit login (including demo) starts a brand-new chat session.
+      await endActiveSession(mockProfile.id, true);
       setState({ user: mockProfile, loading: false, error: null, isMockUser: true });
       return;
     }
@@ -202,6 +205,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           fullName,
           tenantId,
         };
+        // Every explicit login starts a brand-new chat session — archives
+        // whatever was active in this browser before, per product requirement
+        // (refresh resumes a session, login never does).
+        await endActiveSession(profile.id, false);
         setState({ user: profile, loading: false, error: null, isMockUser: false });
         logEvent({ tenantId, userId: profile.id, userEmail: profile.email, userRole: profile.role, eventType: "LOGIN" });
       }
@@ -352,6 +359,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     if (supabase && !state.isMockUser) {
       await supabase.auth.signOut();
+    }
+
+    // Archive the current chat session so the next login starts fresh —
+    // it stays reachable in Arkib Perbualan, just not auto-resumed.
+    if (state.user) {
+      await endActiveSession(state.user.id, state.isMockUser);
     }
 
     setState({ user: null, loading: false, error: null, isMockUser: false });
