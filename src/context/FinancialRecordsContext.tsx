@@ -39,10 +39,16 @@ interface FinancialRecordsContextType {
   deleteBankAccount: (id: string) => void;
   
   addDebtRecord: (debt: Omit<DebtRecord, "id">) => DebtRecord;
+  // Same as addDebtRecord, but awaits the Supabase write and rejects if it
+  // fails — see addFinancialEventAwaited for why callers need this.
+  addDebtRecordAwaited: (debt: Omit<DebtRecord, "id">) => Promise<DebtRecord>;
   editDebtRecord: (id: string, updated: Partial<DebtRecord>) => void;
   deleteDebtRecord: (id: string) => void;
 
   addFinancialCommitment: (commitment: Omit<FinancialCommitment, "id">) => FinancialCommitment;
+  // Same as addFinancialCommitment, but awaits the Supabase write and rejects
+  // if it fails — see addFinancialEventAwaited for why callers need this.
+  addFinancialCommitmentAwaited: (commitment: Omit<FinancialCommitment, "id">) => Promise<FinancialCommitment>;
   editFinancialCommitment: (id: string, updated: Partial<FinancialCommitment>) => void;
   deleteFinancialCommitment: (id: string) => void;
 
@@ -321,7 +327,7 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
     }
 
     // 1. Check if category exists
-    const { data, error: fetchError } = await supabase
+    const { data } = await supabase
       .from("general_ledger_categories")
       .select("id")
       .eq("workspace_id", wsId)
@@ -332,17 +338,17 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
       return data.id;
     }
 
-    // 2. Insert new category standard code
+    // 2. Upsert on (workspace_id, name) — concurrent batch inserts for the
+    // same new category name can both miss the check above before either
+    // commits; the unique index on (workspace_id, name) plus onConflict here
+    // ensures they converge on one row instead of racing to create duplicates.
     const generatedCode = String(Math.floor(Math.random() * 8999) + 1000);
     const { data: newCat, error: insertError } = await supabase
       .from("general_ledger_categories")
-      .insert({
-        workspace_id: wsId,
-        name,
-        code: generatedCode,
-        type,
-        is_system_default: false,
-      })
+      .upsert(
+        { workspace_id: wsId, name, code: generatedCode, type, is_system_default: false },
+        { onConflict: "workspace_id,name", ignoreDuplicates: false }
+      )
       .select("id")
       .single();
 
@@ -1411,6 +1417,47 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
     return newDebt;
   };
 
+  // Same as addDebtRecord, but awaits the Supabase write and rejects if it
+  // fails, so callers (e.g. AI chat confirm) can surface a real failure
+  // instead of always reporting success from the optimistic local update.
+  const addDebtRecordAwaited = async (debt: Omit<DebtRecord, "id">): Promise<DebtRecord> => {
+    const newId = generateUUID();
+    const newDebt: DebtRecord = { ...debt, id: newId };
+    const updated = [...debtRecords, newDebt];
+    setDebtRecords(updated);
+    persistCurrentState(financialEvents, cashAccounts, bankAccounts, updated);
+
+    if (activeWorkspace) {
+      writeAuditLog({
+        workspaceId: activeWorkspace.id,
+        module: "Debt Records",
+        action: "CREATE",
+        oldValue: null,
+        newValue: newDebt
+      });
+    }
+
+    if (isSupabaseConfigured() && !isMockUser && supabase && activeWorkspace && !isDemoWorkspace(activeWorkspace.id)) {
+      const { error: insertError } = await supabase.from("debts").insert({
+        id: newId,
+        workspace_id: activeWorkspace.id,
+        lender_name: newDebt.creditorName,
+        debt_type: "TERM_LOAN",
+        principal_amount_myr: newDebt.totalAmountMyr,
+        outstanding_balance_myr: newDebt.totalAmountMyr - newDebt.repaidAmountMyr,
+        annual_interest_rate: newDebt.interestRateAnnualPercent || 0,
+        origination_date: newDebt.borrowedDate,
+        maturity_date: newDebt.repaymentDueDate || null,
+        monthly_payment_myr: 0,
+        description: newDebt.description,
+        business_id: newDebt.businessId || null,
+      });
+      if (insertError) throw insertError;
+    }
+
+    return newDebt;
+  };
+
   const editDebtRecord = (id: string, updated: Partial<DebtRecord>) => {
     const originalDebt = debtRecords.find((item) => item.id === id);
     const nextList = debtRecords.map((item) =>
@@ -1528,6 +1575,50 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
           console.error("DB persistence insert commitment failed:", err.message);
         }
       })();
+    }
+
+    return newCommitment;
+  };
+
+  // Same as addFinancialCommitment, but awaits the Supabase write and rejects
+  // if it fails, so callers (e.g. AI chat confirm) can surface a real failure
+  // instead of always reporting success from the optimistic local update.
+  const addFinancialCommitmentAwaited = async (commitment: Omit<FinancialCommitment, "id">): Promise<FinancialCommitment> => {
+    const newId = generateUUID();
+    const newCommitment: FinancialCommitment = { ...commitment, id: newId };
+    const updated = [...financialCommitments, newCommitment];
+    setFinancialCommitments(updated);
+    persistCurrentState(financialEvents, cashAccounts, bankAccounts, debtRecords, updated);
+
+    if (activeWorkspace) {
+      writeAuditLog({
+        workspaceId: activeWorkspace.id,
+        module: "Financial Commitments",
+        action: "CREATE",
+        oldValue: null,
+        newValue: newCommitment
+      });
+    }
+
+    if (isSupabaseConfigured() && !isMockUser && supabase && activeWorkspace && !isDemoWorkspace(activeWorkspace.id)) {
+      let dbRecurrence = newCommitment.recurrence;
+      if (dbRecurrence === "DAILY") dbRecurrence = "WEEKLY";
+      if (dbRecurrence === "ONE-TIME") dbRecurrence = "MONTHLY";
+
+      const { error: insertError } = await supabase.from("financial_commitments").insert({
+        id: newId,
+        workspace_id: activeWorkspace.id,
+        description: newCommitment.description,
+        contract_number: newCommitment.contractNumber || null,
+        obligee_name: newCommitment.obligeeName,
+        amount_per_interval_myr: newCommitment.amountPerIntervalMyr,
+        recurrence: dbRecurrence,
+        start_date: newCommitment.startDate,
+        end_date: newCommitment.endDate || null,
+        is_active: newCommitment.isActive,
+        business_id: newCommitment.businessId || null,
+      });
+      if (insertError) throw insertError;
     }
 
     return newCommitment;
@@ -2322,9 +2413,11 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
         editBankAccount,
         deleteBankAccount,
         addDebtRecord,
+        addDebtRecordAwaited,
         editDebtRecord,
         deleteDebtRecord,
         addFinancialCommitment,
+        addFinancialCommitmentAwaited,
         editFinancialCommitment,
         deleteFinancialCommitment,
         addFinancialEvidencePackage,

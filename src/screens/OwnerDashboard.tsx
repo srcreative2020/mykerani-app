@@ -215,7 +215,7 @@ export function OwnerDashboard() {
     userRoles.forEach(r => { map[r.userId] = r.fullName; });
     return map;
   }, [userRoles]);
-  const { financialEvents, addFinancialEvent, addFinancialEventAwaited, addFinancialEventsBatch, editFinancialEvent, deleteFinancialEvent, addDebtRecord, editDebtRecord, deleteDebtRecord, addFinancialCommitment, editFinancialCommitment, deleteFinancialCommitment, learnOcrPattern, learnOcrPatternsBatch, ocrLearnedPatterns, cashAccounts, bankAccounts, debtRecords, financialCommitments, financialEvidencePackages, addFinancialEvidencePackage } = useFinancials();
+  const { financialEvents, addFinancialEvent, addFinancialEventAwaited, addFinancialEventsBatch, editFinancialEvent, deleteFinancialEvent, addDebtRecord, addDebtRecordAwaited, editDebtRecord, deleteDebtRecord, addFinancialCommitment, addFinancialCommitmentAwaited, editFinancialCommitment, deleteFinancialCommitment, learnOcrPattern, learnOcrPatternsBatch, ocrLearnedPatterns, cashAccounts, bankAccounts, debtRecords, financialCommitments, financialEvidencePackages, addFinancialEvidencePackage } = useFinancials();
 
   const [activeTab, setActiveTab] = useState<MainTab>("home");
   const [morePage, setMorePage] = useState<MorePage>("menu");
@@ -1923,16 +1923,22 @@ export function OwnerDashboard() {
       newRecordId = ev.id;
       newRecordType = transactionType;
     } else if (transactionType === "DEBT") {
-      const debt = addDebtRecord({
-        workspaceId: activeWorkspace.id,
-        businessId: businessId || undefined,
-        creditorName: relatedParty,
-        borrowedDate: date,
-        totalAmountMyr: amount,
-        repaidAmountMyr: 0,
-        status: "ACTIVE",
-        description: `Direkodkan melalui pengesahan cadangan Kerani AI: ${s.title}`,
-      });
+      let debt;
+      try {
+        debt = await addDebtRecordAwaited({
+          workspaceId: activeWorkspace.id,
+          businessId: businessId || undefined,
+          creditorName: relatedParty,
+          borrowedDate: date,
+          totalAmountMyr: amount,
+          repaidAmountMyr: 0,
+          status: "ACTIVE",
+          description: `Direkodkan melalui pengesahan cadangan Kerani AI: ${s.title}`,
+        });
+      } catch (err: any) {
+        setChatActionErrors(prev => ({ ...prev, [s.id]: `Gagal menyimpan rekod ke pangkalan data: ${err?.message || "ralat tidak diketahui"}. Cadangan TIDAK disahkan, sila cuba lagi.` }));
+        return;
+      }
       newRecordId = debt.id;
       newRecordType = "DEBT";
     } else if (transactionType === "RECEIVABLE") {
@@ -1980,17 +1986,23 @@ export function OwnerDashboard() {
       newRecordId = ev.id;
       newRecordType = "PAYABLE";
     } else if (transactionType === "COMMITMENT") {
-      const cmt = addFinancialCommitment({
-        workspaceId: activeWorkspace.id,
-        businessId: businessId || undefined,
-        description: `Direkodkan melalui pengesahan cadangan Kerani AI: ${s.title}`,
-        obligeeName: relatedParty,
-        amountPerIntervalMyr: amount,
-        recurrence: "MONTHLY",
-        startDate: date,
-        isActive: true,
-        status: "ACTIVE",
-      });
+      let cmt;
+      try {
+        cmt = await addFinancialCommitmentAwaited({
+          workspaceId: activeWorkspace.id,
+          businessId: businessId || undefined,
+          description: `Direkodkan melalui pengesahan cadangan Kerani AI: ${s.title}`,
+          obligeeName: relatedParty,
+          amountPerIntervalMyr: amount,
+          recurrence: "MONTHLY",
+          startDate: date,
+          isActive: true,
+          status: "ACTIVE",
+        });
+      } catch (err: any) {
+        setChatActionErrors(prev => ({ ...prev, [s.id]: `Gagal menyimpan rekod ke pangkalan data: ${err?.message || "ralat tidak diketahui"}. Cadangan TIDAK disahkan, sila cuba lagi.` }));
+        return;
+      }
       newRecordId = cmt.id;
       newRecordType = "COMMITMENT";
     } else if (transactionType === "ASSET_PURCHASE") {
