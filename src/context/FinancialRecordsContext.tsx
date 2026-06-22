@@ -26,7 +26,7 @@ interface FinancialRecordsContextType {
   addFinancialEventsBatch: (
     events: Omit<FinancialEvent, "id">[],
     onProgress?: (progress: { submitted: number; inserted: number; failed: number; batchNumber: number; totalBatches: number; batchDurationMs: number }) => void
-  ) => Promise<{ events: FinancialEvent[]; inserted: number; failed: number }>;
+  ) => Promise<{ events: FinancialEvent[]; inserted: number; failed: number; failedEvents: { event: FinancialEvent; error: string }[] }>;
   editFinancialEvent: (id: string, updated: Partial<FinancialEvent>) => void;
   deleteFinancialEvent: (id: string) => void;
   
@@ -1009,7 +1009,7 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
       totalBatches: number;
       batchDurationMs: number;
     }) => void
-  ): Promise<{ events: FinancialEvent[]; inserted: number; failed: number }> => {
+  ): Promise<{ events: FinancialEvent[]; inserted: number; failed: number; failedEvents: { event: FinancialEvent; error: string }[] }> => {
     const newEvents: FinancialEvent[] = events.map((event) => ({
       ...event,
       id: generateUUID(),
@@ -1057,6 +1057,7 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
 
     let inserted = 0;
     let failed = 0;
+    const failedEvents: { event: FinancialEvent; error: string }[] = [];
 
     if (isSupabaseConfigured() && !isMockUser && supabase && activeWorkspace && !isDemoWorkspace(activeWorkspace.id)) {
       const BATCH_SIZE = 40;
@@ -1080,6 +1081,7 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
               inserted++;
             } catch (err: any) {
               failed++;
+              failedEvents.push({ event: newEvent, error: String(err?.message || err) });
               console.error(`Batch DB persistence insert failed for event ${newEvent.id}:`, err.message);
             }
           })
@@ -1096,7 +1098,7 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
       }
     }
 
-    return { events: newEvents, inserted, failed };
+    return { events: newEvents, inserted, failed, failedEvents };
   };
 
   const editFinancialEvent = (id: string, updated: Partial<FinancialEvent>) => {

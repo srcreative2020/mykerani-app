@@ -1135,6 +1135,26 @@ export function OwnerDashboard() {
     const { doc, merchantName, lines } = docReview;
     let createdEvents: { id: string }[] = [];
 
+    // Evidence Linking: the original uploaded document already exists in
+    // Document Vault, and confirming a line creates a financial event from
+    // it -- without this, that event shows up as MISSING_ATTACHMENT (see
+    // getHealthFlags) even though the source document is right there. Reuse
+    // the same FinancialEvidencePackage engine the manual "attach receipt"
+    // flow uses, so the existing evidence preview UI just works for these too.
+    const linkDocEvidence = (events: { id: string; type: string }[]) => {
+      events.forEach((ev) => {
+        addFinancialEvidencePackage({
+          workspaceId: activeWorkspace.id,
+          documentType: lines ? "STATEMENT" : "SUPPORTING_DOC",
+          uploadDate: new Date().toISOString().slice(0, 10),
+          fileName: doc.file_name,
+          fileUrl: doc.file_path_supabase,
+          relatedRecordType: ev.type,
+          relatedRecordId: ev.id,
+        });
+      });
+    };
+
     if (lines) {
       // Bank statement: create one financial event per included transaction line.
       // Done as a single batched write (not a per-line addFinancialEvent loop) so
@@ -1146,7 +1166,7 @@ export function OwnerDashboard() {
       setImportProgress({ submitted: includedLines.length, inserted: 0, failed: 0, batchNumber: 0, totalBatches: 0 });
 
       try {
-        const { events: newEvents, failed } = await addFinancialEventsBatch(
+        const { events: newEvents, failed, failedEvents } = await addFinancialEventsBatch(
           includedLines.map((l, idx) => ({
             workspaceId: activeWorkspace.id,
             // Auto-map to one of the user's own registered businesses when its
@@ -1171,13 +1191,27 @@ export function OwnerDashboard() {
         );
 
         if (failed > 0) {
-          // Database write failed for some lines: do NOT mark the document
-          // CONFIRMED. Re-running confirm is safe -- the unique reference
-          // number per line means already-saved lines upsert idempotently.
-          setUploadError(`Gagal menyimpan ${failed} daripada ${newEvents.length} transaksi ke pangkalan data. Rekod TIDAK disahkan sepenuhnya. Sila cuba sahkan semula.`);
+          // Partial failure: keep ONLY the failed lines open for retry --
+          // the successfully-saved lines are already in the database (each
+          // line's unique STMT- reference number means re-confirming the
+          // failed ones later is safe and won't double-insert the rest) --
+          // and mark the document CONFIRMED now with just those event ids
+          // linked, so the user isn't blocked from seeing their work.
+          const failedReferenceNumbers = new Set(failedEvents.map(fe => fe.event.referenceNumber));
+          const stillFailedLines = includedLines.filter((l, idx) => failedReferenceNumbers.has(`STMT-${doc.id.substring(0, 8)}-${idx}`));
+          const succeededEvents = newEvents.filter(e => !failedReferenceNumbers.has(e.referenceNumber));
+          createdEvents = succeededEvents.map(e => ({ id: e.id }));
+          linkDocEvidence(succeededEvents);
+
+          setUploadError(`${failed} daripada ${newEvents.length} transaksi gagal disimpan ke pangkalan data dan TIDAK direkodkan. Baki ${newEvents.length - failed} transaksi telah berjaya disimpan. Sila semak baris yang gagal di bawah dan cuba sahkan semula.`);
+          setDocReview({ ...docReview, lines: stillFailedLines.map(l => ({ ...l, include: true })) });
+          await updateDocumentReview(doc.id, {
+            ocrParsedContent: { reviewStatus: "CONFIRMED", extracted: docReview, linkedEventIds: createdEvents.map(e => e.id), confirmedAt: new Date().toISOString() },
+          });
           return;
         }
         createdEvents = newEvents.map(e => ({ id: e.id }));
+        linkDocEvidence(newEvents);
 
         const patternsToLearn = includedLines
           .filter(l => l.description.trim())
@@ -1214,6 +1248,7 @@ export function OwnerDashboard() {
         return;
       }
       createdEvents.push(ev);
+      linkDocEvidence([ev]);
       if (merchantName.trim()) {
         learnOcrPattern({ workspaceId: activeWorkspace.id, vendorName: merchantName.trim(), category: docReview.category, recordType: docReview.recordType, confidenceScore: docReview.confidenceScore });
       }
@@ -4538,6 +4573,25 @@ export function OwnerDashboard() {
                     dan kenal pasti {docReview.lines.filter(l => l.isInternalTransfer).length} pemindahan dalaman serta {docReview.lines.filter(l => l.isOwnBusinessMatch).length} transaksi dengan bisnes anda sendiri.
                     {" "}Transaksi yang <span className="font-semibold text-emerald-600">sudah sepadan</span>, <span className="font-semibold text-violet-600">pemindahan dalaman</span>, atau <span className="font-semibold text-amber-600">bisnes sendiri</span> tak akan direkod sebagai Pendapatan/Perbelanjaan — batalkan tanda untuk yang tidak mahu direkod, atau tanda balik jika padanan tersilap.
                   </p>
+                  <div className="flex items-center gap-1.5 flex-wrap bg-indigo-50/60 border border-indigo-100 rounded-xl p-2">
+                    <span className="text-[10px] font-semibold text-indigo-700 mr-1">Pilihan Pukal:</span>
+                    <button type="button" onClick={() => setDocReview(d => d ? { ...d, lines: d.lines!.map(x => ({ ...x, include: true })) } : d)}
+                      className="text-[10px] font-semibold px-2 py-1 rounded-lg bg-white border border-indigo-200 text-indigo-700 hover:bg-indigo-100 cursor-pointer">
+                      Pilih Semua
+                    </button>
+                    <button type="button" onClick={() => setDocReview(d => d ? { ...d, lines: d.lines!.map(x => ({ ...x, include: false })) } : d)}
+                      className="text-[10px] font-semibold px-2 py-1 rounded-lg bg-white border border-indigo-200 text-indigo-700 hover:bg-indigo-100 cursor-pointer">
+                      Nyahpilih Semua
+                    </button>
+                    <button type="button" onClick={() => setDocReview(d => d ? { ...d, lines: d.lines!.map(x => ({ ...x, include: x.confidenceScore >= 0.8 })) } : d)}
+                      className="text-[10px] font-semibold px-2 py-1 rounded-lg bg-white border border-indigo-200 text-indigo-700 hover:bg-indigo-100 cursor-pointer">
+                      Pilih Keyakinan Tinggi (≥80%)
+                    </button>
+                    <button type="button" onClick={() => setDocReview(d => d ? { ...d, lines: d.lines!.map(x => ({ ...x, include: x.include && !x.isInternalTransfer && !x.isOwnBusinessMatch && !x.matchedEventId })) } : d)}
+                      className="text-[10px] font-semibold px-2 py-1 rounded-lg bg-white border border-indigo-200 text-indigo-700 hover:bg-indigo-100 cursor-pointer">
+                      Nyahpilih Padanan/Pemindahan
+                    </button>
+                  </div>
                   {docReview.lines.map((l, i) => (
                     <div key={i} className={`border rounded-xl p-3 space-y-1.5 ${l.isInternalTransfer ? "border-violet-200 bg-violet-50/40" : l.isOwnBusinessMatch ? "border-amber-200 bg-amber-50/40" : l.matchedEventId ? "border-emerald-200 bg-emerald-50/40" : "border-slate-200"}`}>
                       <div className="flex items-center gap-2">
@@ -4688,7 +4742,7 @@ export function OwnerDashboard() {
                   <div className="h-full bg-indigo-600 transition-all" style={{ width: `${importProgress.submitted ? Math.round(((importProgress.inserted + importProgress.failed) / importProgress.submitted) * 100) : 0}%` }} />
                 </div>
                 {importProgress.failed > 0 && (
-                  <p className="text-[11px] text-red-600 font-semibold">{importProgress.failed} transaksi gagal disimpan ke pangkalan data (disimpan tempatan).</p>
+                  <p className="text-[11px] text-red-600 font-semibold">{importProgress.failed} transaksi gagal disimpan ke pangkalan data dan TIDAK direkodkan. Baris yang gagal akan kekal untuk disahkan semula.</p>
                 )}
               </div>
             )}
