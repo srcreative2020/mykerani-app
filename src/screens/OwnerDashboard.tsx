@@ -489,7 +489,7 @@ export function OwnerDashboard() {
   }[f]);
 
   const [editingTxnId, setEditingTxnId] = useState<string | null>(null);
-  const [editTxnDraft, setEditTxnDraft] = useState({ amountMyr: "", categoryName: "", partyName: "", date: "" });
+  const [editTxnDraft, setEditTxnDraft] = useState({ amountMyr: "", categoryName: "", partyName: "", date: "", businessId: "", branchId: "" });
   const txnReceiptInputRef = useRef<HTMLInputElement>(null);
   const [uploadingTxnReceipt, setUploadingTxnReceipt] = useState(false);
   const evidenceByRecordId = useMemo(() => {
@@ -500,6 +500,12 @@ export function OwnerDashboard() {
     });
     return map;
   }, [financialEvidencePackages]);
+  const getBusinessBranchLabel = (ev: { businessId?: string; branchId?: string }) => {
+    const business = businesses.find(b => b.id === ev.businessId);
+    if (!business) return "Bisnes";
+    const branch = ev.branchId ? (businessBranches[ev.businessId!] || []).find(br => br.id === ev.branchId) : undefined;
+    return branch ? `${business.businessName} - ${branch.branchName}` : business.businessName;
+  };
   const findTxnConfidence = (ev: typeof myEvents[number]) => {
     const match = ocrLearnedPatterns.find(p => p.vendorName.toLowerCase() === ev.partyName.toLowerCase() && p.category === ev.categoryName && p.recordType === ev.type);
     return match ? Math.round(match.confidenceScore * 100) : null;
@@ -510,7 +516,7 @@ export function OwnerDashboard() {
   };
   const startEditTxn = (ev: typeof myEvents[number]) => {
     setEditingTxnId(ev.id);
-    setEditTxnDraft({ amountMyr: String(ev.amountMyr), categoryName: ev.categoryName, partyName: ev.partyName, date: ev.date });
+    setEditTxnDraft({ amountMyr: String(ev.amountMyr), categoryName: ev.categoryName, partyName: ev.partyName, date: ev.date, businessId: ev.businessId || "", branchId: ev.branchId || "" });
   };
   const attachTxnReceipt = async (ev: typeof myEvents[number], file: File) => {
     if (!activeWorkspace) return;
@@ -548,6 +554,11 @@ export function OwnerDashboard() {
       categoryName: editTxnDraft.categoryName,
       partyName: editTxnDraft.partyName,
       date: editTxnDraft.date,
+      businessId: editTxnDraft.businessId || undefined,
+      // A branch only belongs to one business -- if the user changes the
+      // business, any previously-picked branch from a different business
+      // would be stale, so clear it rather than carrying it forward.
+      branchId: editTxnDraft.businessId ? (editTxnDraft.branchId || undefined) : undefined,
     });
     if (editedEvent && editTxnDraft.partyName.trim() && (editTxnDraft.categoryName !== editedEvent.categoryName || editTxnDraft.partyName !== editedEvent.partyName)) {
       learnOcrPattern({
@@ -797,6 +808,8 @@ export function OwnerDashboard() {
     matchedEventId?: string; matchedLabel?: string;
     isInternalTransfer?: boolean; transferPairLabel?: string;
     isOwnBusinessMatch?: boolean; ownBusinessMatchLabel?: string; ownBusinessMatchId?: string;
+    branchMatchId?: string; branchMatchLabel?: string;
+    branchMatchAmbiguous?: boolean; branchMatchCandidates?: string[];
   };
 
   // A transaction line whose description names one of the user's OWN registered
@@ -813,6 +826,42 @@ export function OwnerDashboard() {
       if (normName.length < 3) return false;
       return normDesc.includes(normName) || normName.includes(normDesc);
     });
+  };
+
+  // Branch Mapping extends the same name-matching engine above: a transaction
+  // whose description names one of the user's registered BRANCHES (not just
+  // the business itself, e.g. "KILANG CETAK SR JOHOR BAHRU") should auto-set
+  // businessId + branchId together. Only auto-map when exactly one branch
+  // matches; if more than one branch's name appears in the text, confidence
+  // is too low to pick automatically, so the line is flagged for the user to
+  // choose explicitly during review instead of guessing.
+  type BranchMatchResult = {
+    business: Business;
+    branch?: BusinessBranch;
+    ambiguous: boolean;
+    candidateLabels: string[];
+  };
+  const matchOwnBusinessAndBranch = (
+    description: string,
+    ownBusinesses: Business[],
+    branchesByBusinessId: Record<string, BusinessBranch[]>
+  ): BranchMatchResult | undefined => {
+    const business = matchOwnBusiness(description, ownBusinesses);
+    if (!business) return undefined;
+    const normDesc = normalizeForMatch(description);
+    const branchesForBusiness = (branchesByBusinessId[business.id] || []).filter((br) => br.isActive);
+    const matchingBranches = branchesForBusiness.filter((br) => {
+      const normName = normalizeForMatch(br.branchName || "");
+      if (normName.length < 3) return false;
+      return normDesc.includes(normName) || normName.includes(normDesc);
+    });
+    if (matchingBranches.length === 1) {
+      return { business, branch: matchingBranches[0], ambiguous: false, candidateLabels: [] };
+    }
+    if (matchingBranches.length > 1) {
+      return { business, ambiguous: true, candidateLabels: matchingBranches.map((br) => br.branchName) };
+    }
+    return { business, ambiguous: false, candidateLabels: [] };
   };
 
   // Reuse the same Internal Transfer Detection engine as the Historical Recovery
@@ -949,14 +998,20 @@ export function OwnerDashboard() {
                 transferPairLabel,
               };
             }
-            const ownBusinessMatch = matchOwnBusiness(line.description, activeOwnBusinesses);
-            if (ownBusinessMatch) {
+            const branchMatch = matchOwnBusinessAndBranch(line.description, activeOwnBusinesses, businessBranches);
+            if (branchMatch) {
               return {
                 ...line,
                 include: false,
                 isOwnBusinessMatch: true,
-                ownBusinessMatchLabel: `Padanan dengan bisnes anda sendiri: ${ownBusinessMatch.businessName}`,
-                ownBusinessMatchId: ownBusinessMatch.id,
+                ownBusinessMatchLabel: branchMatch.branch
+                  ? `Padanan dengan bisnes anda sendiri: ${branchMatch.business.businessName} (Cawangan ${branchMatch.branch.branchName})`
+                  : `Padanan dengan bisnes anda sendiri: ${branchMatch.business.businessName}`,
+                ownBusinessMatchId: branchMatch.business.id,
+                branchMatchId: branchMatch.branch?.id,
+                branchMatchLabel: branchMatch.branch?.branchName,
+                branchMatchAmbiguous: branchMatch.ambiguous,
+                branchMatchCandidates: branchMatch.ambiguous ? branchMatch.candidateLabels : undefined,
               };
             }
             // Padankan dengan rekod sedia ada (cth: dimasukkan sendiri oleh
@@ -1114,6 +1169,10 @@ export function OwnerDashboard() {
             // engine used above to flag inter-business transfers) -- only applies
             // if the user chose to include the line despite/after that flag.
             businessId: l.ownBusinessMatchId || undefined,
+            // Branch Mapping extends the same auto-map: when the line's
+            // business match was unambiguous AND a single branch name also
+            // matched, attribute it to that branch too.
+            branchId: l.branchMatchId || undefined,
             type: l.type === "CREDIT" ? "INCOME" as const : "EXPENSE" as const,
             categoryName: l.suggestedCategory,
             amountMyr: l.amount,
@@ -1147,14 +1206,16 @@ export function OwnerDashboard() {
       // melainkan ia direkodkan terus sebagai Pendapatan/Perbelanjaan sebenar —
       // supaya "Perlu Dibayar"/"Perlu Dikutip" di Dashboard betul-betul tepat.
       const isOutstanding = docReview.recordType === "PAYABLE" || docReview.recordType === "RECEIVABLE";
-      // Auto-map to one of the user's own registered businesses when the
-      // merchant/vendor name on the receipt or invoice clearly names it.
-      const ocrOwnBusinessMatch = matchOwnBusiness(merchantName || "", businesses.filter(b => b.isActive));
+      // Auto-map to one of the user's own registered businesses (and, when
+      // unambiguous, the specific branch) when the merchant/vendor name on
+      // the receipt or invoice clearly names it.
+      const ocrBranchMatch = matchOwnBusinessAndBranch(merchantName || "", businesses.filter(b => b.isActive), businessBranches);
       let ev;
       try {
         ev = await addFinancialEventAwaited({
           workspaceId: activeWorkspace.id,
-          businessId: ocrOwnBusinessMatch?.id || undefined,
+          businessId: ocrBranchMatch?.business.id || undefined,
+          branchId: ocrBranchMatch?.branch?.id || undefined,
           type: docReview.recordType,
           categoryName: docReview.category,
           amountMyr: Number(docReview.amount) || 0,
@@ -1347,6 +1408,32 @@ export function OwnerDashboard() {
   const [personalProfile, setPersonalProfile] = useState<PersonalProfile>(EMPTY_PERSONAL_PROFILE);
   const [businesses, setBusinesses] = useState<Business[]>([]);
   const [businessBranches, setBusinessBranches] = useState<Record<string, BusinessBranch[]>>({});
+  const [allBranchesLoaded, setAllBranchesLoaded] = useState(false);
+  // Branch Mapping needs every active business's branches available up front
+  // (not just the ones the user has manually expanded in My Profile), so the
+  // matching engine below can check a transaction's text against the full
+  // branch list at doc-review time.
+  useEffect(() => {
+    if (!wsId || allBranchesLoaded) return;
+    const activeBusinesses = businesses.filter((b) => b.isActive);
+    if (activeBusinesses.length === 0) return;
+    setAllBranchesLoaded(true);
+    Promise.all(activeBusinesses.map((b) => loadBusinessBranches(wsId, isMockUser, b.id).then((branches) => ({ id: b.id, branches }))))
+      .then((results) => {
+        setBusinessBranches((prev) => {
+          const next = { ...prev };
+          results.forEach(({ id, branches }) => { next[id] = branches; });
+          return next;
+        });
+      })
+      .catch(() => { /* best-effort only */ });
+  }, [wsId, businesses, allBranchesLoaded]);
+  /** All active branches across all active businesses, flattened — the input
+   * the Business+Branch matching engine matches transaction text against. */
+  const allActiveBranches = useMemo(
+    () => Object.values(businessBranches).flat().filter((br) => br.isActive),
+    [businessBranches]
+  );
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [dependents, setDependents] = useState<Dependent[]>([]);
   const [profileSaving, setProfileSaving] = useState(false);
@@ -1388,6 +1475,7 @@ export function OwnerDashboard() {
     if (!wsId) return;
     loadPersonalProfile(wsId, isMockUser).then(setPersonalProfile);
     loadBusinesses(wsId, isMockUser).then(setBusinesses);
+    setAllBranchesLoaded(false);
     loadVehicles(wsId, isMockUser).then(setVehicles);
     loadDependents(wsId, isMockUser).then(setDependents);
     loadAssetPurchases(wsId, isMockUser).then(setAssetPurchases);
@@ -2739,13 +2827,33 @@ export function OwnerDashboard() {
                         <div className="flex items-center gap-2 flex-wrap text-[10px] text-slate-400">
                           <span className={`px-1 py-0.5 rounded font-semibold ${txnSourceBadgeClass(getTxnSource(ev))}`}>{txnSourceLabel(getTxnSource(ev))}</span>
                           <span>Ref: {ev.referenceNumber}</span>
-                          {ev.businessId && <span>🏢 {businesses.find(b => b.id === ev.businessId)?.businessName || "Bisnes"}</span>}
+                          {ev.businessId && <span>🏢 {getBusinessBranchLabel(ev)}</span>}
                           {ev.description && <span className="italic truncate max-w-[160px]">📝 {ev.description}</span>}
                         </div>
                         <input value={editTxnDraft.partyName} onChange={e => setEditTxnDraft(d => ({ ...d, partyName: e.target.value }))} placeholder="Pihak Berkaitan" className="w-full px-2 py-1 rounded border border-slate-300 text-xs" />
                         <input value={editTxnDraft.categoryName} onChange={e => setEditTxnDraft(d => ({ ...d, categoryName: e.target.value }))} placeholder="Kategori" className="w-full px-2 py-1 rounded border border-slate-300 text-xs" />
                         <input value={editTxnDraft.amountMyr} onChange={e => setEditTxnDraft(d => ({ ...d, amountMyr: e.target.value }))} type="number" placeholder="Jumlah (RM)" className="w-full px-2 py-1 rounded border border-slate-300 text-xs" />
                         <input value={editTxnDraft.date} onChange={e => setEditTxnDraft(d => ({ ...d, date: e.target.value }))} type="date" className="w-full px-2 py-1 rounded border border-slate-300 text-xs" />
+
+                        {/* Business + Branch Mapping -- manual override/resolution when
+                            auto-mapping left this unset (low confidence or multiple
+                            branches matched), or to correct a wrong auto-map. */}
+                        <select value={editTxnDraft.businessId} onChange={e => setEditTxnDraft(d => ({ ...d, businessId: e.target.value, branchId: "" }))}
+                          className="w-full px-2 py-1 rounded border border-slate-300 text-xs">
+                          <option value="">Tiada Bisnes (Personal)</option>
+                          {businesses.filter(b => b.isActive).map(b => (
+                            <option key={b.id} value={b.id}>{b.businessName}</option>
+                          ))}
+                        </select>
+                        {editTxnDraft.businessId && (businessBranches[editTxnDraft.businessId] || []).filter(br => br.isActive).length > 0 && (
+                          <select value={editTxnDraft.branchId} onChange={e => setEditTxnDraft(d => ({ ...d, branchId: e.target.value }))}
+                            className="w-full px-2 py-1 rounded border border-slate-300 text-xs">
+                            <option value="">Tiada Cawangan Tertentu</option>
+                            {(businessBranches[editTxnDraft.businessId] || []).filter(br => br.isActive).map(br => (
+                              <option key={br.id} value={br.id}>{br.branchName}</option>
+                            ))}
+                          </select>
+                        )}
 
                         {/* Lampiran resit */}
                         <div className="pt-1">
@@ -2794,7 +2902,7 @@ export function OwnerDashboard() {
                               )}
                               {ev.businessId && (
                                 <span className="text-[9px] px-1 py-0.5 rounded bg-slate-100 text-slate-600 font-semibold">
-                                  🏢 {businesses.find(b => b.id === ev.businessId)?.businessName || "Bisnes"}
+                                  🏢 {getBusinessBranchLabel(ev)}
                                 </span>
                               )}
                               {getHealthFlags(ev).map(f => (
@@ -3235,7 +3343,7 @@ export function OwnerDashboard() {
                               <span className={`text-[9px] px-1 py-0.5 rounded font-semibold ${txnSourceBadgeClass(getTxnSource(ev))}`}>{txnSourceLabel(getTxnSource(ev))}</span>
                               {ev.businessId && (
                                 <span className="text-[9px] px-1 py-0.5 rounded bg-slate-100 text-slate-600 font-semibold">
-                                  🏢 {businesses.find(b => b.id === ev.businessId)?.businessName || "Bisnes"}
+                                  🏢 {getBusinessBranchLabel(ev)}
                                 </span>
                               )}
                               {getHealthFlags(ev).map(f => (
@@ -4352,6 +4460,23 @@ export function OwnerDashboard() {
                         <p className="pl-6 text-[10px] font-semibold text-amber-600">
                           🏢 {l.ownBusinessMatchLabel} — semak sama ada ini perlu direkod sebagai Pendapatan/Perbelanjaan luaran
                         </p>
+                      )}
+                      {l.branchMatchAmbiguous && (
+                        <div className="pl-6 space-y-1">
+                          <p className="text-[10px] font-semibold text-amber-600">
+                            ⚠ Lebih daripada satu cawangan sepadan ({(l.branchMatchCandidates || []).join(", ")}) — sila pilih cawangan yang betul:
+                          </p>
+                          <select
+                            value={l.branchMatchId || ""}
+                            onChange={e => setDocReview(d => d ? { ...d, lines: d.lines!.map((x, xi) => xi === i ? { ...x, branchMatchId: e.target.value || undefined } : x) } : d)}
+                            className="px-2 py-1 rounded border border-amber-300 text-[11px]"
+                          >
+                            <option value="">Tiada Cawangan Tertentu</option>
+                            {(businessBranches[l.ownBusinessMatchId || ""] || []).filter(br => br.isActive).map(br => (
+                              <option key={br.id} value={br.id}>{br.branchName}</option>
+                            ))}
+                          </select>
+                        </div>
                       )}
                       {l.matchedEventId && (
                         <p className="pl-6 text-[10px] font-semibold text-emerald-600">

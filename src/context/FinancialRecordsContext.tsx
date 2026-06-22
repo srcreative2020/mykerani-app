@@ -517,6 +517,7 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
               bankAccountId: row.source_bank_account_id || undefined,
               cashAccountId: row.source_cash_account_id || undefined,
               businessId: row.business_id || undefined,
+              branchId: row.branch_id || undefined,
               createdByUserId: row.created_by_user_id || undefined,
               createdByName: row.created_by_name || undefined,
               createdAt: row.created_at || undefined,
@@ -540,6 +541,7 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
               bankAccountId: row.payment_bank_account_id || undefined,
               cashAccountId: row.payment_cash_account_id || undefined,
               businessId: row.business_id || undefined,
+              branchId: row.branch_id || undefined,
               createdByUserId: row.created_by_user_id || undefined,
               createdByName: row.created_by_name || undefined,
               createdAt: row.created_at || undefined,
@@ -560,6 +562,8 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
               referenceNumber: row.invoice_number || "",
               description: "Outstanding design services invoice project.",
               isCompleted: row.status === "PAID",
+              businessId: row.business_id || undefined,
+              branchId: row.branch_id || undefined,
             });
           });
 
@@ -577,6 +581,8 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
               referenceNumber: row.bill_number || "",
               description: "Bulk raw materials receipt order.",
               isCompleted: row.status === "PAID",
+              businessId: row.business_id || undefined,
+              branchId: row.branch_id || undefined,
             });
           });
 
@@ -793,6 +799,7 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
         reference_number: newEvent.referenceNumber,
         description: newEvent.description,
         business_id: newEvent.businessId || null,
+        branch_id: newEvent.branchId || null,
         created_by_user_id: newEvent.createdByUserId || null,
         created_by_name: newEvent.createdByName || null,
       }, isAiConfirmed ? { onConflict: "workspace_id,reference_number", ignoreDuplicates: true } : undefined));
@@ -812,6 +819,7 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
         created_by_name: newEvent.createdByName || null,
         description: newEvent.type === "DEBT" ? `[DEBT] ${newEvent.description}` : newEvent.description,
         business_id: newEvent.businessId || null,
+        branch_id: newEvent.branchId || null,
       }, isAiConfirmed ? { onConflict: "workspace_id,reference_number", ignoreDuplicates: true } : undefined));
     } else if (newEvent.type === "RECEIVABLE") {
       ({ error: dbError } = await supabase.from("receivables").upsert({
@@ -826,6 +834,7 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
         status: newEvent.isCompleted ? "PAID" : "UNPAID",
         category_id: catId,
         business_id: newEvent.businessId || null,
+        branch_id: newEvent.branchId || null,
       }, isAiConfirmed ? { onConflict: "workspace_id,invoice_number", ignoreDuplicates: true } : undefined));
     } else if (newEvent.type === "PAYABLE") {
       ({ error: dbError } = await supabase.from("payables").upsert({
@@ -840,6 +849,7 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
         status: newEvent.isCompleted ? "PAID" : "UNPAID",
         category_id: catId,
         business_id: newEvent.businessId || null,
+        branch_id: newEvent.branchId || null,
       }, isAiConfirmed ? { onConflict: "workspace_id,bill_number", ignoreDuplicates: true } : undefined));
     }
 
