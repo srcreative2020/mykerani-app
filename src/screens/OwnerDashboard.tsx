@@ -717,6 +717,8 @@ export function OwnerDashboard() {
     confidenceScore: number;
     rawExtractedText: string;
     lines?: DocReviewLine[];
+    pagesFound?: number | null;
+    transactionsFound?: number;
   }>(null);
 
   // Load documents when workspace ready
@@ -772,6 +774,8 @@ export function OwnerDashboard() {
           recordType: "EXPENSE",
           confidenceScore: payload.confidenceScore || 0.7,
           rawExtractedText: payload.rawExtractedText || "",
+          pagesFound: payload.pagesFound ?? null,
+          transactionsFound: payload.transactionsFound ?? payload.transactions.length,
           lines: (() => {
             const rawLines = payload.transactions.map((t: any) => ({
               date: t.date || "", description: t.description || "", amount: Number(t.amount) || 0,
@@ -3818,6 +3822,12 @@ export function OwnerDashboard() {
             <div className="flex-1 overflow-y-auto p-5 space-y-3">
               {docReview.lines ? (
                 <>
+                  <div className="grid grid-cols-4 gap-2 text-center bg-slate-50 border border-slate-200 rounded-xl p-2">
+                    <div><p className="text-[10px] text-slate-400">Pages Found</p><p className="text-sm font-bold text-slate-800">{docReview.pagesFound ?? "—"}</p></div>
+                    <div><p className="text-[10px] text-slate-400">Transactions Found</p><p className="text-sm font-bold text-slate-800">{docReview.transactionsFound ?? docReview.lines.length}</p></div>
+                    <div><p className="text-[10px] text-slate-400">Extracted</p><p className="text-sm font-bold text-slate-800">{docReview.lines.length}</p></div>
+                    <div><p className="text-[10px] text-slate-400">To Import</p><p className="text-sm font-bold text-emerald-600">{docReview.lines.filter(l => l.include).length}</p></div>
+                  </div>
                   <p className="text-[11px] text-slate-500">
                     AI mengesan {docReview.lines.length} transaksi dalam penyata ini, padankan dengan rekod yang anda dah masukkan sendiri,
                     dan kenal pasti {docReview.lines.filter(l => l.isInternalTransfer).length} pemindahan dalaman.

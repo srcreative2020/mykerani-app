@@ -675,12 +675,14 @@ async function startServer() {
       // Extract the PDF's real text layer locally instead, and send that as plain text —
       // every provider's standard chat-completions endpoint already supports text input.
       let extractedPdfText: string | null = null;
+      let pdfPagesFound: number | null = null;
       if (mimeType === "application/pdf") {
         try {
           const pdfBuffer = Buffer.from(base64Data, "base64");
           const parser = new PDFParse({ data: pdfBuffer });
           const result = await parser.getText();
           extractedPdfText = (result.text || "").trim();
+          pdfPagesFound = result.total ?? null;
         } catch (pdfErr: any) {
           console.error("PDF text extraction failed:", pdfErr?.message || pdfErr);
           return res.status(422).json({
@@ -756,6 +758,16 @@ Provide your output precisely formatted as raw JSON matching exactly this shape,
 
       console.info(`[AI_ROUTER_DEBUG][OCR] servedBy=${usedCandidate!.provider}:${usedCandidate!.model} mode=${extractedPdfText !== null ? "pdf-text" : "vision"}`);
       logAiUsage(tenantId, workspaceId, userId, "ocr", usedCandidate!.provider, usedCandidate!.model);
+
+      if (isStatement) {
+        const transactionsFound = Array.isArray(parsedResult?.transactions) ? parsedResult.transactions.length : 0;
+        return res.json({
+          ...parsedResult,
+          pagesFound: pdfPagesFound,
+          transactionsFound,
+          transactionsExtracted: transactionsFound,
+        });
+      }
 
       return res.json(parsedResult);
 
