@@ -27,6 +27,8 @@ import type {
   FinancialEvent,
   DebtRecord,
   FinancialCommitment,
+  CashAccount,
+  BankAccount,
 } from "../types";
 import type { AssetPurchase, OwnerTransaction } from "./assetOwnerData";
 
@@ -40,14 +42,17 @@ export type ClassificationFallbackType =
   | "COMMITMENT"
   | "ASSET_PURCHASE"
   | "CAPITAL_INJECTION"
-  | "DRAWING";
+  | "DRAWING"
+  | "CASH_OR_BANK_BALANCE";
 
 export type ClassifiableRecordKind =
   | "FINANCIAL_EVENT"
   | "DEBT_RECORD"
   | "FINANCIAL_COMMITMENT"
   | "ASSET_PURCHASE"
-  | "OWNER_TRANSACTION";
+  | "OWNER_TRANSACTION"
+  | "CASH_ACCOUNT"
+  | "BANK_ACCOUNT";
 
 export type ResolutionMethod = "CANONICAL_MATCH" | "KNOWLEDGE_BASE_MATCH" | "TYPE_FALLBACK";
 
@@ -86,6 +91,7 @@ const TYPE_FALLBACK_GROUP: Record<ClassificationFallbackType, FinancialStatement
   ASSET_PURCHASE: "ASSETS",
   CAPITAL_INJECTION: "EQUITY",
   DRAWING: "EQUITY",
+  CASH_OR_BANK_BALANCE: "ASSETS",
 };
 
 const FALLBACK_DISPLAY_NAMES: Record<FinancialStatementGroup, { accountingName: string; humanFriendlyName: string }> = {
@@ -223,6 +229,29 @@ export function fromOwnerTransaction(txn: OwnerTransaction): ClassificationInput
     recordId: txn.id,
     kind: "OWNER_TRANSACTION",
     fallbackType: txn.type === "CAPITAL_INJECTION" ? "CAPITAL_INJECTION" : "DRAWING",
+    categoryText: null,
+    lookupText: null,
+  };
+}
+
+// Cash/Bank balances are structural Assets regardless of any free-text field
+// (there is none to consider here) — same reasoning as Debt/Commitment/Owner
+// Transaction above, always resolves via the deterministic type fallback.
+export function fromCashAccount(account: CashAccount): ClassificationInput {
+  return {
+    recordId: account.id,
+    kind: "CASH_ACCOUNT",
+    fallbackType: "CASH_OR_BANK_BALANCE",
+    categoryText: null,
+    lookupText: null,
+  };
+}
+
+export function fromBankAccount(account: BankAccount): ClassificationInput {
+  return {
+    recordId: account.id,
+    kind: "BANK_ACCOUNT",
+    fallbackType: "CASH_OR_BANK_BALANCE",
     categoryText: null,
     lookupText: null,
   };

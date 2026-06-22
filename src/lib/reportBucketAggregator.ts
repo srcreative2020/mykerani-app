@@ -9,7 +9,7 @@
 // Stateless, pure functions only. No DB, no I/O, no React. Reports are not
 // built here — only the reusable bucket/total APIs they will consume.
 
-import type { DebtRecord, FinancialCommitment, FinancialEvent } from "../types";
+import type { DebtRecord, FinancialCommitment, FinancialEvent, CashAccount, BankAccount } from "../types";
 import type { AssetPurchase, OwnerTransaction } from "./assetOwnerData";
 import {
   resolveLevel1Group,
@@ -18,6 +18,8 @@ import {
   fromFinancialCommitment,
   fromAssetPurchase,
   fromOwnerTransaction,
+  fromCashAccount,
+  fromBankAccount,
   type ClassifiableRecordKind,
   type ResolutionMethod,
 } from "./reportClassificationEngine";
@@ -75,6 +77,10 @@ export interface ReportBucketAggregatorInput {
   financialCommitments: FinancialCommitment[];
   assetPurchases: AssetPurchase[];
   ownerTransactions: OwnerTransaction[];
+  /** Optional — only the Balance Sheet passes these. Omitting them preserves
+   * every existing caller's totals (P&L, Cash Flow) exactly as before. */
+  cashAccounts?: CashAccount[];
+  bankAccounts?: BankAccount[];
 }
 
 /**
@@ -109,6 +115,16 @@ export function buildReportBuckets(input: ReportBucketAggregatorInput): ReportBu
   for (const txn of input.ownerTransactions) {
     const resolution = resolveLevel1Group(fromOwnerTransaction(txn));
     pushResolved(buckets, txn.id, "OWNER_TRANSACTION", txn.amountMyr, txn.transactionDate, resolution);
+  }
+
+  for (const account of input.cashAccounts || []) {
+    const resolution = resolveLevel1Group(fromCashAccount(account));
+    pushResolved(buckets, account.id, "CASH_ACCOUNT", account.currentBalanceMyr, "", resolution);
+  }
+
+  for (const account of input.bankAccounts || []) {
+    const resolution = resolveLevel1Group(fromBankAccount(account));
+    pushResolved(buckets, account.id, "BANK_ACCOUNT", account.currentBalanceMyr, "", resolution);
   }
 
   return buckets;

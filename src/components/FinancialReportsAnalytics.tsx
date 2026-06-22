@@ -1627,6 +1627,8 @@ export const FinancialReportsAnalytics: React.FC = () => {
             <div className="animate-fade-in" id="report_balance_sheet_view">
               <BalanceSheetReport
                 financialEvents={financialEvents}
+                cashAccounts={cashAccounts}
+                bankAccounts={bankAccounts}
                 debtRecords={debtRecords}
                 financialCommitments={financialCommitments}
                 financialEvidencePackages={financialEvidencePackages}

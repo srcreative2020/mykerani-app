@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { Landmark, Receipt, FileText, X, Scale } from "lucide-react";
-import type { DebtRecord, FinancialCommitment, FinancialEvent, FinancialEvidencePackage } from "../types";
+import type { DebtRecord, FinancialCommitment, FinancialEvent, FinancialEvidencePackage, CashAccount, BankAccount } from "../types";
 import { type AssetPurchase, type OwnerTransaction, loadAssetPurchases, loadOwnerTransactions } from "../lib/assetOwnerData";
 import { buildReportBuckets, getBalanceSheetTieOut, type BucketedRecord } from "../lib/reportBucketAggregator";
 import { buildEvidenceIndex, getDrilldownForRecords, type DrilldownEntry } from "../lib/evidenceDrilldown";
@@ -12,6 +12,8 @@ function fmtMyr(n: number): string {
 
 interface BalanceSheetReportProps {
   financialEvents: FinancialEvent[];
+  cashAccounts: CashAccount[];
+  bankAccounts: BankAccount[];
   debtRecords: DebtRecord[];
   financialCommitments: FinancialCommitment[];
   financialEvidencePackages: FinancialEvidencePackage[];
@@ -30,6 +32,8 @@ const LABELS: Record<BsLine, { human: string; accounting: string }> = {
 
 export const BalanceSheetReport: React.FC<BalanceSheetReportProps> = ({
   financialEvents,
+  cashAccounts,
+  bankAccounts,
   debtRecords,
   financialCommitments,
   financialEvidencePackages,
@@ -49,8 +53,8 @@ export const BalanceSheetReport: React.FC<BalanceSheetReportProps> = ({
   // Balance Sheet is point-in-time (all-time), not period-filtered like P&L —
   // it answers "what does the business own/owe right now," not "this month."
   const buckets = useMemo(
-    () => buildReportBuckets({ financialEvents, debtRecords, financialCommitments, assetPurchases, ownerTransactions }),
-    [financialEvents, debtRecords, financialCommitments, assetPurchases, ownerTransactions]
+    () => buildReportBuckets({ financialEvents, debtRecords, financialCommitments, assetPurchases, ownerTransactions, cashAccounts, bankAccounts }),
+    [financialEvents, debtRecords, financialCommitments, assetPurchases, ownerTransactions, cashAccounts, bankAccounts]
   );
 
   // The ONLY source of Balance Sheet totals + the Retained Earnings tie-out —
