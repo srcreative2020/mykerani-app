@@ -221,7 +221,10 @@ export function OwnerDashboard() {
   const [editingChatSuggestionId, setEditingChatSuggestionId] = useState<string | null>(null);
   const [chatEditDraft, setChatEditDraft] = useState({ amount: "", category: "", relatedParty: "", date: "" });
   // Per-suggestion business pick + evidence step, layered on top of the AI suggestion before final Sahkan.
-  const [chatSuggestionExtra, setChatSuggestionExtra] = useState<Record<string, { businessId: string | null; businessName: string; businessPicked: boolean; evidenceStatus: "NONE" | "ATTACHED" | "SKIPPED" }>>({});
+  const [chatSuggestionExtra, setChatSuggestionExtra] = useState<Record<string, {
+    businessId: string | null; businessName: string; businessPicked: boolean; evidenceStatus: "NONE" | "ATTACHED" | "SKIPPED";
+    branchId?: string | null; branchName?: string; branchPicked?: boolean; autoMapped?: boolean; branchCandidates?: string[];
+  }>>({});
   const chatEvidenceFilesRef = useRef<Record<string, File>>({});
   const chatEvidenceInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
   // Cross-workspace learning: suggestionId -> { workspaceName } when AI has learned
@@ -1650,9 +1653,40 @@ export function OwnerDashboard() {
       setChatSuggestionExtra(prev => {
         const next = { ...prev };
         suggestions.forEach(s => {
-          next[s.id] = activeBusinesses.length > 0
-            ? { businessId: null, businessName: "", businessPicked: false, evidenceStatus: "NONE" }
-            : { businessId: null, businessName: "Personal", businessPicked: true, evidenceStatus: "NONE" };
+          if (activeBusinesses.length === 0) {
+            next[s.id] = { businessId: null, businessName: "Personal", businessPicked: true, evidenceStatus: "NONE" };
+            return;
+          }
+          // Reuse the same Business/Branch Mapping engine used by Bank Statement and
+          // OCR confirm flows — never duplicate the matching logic for AI Chat.
+          const chatMatchText = [s.payload?.relatedParty, s.description, s.payload?.category].filter(Boolean).join(" ");
+          const branchMatch = matchOwnBusinessAndBranch(chatMatchText, activeBusinesses, businessBranches);
+          if (branchMatch && !branchMatch.ambiguous) {
+            next[s.id] = {
+              businessId: branchMatch.business.id,
+              businessName: branchMatch.business.businessName,
+              businessPicked: true,
+              evidenceStatus: "NONE",
+              branchId: branchMatch.branch?.id ?? null,
+              branchName: branchMatch.branch?.branchName ?? "",
+              branchPicked: true,
+              autoMapped: true,
+            };
+          } else if (branchMatch && branchMatch.ambiguous) {
+            next[s.id] = {
+              businessId: branchMatch.business.id,
+              businessName: branchMatch.business.businessName,
+              businessPicked: true,
+              evidenceStatus: "NONE",
+              branchId: null,
+              branchName: "",
+              branchPicked: false,
+              autoMapped: true,
+              branchCandidates: branchMatch.candidateLabels,
+            };
+          } else {
+            next[s.id] = { businessId: null, businessName: "", businessPicked: false, evidenceStatus: "NONE" };
+          }
         });
         return next;
       });
@@ -1842,7 +1876,20 @@ export function OwnerDashboard() {
   const handleChatPickBusiness = (suggestionId: string, businessId: string | null, businessName: string) => {
     setChatSuggestionExtra(prev => ({
       ...prev,
-      [suggestionId]: { ...(prev[suggestionId] || { businessId: null, businessName: "", businessPicked: false, evidenceStatus: "NONE" }), businessId, businessName, businessPicked: true },
+      [suggestionId]: {
+        ...(prev[suggestionId] || { businessId: null, businessName: "", businessPicked: false, evidenceStatus: "NONE" }),
+        businessId, businessName, businessPicked: true,
+        // Manual business pick overrides any auto-mapping; branch must be re-resolved for the new business.
+        branchId: null, branchName: "", branchPicked: !businessId || (businessBranches[businessId] || []).filter(br => br.isActive).length === 0,
+        autoMapped: false, branchCandidates: undefined,
+      },
+    }));
+  };
+
+  const handleChatPickBranch = (suggestionId: string, branchId: string | null, branchName: string) => {
+    setChatSuggestionExtra(prev => ({
+      ...prev,
+      [suggestionId]: { ...(prev[suggestionId] || { businessId: null, businessName: "", businessPicked: false, evidenceStatus: "NONE" }), branchId, branchName, branchPicked: true },
     }));
   };
 
@@ -1867,6 +1914,7 @@ export function OwnerDashboard() {
     const extra = chatSuggestionExtra[s.id];
     if (!extra || !extra.businessPicked) return;
     const businessId = extra.businessId;
+    const branchId = extra.branchId;
     const transactionType = s.payload?.transactionType;
     const amount = Number(edited ? edited.amount : s.payload?.amount) || 0;
     const category = (edited ? edited.category : s.payload?.category) || "Lain-lain";
@@ -1883,6 +1931,7 @@ export function OwnerDashboard() {
         ev = await addFinancialEventAwaited({
           workspaceId: activeWorkspace.id,
           businessId: businessId || undefined,
+          branchId: branchId || undefined,
           type: transactionType,
           categoryName: category,
           amountMyr: amount,
@@ -1917,6 +1966,7 @@ export function OwnerDashboard() {
         ev = await addFinancialEventAwaited({
           workspaceId: activeWorkspace.id,
           businessId: businessId || undefined,
+          branchId: branchId || undefined,
           type: "RECEIVABLE",
           categoryName: category,
           amountMyr: amount,
@@ -1938,6 +1988,7 @@ export function OwnerDashboard() {
         ev = await addFinancialEventAwaited({
           workspaceId: activeWorkspace.id,
           businessId: businessId || undefined,
+          branchId: branchId || undefined,
           type: "PAYABLE",
           categoryName: category,
           amountMyr: amount,
@@ -2437,7 +2488,7 @@ export function OwnerDashboard() {
                       const statusObj = chatSuggestionStatus[s.id] || { status: "pending" as const };
                       const status = statusObj.status;
                       if (status === "rejected") return null;
-                      const extra = chatSuggestionExtra[s.id] || { businessId: null, businessName: "", businessPicked: businesses.filter(b => b.isActive).length === 0, evidenceStatus: "NONE" as const };
+                      const extra = chatSuggestionExtra[s.id] || { businessId: null, businessName: "", businessPicked: businesses.filter(b => b.isActive).length === 0, evidenceStatus: "NONE" as const, branchPicked: true };
                       const confidencePct = Math.round((s.payload?.confidenceScore ?? 0.7) * 100);
                       const confidenceClass = confidencePct >= 90 ? "text-emerald-700" : confidencePct >= 75 ? "text-amber-700" : "text-rose-700";
                       const activeBusinesses = businesses.filter(b => b.isActive);
@@ -2545,7 +2596,32 @@ export function OwnerDashboard() {
                               </div>
                             )}
                             {status === "pending" && extra.businessPicked && (
-                              <div className="text-xs text-slate-500">Bisnes: <span className="font-semibold text-slate-700">{extra.businessName || "Personal"}</span></div>
+                              <div className="text-xs text-slate-500">
+                                Bisnes: <span className="font-semibold text-slate-700">{extra.branchName ? `${extra.businessName} - ${extra.branchName}` : (extra.businessName || "Personal")}</span>
+                                {extra.autoMapped && <span className="ml-1.5 text-[10px] text-emerald-600 font-semibold">✓ Auto-mapped</span>}
+                              </div>
+                            )}
+                            {status === "pending" && extra.businessPicked && extra.businessId && !extra.branchPicked && (
+                              <div className="space-y-1.5 pt-1">
+                                <p className="text-xs text-amber-600">
+                                  {(extra.branchCandidates && extra.branchCandidates.length > 0)
+                                    ? `Lebih daripada satu cawangan sepadan (${extra.branchCandidates.join(", ")}) — sila pilih cawangan:`
+                                    : "Pilih cawangan (jika berkaitan):"}
+                                </p>
+                                <div className="flex flex-wrap gap-2">
+                                  {(businessBranches[extra.businessId] || []).filter(br => br.isActive).map(br => (
+                                    <button key={br.id} type="button" onClick={() => handleChatPickBranch(s.id, br.id, br.branchName)}
+                                      title={br.branchName}
+                                      className="px-3 py-1.5 text-sm rounded-full bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-700 font-semibold truncate max-w-[160px]">
+                                      {br.branchName}
+                                    </button>
+                                  ))}
+                                  <button type="button" onClick={() => handleChatPickBranch(s.id, null, "")}
+                                    className="px-3 py-1.5 text-sm rounded-full bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-700 font-semibold">
+                                    Tiada Cawangan Tertentu
+                                  </button>
+                                </div>
+                              </div>
                             )}
                             {status === "pending" && extra.businessPicked && (
                               <div className="space-y-1.5">
@@ -2576,7 +2652,7 @@ export function OwnerDashboard() {
                                 )}
                               </div>
                             )}
-                            {status === "pending" && editingChatSuggestionId !== s.id && extra.businessPicked && extra.evidenceStatus !== "NONE" && (
+                            {status === "pending" && editingChatSuggestionId !== s.id && extra.businessPicked && !!extra.branchPicked && extra.evidenceStatus !== "NONE" && (
                               <div className="flex gap-2 pt-1">
                                 <button type="button" onClick={() => handleChatConfirmSuggestion(s)} className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-semibold">Sahkan</button>
                                 <button type="button" onClick={() => handleChatStartEdit(s)} className="px-3 py-1.5 rounded-lg bg-slate-200 hover:bg-slate-300 text-slate-800 font-semibold">Edit</button>
