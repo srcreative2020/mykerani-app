@@ -345,6 +345,7 @@ export function OwnerDashboard() {
   const [historyFilterSource, setHistoryFilterSource] = useState<"ALL" | "AI_CHAT" | "RECEIPT_OCR" | "INVOICE_OCR" | "BANK_STATEMENT" | "MANUAL">("ALL");
   const [historyFilterBusiness, setHistoryFilterBusiness] = useState<string>("ALL");
   const [historyFilterType, setHistoryFilterType] = useState<"ALL" | "INCOME" | "EXPENSE" | "RECEIVABLE" | "PAYABLE" | "DEBT">("ALL");
+  const [historyFilterCategory, setHistoryFilterCategory] = useState<string>("ALL");
   const [historyPage, setHistoryPage] = useState(0);
   const [historyPageSize, setHistoryPageSize] = useState(100);
   const getTxnSource = (ev: { referenceNumber: string }): "AI_CHAT" | "RECEIPT_OCR" | "INVOICE_OCR" | "BANK_STATEMENT" | "MANUAL" => {
@@ -426,26 +427,33 @@ export function OwnerDashboard() {
   useEffect(() => { setTxnPage(0); }, [txnSearch, txnFilterBusiness, txnFilterCategory, txnFilterSource, txnFilterFrom, txnFilterTo, dashboardTypeFilter, txnPageSize]);
 
   const historyFilteredEvents = useMemo(() => {
+    // Same default window as the Dashboard (periodRange) when no custom date
+    // range is set, so "no filter selected" produces an identical count on
+    // both screens -- they read the same myEvents source under the same rules.
+    const usingCustomRange = !!(historyFilterFrom || historyFilterTo);
     const q = historySearch.trim().toLowerCase();
     return myEvents.filter(e => {
-      const inRange = (!historyFilterFrom || e.date >= historyFilterFrom) && (!historyFilterTo || e.date <= historyFilterTo);
+      const inRange = usingCustomRange
+        ? (!historyFilterFrom || e.date >= historyFilterFrom) && (!historyFilterTo || e.date <= historyFilterTo)
+        : (e.date >= periodRange.from && e.date <= periodRange.to);
       const matchesSource = historyFilterSource === "ALL" || getTxnSource(e) === historyFilterSource;
       const matchesBusiness = historyFilterBusiness === "ALL" || (e.businessId || "") === historyFilterBusiness;
       const matchesType = historyFilterType === "ALL" || e.type === historyFilterType;
+      const matchesCategory = historyFilterCategory === "ALL" || e.categoryName === historyFilterCategory;
       const matchesSearch = !q ||
         e.description?.toLowerCase().includes(q) ||
         e.partyName?.toLowerCase().includes(q) ||
         e.referenceNumber?.toLowerCase().includes(q) ||
         e.categoryName?.toLowerCase().includes(q);
-      return inRange && matchesSource && matchesBusiness && matchesType && matchesSearch;
+      return inRange && matchesSource && matchesBusiness && matchesType && matchesCategory && matchesSearch;
     }).slice().reverse();
-  }, [myEvents, historySearch, historyFilterFrom, historyFilterTo, historyFilterSource, historyFilterBusiness, historyFilterType]);
+  }, [myEvents, historySearch, historyFilterFrom, historyFilterTo, periodRange, historyFilterSource, historyFilterBusiness, historyFilterType, historyFilterCategory]);
   const historyTotalPages = Math.max(1, Math.ceil(historyFilteredEvents.length / historyPageSize));
   const pagedHistoryEvents = useMemo(() => {
     const start = historyPage * historyPageSize;
     return historyFilteredEvents.slice(start, start + historyPageSize);
   }, [historyFilteredEvents, historyPage, historyPageSize]);
-  useEffect(() => { setHistoryPage(0); }, [historySearch, historyFilterFrom, historyFilterTo, historyFilterSource, historyFilterBusiness, historyFilterType, historyPageSize]);
+  useEffect(() => { setHistoryPage(0); }, [historySearch, historyFilterFrom, historyFilterTo, historyFilterSource, historyFilterBusiness, historyFilterType, historyFilterCategory, historyPageSize]);
 
   // â•â• Phase 2: computed-only Transaction Health Flags. No new tables/state --
   // derived purely from fields already on FinancialEvent at render time.
@@ -875,6 +883,12 @@ export function OwnerDashboard() {
     recordType: "INCOME" | "EXPENSE" | "RECEIVABLE" | "PAYABLE" | "DEBT";
     confidenceScore: number;
     rawExtractedText: string;
+    // Single source of truth for the receipt/invoice Business + Branch mapping --
+    // pre-filled from matchOwnBusinessAndBranch when the review is built, shown
+    // via an editable selector, and read directly (no separate preview state)
+    // by confirmDocReview when saving.
+    businessId?: string;
+    branchId?: string;
     lines?: DocReviewLine[];
     pagesFound?: number | null;
     transactionsFound?: number;
@@ -984,15 +998,19 @@ export function OwnerDashboard() {
       };
     }
     const matchedPattern = ocrLearnedPatterns.find(p => p.vendorName.toLowerCase() === (payload.merchantName || "").toLowerCase());
+    const merchantName = matchedPattern?.vendorName || payload.merchantName || "";
+    const ocrBranchMatch = matchOwnBusinessAndBranch(merchantName, businesses.filter(b => b.isActive), businessBranches);
     return {
       doc,
-      merchantName: matchedPattern?.vendorName || payload.merchantName || "",
+      merchantName,
       amount: String(payload.amount || 0),
       date: payload.date || new Date().toISOString().split("T")[0],
       category: matchedPattern?.category || payload.suggestedCategory || "Lain-lain",
       recordType: matchedPattern?.recordType || (doc.document_type === "INVOICE" ? "PAYABLE" : "EXPENSE"),
       confidenceScore: matchedPattern?.confidenceScore || payload.confidenceScore || 0.7,
       rawExtractedText: payload.rawExtractedText || "",
+      businessId: ocrBranchMatch?.business.id,
+      branchId: ocrBranchMatch?.branch?.id,
     };
   };
 
@@ -1162,16 +1180,15 @@ export function OwnerDashboard() {
       // melainkan ia direkodkan terus sebagai Pendapatan/Perbelanjaan sebenar —
       // supaya "Perlu Dibayar"/"Perlu Dikutip" di Dashboard betul-betul tepat.
       const isOutstanding = docReview.recordType === "PAYABLE" || docReview.recordType === "RECEIVABLE";
-      // Reuse the exact match already shown to the user on the review screen
-      // (ocrLiveMatch) rather than recomputing it, so what was confirmed on
-      // screen is guaranteed to be what gets saved.
-      const ocrBranchMatch = ocrLiveMatch;
+      // docReview.businessId/branchId is the single source of truth -- whatever
+      // the user sees/edits in the selector on the review screen is exactly
+      // what gets saved here, no separate recomputation.
       let ev;
       try {
         ev = await addFinancialEventAwaited({
           workspaceId: activeWorkspace.id,
-          businessId: ocrBranchMatch?.business.id || undefined,
-          branchId: ocrBranchMatch?.branch?.id || undefined,
+          businessId: docReview.businessId || undefined,
+          branchId: docReview.branchId || undefined,
           type: docReview.recordType,
           categoryName: docReview.category,
           amountMyr: Number(docReview.amount) || 0,
@@ -1384,14 +1401,6 @@ export function OwnerDashboard() {
       })
       .catch(() => { /* best-effort only */ });
   }, [wsId, businesses, allBranchesLoaded]);
-  // Live Business/Branch match preview for the single-record (receipt/invoice)
-  // OCR review screen — recomputed as the user edits the merchant/vendor name,
-  // using the exact same engine as confirmDocReview below, so what's shown
-  // before Confirm is guaranteed to match what gets saved.
-  const ocrLiveMatch = useMemo(() => {
-    if (!docReview || docReview.lines) return undefined;
-    return matchOwnBusinessAndBranch(docReview.merchantName || "", businesses.filter((b) => b.isActive), businessBranches);
-  }, [docReview, businesses, businessBranches]);
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [dependents, setDependents] = useState<Dependent[]>([]);
   const [profileSaving, setProfileSaving] = useState(false);
@@ -3351,6 +3360,14 @@ export function OwnerDashboard() {
                       <option value="RECEIVABLE">Belum Terima</option>
                       <option value="PAYABLE">Belum Bayar</option>
                     </select>
+                    <select
+                      value={historyFilterCategory}
+                      onChange={e => setHistoryFilterCategory(e.target.value)}
+                      className="text-xs border border-slate-200 rounded-lg px-2 py-1.5"
+                    >
+                      <option value="ALL">Semua Kategori</option>
+                      {txnCategoryOptions.map(c => <option key={c} value={c}>{c}</option>)}
+                    </select>
                   </div>
                   <div className="flex items-center justify-end gap-2 pt-1">
                     <label className="text-[11px] text-slate-400">Papar setiap halaman:</label>
@@ -3384,6 +3401,15 @@ export function OwnerDashboard() {
                             <p className="text-[10px] text-slate-400 truncate">{ev.partyName || ev.categoryName} &middot; {ev.date} &middot; Ref: {ev.referenceNumber}</p>
                             <div className="flex items-center gap-1 mt-0.5 flex-wrap">
                               <span className={`text-[9px] px-1 py-0.5 rounded font-semibold ${txnSourceBadgeClass(getTxnSource(ev))}`}>{txnSourceLabel(getTxnSource(ev))}</span>
+                              {findTxnConfidence(ev) !== null && (
+                                <span className="text-[9px] px-1 py-0.5 rounded bg-indigo-50 text-indigo-500 font-semibold">Confiden {findTxnConfidence(ev)}%</span>
+                              )}
+                              {(evidenceByRecordId[ev.id] || []).length > 0 && (
+                                <button type="button" onClick={() => previewTxnEvidence(evidenceByRecordId[ev.id][0])}
+                                  className="text-[9px] px-1 py-0.5 rounded bg-emerald-50 text-emerald-600 font-semibold cursor-pointer hover:bg-emerald-100 flex items-center gap-0.5">
+                                  <Receipt className="w-2.5 h-2.5" /> Resit
+                                </button>
+                              )}
                               {ev.businessId && (
                                 <span className="text-[9px] px-1 py-0.5 rounded bg-slate-100 text-slate-600 font-semibold">
                                   🏢 {getBusinessBranchLabel(ev)}
@@ -3395,9 +3421,14 @@ export function OwnerDashboard() {
                             </div>
                           </div>
                         </div>
-                        <span className={`text-sm font-bold shrink-0 ${ev.type === "INCOME" ? "text-emerald-600" : "text-rose-500"}`}>
-                          {ev.type === "INCOME" ? "+" : "-"}RM {ev.amountMyr.toFixed(2)}
-                        </span>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <span className={`text-sm font-bold ${ev.type === "INCOME" ? "text-emerald-600" : "text-rose-500"}`}>
+                            {ev.type === "INCOME" ? "+" : "-"}RM {ev.amountMyr.toFixed(2)}
+                          </span>
+                          <button onClick={() => startEditTxn(ev)} className="p-1 text-slate-300 hover:text-indigo-500 cursor-pointer" aria-label="Edit transaksi">
+                            <Edit3 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
                       </div>
                     ))}
                     <div className="flex items-center justify-between pt-1">
@@ -4505,22 +4536,37 @@ export function OwnerDashboard() {
                         </p>
                       )}
                       {l.branchMatchAmbiguous && (
-                        <div className="pl-6 space-y-1">
-                          <p className="text-[10px] font-semibold text-amber-600">
-                            ⚠ Lebih daripada satu cawangan sepadan ({(l.branchMatchCandidates || []).join(", ")}) — sila pilih cawangan yang betul:
-                          </p>
+                        <p className="pl-6 text-[10px] font-semibold text-amber-600">
+                          ⚠ Lebih daripada satu cawangan sepadan ({(l.branchMatchCandidates || []).join(", ")}) — sila pilih cawangan yang betul di bawah:
+                        </p>
+                      )}
+                      {/* Business + Branch selector -- single source of truth: pre-filled
+                          from the auto-match above, but always editable, and this exact
+                          value (ownBusinessMatchId/branchMatchId) is what gets saved on Confirm. */}
+                      <div className="pl-6 flex items-center gap-2">
+                        <select
+                          value={l.ownBusinessMatchId || ""}
+                          onChange={e => setDocReview(d => d ? { ...d, lines: d.lines!.map((x, xi) => xi === i ? { ...x, ownBusinessMatchId: e.target.value || undefined, branchMatchId: undefined } : x) } : d)}
+                          className="flex-1 px-2 py-1 rounded border border-slate-200 text-[11px]"
+                        >
+                          <option value="">Tiada Bisnes (Personal)</option>
+                          {businesses.filter(b => b.isActive).map(b => (
+                            <option key={b.id} value={b.id}>{b.businessName}</option>
+                          ))}
+                        </select>
+                        {l.ownBusinessMatchId && (businessBranches[l.ownBusinessMatchId] || []).filter(br => br.isActive).length > 0 && (
                           <select
                             value={l.branchMatchId || ""}
                             onChange={e => setDocReview(d => d ? { ...d, lines: d.lines!.map((x, xi) => xi === i ? { ...x, branchMatchId: e.target.value || undefined } : x) } : d)}
-                            className="px-2 py-1 rounded border border-amber-300 text-[11px]"
+                            className="flex-1 px-2 py-1 rounded border border-slate-200 text-[11px]"
                           >
                             <option value="">Tiada Cawangan Tertentu</option>
-                            {(businessBranches[l.ownBusinessMatchId || ""] || []).filter(br => br.isActive).map(br => (
+                            {(businessBranches[l.ownBusinessMatchId] || []).filter(br => br.isActive).map(br => (
                               <option key={br.id} value={br.id}>{br.branchName}</option>
                             ))}
                           </select>
-                        </div>
-                      )}
+                        )}
+                      </div>
                       {l.matchedEventId && (
                         <p className="pl-6 text-[10px] font-semibold text-emerald-600">
                           ✓ Sudah sepadan dengan rekod sedia ada ({l.matchedLabel}) — tidak akan direkod semula
@@ -4543,18 +4589,36 @@ export function OwnerDashboard() {
                     <input value={docReview.merchantName} onChange={e => setDocReview(d => d ? { ...d, merchantName: e.target.value } : d)}
                       className="w-full mt-1 px-3 py-2 rounded-lg border border-slate-200 text-sm" />
                   </div>
-                  {ocrLiveMatch && !ocrLiveMatch.ambiguous && (
+                  <div>
+                    <label className="text-[11px] font-semibold text-slate-500">Bisnes</label>
+                    <select value={docReview.businessId || ""}
+                      onChange={e => setDocReview(d => d ? { ...d, businessId: e.target.value || undefined, branchId: undefined } : d)}
+                      className="w-full mt-1 px-3 py-2 rounded-lg border border-slate-200 text-sm">
+                      <option value="">Tiada Bisnes (Personal)</option>
+                      {businesses.filter(b => b.isActive).map(b => (
+                        <option key={b.id} value={b.id}>{b.businessName}</option>
+                      ))}
+                    </select>
+                  </div>
+                  {docReview.businessId && (businessBranches[docReview.businessId] || []).filter(br => br.isActive).length > 0 && (
+                    <div>
+                      <label className="text-[11px] font-semibold text-slate-500">Cawangan</label>
+                      <select value={docReview.branchId || ""}
+                        onChange={e => setDocReview(d => d ? { ...d, branchId: e.target.value || undefined } : d)}
+                        className="w-full mt-1 px-3 py-2 rounded-lg border border-slate-200 text-sm">
+                        <option value="">Tiada Cawangan Tertentu</option>
+                        {(businessBranches[docReview.businessId] || []).filter(br => br.isActive).map(br => (
+                          <option key={br.id} value={br.id}>{br.branchName}</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+                  {docReview.businessId ? (
                     <p className="text-[11px] font-semibold text-emerald-600 bg-emerald-50 border border-emerald-200 rounded-xl px-3 py-2">
-                      ✓ Auto-mapped — Bisnes: {ocrLiveMatch.business.businessName}
-                      {ocrLiveMatch.branch && <> · Cawangan: {ocrLiveMatch.branch.branchName}</>}
+                      ✓ Auto-mapped — Bisnes: {businesses.find(b => b.id === docReview.businessId)?.businessName}
+                      {docReview.branchId && <> · Cawangan: {(businessBranches[docReview.businessId] || []).find(br => br.id === docReview.branchId)?.branchName}</>}
                     </p>
-                  )}
-                  {ocrLiveMatch && ocrLiveMatch.ambiguous && (
-                    <p className="text-[11px] font-semibold text-amber-600 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">
-                      ⚠ Bisnes: {ocrLiveMatch.business.businessName} — lebih daripada satu cawangan sepadan ({ocrLiveMatch.candidateLabels.join(", ")}), sila pilih semasa semakan
-                    </p>
-                  )}
-                  {!ocrLiveMatch && (
+                  ) : (
                     <p className="text-[11px] font-semibold text-slate-400 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2">
                       ⚠ Tiada Padanan Ditemui — akan direkod sebagai Personal
                     </p>
