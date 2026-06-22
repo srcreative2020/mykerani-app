@@ -5,7 +5,7 @@ import { GoogleGenAI, Type } from "@google/genai";
 import dotenv from "dotenv";
 import fs from "fs";
 import pg from "pg";
-import { createVerify } from "crypto";
+import { createVerify, randomUUID } from "crypto";
 import { evaluateAccountingSuggestion } from "./src/lib/accountingClassificationMap";
 import { PDFParse } from "pdf-parse";
 
@@ -615,90 +615,192 @@ async function startServer() {
     }
   });
 
-  app.post("/api/ocr/analyze", async (req, res) => {
-    try {
-      const { fileDataUrl, fileName, documentType, tenantId, workspaceId, userId } = req.body;
-      if (!fileDataUrl) {
-        return res.status(400).json({ error: "No file data provided." });
-      }
-      if (await isUserSuspended(userId)) {
-        return res.status(403).json({ error: "Akaun anda telah disekat oleh pentadbir HQ. Sila hubungi sokongan." });
-      }
-      const access = await verifyTenantAccess(req, tenantId, workspaceId);
-      if (!access.ok) {
-        return res.status(403).json({ error: "Sesi tidak sah atau tidak mempunyai akses kepada syarikat ini." });
-      }
+  // ---- Document Processing Progress tracking ----
+  // In-memory job store (single Railway instance; jobs are short-lived and
+  // only used to drive the live progress panel — never the source of truth
+  // for the actual OCR result returned to the caller's own request/response).
+  type OcrStage =
+    | "UPLOAD_COMPLETE" | "FILE_RETRIEVED" | "PDF_EXTRACTED" | "OCR_PROCESSING"
+    | "AI_ANALYSIS" | "CLASSIFICATION" | "TRANSACTION_EXTRACTION" | "REVIEW_GENERATION"
+    | "COMPLETED" | "FAILED";
 
-      const candidates = await getAiProviderCandidates();
-      console.info("[AI_ROUTER_DEBUG][OCR]", JSON.stringify({
-        candidateCount: candidates.length,
-        candidateProviders: candidates.map(c => `${c.provider}:${c.model}`),
-        dbConfigReachable: Boolean(process.env.VITE_SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY),
-        envFallbackKeysPresent: {
-          gemini: Boolean(process.env.GEMINI_API_KEY),
-          openai: Boolean(process.env.OPENAI_API_KEY),
-          deepseek: Boolean(process.env.DEEPSEEK_API_KEY),
-          anthropic: Boolean(process.env.ANTHROPIC_API_KEY),
-        },
-        forcedProvider: process.env.AI_PROVIDER || null,
-        providerOrder: process.env.AI_PROVIDER_ORDER || null,
-      }));
-      if (candidates.length === 0) {
-        console.info("[AI_ROUTER_DEBUG][OCR] fallbackTriggerReason=NO_CANDIDATES — checked HQ Console AI Router settings (ai_router_settings/ai_provider_configs via SUPABASE_SERVICE_ROLE_KEY), then OPENAI_API_KEY/GEMINI_API_KEY/ANTHROPIC_API_KEY/DEEPSEEK_API_KEY env vars.");
-        return res.status(503).json({
-          error: "Tiada pembekal AI dikonfigurasikan. Dokumen ini tidak dapat dianalisis. Sila konfigurasikan AI Router (HQ Console) atau cuba lagi kemudian.",
-          code: "NO_AI_PROVIDER_CONFIGURED",
-        });
-      }
+  interface OcrJobState {
+    jobId: string;
+    fileName: string;
+    fileSize: number;
+    documentType: string;
+    startTime: number;
+    updatedTime: number;
+    stage: OcrStage;
+    status: "PROCESSING" | "COMPLETED" | "FAILED";
+    overallProgress: number;
+    pagesFound: number | null;
+    pagesProcessed: number | null;
+    chunksTotal: number | null;
+    chunksCompleted: number;
+    chunksFailed: number;
+    transactionsFound: number;
+    transactionsExtracted: number;
+    providerUsed: string | null;
+    modelUsed: string | null;
+    estimatedInputTokens: number;
+    estimatedOutputTokens: number;
+    estimatedCostUsd: number | null;
+    estimatedRemainingMs: number | null;
+    error: string | null;
+    errorDetail: string | null;
+    errorCode: string | null;
+    errorStage: OcrStage | null;
+    result: any | null;
+  }
 
-      const hasCredit = await consumeResourceCredit(tenantId, workspaceId, "OCR", `OCR analyze: ${fileName || "document"}`);
-      if (!hasCredit) {
-        return res.status(402).json({
-          error: "Kredit OCR syarikat anda telah digunakan sepenuhnya untuk tempoh semasa. Sila naik taraf pelan atau tunggu pembaharuan bulanan.",
-          code: "OCR_CREDITS_EXHAUSTED",
-        });
-      }
+  const ocrJobs = new Map<string, OcrJobState>();
+  const OCR_JOB_TTL_MS = 30 * 60 * 1000;
+  setInterval(() => {
+    const now = Date.now();
+    for (const [id, job] of ocrJobs.entries()) {
+      if (now - job.updatedTime > OCR_JOB_TTL_MS) ocrJobs.delete(id);
+    }
+  }, 5 * 60 * 1000);
 
-      // Process fileDataUrl. Format: data:<mimeType>;base64,<base64Data>
-      const match = fileDataUrl.match(/^data:([^;]+);base64,(.+)$/);
-      let mimeType = "image/png";
-      let base64Data = fileDataUrl;
-      if (match) {
-        mimeType = match[1];
-        base64Data = match[2];
-      }
+  const OCR_STAGE_START_PCT: Record<OcrStage, number> = {
+    UPLOAD_COMPLETE: 0, FILE_RETRIEVED: 5, PDF_EXTRACTED: 10, OCR_PROCESSING: 20,
+    AI_ANALYSIS: 70, CLASSIFICATION: 80, TRANSACTION_EXTRACTION: 85, REVIEW_GENERATION: 90,
+    COMPLETED: 100, FAILED: 0,
+  };
+  const OCR_STAGE_END_PCT: Record<OcrStage, number> = {
+    UPLOAD_COMPLETE: 5, FILE_RETRIEVED: 10, PDF_EXTRACTED: 20, OCR_PROCESSING: 70,
+    AI_ANALYSIS: 80, CLASSIFICATION: 85, TRANSACTION_EXTRACTION: 90, REVIEW_GENERATION: 95,
+    COMPLETED: 100, FAILED: 100,
+  };
 
-      // PDFs cannot be sent via the vision `image_url`/`image` content blocks AI
-      // providers expose — those only accept raster image formats (png/jpeg/webp/gif).
-      // Sending a PDF that way is rejected by the provider and previously caused every
-      // candidate to throw, exhausting the loop and falling back to fabricated mock data.
-      // Extract the PDF's real text layer locally instead, and send that as plain text —
-      // every provider's standard chat-completions endpoint already supports text input.
-      let extractedPdfText: string | null = null;
-      let pdfPagesFound: number | null = null;
-      if (mimeType === "application/pdf") {
-        try {
-          const pdfBuffer = Buffer.from(base64Data, "base64");
-          const parser = new PDFParse({ data: pdfBuffer });
-          const result = await parser.getText();
-          extractedPdfText = (result.text || "").trim();
-          pdfPagesFound = result.total ?? null;
-        } catch (pdfErr: any) {
-          console.error("PDF text extraction failed:", pdfErr?.message || pdfErr);
-          return res.status(422).json({
-            error: "Gagal mengekstrak teks daripada fail PDF ini. Fail mungkin rosak atau dilindungi kata laluan.",
-            code: "PDF_EXTRACTION_FAILED",
-          });
-        }
-        if (!extractedPdfText) {
-          return res.status(422).json({
-            error: "PDF ini tidak mengandungi teks yang boleh dibaca (mungkin hasil imbasan/scan tanpa lapisan teks). Sila muat naik versi PDF yang mengandungi teks sebenar, atau gunakan format CSV/Excel.",
-            code: "PDF_NO_TEXT_LAYER",
-          });
-        }
-      }
+  function estimateTokens(text: string | null | undefined): number {
+    return Math.ceil((text || "").length / 4);
+  }
 
-      const isInvoice = documentType === "INVOICE";
+  // Best-effort, publicly-listed per-1M-token pricing for a few common models —
+  // used only to show a rough cost estimate in the processing panel. Returns
+  // null (shown as "—" in the UI) for any model not in this small table,
+  // which includes most custom "openai-compatible" endpoints.
+  const OCR_MODEL_PRICING_PER_1M: Array<{ match: RegExp; inputUsd: number; outputUsd: number }> = [
+    { match: /gemini-1\.5-flash|gemini-2\.0-flash/i, inputUsd: 0.075, outputUsd: 0.30 },
+    { match: /gemini-1\.5-pro|gemini-2\.5-pro/i, inputUsd: 1.25, outputUsd: 5.00 },
+    { match: /claude-3-5-haiku|claude.*haiku/i, inputUsd: 0.80, outputUsd: 4.00 },
+    { match: /claude-3-5-sonnet|claude.*sonnet/i, inputUsd: 3.00, outputUsd: 15.00 },
+    { match: /gpt-4o-mini/i, inputUsd: 0.15, outputUsd: 0.60 },
+    { match: /gpt-4o/i, inputUsd: 2.50, outputUsd: 10.00 },
+    { match: /deepseek-chat|deepseek-v/i, inputUsd: 0.27, outputUsd: 1.10 },
+  ];
+
+  function estimateCostUsd(model: string | null | undefined, inputTokens: number, outputTokens: number): number | null {
+    if (!model) return null;
+    const entry = OCR_MODEL_PRICING_PER_1M.find((p) => p.match.test(model));
+    if (!entry) return null;
+    return (inputTokens / 1_000_000) * entry.inputUsd + (outputTokens / 1_000_000) * entry.outputUsd;
+  }
+
+  class OcrApiError extends Error {
+    status: number;
+    body: any;
+    stage: OcrStage;
+    constructor(status: number, body: any, stage: OcrStage = "OCR_PROCESSING") {
+      super(body?.error || "OCR error");
+      this.status = status;
+      this.body = body;
+      this.stage = stage;
+    }
+  }
+
+  // Single source of truth for the OCR pipeline, shared by the plain
+  // request/response endpoint and the progress-tracked job endpoint below.
+  // `onProgress` is a no-op for the plain endpoint.
+  async function runOcrAnalysis(
+    params: { fileDataUrl: string; fileName: string; documentType: string; tenantId: string; workspaceId: string; userId: string },
+    onProgress: (patch: Partial<OcrJobState>) => void
+  ): Promise<any> {
+    const { fileDataUrl, fileName, documentType, tenantId, workspaceId, userId } = params;
+    const jobStartTime = Date.now();
+
+    if (await isUserSuspended(userId)) {
+      throw new OcrApiError(403, { error: "Akaun anda telah disekat oleh pentadbir HQ. Sila hubungi sokongan." }, "UPLOAD_COMPLETE");
+    }
+
+    onProgress({ stage: "UPLOAD_COMPLETE", overallProgress: OCR_STAGE_END_PCT.UPLOAD_COMPLETE });
+
+    const candidates = await getAiProviderCandidates();
+    console.info("[AI_ROUTER_DEBUG][OCR]", JSON.stringify({
+      candidateCount: candidates.length,
+      candidateProviders: candidates.map(c => `${c.provider}:${c.model}`),
+      dbConfigReachable: Boolean(process.env.VITE_SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY),
+      envFallbackKeysPresent: {
+        gemini: Boolean(process.env.GEMINI_API_KEY),
+        openai: Boolean(process.env.OPENAI_API_KEY),
+        deepseek: Boolean(process.env.DEEPSEEK_API_KEY),
+        anthropic: Boolean(process.env.ANTHROPIC_API_KEY),
+      },
+      forcedProvider: process.env.AI_PROVIDER || null,
+      providerOrder: process.env.AI_PROVIDER_ORDER || null,
+    }));
+    if (candidates.length === 0) {
+      console.info("[AI_ROUTER_DEBUG][OCR] fallbackTriggerReason=NO_CANDIDATES — checked HQ Console AI Router settings (ai_router_settings/ai_provider_configs via SUPABASE_SERVICE_ROLE_KEY), then OPENAI_API_KEY/GEMINI_API_KEY/ANTHROPIC_API_KEY/DEEPSEEK_API_KEY env vars.");
+      throw new OcrApiError(503, {
+        error: "Tiada pembekal AI dikonfigurasikan. Dokumen ini tidak dapat dianalisis. Sila konfigurasikan AI Router (HQ Console) atau cuba lagi kemudian.",
+        code: "NO_AI_PROVIDER_CONFIGURED",
+      }, "FILE_RETRIEVED");
+    }
+
+    const hasCredit = await consumeResourceCredit(tenantId, workspaceId, "OCR", `OCR analyze: ${fileName || "document"}`);
+    if (!hasCredit) {
+      throw new OcrApiError(402, {
+        error: "Kredit OCR syarikat anda telah digunakan sepenuhnya untuk tempoh semasa. Sila naik taraf pelan atau tunggu pembaharuan bulanan.",
+        code: "OCR_CREDITS_EXHAUSTED",
+      }, "FILE_RETRIEVED");
+    }
+
+    // Process fileDataUrl. Format: data:<mimeType>;base64,<base64Data>
+    const match = fileDataUrl.match(/^data:([^;]+);base64,(.+)$/);
+    let mimeType = "image/png";
+    let base64Data = fileDataUrl;
+    if (match) {
+      mimeType = match[1];
+      base64Data = match[2];
+    }
+
+    onProgress({ stage: "FILE_RETRIEVED", overallProgress: OCR_STAGE_END_PCT.FILE_RETRIEVED });
+
+    // PDFs cannot be sent via the vision `image_url`/`image` content blocks AI
+    // providers expose — those only accept raster image formats (png/jpeg/webp/gif).
+    // Sending a PDF that way is rejected by the provider and previously caused every
+    // candidate to throw, exhausting the loop and falling back to fabricated mock data.
+    // Extract the PDF's real text layer locally instead, and send that as plain text —
+    // every provider's standard chat-completions endpoint already supports text input.
+    let extractedPdfText: string | null = null;
+    let pdfPagesFound: number | null = null;
+    if (mimeType === "application/pdf") {
+      try {
+        const pdfBuffer = Buffer.from(base64Data, "base64");
+        const parser = new PDFParse({ data: pdfBuffer });
+        const result = await parser.getText();
+        extractedPdfText = (result.text || "").trim();
+        pdfPagesFound = result.total ?? null;
+      } catch (pdfErr: any) {
+        console.error("PDF text extraction failed:", pdfErr?.message || pdfErr);
+        throw new OcrApiError(422, {
+          error: "Gagal mengekstrak teks daripada fail PDF ini. Fail mungkin rosak atau dilindungi kata laluan.",
+          code: "PDF_EXTRACTION_FAILED",
+        }, "PDF_EXTRACTED");
+      }
+      if (!extractedPdfText) {
+        throw new OcrApiError(422, {
+          error: "PDF ini tidak mengandungi teks yang boleh dibaca (mungkin hasil imbasan/scan tanpa lapisan teks). Sila muat naik versi PDF yang mengandungi teks sebenar, atau gunakan format CSV/Excel.",
+          code: "PDF_NO_TEXT_LAYER",
+        }, "PDF_EXTRACTED");
+      }
+    }
+
+    onProgress({ stage: "PDF_EXTRACTED", overallProgress: OCR_STAGE_END_PCT.PDF_EXTRACTED, pagesFound: pdfPagesFound });
+
+    const isInvoice = documentType === "INVOICE";
       const isStatement = documentType === "STATEMENT";
 
       const invoiceFields = isInvoice
@@ -739,6 +841,8 @@ Provide your output precisely formatted as raw JSON matching exactly this shape,
       let parsedResult: any = null;
       let lastErr: any = null;
       let usedCandidate: AiCandidate | null = null;
+      let estimatedInputTokens = 0;
+      let estimatedOutputTokens = 0;
 
       // Bank statements: split the extracted text into chunks and run extraction per
       // chunk, then merge every chunk's transactions so nothing is dropped to a token
@@ -748,6 +852,8 @@ Provide your output precisely formatted as raw JSON matching exactly this shape,
       let chunksTotal = 0;
       let chunksSucceeded = 0;
       let chunksFailed = 0;
+
+      onProgress({ stage: "OCR_PROCESSING", overallProgress: OCR_STAGE_START_PCT.OCR_PROCESSING });
 
       if (isChunkedStatement) {
         const nonEmptyLines = extractedPdfText!.split(/\r\n|\r|\n/).filter((l) => l.trim().length > 0);
@@ -769,6 +875,7 @@ Provide your output precisely formatted as raw JSON matching exactly this shape,
 
           let chunkResult: any = null;
           let chunkErr: any = null;
+          estimatedInputTokens += estimateTokens(chunkPrompt) + estimateTokens(chunks[i]);
           for (const candidate of candidates) {
             try {
               chunkResult = await callAiProviderTextOcr(candidate, chunks[i], chunkPrompt);
@@ -786,13 +893,28 @@ Provide your output precisely formatted as raw JSON matching exactly this shape,
             chunksFailed++;
             lastErr = chunkErr || lastErr;
             console.error(`[BANK_STATEMENT_CHUNK_FAILED] chunk ${i + 1}/${chunks.length} could not be extracted by any provider; transactions in this chunk are MISSING from the result.`);
-            continue;
+          } else {
+            chunksSucceeded++;
+            estimatedOutputTokens += estimateTokens(JSON.stringify(chunkResult));
+            if (!mergedHeader) mergedHeader = chunkResult;
+            if (Array.isArray(chunkResult.transactions)) {
+              mergedTransactions.push(...chunkResult.transactions);
+            }
           }
-          chunksSucceeded++;
-          if (!mergedHeader) mergedHeader = chunkResult;
-          if (Array.isArray(chunkResult.transactions)) {
-            mergedTransactions.push(...chunkResult.transactions);
-          }
+
+          const chunksDone = chunksSucceeded + chunksFailed;
+          const elapsedMs = Date.now() - jobStartTime;
+          const avgMsPerChunk = chunksDone > 0 ? elapsedMs / chunksDone : null;
+          const remainingMs = avgMsPerChunk !== null ? Math.round(avgMsPerChunk * (chunksTotal - chunksDone)) : null;
+          onProgress({
+            stage: "OCR_PROCESSING",
+            overallProgress: OCR_STAGE_START_PCT.OCR_PROCESSING + (OCR_STAGE_END_PCT.OCR_PROCESSING - OCR_STAGE_START_PCT.OCR_PROCESSING) * (chunksDone / chunksTotal),
+            pagesProcessed: pdfPagesFound !== null ? Math.round((chunksDone / chunksTotal) * pdfPagesFound) : null,
+            chunksTotal, chunksCompleted: chunksSucceeded, chunksFailed,
+            transactionsFound: mergedTransactions.length, transactionsExtracted: mergedTransactions.length,
+            providerUsed: usedCandidate?.provider ?? null, modelUsed: usedCandidate?.model ?? null,
+            estimatedInputTokens, estimatedOutputTokens, estimatedRemainingMs: remainingMs,
+          });
         }
 
         if (chunksSucceeded === 0) {
@@ -804,6 +926,8 @@ Provide your output precisely formatted as raw JSON matching exactly this shape,
 
         parsedResult = { ...(mergedHeader || {}), transactions: mergedTransactions };
       } else {
+        const inputText = extractedPdfText !== null ? `${ocrPrompt}\n${extractedPdfText}` : ocrPrompt;
+        estimatedInputTokens += estimateTokens(inputText);
         for (const candidate of candidates) {
           try {
             parsedResult = extractedPdfText !== null
@@ -820,14 +944,30 @@ Provide your output precisely formatted as raw JSON matching exactly this shape,
         if (!parsedResult) {
           throw lastErr || new Error("All configured AI providers failed for OCR");
         }
+        estimatedOutputTokens += estimateTokens(JSON.stringify(parsedResult));
+        onProgress({
+          stage: "OCR_PROCESSING", overallProgress: OCR_STAGE_END_PCT.OCR_PROCESSING,
+          providerUsed: usedCandidate.provider, modelUsed: usedCandidate.model,
+          estimatedInputTokens, estimatedOutputTokens,
+        });
       }
 
       console.info(`[AI_ROUTER_DEBUG][OCR] servedBy=${usedCandidate!.provider}:${usedCandidate!.model} mode=${extractedPdfText !== null ? "pdf-text" : "vision"}${isChunkedStatement ? ` chunks=${chunksSucceeded}/${chunksTotal}` : ""}`);
       logAiUsage(tenantId, workspaceId, userId, "ocr", usedCandidate!.provider, usedCandidate!.model);
 
+      onProgress({ stage: "AI_ANALYSIS", overallProgress: OCR_STAGE_END_PCT.AI_ANALYSIS });
+      onProgress({ stage: "CLASSIFICATION", overallProgress: OCR_STAGE_END_PCT.CLASSIFICATION });
+
+      const estimatedCostUsd = estimateCostUsd(usedCandidate!.model, estimatedInputTokens, estimatedOutputTokens);
+
       if (isStatement) {
         const transactionsFound = Array.isArray(parsedResult?.transactions) ? parsedResult.transactions.length : 0;
-        return res.json({
+        onProgress({
+          stage: "TRANSACTION_EXTRACTION", overallProgress: OCR_STAGE_END_PCT.TRANSACTION_EXTRACTION,
+          transactionsFound, transactionsExtracted: transactionsFound, estimatedCostUsd,
+        });
+        onProgress({ stage: "REVIEW_GENERATION", overallProgress: OCR_STAGE_END_PCT.REVIEW_GENERATION });
+        return ({
           ...parsedResult,
           pagesFound: pdfPagesFound,
           rowsFound: isChunkedStatement ? rowsFound : null,
@@ -837,18 +977,33 @@ Provide your output precisely formatted as raw JSON matching exactly this shape,
           transactionsFound,
           transactionsExtracted: transactionsFound,
           extractionIncomplete: isChunkedStatement && chunksFailed > 0,
+          providerUsed: usedCandidate!.provider,
+          modelUsed: usedCandidate!.model,
+          estimatedInputTokens,
+          estimatedOutputTokens,
+          estimatedCostUsd,
         });
       }
 
-      return res.json(parsedResult);
+      onProgress({ stage: "TRANSACTION_EXTRACTION", overallProgress: OCR_STAGE_END_PCT.TRANSACTION_EXTRACTION });
+      onProgress({ stage: "REVIEW_GENERATION", overallProgress: OCR_STAGE_END_PCT.REVIEW_GENERATION });
+      return { ...parsedResult, providerUsed: usedCandidate!.provider, modelUsed: usedCandidate!.model, estimatedInputTokens, estimatedOutputTokens, estimatedCostUsd };
+  }
 
-    } catch (error: any) {
-      const errStr = error?.message || (typeof error === 'object' ? JSON.stringify(error) : String(error));
-      const isBillingOrCreditIssue = /depleted|exhausted|billing|prepay|429|credit/i.test(errStr);
-
-      console.error("AI OCR call failed — no fallback data will be returned:", errStr);
-
-      return res.status(502).json({
+  // Wraps any error thrown by runOcrAnalysis (including ones not already an
+  // OcrApiError, e.g. an AI provider call rejecting) into a consistent 502
+  // shape with as much upstream detail as can be safely surfaced.
+  function toOcrErrorResponse(error: any): { status: number; body: any; stage: OcrStage } {
+    if (error instanceof OcrApiError) {
+      return { status: error.status, body: error.body, stage: error.stage };
+    }
+    const errStr = error?.message || (typeof error === "object" ? JSON.stringify(error) : String(error));
+    const isBillingOrCreditIssue = /depleted|exhausted|billing|prepay|429|credit/i.test(errStr);
+    console.error("AI OCR call failed — no fallback data will be returned:", errStr);
+    return {
+      status: 502,
+      stage: "OCR_PROCESSING",
+      body: {
         error: isBillingOrCreditIssue
           ? "Pembekal AI tidak dapat diakses sekarang (had penggunaan/bil dicapai). Dokumen ini TIDAK dapat dianalisis. Sila cuba lagi kemudian."
           : "AI tidak dapat membaca dokumen ini. Dokumen ini TIDAK dapat dianalisis. Sila cuba semula atau muat naik fail yang lebih jelas.",
@@ -857,8 +1012,87 @@ Provide your output precisely formatted as raw JSON matching exactly this shape,
         // this endpoint's only other visibility is server-side console.error, which
         // isn't reachable when investigating from outside the deployment.
         detail: errStr ? String(errStr).slice(0, 500) : null,
-      });
+      },
+    };
+  }
+
+  // Plain request/response OCR endpoint — unchanged behaviour for existing
+  // callers (e.g. the best-effort chat-attachment flow) that don't need a
+  // live progress panel and just want the final result in one round trip.
+  app.post("/api/ocr/analyze", async (req, res) => {
+    try {
+      const { fileDataUrl, fileName, documentType, tenantId, workspaceId, userId } = req.body || {};
+      if (!fileDataUrl) {
+        return res.status(400).json({ error: "No file data provided." });
+      }
+      const access = await verifyTenantAccess(req, tenantId, workspaceId);
+      if (!access.ok) {
+        return res.status(403).json({ error: "Sesi tidak sah atau tidak mempunyai akses kepada syarikat ini." });
+      }
+      const result = await runOcrAnalysis({ fileDataUrl, fileName, documentType, tenantId, workspaceId, userId }, () => {});
+      return res.json(result);
+    } catch (error: any) {
+      const { status, body } = toOcrErrorResponse(error);
+      return res.status(status).json(body);
     }
+  });
+
+  // Progress-tracked OCR flow: kicks off processing asynchronously and
+  // returns a jobId immediately; the client polls /api/ocr/analyze/progress/:jobId
+  // for live stage/counter/token updates, used by the Document Processing
+  // Progress Panel so failures and slow stages are visible while they happen
+  // instead of only as a single generic message at the very end.
+  app.post("/api/ocr/analyze/start", async (req, res) => {
+    const { fileDataUrl, fileName, documentType, tenantId, workspaceId, userId } = req.body || {};
+    if (!fileDataUrl) {
+      return res.status(400).json({ error: "No file data provided." });
+    }
+    const access = await verifyTenantAccess(req, tenantId, workspaceId);
+    if (!access.ok) {
+      return res.status(403).json({ error: "Sesi tidak sah atau tidak mempunyai akses kepada syarikat ini." });
+    }
+
+    const jobId = randomUUID();
+    const fileSize = Math.ceil(((fileDataUrl as string).length * 3) / 4); // rough decoded-base64 size
+    const now = Date.now();
+    const job: OcrJobState = {
+      jobId, fileName: fileName || "document", fileSize, documentType,
+      startTime: now, updatedTime: now,
+      stage: "UPLOAD_COMPLETE", status: "PROCESSING", overallProgress: 0,
+      pagesFound: null, pagesProcessed: null,
+      chunksTotal: null, chunksCompleted: 0, chunksFailed: 0,
+      transactionsFound: 0, transactionsExtracted: 0,
+      providerUsed: null, modelUsed: null,
+      estimatedInputTokens: 0, estimatedOutputTokens: 0, estimatedCostUsd: null, estimatedRemainingMs: null,
+      error: null, errorDetail: null, errorCode: null, errorStage: null,
+      result: null,
+    };
+    ocrJobs.set(jobId, job);
+    res.json({ jobId });
+
+    runOcrAnalysis({ fileDataUrl, fileName, documentType, tenantId, workspaceId, userId }, (patch) => {
+      Object.assign(job, patch, { updatedTime: Date.now() });
+    }).then((result) => {
+      Object.assign(job, {
+        stage: "COMPLETED", status: "COMPLETED", overallProgress: 100,
+        result, updatedTime: Date.now(),
+      });
+    }).catch((error: any) => {
+      const { body, stage } = toOcrErrorResponse(error);
+      Object.assign(job, {
+        stage: "FAILED", status: "FAILED",
+        error: body.error || null, errorCode: body.code || null, errorDetail: body.detail || null,
+        errorStage: stage, updatedTime: Date.now(),
+      });
+    });
+  });
+
+  app.get("/api/ocr/analyze/progress/:jobId", (req, res) => {
+    const job = ocrJobs.get(req.params.jobId);
+    if (!job) {
+      return res.status(404).json({ error: "Job not found or expired." });
+    }
+    return res.json(job);
   });
 
 

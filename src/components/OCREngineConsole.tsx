@@ -5,6 +5,8 @@ import { useAuth } from "../context/AuthContext";
 import { usePermission } from "../context/PermissionContext";
 import { useAudit } from "../context/AuditContext";
 import { logEvent } from "../lib/eventLog";
+import { pollOcrJob, type OcrJobState } from "../lib/ocrJobTypes";
+import DocumentProcessingProgressPanel from "./DocumentProcessingProgressPanel";
 import { 
   FileText, 
   UploadCloud, 
@@ -59,6 +61,7 @@ export const OCREngineConsole: React.FC = () => {
   // OCR processing state
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisStep, setAnalysisStep] = useState<string>("");
+  const [ocrJob, setOcrJob] = useState<OcrJobState | null>(null);
   const [errorText, setErrorText] = useState<string | null>(null);
   const [successText, setSuccessText] = useState<string | null>(null);
 
@@ -168,15 +171,12 @@ export const OCREngineConsole: React.FC = () => {
     if (!fileDataUrl || !file) return;
 
     setIsAnalyzing(true);
+    setOcrJob(null);
     setAnalysisStep("Securing local transport tunnels...");
 
     try {
-      // Step-by-step visual animation for compliance officer delight
-      setTimeout(() => setAnalysisStep("Invoking multi-modal OCR processor..."), 1000);
-      setTimeout(() => setAnalysisStep("Extracting key signatures & merchant indexes..."), 2200);
-
       const { getAuthHeader } = await import("../lib/supabase");
-      const response = await fetch("/api/ocr/analyze", {
+      const startResponse = await fetch("/api/ocr/analyze/start", {
         method: "POST",
         headers: { "Content-Type": "application/json", ...(await getAuthHeader()) },
         body: JSON.stringify({
@@ -189,28 +189,31 @@ export const OCREngineConsole: React.FC = () => {
         })
       });
 
-      if (response.status === 403) {
-        const errBody = await response.json().catch(() => ({}));
-        setErrorText(errBody.error || "Akaun anda telah disekat oleh pentadbir HQ.");
-        setIsAnalyzing(false);
-        setAnalysisStep("");
+      if (startResponse.status === 403) {
+        const errBody = await startResponse.json().catch(() => ({}));
+        setErrorText(errBody.error || "Sesi tidak sah atau Akaun anda telah disekat oleh pentadbir HQ.");
         return;
       }
-      if (response.status === 402) {
-        const errBody = await response.json().catch(() => ({}));
-        setErrorText(errBody.error || "Kredit OCR syarikat anda telah digunakan sepenuhnya. Sila naik taraf pelan.");
-        setIsAnalyzing(false);
-        setAnalysisStep("");
-        return;
-      }
-      if (!response.ok) {
-        const errBody = await response.json().catch(() => null);
-        const baseMsg = errBody?.error || `Extraction service returned HTTP code ${response.status} (non-JSON response — likely a gateway/timeout error before the server could respond)`;
-        throw new Error(errBody?.detail ? `${baseMsg} [${errBody.detail}]` : baseMsg);
+      if (!startResponse.ok) {
+        const errBody = await startResponse.json().catch(() => null);
+        throw new Error(errBody?.error || `Extraction service returned HTTP code ${startResponse.status}`);
       }
 
-      const payload = await response.json();
-      
+      const { jobId } = await startResponse.json();
+      setAnalysisStep("Invoking multi-modal OCR processor...");
+      const finalJob = await pollOcrJob(jobId, setOcrJob);
+
+      if (finalJob.status === "FAILED") {
+        if (finalJob.errorCode === "OCR_CREDITS_EXHAUSTED") {
+          setErrorText(finalJob.error || "Kredit OCR syarikat anda telah digunakan sepenuhnya. Sila naik taraf pelan.");
+          return;
+        }
+        const baseMsg = finalJob.error || "Pengekstrakan OCR gagal.";
+        throw new Error(finalJob.errorDetail ? `${baseMsg} [${finalJob.errorDetail}]` : baseMsg);
+      }
+
+      const payload = finalJob.result;
+
       // Look in OCR Learning Layer memory
       const merchantInput = payload.merchantName || "";
       const matchedPattern = ocrLearnedPatterns.find(
@@ -627,13 +630,14 @@ export const OCREngineConsole: React.FC = () => {
             <div className="pt-4 border-t border-slate-200 mt-4">
               {isAnalyzing ? (
                 <div className="space-y-2 py-2" id="analysing_spinner_animation">
-                  <div className="flex items-center justify-center gap-2 text-xs font-bold text-emerald-800">
-                    <Loader2 className="w-4 h-4 animate-spin text-emerald-600" />
-                    <span>{analysisStep}</span>
-                  </div>
-                  <div className="relative w-full h-1 bg-slate-100 rounded overflow-hidden">
-                    <div className="absolute left-0 top-0 h-full w-1/3 bg-emerald-600 rounded animate-marquee" />
-                  </div>
+                  {ocrJob ? (
+                    <DocumentProcessingProgressPanel job={ocrJob} />
+                  ) : (
+                    <div className="flex items-center justify-center gap-2 text-xs font-bold text-emerald-800">
+                      <Loader2 className="w-4 h-4 animate-spin text-emerald-600" />
+                      <span>{analysisStep}</span>
+                    </div>
+                  )}
                 </div>
               ) : (
                 <div className="flex gap-2">

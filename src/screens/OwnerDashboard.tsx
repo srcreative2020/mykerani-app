@@ -34,6 +34,8 @@ import { isDemoWorkspace } from "../lib/seeder";
 import { loadChatHistory, saveChatMessage } from "../lib/chatHistory";
 import { logEvent } from "../lib/eventLog";
 import { detectInternalTransfers } from "../lib/internalTransferDetection";
+import { pollOcrJob, type OcrJobState } from "../lib/ocrJobTypes";
+import DocumentProcessingProgressPanel from "../components/DocumentProcessingProgressPanel";
 import type { ImportedBankTransaction } from "../lib/bankStatementImport";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
@@ -723,6 +725,7 @@ export function OwnerDashboard() {
     });
   };
   const [docAnalyzing, setDocAnalyzing] = useState(false);
+  const [docOcrJob, setDocOcrJob] = useState<OcrJobState | null>(null);
   const [docReviewError, setDocReviewError] = useState<string | null>(null);
   const [docReview, setDocReview] = useState<null | {
     doc: UploadedDoc;
@@ -761,11 +764,12 @@ export function OwnerDashboard() {
     if (!activeWorkspace || !user) return;
     setDocAnalyzing(true);
     setDocReviewError(null);
+    setDocOcrJob(null);
     try {
       const fileDataUrl = await fileToDataUrl(file);
       const serverDocType = doc.document_type === "BANK_STATEMENT" ? "STATEMENT" : doc.document_type === "CONTRACT" ? "SUPPORTING_DOC" : doc.document_type;
       const { getAuthHeader } = await import("../lib/supabase");
-      const response = await fetch("/api/ocr/analyze", {
+      const startResponse = await fetch("/api/ocr/analyze/start", {
         method: "POST",
         headers: { "Content-Type": "application/json", ...(await getAuthHeader()) },
         body: JSON.stringify({
@@ -773,13 +777,21 @@ export function OwnerDashboard() {
           tenantId: activeWorkspace.tenantId, workspaceId: activeWorkspace.id, userId: user.id,
         }),
       });
-      if (!response.ok) {
-        const errBody = await response.json().catch(() => null);
-        const baseMsg = errBody?.error || `AI tidak dapat membaca dokumen ini. Cuba lagi. [HTTP ${response.status}, non-JSON response — likely a gateway/timeout error before the server could respond]`;
-        setDocReviewError(errBody?.detail ? `${baseMsg} [${errBody.detail}]` : baseMsg);
+      if (!startResponse.ok) {
+        const errBody = await startResponse.json().catch(() => null);
+        setDocReviewError(errBody?.error || `Gagal memulakan pemprosesan dokumen (HTTP ${startResponse.status}).`);
         return;
       }
-      const payload = await response.json();
+      const { jobId } = await startResponse.json();
+      const finalJob = await pollOcrJob(jobId, setDocOcrJob);
+
+      if (finalJob.status === "FAILED") {
+        const baseMsg = finalJob.error || "AI tidak dapat membaca dokumen ini. Cuba lagi.";
+        setDocReviewError(finalJob.errorDetail ? `${baseMsg} [${finalJob.errorDetail}]` : baseMsg);
+        return;
+      }
+
+      const payload = finalJob.result;
 
       if (payload.warning) {
         setDocReviewError(payload.warning);
@@ -2572,10 +2584,13 @@ export function OwnerDashboard() {
               {compilePackageError && <p className="text-[10px] text-rose-600">{compilePackageError}</p>}
             </div>
 
-            {docAnalyzing && (
+            {docAnalyzing && docOcrJob && (
+              <DocumentProcessingProgressPanel job={docOcrJob} />
+            )}
+            {docAnalyzing && !docOcrJob && (
               <div className="bg-indigo-50 border border-indigo-200 rounded-xl px-4 py-3 flex items-center gap-2">
                 <RefreshCw className="w-4 h-4 text-indigo-500 animate-spin shrink-0" />
-                <p className="text-xs text-indigo-700 font-semibold">AI sedang membaca dokumen anda...</p>
+                <p className="text-xs text-indigo-700 font-semibold">Memulakan pemprosesan dokumen...</p>
               </div>
             )}
             {docReviewError && (
