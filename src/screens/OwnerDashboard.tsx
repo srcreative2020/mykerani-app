@@ -42,6 +42,7 @@ import type { ImportedBankTransaction } from "../lib/bankStatementImport";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import JSZip from "jszip";
+import { matchOwnBusiness, matchOwnBusinessAndBranch } from "../lib/businessMatching";
 import {
   loadPersonalProfile, savePersonalProfile,
   loadVehicles, addVehicle, updateVehicle, deleteVehicle, loadDependents, addDependent, updateDependent, deleteDependent,
@@ -815,57 +816,9 @@ export function OwnerDashboard() {
     branchMatchAmbiguous?: boolean; branchMatchCandidates?: string[];
   };
 
-  // A transaction line whose description names one of the user's OWN registered
-  // businesses (e.g. "KILANG CETAK SR") is an inter-business movement, not an
-  // external expense/income — surface it as a flagged match so the user reviews
-  // and confirms it explicitly, rather than the AI silently suggesting it as a
-  // normal external counterparty.
-  const normalizeForMatch = (s: string) => s.toUpperCase().replace(/[^A-Z0-9 ]/g, " ").replace(/\s+/g, " ").trim();
-  const matchOwnBusiness = (description: string, ownBusinesses: Business[]): Business | undefined => {
-    const normDesc = normalizeForMatch(description);
-    if (!normDesc) return undefined;
-    return ownBusinesses.find((b) => {
-      const normName = normalizeForMatch(b.businessName || "");
-      if (normName.length < 3) return false;
-      return normDesc.includes(normName) || normName.includes(normDesc);
-    });
-  };
-
-  // Branch Mapping extends the same name-matching engine above: a transaction
-  // whose description names one of the user's registered BRANCHES (not just
-  // the business itself, e.g. "KILANG CETAK SR JOHOR BAHRU") should auto-set
-  // businessId + branchId together. Only auto-map when exactly one branch
-  // matches; if more than one branch's name appears in the text, confidence
-  // is too low to pick automatically, so the line is flagged for the user to
-  // choose explicitly during review instead of guessing.
-  type BranchMatchResult = {
-    business: Business;
-    branch?: BusinessBranch;
-    ambiguous: boolean;
-    candidateLabels: string[];
-  };
-  const matchOwnBusinessAndBranch = (
-    description: string,
-    ownBusinesses: Business[],
-    branchesByBusinessId: Record<string, BusinessBranch[]>
-  ): BranchMatchResult | undefined => {
-    const business = matchOwnBusiness(description, ownBusinesses);
-    if (!business) return undefined;
-    const normDesc = normalizeForMatch(description);
-    const branchesForBusiness = (branchesByBusinessId[business.id] || []).filter((br) => br.isActive);
-    const matchingBranches = branchesForBusiness.filter((br) => {
-      const normName = normalizeForMatch(br.branchName || "");
-      if (normName.length < 3) return false;
-      return normDesc.includes(normName) || normName.includes(normDesc);
-    });
-    if (matchingBranches.length === 1) {
-      return { business, branch: matchingBranches[0], ambiguous: false, candidateLabels: [] };
-    }
-    if (matchingBranches.length > 1) {
-      return { business, ambiguous: true, candidateLabels: matchingBranches.map((br) => br.branchName) };
-    }
-    return { business, ambiguous: false, candidateLabels: [] };
-  };
+  // Business/Branch matching engine itself lives in ../lib/businessMatching.ts
+  // (matchOwnBusiness / matchOwnBusinessAndBranch, imported above) so Bank
+  // Statement import, OCR review, and AI Chat all share one implementation.
 
   // Reuse the same Internal Transfer Detection engine as the Historical Recovery
   // Workspace (lib/internalTransferDetection.ts) on the lines extracted from THIS
@@ -1209,10 +1162,10 @@ export function OwnerDashboard() {
       // melainkan ia direkodkan terus sebagai Pendapatan/Perbelanjaan sebenar —
       // supaya "Perlu Dibayar"/"Perlu Dikutip" di Dashboard betul-betul tepat.
       const isOutstanding = docReview.recordType === "PAYABLE" || docReview.recordType === "RECEIVABLE";
-      // Auto-map to one of the user's own registered businesses (and, when
-      // unambiguous, the specific branch) when the merchant/vendor name on
-      // the receipt or invoice clearly names it.
-      const ocrBranchMatch = matchOwnBusinessAndBranch(merchantName || "", businesses.filter(b => b.isActive), businessBranches);
+      // Reuse the exact match already shown to the user on the review screen
+      // (ocrLiveMatch) rather than recomputing it, so what was confirmed on
+      // screen is guaranteed to be what gets saved.
+      const ocrBranchMatch = ocrLiveMatch;
       let ev;
       try {
         ev = await addFinancialEventAwaited({
@@ -1431,12 +1384,14 @@ export function OwnerDashboard() {
       })
       .catch(() => { /* best-effort only */ });
   }, [wsId, businesses, allBranchesLoaded]);
-  /** All active branches across all active businesses, flattened — the input
-   * the Business+Branch matching engine matches transaction text against. */
-  const allActiveBranches = useMemo(
-    () => Object.values(businessBranches).flat().filter((br) => br.isActive),
-    [businessBranches]
-  );
+  // Live Business/Branch match preview for the single-record (receipt/invoice)
+  // OCR review screen — recomputed as the user edits the merchant/vendor name,
+  // using the exact same engine as confirmDocReview below, so what's shown
+  // before Confirm is guaranteed to match what gets saved.
+  const ocrLiveMatch = useMemo(() => {
+    if (!docReview || docReview.lines) return undefined;
+    return matchOwnBusinessAndBranch(docReview.merchantName || "", businesses.filter((b) => b.isActive), businessBranches);
+  }, [docReview, businesses, businessBranches]);
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [dependents, setDependents] = useState<Dependent[]>([]);
   const [profileSaving, setProfileSaving] = useState(false);
@@ -4588,6 +4543,22 @@ export function OwnerDashboard() {
                     <input value={docReview.merchantName} onChange={e => setDocReview(d => d ? { ...d, merchantName: e.target.value } : d)}
                       className="w-full mt-1 px-3 py-2 rounded-lg border border-slate-200 text-sm" />
                   </div>
+                  {ocrLiveMatch && !ocrLiveMatch.ambiguous && (
+                    <p className="text-[11px] font-semibold text-emerald-600 bg-emerald-50 border border-emerald-200 rounded-xl px-3 py-2">
+                      ✓ Auto-mapped — Bisnes: {ocrLiveMatch.business.businessName}
+                      {ocrLiveMatch.branch && <> · Cawangan: {ocrLiveMatch.branch.branchName}</>}
+                    </p>
+                  )}
+                  {ocrLiveMatch && ocrLiveMatch.ambiguous && (
+                    <p className="text-[11px] font-semibold text-amber-600 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">
+                      ⚠ Bisnes: {ocrLiveMatch.business.businessName} — lebih daripada satu cawangan sepadan ({ocrLiveMatch.candidateLabels.join(", ")}), sila pilih semasa semakan
+                    </p>
+                  )}
+                  {!ocrLiveMatch && (
+                    <p className="text-[11px] font-semibold text-slate-400 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2">
+                      ⚠ Tiada Padanan Ditemui — akan direkod sebagai Personal
+                    </p>
+                  )}
                   <div className="grid grid-cols-2 gap-2">
                     <div>
                       <label className="text-[11px] font-semibold text-slate-500">Jumlah (RM)</label>
