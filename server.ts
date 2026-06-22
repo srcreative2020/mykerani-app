@@ -756,6 +756,11 @@ Provide your output precisely formatted as raw JSON matching exactly this shape,
         chunksTotal = chunks.length;
         const mergedTransactions: any[] = [];
         let mergedHeader: any = null;
+        // Distinct (provider, error message) pairs seen across all failed chunks —
+        // a single "lastErr" hides whether every chunk failed for the SAME reason
+        // (e.g. one misconfigured candidate) or DIFFERENT reasons (e.g. content-specific
+        // rejections), which is exactly what's needed to pin down a 100%-failure case.
+        const distinctChunkErrors = new Set<string>();
 
         for (let i = 0; i < chunks.length; i++) {
           const chunkPrompt = chunks.length > 1
@@ -771,7 +776,9 @@ Provide your output precisely formatted as raw JSON matching exactly this shape,
               break;
             } catch (err: any) {
               chunkErr = err;
-              console.error(`AI provider "${candidate.provider}" OCR call failed on chunk ${i + 1}/${chunks.length}, trying next candidate:`, err?.message || err);
+              const msg = err?.message || String(err);
+              distinctChunkErrors.add(`${candidate.provider}: ${msg}`);
+              console.error(`AI provider "${candidate.provider}" OCR call failed on chunk ${i + 1}/${chunks.length}, trying next candidate:`, msg);
             }
           }
 
@@ -789,7 +796,10 @@ Provide your output precisely formatted as raw JSON matching exactly this shape,
         }
 
         if (chunksSucceeded === 0) {
-          throw lastErr || new Error("All configured AI providers failed for OCR on every chunk");
+          const summary = distinctChunkErrors.size > 0
+            ? `All ${chunksTotal} chunk(s) failed across all providers. Distinct errors seen: ${Array.from(distinctChunkErrors).join(" | ")}`
+            : null;
+          throw (summary ? new Error(summary) : (lastErr || new Error("All configured AI providers failed for OCR on every chunk")));
         }
 
         parsedResult = { ...(mergedHeader || {}), transactions: mergedTransactions };
