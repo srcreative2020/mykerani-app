@@ -17,11 +17,16 @@ interface FinancialRecordsContextType {
   loading: boolean;
   error: string | null;
   
-  addFinancialEvent: (event: Omit<FinancialEvent, "id">) => FinancialEvent;
+  addFinancialEvent: (event: Omit<FinancialEvent, "id">, onDbError?: (err: Error) => void) => FinancialEvent;
+  // Same record-creation logic as addFinancialEvent, but awaits the Supabase
+  // write and rejects if it fails, so callers that must not report success
+  // before the database actually confirms the write (e.g. AI chat confirm,
+  // single-document OCR confirm) can gate their "success" UI state on it.
+  addFinancialEventAwaited: (event: Omit<FinancialEvent, "id">) => Promise<FinancialEvent>;
   addFinancialEventsBatch: (
     events: Omit<FinancialEvent, "id">[],
     onProgress?: (progress: { submitted: number; inserted: number; failed: number; batchNumber: number; totalBatches: number; batchDurationMs: number }) => void
-  ) => Promise<FinancialEvent[]>;
+  ) => Promise<{ events: FinancialEvent[]; inserted: number; failed: number }>;
   editFinancialEvent: (id: string, updated: Partial<FinancialEvent>) => void;
   deleteFinancialEvent: (id: string) => void;
   
@@ -769,8 +774,14 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
     // the same suggestion/import upserts idempotently instead of duplicating.
     const isAiConfirmed = (newEvent.referenceNumber || "").startsWith("AI-") || (newEvent.referenceNumber || "").startsWith("STMT-");
 
+    // supabase-js does not throw on a failed insert/upsert -- it resolves
+    // with { error }. Every branch below must check it and throw, otherwise
+    // a real database failure (e.g. a constraint violation) is silently
+    // ignored and the caller believes the write succeeded.
+    let dbError: { message: string } | null = null;
+
     if (newEvent.type === "INCOME") {
-      await supabase.from("income_records").upsert({
+      ({ error: dbError } = await supabase.from("income_records").upsert({
         id: newEvent.id,
         workspace_id: activeWorkspace.id,
         category_id: catId,
@@ -784,9 +795,9 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
         business_id: newEvent.businessId || null,
         created_by_user_id: newEvent.createdByUserId || null,
         created_by_name: newEvent.createdByName || null,
-      }, isAiConfirmed ? { onConflict: "workspace_id,reference_number", ignoreDuplicates: true } : undefined);
+      }, isAiConfirmed ? { onConflict: "workspace_id,reference_number", ignoreDuplicates: true } : undefined));
     } else if (newEvent.type === "EXPENSE" || newEvent.type === "DEBT") {
-      await supabase.from("expense_records").upsert({
+      ({ error: dbError } = await supabase.from("expense_records").upsert({
         id: newEvent.id,
         workspace_id: activeWorkspace.id,
         category_id: catId,
@@ -801,9 +812,9 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
         created_by_name: newEvent.createdByName || null,
         description: newEvent.type === "DEBT" ? `[DEBT] ${newEvent.description}` : newEvent.description,
         business_id: newEvent.businessId || null,
-      }, isAiConfirmed ? { onConflict: "workspace_id,reference_number", ignoreDuplicates: true } : undefined);
+      }, isAiConfirmed ? { onConflict: "workspace_id,reference_number", ignoreDuplicates: true } : undefined));
     } else if (newEvent.type === "RECEIVABLE") {
-      await supabase.from("receivables").upsert({
+      ({ error: dbError } = await supabase.from("receivables").upsert({
         id: newEvent.id,
         workspace_id: activeWorkspace.id,
         customer_name: newEvent.partyName,
@@ -815,9 +826,9 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
         status: newEvent.isCompleted ? "PAID" : "UNPAID",
         category_id: catId,
         business_id: newEvent.businessId || null,
-      }, isAiConfirmed ? { onConflict: "workspace_id,invoice_number", ignoreDuplicates: true } : undefined);
+      }, isAiConfirmed ? { onConflict: "workspace_id,invoice_number", ignoreDuplicates: true } : undefined));
     } else if (newEvent.type === "PAYABLE") {
-      await supabase.from("payables").upsert({
+      ({ error: dbError } = await supabase.from("payables").upsert({
         id: newEvent.id,
         workspace_id: activeWorkspace.id,
         vendor_name: newEvent.partyName,
@@ -829,11 +840,13 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
         status: newEvent.isCompleted ? "PAID" : "UNPAID",
         category_id: catId,
         business_id: newEvent.businessId || null,
-      }, isAiConfirmed ? { onConflict: "workspace_id,bill_number", ignoreDuplicates: true } : undefined);
+      }, isAiConfirmed ? { onConflict: "workspace_id,bill_number", ignoreDuplicates: true } : undefined));
     }
+
+    if (dbError) throw new Error(dbError.message);
   };
 
-  const addFinancialEvent = (event: Omit<FinancialEvent, "id">): FinancialEvent => {
+  const addFinancialEvent = (event: Omit<FinancialEvent, "id">, onDbError?: (err: Error) => void): FinancialEvent => {
     const newId = generateUUID();
     const newEvent: FinancialEvent = {
       ...event,
@@ -892,8 +905,71 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
           await persistEventToSupabase(newEvent, catId);
         } catch (err: any) {
           console.error("DB persistence insert record failed:", err.message);
+          onDbError?.(err instanceof Error ? err : new Error(String(err?.message || err)));
         }
       })();
+    }
+
+    return newEvent;
+  };
+
+  // Same as addFinancialEvent, but awaits the Supabase write (instead of
+  // firing it in the background) and rejects if it fails, so the caller can
+  // gate its own "saved successfully" UI state on a real database
+  // confirmation instead of just the optimistic local update.
+  const addFinancialEventAwaited = async (event: Omit<FinancialEvent, "id">): Promise<FinancialEvent> => {
+    const newId = generateUUID();
+    const newEvent: FinancialEvent = {
+      ...event,
+      id: newId,
+      createdByUserId: event.createdByUserId || user?.id || undefined,
+      createdByName: event.createdByName || user?.fullName || undefined,
+      createdAt: event.createdAt || new Date().toISOString(),
+    };
+
+    const updated = [newEvent, ...financialEvents];
+    setFinancialEvents(updated);
+
+    let updatedCash = [...cashAccounts];
+    let updatedBank = [...bankAccounts];
+
+    if (newEvent.isCompleted) {
+      const isIngress = newEvent.type === "INCOME" || newEvent.type === "RECEIVABLE";
+      const factor = isIngress ? 1 : -1;
+      const amt = newEvent.amountMyr * factor;
+
+      if (newEvent.cashAccountId) {
+        updatedCash = cashAccounts.map((acct) =>
+          acct.id === newEvent.cashAccountId
+            ? { ...acct, currentBalanceMyr: acct.currentBalanceMyr + amt }
+            : acct
+        );
+        setCashAccounts(updatedCash);
+      } else if (newEvent.bankAccountId) {
+        updatedBank = bankAccounts.map((acct) =>
+          acct.id === newEvent.bankAccountId
+            ? { ...acct, currentBalanceMyr: acct.currentBalanceMyr + amt }
+            : acct
+        );
+        setBankAccounts(updatedBank);
+      }
+    }
+
+    persistCurrentState(updated, updatedCash, updatedBank);
+
+    if (activeWorkspace) {
+      writeAuditLog({
+        workspaceId: activeWorkspace.id,
+        module: "Financial Records",
+        action: "CREATE",
+        oldValue: null,
+        newValue: newEvent
+      });
+    }
+
+    if (isSupabaseConfigured() && !isMockUser && supabase && activeWorkspace && !isDemoWorkspace(activeWorkspace.id)) {
+      const catId = await getOrCreateCategoryId(activeWorkspace.id, newEvent.categoryName, newEvent.type);
+      await persistEventToSupabase(newEvent, catId);
     }
 
     return newEvent;
@@ -917,7 +993,7 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
       totalBatches: number;
       batchDurationMs: number;
     }) => void
-  ): Promise<FinancialEvent[]> => {
+  ): Promise<{ events: FinancialEvent[]; inserted: number; failed: number }> => {
     const newEvents: FinancialEvent[] = events.map((event) => ({
       ...event,
       id: generateUUID(),
@@ -1004,7 +1080,7 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
       }
     }
 
-    return newEvents;
+    return { events: newEvents, inserted, failed };
   };
 
   const editFinancialEvent = (id: string, updated: Partial<FinancialEvent>) => {
@@ -2225,6 +2301,7 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
         loading,
         error,
         addFinancialEvent,
+        addFinancialEventAwaited,
         addFinancialEventsBatch,
         editFinancialEvent,
         deleteFinancialEvent,

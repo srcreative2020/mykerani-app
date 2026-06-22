@@ -82,7 +82,7 @@ export const AIFinancialAssistant: React.FC<AIFinancialAssistantProps> = ({ onTr
     financialEvidencePackages,
     ocrLearnedPatterns,
     learnOcrPattern,
-    addFinancialEvent,
+    addFinancialEventAwaited,
     addDebtRecord,
     addFinancialCommitment,
     addFinancialEvidencePackage
@@ -364,7 +364,7 @@ export const AIFinancialAssistant: React.FC<AIFinancialAssistantProps> = ({ onTr
       let evidenceRelatedType: string | undefined;
 
       if (transactionType === "INCOME" || transactionType === "EXPENSE") {
-        const rec = addFinancialEvent({
+        const rec = await addFinancialEventAwaited({
           workspaceId: activeWorkspace.id,
           type: transactionType,
           categoryName: category,
@@ -392,7 +392,7 @@ export const AIFinancialAssistant: React.FC<AIFinancialAssistantProps> = ({ onTr
         newRecordId = rec.id;
         evidenceRelatedType = "DEBT";
       } else if (transactionType === "RECEIVABLE") {
-        const rec = addFinancialEvent({
+        const rec = await addFinancialEventAwaited({
           workspaceId: activeWorkspace.id,
           type: "RECEIVABLE",
           categoryName: category,
@@ -466,8 +466,9 @@ export const AIFinancialAssistant: React.FC<AIFinancialAssistantProps> = ({ onTr
 
       setSuggestionStatus(prev => ({ ...prev, [s.id]: "confirmed" }));
       setEditingSuggestionId(null);
-    } catch (err) {
+    } catch (err: any) {
       console.error("Failed to confirm AI suggestion:", err);
+      setError(`Gagal menyimpan rekod ke pangkalan data: ${err?.message || "ralat tidak diketahui"}. Cadangan TIDAK disahkan, sila cuba lagi.`);
     }
   };
 
@@ -640,6 +641,13 @@ export const AIFinancialAssistant: React.FC<AIFinancialAssistantProps> = ({ onTr
           );
           });
         })}
+
+        {error && (
+          <div className="flex items-start justify-between gap-2 bg-rose-50 border border-rose-200 rounded-xl px-3 py-2 text-xs text-rose-700 self-start max-w-[85%]">
+            <span>{error}</span>
+            <button type="button" onClick={() => setError(null)} className="text-rose-400 hover:text-rose-600 cursor-pointer shrink-0">✕</button>
+          </div>
+        )}
 
         {/* Loading Indicator */}
         {loading && (

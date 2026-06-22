@@ -202,7 +202,7 @@ export function OwnerDashboard() {
     userRoles.forEach(r => { map[r.userId] = r.fullName; });
     return map;
   }, [userRoles]);
-  const { financialEvents, addFinancialEvent, addFinancialEventsBatch, editFinancialEvent, deleteFinancialEvent, addDebtRecord, editDebtRecord, deleteDebtRecord, addFinancialCommitment, editFinancialCommitment, deleteFinancialCommitment, learnOcrPattern, learnOcrPatternsBatch, ocrLearnedPatterns, cashAccounts, bankAccounts, debtRecords, financialCommitments, financialEvidencePackages, addFinancialEvidencePackage } = useFinancials();
+  const { financialEvents, addFinancialEvent, addFinancialEventAwaited, addFinancialEventsBatch, editFinancialEvent, deleteFinancialEvent, addDebtRecord, editDebtRecord, deleteDebtRecord, addFinancialCommitment, editFinancialCommitment, deleteFinancialCommitment, learnOcrPattern, learnOcrPatternsBatch, ocrLearnedPatterns, cashAccounts, bankAccounts, debtRecords, financialCommitments, financialEvidencePackages, addFinancialEvidencePackage } = useFinancials();
 
   const [activeTab, setActiveTab] = useState<MainTab>("home");
   const [morePage, setMorePage] = useState<MorePage>("menu");
@@ -586,6 +586,7 @@ export function OwnerDashboard() {
   const [docsLoading, setDocsLoading] = useState(false);
   const [uploadingDoc, setUploadingDoc] = useState<DocType | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const [chatActionErrors, setChatActionErrors] = useState<Record<string, string>>({});
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [pendingDocType, setPendingDocType] = useState<DocType>("SUPPORTING_DOC");
   const [docTypeFilter, setDocTypeFilter] = useState<"ALL" | DocType>("ALL");
@@ -1024,7 +1025,7 @@ export function OwnerDashboard() {
       setImportProgress({ submitted: includedLines.length, inserted: 0, failed: 0, batchNumber: 0, totalBatches: 0 });
 
       try {
-        const newEvents = await addFinancialEventsBatch(
+        const { events: newEvents, failed } = await addFinancialEventsBatch(
           includedLines.map((l, idx) => ({
             workspaceId: activeWorkspace.id,
             type: l.type === "CREDIT" ? "INCOME" as const : "EXPENSE" as const,
@@ -1038,6 +1039,14 @@ export function OwnerDashboard() {
           })),
           (progress) => setImportProgress(progress)
         );
+
+        if (failed > 0) {
+          // Database write failed for some lines: do NOT mark the document
+          // CONFIRMED. Re-running confirm is safe -- the unique reference
+          // number per line means already-saved lines upsert idempotently.
+          setUploadError(`Gagal menyimpan ${failed} daripada ${newEvents.length} transaksi ke pangkalan data. Rekod TIDAK disahkan sepenuhnya. Sila cuba sahkan semula.`);
+          return;
+        }
         createdEvents = newEvents.map(e => ({ id: e.id }));
 
         const patternsToLearn = includedLines
@@ -1052,17 +1061,23 @@ export function OwnerDashboard() {
       // melainkan ia direkodkan terus sebagai Pendapatan/Perbelanjaan sebenar —
       // supaya "Perlu Dibayar"/"Perlu Dikutip" di Dashboard betul-betul tepat.
       const isOutstanding = docReview.recordType === "PAYABLE" || docReview.recordType === "RECEIVABLE";
-      const ev = addFinancialEvent({
-        workspaceId: activeWorkspace.id,
-        type: docReview.recordType,
-        categoryName: docReview.category,
-        amountMyr: Number(docReview.amount) || 0,
-        partyName: merchantName || "Tidak dinyatakan",
-        date: docReview.date,
-        referenceNumber: `DOC-${doc.id.substring(0, 8)}`,
-        description: `Daripada dokumen dimuat naik: ${doc.file_name}`,
-        isCompleted: !isOutstanding,
-      });
+      let ev;
+      try {
+        ev = await addFinancialEventAwaited({
+          workspaceId: activeWorkspace.id,
+          type: docReview.recordType,
+          categoryName: docReview.category,
+          amountMyr: Number(docReview.amount) || 0,
+          partyName: merchantName || "Tidak dinyatakan",
+          date: docReview.date,
+          referenceNumber: `DOC-${doc.id.substring(0, 8)}`,
+          description: `Daripada dokumen dimuat naik: ${doc.file_name}`,
+          isCompleted: !isOutstanding,
+        });
+      } catch (err: any) {
+        setUploadError(`Gagal menyimpan rekod ke pangkalan data: ${err?.message || "ralat tidak diketahui"}. Rekod TIDAK disahkan.`);
+        return;
+      }
       createdEvents.push(ev);
       if (merchantName.trim()) {
         learnOcrPattern({ workspaceId: activeWorkspace.id, vendorName: merchantName.trim(), category: docReview.category, recordType: docReview.recordType, confidenceScore: docReview.confidenceScore });
@@ -1668,8 +1683,9 @@ export function OwnerDashboard() {
     }));
   };
 
-  const handleChatConfirmSuggestion = (s: ChatSuggestion, edited?: typeof chatEditDraft) => {
+  const handleChatConfirmSuggestion = async (s: ChatSuggestion, edited?: typeof chatEditDraft) => {
     if (!activeWorkspace || chatSuggestionStatus[s.id]?.status === "confirmed") return;
+    setChatActionErrors(prev => { const next = { ...prev }; delete next[s.id]; return next; });
     const extra = chatSuggestionExtra[s.id];
     if (!extra || !extra.businessPicked) return;
     const businessId = extra.businessId;
@@ -1684,18 +1700,24 @@ export function OwnerDashboard() {
     let newRecordType: ChatSuggestionRecordType | undefined;
 
     if (transactionType === "INCOME" || transactionType === "EXPENSE") {
-      const ev = addFinancialEvent({
-        workspaceId: activeWorkspace.id,
-        businessId: businessId || undefined,
-        type: transactionType,
-        categoryName: category,
-        amountMyr: amount,
-        partyName: relatedParty,
-        date,
-        referenceNumber: `AI-${s.id}`,
-        description: `Direkodkan melalui pengesahan cadangan Kerani AI: ${s.title}`,
-        isCompleted: true,
-      });
+      let ev;
+      try {
+        ev = await addFinancialEventAwaited({
+          workspaceId: activeWorkspace.id,
+          businessId: businessId || undefined,
+          type: transactionType,
+          categoryName: category,
+          amountMyr: amount,
+          partyName: relatedParty,
+          date,
+          referenceNumber: `AI-${s.id}`,
+          description: `Direkodkan melalui pengesahan cadangan Kerani AI: ${s.title}`,
+          isCompleted: true,
+        });
+      } catch (err: any) {
+        setChatActionErrors(prev => ({ ...prev, [s.id]: `Gagal menyimpan rekod ke pangkalan data: ${err?.message || "ralat tidak diketahui"}. Cadangan TIDAK disahkan, sila cuba lagi.` }));
+        return;
+      }
       newRecordId = ev.id;
       newRecordType = transactionType;
     } else if (transactionType === "DEBT") {
@@ -1712,33 +1734,45 @@ export function OwnerDashboard() {
       newRecordId = debt.id;
       newRecordType = "DEBT";
     } else if (transactionType === "RECEIVABLE") {
-      const ev = addFinancialEvent({
-        workspaceId: activeWorkspace.id,
-        businessId: businessId || undefined,
-        type: "RECEIVABLE",
-        categoryName: category,
-        amountMyr: amount,
-        partyName: relatedParty,
-        date,
-        referenceNumber: `AI-${s.id}`,
-        description: `Direkodkan melalui pengesahan cadangan Kerani AI: ${s.title}`,
-        isCompleted: false,
-      });
+      let ev;
+      try {
+        ev = await addFinancialEventAwaited({
+          workspaceId: activeWorkspace.id,
+          businessId: businessId || undefined,
+          type: "RECEIVABLE",
+          categoryName: category,
+          amountMyr: amount,
+          partyName: relatedParty,
+          date,
+          referenceNumber: `AI-${s.id}`,
+          description: `Direkodkan melalui pengesahan cadangan Kerani AI: ${s.title}`,
+          isCompleted: false,
+        });
+      } catch (err: any) {
+        setChatActionErrors(prev => ({ ...prev, [s.id]: `Gagal menyimpan rekod ke pangkalan data: ${err?.message || "ralat tidak diketahui"}. Cadangan TIDAK disahkan, sila cuba lagi.` }));
+        return;
+      }
       newRecordId = ev.id;
       newRecordType = "RECEIVABLE";
     } else if (transactionType === "PAYABLE") {
-      const ev = addFinancialEvent({
-        workspaceId: activeWorkspace.id,
-        businessId: businessId || undefined,
-        type: "PAYABLE",
-        categoryName: category,
-        amountMyr: amount,
-        partyName: relatedParty,
-        date,
-        referenceNumber: `AI-${s.id}`,
-        description: `Direkodkan melalui pengesahan cadangan Kerani AI: ${s.title}`,
-        isCompleted: false,
-      });
+      let ev;
+      try {
+        ev = await addFinancialEventAwaited({
+          workspaceId: activeWorkspace.id,
+          businessId: businessId || undefined,
+          type: "PAYABLE",
+          categoryName: category,
+          amountMyr: amount,
+          partyName: relatedParty,
+          date,
+          referenceNumber: `AI-${s.id}`,
+          description: `Direkodkan melalui pengesahan cadangan Kerani AI: ${s.title}`,
+          isCompleted: false,
+        });
+      } catch (err: any) {
+        setChatActionErrors(prev => ({ ...prev, [s.id]: `Gagal menyimpan rekod ke pangkalan data: ${err?.message || "ralat tidak diketahui"}. Cadangan TIDAK disahkan, sila cuba lagi.` }));
+        return;
+      }
       newRecordId = ev.id;
       newRecordType = "PAYABLE";
     } else if (transactionType === "COMMITMENT") {
@@ -2241,6 +2275,12 @@ export function OwnerDashboard() {
                               <div>Jumlah: RM{Number(statusObj.editedAmount ?? s.payload?.amount ?? 0).toFixed(2)}</div>
                               <div>Confidence: <span className={`font-bold ${confidenceClass}`}>{confidencePct}%</span></div>
                             </div>
+                            {chatActionErrors[s.id] && (
+                              <div className="flex items-start justify-between gap-2 bg-rose-50 border border-rose-200 rounded-lg px-2.5 py-1.5 text-2xs text-rose-700">
+                                <span>{chatActionErrors[s.id]}</span>
+                                <button type="button" onClick={() => setChatActionErrors(prev => { const next = { ...prev }; delete next[s.id]; return next; })} className="text-rose-400 hover:text-rose-600 cursor-pointer shrink-0">✕</button>
+                              </div>
+                            )}
                             {status === "pending" && crossWorkspaceHints[s.id] && (
                               <div className="flex items-center justify-between gap-2 bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-1.5 text-2xs text-amber-800">
                                 <span>Berdasarkan sejarah, "{s.payload?.relatedParty}" biasa direkodkan di bawah <strong>{crossWorkspaceHints[s.id].workspaceName}</strong>.</span>
