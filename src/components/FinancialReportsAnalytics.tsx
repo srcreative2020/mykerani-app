@@ -12,9 +12,8 @@ import {
   Clock, 
   AlertCircle, 
   Scale, 
-  Calendar, 
-  Search, 
-  Building2, 
+  Calendar,
+  Building2,
   Wallet, 
   Printer, 
   Download, 
@@ -28,9 +27,11 @@ import {
 } from "lucide-react";
 import { type FinancialEvent, type FinancialCommitment } from "../types";
 import { exportToCSV, exportToExcel, exportToJSON, exportToPDF, type ExportColumn } from "../lib/exportUtils";
-import { computeFinancialHealthScoring } from "../lib/financialHealth";
+import { computeFinancialHealthScoring, computeFinancialHealthV1 } from "../lib/financialHealth";
 import { computeLoanReadiness } from "../lib/loanReadiness";
 import { computeLhdnReadiness } from "../lib/lhdnReadiness";
+import { buildReportBuckets, flattenBuckets } from "../lib/reportBucketAggregator";
+import { buildEvidenceIndex, getEvidenceCoverageRatio } from "../lib/evidenceDrilldown";
 import { ProfitLossReport } from "./ProfitLossReport";
 import { BalanceSheetReport } from "./BalanceSheetReport";
 import { CashFlowReport } from "./CashFlowReport";
@@ -50,7 +51,7 @@ export const FinancialReportsAnalytics: React.FC = () => {
 
   // Active Report Selection state: 9 reports
   const [selectedReport, setSelectedReport] = useState<
-    "summary" | "cashflow" | "receivables_aging" | "payables_aging" | "commitments" | "health" | "tax_readiness" | "bank_readiness" | "profit_loss" | "balance_sheet" | "cash_flow_v1"
+    "summary" | "receivables_aging" | "payables_aging" | "commitments" | "health" | "tax_readiness" | "bank_readiness" | "profit_loss" | "balance_sheet" | "cash_flow_v1"
   >("summary");
 
   const [businessProfile, setBusinessProfile] = useState<BusinessProfile>(EMPTY_BUSINESS_PROFILE);
@@ -100,25 +101,6 @@ export const FinancialReportsAnalytics: React.FC = () => {
   const aggregateAssets = totalLiquidAssets + totalReceivables;
   const aggregateLiabilities = totalPayables + totalDebts;
   const netCapitalMargin = aggregateAssets - aggregateLiabilities;
-
-  // Completed Inflows & Outflows for Cashflow report
-  const completedInflows = useMemo(() => {
-    return financialEvents.filter(e => e.type === "INCOME" && e.isCompleted);
-  }, [financialEvents]);
-
-  const completedOutflows = useMemo(() => {
-    return financialEvents.filter(e => (e.type === "EXPENSE" || e.type === "DEBT") && e.isCompleted);
-  }, [financialEvents]);
-
-  const sumCompletedInflow = useMemo(() => {
-    return completedInflows.reduce((sum, e) => sum + e.amountMyr, 0);
-  }, [completedInflows]);
-
-  const sumCompletedOutflow = useMemo(() => {
-    return completedOutflows.reduce((sum, e) => sum + e.amountMyr, 0);
-  }, [completedOutflows]);
-
-  const netCashflowChange = sumCompletedInflow - sumCompletedOutflow;
 
   // Receivables Aging calculations
   const receivablesAgingData = useMemo(() => {
@@ -285,6 +267,19 @@ export const FinancialReportsAnalytics: React.FC = () => {
     return { ...scoring, solvencyColor, quickColor, runwayColor };
   }, [cashAccounts, bankAccounts, financialEvents, debtRecords, financialCommitments, baseDate]);
 
+  // Financial Health V1 (Report Delivery Closeout Sprint) — Evidence Coverage % and
+  // Data Completeness % sub-metrics, additive to healthScoring above (no formula changed).
+  const evidenceCoverageRatio = useMemo(() => {
+    const buckets = buildReportBuckets({ financialEvents, debtRecords, financialCommitments, assetPurchases: [], ownerTransactions: [] });
+    const evidenceIndex = buildEvidenceIndex(financialEvidencePackages);
+    return getEvidenceCoverageRatio(flattenBuckets(buckets), evidenceIndex);
+  }, [financialEvents, debtRecords, financialCommitments, financialEvidencePackages]);
+
+  const healthV1 = useMemo(
+    () => computeFinancialHealthV1(cashAccounts, bankAccounts, financialEvents, debtRecords, financialCommitments, evidenceCoverageRatio, baseDate),
+    [cashAccounts, bankAccounts, financialEvents, debtRecords, financialCommitments, evidenceCoverageRatio, baseDate]
+  );
+
   // LHDN Tax Readiness checklist — computed purely from existing income/expense
   // records, evidence linkage, and business profile completeness. No mock data.
   const taxReadiness = useMemo(
@@ -347,14 +342,16 @@ export const FinancialReportsAnalytics: React.FC = () => {
         ];
         return { columns, rows: commitmentBurnData.items as unknown as Record<string, unknown>[], title: "Laporan Komitmen Kewangan" };
       }
-      case "cashflow":
-        return { columns: eventColumns, rows: eventRows(financialEvents), title: "Laporan Aliran Tunai" };
       case "health": {
         const columns: ExportColumn[] = [{ key: "metric", label: "Metrik" }, { key: "value", label: "Nilai" }, { key: "grade", label: "Gred" }];
         const rows = [
           { metric: "Nisbah Solvensi", value: healthScoring.solvencyRatio.toFixed(2), grade: healthScoring.solvencyGrade },
           { metric: "Nisbah Cepat", value: healthScoring.quickRatio.toFixed(2), grade: healthScoring.quickGrade },
           { metric: "Tempoh Survival (Bulan)", value: healthScoring.runwayMonths.toFixed(1), grade: healthScoring.runwayGrade },
+          { metric: "Cash Health (RM)", value: healthV1.cashHealth.totalLiquidAssets.toFixed(2), grade: healthV1.cashHealth.quickGrade },
+          { metric: "Debt Health (RM)", value: healthV1.debtHealth.totalActiveDebt.toFixed(2), grade: healthV1.debtHealth.solvencyGrade },
+          { metric: "Evidence Coverage %", value: healthV1.evidenceCoveragePct.toFixed(1), grade: "" },
+          { metric: "Data Completeness %", value: healthV1.dataCompletenessPct.toFixed(1), grade: "" },
         ];
         return { columns, rows, title: "Laporan Kesihatan Kewangan" };
       }
@@ -383,7 +380,7 @@ export const FinancialReportsAnalytics: React.FC = () => {
     }
   }, [
     selectedReport, financialEvents, receivablesAgingData, payablesAgingData, commitmentBurnData,
-    healthScoring, totalLiquidAssets, totalReceivables, totalPayables, totalDebts, aggregateAssets, aggregateLiabilities,
+    healthScoring, healthV1, totalLiquidAssets, totalReceivables, totalPayables, totalDebts, aggregateAssets, aggregateLiabilities,
     taxReadiness, bankReadiness,
   ]);
 
@@ -431,7 +428,7 @@ export const FinancialReportsAnalytics: React.FC = () => {
             Laporan berkanun ini dikompilasi secara automatik berasaskan rekod-rekod dwi-lejar berasingan yang sah dalam workspace <strong>{activeWorkspace.name}</strong>.
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <button
             onClick={handlePrint}
             className="px-3 py-1.5 border border-slate-300 hover:border-slate-400 bg-white hover:bg-slate-50 text-slate-700 rounded-lg text-xs font-medium flex items-center transition cursor-pointer"
@@ -495,21 +492,6 @@ export const FinancialReportsAnalytics: React.FC = () => {
             <div className="flex items-center space-x-2">
               <PieChart className="w-4 h-4 text-emerald-500" />
               <span>1. Ringkasan Kedudukan Kewangan</span>
-            </div>
-          </button>
-
-          <button
-            onClick={() => { setSelectedReport("cashflow"); setSearchTerm(""); }}
-            className={`w-full text-left px-3.5 py-3 rounded-xl text-xs font-semibold flex items-center justify-between transition border ${
-              selectedReport === "cashflow"
-                ? "bg-slate-950 border-slate-950 text-white shadow-xs"
-                : "bg-white border-slate-200 text-slate-700 hover:bg-slate-50 hover:text-slate-950"
-            }`}
-            id="nav_report_cashflow"
-          >
-            <div className="flex items-center space-x-2">
-              <Activity className="w-4 h-4 text-indigo-505" />
-              <span>2. Ringkasan Aliran Tunai</span>
             </div>
           </button>
 
@@ -668,7 +650,6 @@ export const FinancialReportsAnalytics: React.FC = () => {
             </div>
             <h3 className="font-display font-bold text-lg text-slate-950 mt-1">
               {selectedReport === "summary" && "1. Laporan Kedudukan Kewangan Bersih (Financial Position)"}
-              {selectedReport === "cashflow" && "2. Laporan Kedudukan Aliran Tunai Selesa (Cashflow Matrix)"}
               {selectedReport === "receivables_aging" && "3. Laporan Penuaan Tuntutan Jualan Terkumpul"}
               {selectedReport === "payables_aging" && "4. Laporan Penuaan Hutang Pembekal & Bil Belum Bayar"}
               {selectedReport === "commitments" && "5. Laporan Inventori Komitmen Operasional & Kontrak"}
@@ -813,127 +794,10 @@ export const FinancialReportsAnalytics: React.FC = () => {
             </div>
           )}
 
-          {/* Report 2: Cashflow Report */}
-          {selectedReport === "cashflow" && (
-            <div className="space-y-6 animate-fade-in" id="report_cashflow_view">
-              
-              {/* Cashflow core metrics */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="bg-emerald-50 border border-emerald-150 p-4 rounded-xl text-emerald-800">
-                  <span className="text-[10px] font-mono uppercase text-emerald-700 font-bold block">
-                    ALIRAN MASUK BERJAYA (INFLOW)
-                  </span>
-                  <p className="text-xl font-mono font-bold mt-1">
-                    + RM {sumCompletedInflow.toLocaleString("en-MY", { minimumFractionDigits: 2 })}
-                  </p>
-                  <span className="text-[9px] text-emerald-650 font-sans mt-0.5 block">
-                    Berasas resit pendapatan disahkan
-                  </span>
-                </div>
-
-                <div className="bg-rose-50 border border-rose-150 p-4 rounded-xl text-rose-800">
-                  <span className="text-[10px] font-mono uppercase text-rose-700 font-bold block">
-                    ALIRAN KELUAR BERJAYA (OUTFLOW)
-                  </span>
-                  <p className="text-xl font-mono font-bold mt-1">
-                    - RM {sumCompletedOutflow.toLocaleString("en-MY", { minimumFractionDigits: 2 })}
-                  </p>
-                  <span className="text-[9px] text-rose-650 font-sans mt-0.5 block">
-                    Berasas bil & perbelanjaan dibayar
-                  </span>
-                </div>
-
-                <div className="bg-slate-900 text-white p-4 rounded-xl">
-                  <span className="text-[10px] font-mono text-slate-350 uppercase font-bold block">
-                    PERUBAHAN ALIRAN BERSIH
-                  </span>
-                  <p className={`text-xl font-mono font-bold mt-1 ${netCashflowChange >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
-                    RM {netCashflowChange.toLocaleString("en-MY", { minimumFractionDigits: 2 })}
-                  </p>
-                  <span className="text-[9px] text-slate-400 font-sans mt-0.5 block">
-                    Peningkatan/susutan tunai bersih
-                  </span>
-                </div>
-              </div>
-
-              {/* Transactions search section */}
-              <div className="space-y-3">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                  <h4 className="font-display font-semibold text-xs text-slate-900 uppercase">
-                    Aktiviti Aliran Tunai Selesai ({completedInflows.length + completedOutflows.length} item)
-                  </h4>
-                  <div className="relative w-full sm:w-64">
-                    <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-slate-400" />
-                    <input
-                      type="text"
-                      className="w-full text-xs font-sans pl-8 pr-3 py-2 border border-slate-200 rounded-lg focus:outline-hidden"
-                      placeholder="Cari pihak atau kategori..."
-                      value={searchTerm}
-                      onChange={e => setSearchTerm(e.target.value)}
-                    />
-                  </div>
-                </div>
-
-                {/* Combined Table of Completed Events */}
-                <div className="border border-slate-200 rounded-xl overflow-hidden text-xs">
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-left border-collapse">
-                      <thead>
-                        <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 font-mono text-[9px] uppercase tracking-wider">
-                          <th className="p-3">Ref</th>
-                          <th className="p-3">Kategori</th>
-                          <th className="p-3">Tarikh Selesai</th>
-                          <th className="p-3">Pihak Berkenaan</th>
-                          <th className="p-3 text-right">Nilai (MYR)</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-100 text-slate-700">
-                        {(() => {
-                          const combined = [...completedInflows, ...completedOutflows]
-                            .sort((a,b) => b.date.localeCompare(a.date))
-                            .filter(e => {
-                              const key = searchTerm.toLowerCase();
-                              return e.categoryName.toLowerCase().includes(key) || 
-                                     e.partyName.toLowerCase().includes(key) ||
-                                     e.referenceNumber.toLowerCase().includes(key);
-                            });
-
-                          if (combined.length === 0) {
-                            return (
-                              <tr>
-                                <td colSpan={5} className="p-6 text-center text-slate-400 italic">
-                                  Tiada rekod seseai ditemui untuk penapis terkini.
-                                </td>
-                              </tr>
-                            );
-                          }
-
-                          return combined.map(e => {
-                            const isIncome = e.type === "INCOME";
-                            return (
-                              <tr key={e.id} className="hover:bg-slate-50/50">
-                                <td className="p-3 font-mono font-bold text-slate-500">{e.referenceNumber || "—"}</td>
-                                <td className="p-3">
-                                  <span className="font-semibold text-slate-900 block">{e.categoryName}</span>
-                                  <span className="text-[10px] text-slate-405 font-mono">{isIncome ? "OPERATING INFLOW" : "OPERATING OUTFLOW"}</span>
-                                </td>
-                                <td className="p-3 font-mono text-slate-500">{e.date}</td>
-                                <td className="p-3 font-medium">{e.partyName}</td>
-                                <td className={`p-3 text-right font-mono font-bold ${isIncome ? "text-emerald-600" : "text-rose-600"}`}>
-                                  {isIncome ? "+" : "-"} RM {e.amountMyr.toLocaleString()}
-                                </td>
-                              </tr>
-                            );
-                          });
-                        })()}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              </div>
-
-            </div>
-          )}
+          {/* Report 2 (legacy Cashflow Matrix) removed — consolidated into single
+              "11. Penyata Aliran Tunai" (cash_flow_v1 / CashFlowReport.tsx), the
+              accounting-correct, validated (28/28) Cash Flow Statement. See
+              MYKERANI_REPORT_STACK_V1_FINAL_READINESS.md for rationale. */}
 
           {/* Report 3: Receivables Aging Report */}
           {selectedReport === "receivables_aging" && (
@@ -1454,6 +1318,39 @@ export const FinancialReportsAnalytics: React.FC = () => {
                   </div>
                 </div>
 
+              </div>
+
+              {/* Financial Health V1 — Sub-Metrik Tambahan */}
+              <div className="space-y-3" id="health_v1_submetrics">
+                <h4 className="font-display font-semibold text-xs text-slate-900 uppercase tracking-widest">
+                  Sub-Metrik Kesihatan Tambahan (V1)
+                </h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
+                  <div className="p-5 rounded-2xl border-2 border-slate-200 bg-white space-y-2" id="health_v1_cash">
+                    <span className="text-[10px] font-mono font-bold uppercase tracking-wide text-slate-500">Cash Health</span>
+                    <p className="text-xl font-mono font-bold tracking-tight text-slate-950">
+                      RM {healthV1.cashHealth.totalLiquidAssets.toLocaleString("en-MY", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </p>
+                    <p className="text-[11px] text-slate-500">Quick Ratio: {healthV1.cashHealth.quickRatio.toFixed(2)}x · {healthV1.cashHealth.quickGrade}</p>
+                  </div>
+                  <div className="p-5 rounded-2xl border-2 border-slate-200 bg-white space-y-2" id="health_v1_debt">
+                    <span className="text-[10px] font-mono font-bold uppercase tracking-wide text-slate-500">Debt Health</span>
+                    <p className="text-xl font-mono font-bold tracking-tight text-slate-950">
+                      RM {healthV1.debtHealth.totalActiveDebt.toLocaleString("en-MY", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </p>
+                    <p className="text-[11px] text-slate-500">{healthV1.debtHealth.overdueDebtCount} hutang tertunggak · {healthV1.debtHealth.solvencyGrade}</p>
+                  </div>
+                  <div className="p-5 rounded-2xl border-2 border-slate-200 bg-white space-y-2" id="health_v1_evidence_coverage">
+                    <span className="text-[10px] font-mono font-bold uppercase tracking-wide text-slate-500">Evidence Coverage %</span>
+                    <p className="text-xl font-mono font-bold tracking-tight text-slate-950">{healthV1.evidenceCoveragePct.toFixed(1)}%</p>
+                    <p className="text-[11px] text-slate-505">Peratus rekod kewangan yang mempunyai pakej bukti (invois/resit) dikaitkan.</p>
+                  </div>
+                  <div className="p-5 rounded-2xl border-2 border-slate-200 bg-white space-y-2" id="health_v1_data_completeness">
+                    <span className="text-[10px] font-mono font-bold uppercase tracking-wide text-slate-500">Data Completeness %</span>
+                    <p className="text-xl font-mono font-bold tracking-tight text-slate-950">{healthV1.dataCompletenessPct.toFixed(1)}%</p>
+                    <p className="text-[11px] text-slate-505">Peratus rekod kewangan yang dikategorikan dengan lengkap (bukan "Lain-lain"/kosong).</p>
+                  </div>
+                </div>
               </div>
 
               {/* Cognitive Health Assessment Checklist */}
