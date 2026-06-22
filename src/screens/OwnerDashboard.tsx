@@ -331,6 +331,17 @@ export function OwnerDashboard() {
   const [txnFilterSource, setTxnFilterSource] = useState<"ALL" | "AI_CHAT" | "RECEIPT_OCR" | "INVOICE_OCR" | "BANK_STATEMENT" | "MANUAL">("ALL");
   const [txnPageSize, setTxnPageSize] = useState<50 | 100 | 250 | 500>(50);
   const [txnPage, setTxnPage] = useState(0);
+  // â•â• Sejarah Aktiviti (Activity History) -- own search/filter/pagination, but
+  // reads from the exact same `myEvents` Master Ledger array as the Dashboard
+  // table above. No separate storage, no separate fetch.
+  const [historySearch, setHistorySearch] = useState("");
+  const [historyFilterFrom, setHistoryFilterFrom] = useState("");
+  const [historyFilterTo, setHistoryFilterTo] = useState("");
+  const [historyFilterSource, setHistoryFilterSource] = useState<"ALL" | "AI_CHAT" | "RECEIPT_OCR" | "INVOICE_OCR" | "BANK_STATEMENT" | "MANUAL">("ALL");
+  const [historyFilterBusiness, setHistoryFilterBusiness] = useState<string>("ALL");
+  const [historyFilterType, setHistoryFilterType] = useState<"ALL" | "INCOME" | "EXPENSE" | "RECEIVABLE" | "PAYABLE" | "DEBT">("ALL");
+  const [historyPage, setHistoryPage] = useState(0);
+  const HISTORY_PAGE_SIZE = 50;
   const getTxnSource = (ev: { referenceNumber: string }): "AI_CHAT" | "RECEIPT_OCR" | "INVOICE_OCR" | "BANK_STATEMENT" | "MANUAL" => {
     const ref = ev.referenceNumber || "";
     if (ref.startsWith("STMT-")) return "BANK_STATEMENT";
@@ -408,6 +419,74 @@ export function OwnerDashboard() {
     return sortedFilteredEvents.slice(start, start + txnPageSize);
   }, [sortedFilteredEvents, txnPage, txnPageSize]);
   useEffect(() => { setTxnPage(0); }, [txnSearch, txnFilterBusiness, txnFilterCategory, txnFilterSource, txnFilterFrom, txnFilterTo, dashboardTypeFilter, txnPageSize]);
+
+  const historyFilteredEvents = useMemo(() => {
+    const q = historySearch.trim().toLowerCase();
+    return myEvents.filter(e => {
+      const inRange = (!historyFilterFrom || e.date >= historyFilterFrom) && (!historyFilterTo || e.date <= historyFilterTo);
+      const matchesSource = historyFilterSource === "ALL" || getTxnSource(e) === historyFilterSource;
+      const matchesBusiness = historyFilterBusiness === "ALL" || (e.businessId || "") === historyFilterBusiness;
+      const matchesType = historyFilterType === "ALL" || e.type === historyFilterType;
+      const matchesSearch = !q ||
+        e.description?.toLowerCase().includes(q) ||
+        e.partyName?.toLowerCase().includes(q) ||
+        e.referenceNumber?.toLowerCase().includes(q) ||
+        e.categoryName?.toLowerCase().includes(q);
+      return inRange && matchesSource && matchesBusiness && matchesType && matchesSearch;
+    }).slice().reverse();
+  }, [myEvents, historySearch, historyFilterFrom, historyFilterTo, historyFilterSource, historyFilterBusiness, historyFilterType]);
+  const historyTotalPages = Math.max(1, Math.ceil(historyFilteredEvents.length / HISTORY_PAGE_SIZE));
+  const pagedHistoryEvents = useMemo(() => {
+    const start = historyPage * HISTORY_PAGE_SIZE;
+    return historyFilteredEvents.slice(start, start + HISTORY_PAGE_SIZE);
+  }, [historyFilteredEvents, historyPage]);
+  useEffect(() => { setHistoryPage(0); }, [historySearch, historyFilterFrom, historyFilterTo, historyFilterSource, historyFilterBusiness, historyFilterType]);
+
+  // â•â• Phase 2: computed-only Transaction Health Flags. No new tables/state --
+  // derived purely from fields already on FinancialEvent at render time.
+  type HealthFlag = "MISSING_ATTACHMENT" | "LOW_CONFIDENCE" | "POSSIBLE_DUPLICATE" | "UNCATEGORIZED" | "REVIEW_REQUIRED" | "READY";
+  const possibleDuplicateIds = useMemo(() => {
+    const flagged = new Set<string>();
+    const byKey = new Map<string, FinancialEvent[]>();
+    for (const e of myEvents) {
+      const key = `${e.type}|${e.amountMyr.toFixed(2)}|${e.date}`;
+      const bucket = byKey.get(key) || [];
+      bucket.push(e);
+      byKey.set(key, bucket);
+    }
+    byKey.forEach(bucket => { if (bucket.length > 1) bucket.forEach(e => flagged.add(e.id)); });
+    return flagged;
+  }, [myEvents]);
+  const getHealthFlags = (ev: FinancialEvent): HealthFlag[] => {
+    const flags: HealthFlag[] = [];
+    const hasAttachment = financialEvidencePackages.some(p => p.relatedRecordId === ev.id);
+    const isOcrOrChatSourced = getTxnSource(ev) !== "MANUAL";
+    if (isOcrOrChatSourced && !hasAttachment) flags.push("MISSING_ATTACHMENT");
+    const confidencePct = findTxnConfidence(ev);
+    if (confidencePct !== null && confidencePct < 75) flags.push("LOW_CONFIDENCE");
+    if (possibleDuplicateIds.has(ev.id)) flags.push("POSSIBLE_DUPLICATE");
+    if (!ev.categoryName || ev.categoryName.trim() === "" || ev.categoryName === "Lain-lain") flags.push("UNCATEGORIZED");
+    if (!ev.businessId && businesses.some(b => b.isActive)) flags.push("REVIEW_REQUIRED");
+    if (flags.length === 0) flags.push("READY");
+    return flags;
+  };
+  const healthFlagLabel = (f: HealthFlag) => ({
+    MISSING_ATTACHMENT: "Tiada Lampiran",
+    LOW_CONFIDENCE: "Keyakinan Rendah",
+    POSSIBLE_DUPLICATE: "Mungkin Pendua",
+    UNCATEGORIZED: "Belum Dikategorikan",
+    REVIEW_REQUIRED: "Perlu Disemak",
+    READY: "Sedia",
+  }[f]);
+  const healthFlagBadgeClass = (f: HealthFlag) => ({
+    MISSING_ATTACHMENT: "bg-orange-50 text-orange-600",
+    LOW_CONFIDENCE: "bg-amber-50 text-amber-600",
+    POSSIBLE_DUPLICATE: "bg-rose-50 text-rose-600",
+    UNCATEGORIZED: "bg-slate-100 text-slate-500",
+    REVIEW_REQUIRED: "bg-yellow-50 text-yellow-700",
+    READY: "bg-emerald-50 text-emerald-600",
+  }[f]);
+
   const [editingTxnId, setEditingTxnId] = useState<string | null>(null);
   const [editTxnDraft, setEditTxnDraft] = useState({ amountMyr: "", categoryName: "", partyName: "", date: "" });
   const txnReceiptInputRef = useRef<HTMLInputElement>(null);
@@ -716,7 +795,7 @@ export function OwnerDashboard() {
     suggestedCategory: string; confidenceScore: number; include: boolean;
     matchedEventId?: string; matchedLabel?: string;
     isInternalTransfer?: boolean; transferPairLabel?: string;
-    isOwnBusinessMatch?: boolean; ownBusinessMatchLabel?: string;
+    isOwnBusinessMatch?: boolean; ownBusinessMatchLabel?: string; ownBusinessMatchId?: string;
   };
 
   // A transaction line whose description names one of the user's OWN registered
@@ -876,6 +955,7 @@ export function OwnerDashboard() {
                 include: false,
                 isOwnBusinessMatch: true,
                 ownBusinessMatchLabel: `Padanan dengan bisnes anda sendiri: ${ownBusinessMatch.businessName}`,
+                ownBusinessMatchId: ownBusinessMatch.id,
               };
             }
             // Padankan dengan rekod sedia ada (cth: dimasukkan sendiri oleh
@@ -1028,6 +1108,11 @@ export function OwnerDashboard() {
         const { events: newEvents, failed } = await addFinancialEventsBatch(
           includedLines.map((l, idx) => ({
             workspaceId: activeWorkspace.id,
+            // Auto-map to one of the user's own registered businesses when its
+            // name is clearly referenced in the line description (same matching
+            // engine used above to flag inter-business transfers) -- only applies
+            // if the user chose to include the line despite/after that flag.
+            businessId: l.ownBusinessMatchId || undefined,
             type: l.type === "CREDIT" ? "INCOME" as const : "EXPENSE" as const,
             categoryName: l.suggestedCategory,
             amountMyr: l.amount,
@@ -1061,10 +1146,14 @@ export function OwnerDashboard() {
       // melainkan ia direkodkan terus sebagai Pendapatan/Perbelanjaan sebenar —
       // supaya "Perlu Dibayar"/"Perlu Dikutip" di Dashboard betul-betul tepat.
       const isOutstanding = docReview.recordType === "PAYABLE" || docReview.recordType === "RECEIVABLE";
+      // Auto-map to one of the user's own registered businesses when the
+      // merchant/vendor name on the receipt or invoice clearly names it.
+      const ocrOwnBusinessMatch = matchOwnBusiness(merchantName || "", businesses.filter(b => b.isActive));
       let ev;
       try {
         ev = await addFinancialEventAwaited({
           workspaceId: activeWorkspace.id,
+          businessId: ocrOwnBusinessMatch?.id || undefined,
           type: docReview.recordType,
           categoryName: docReview.category,
           amountMyr: Number(docReview.amount) || 0,
@@ -2646,6 +2735,12 @@ export function OwnerDashboard() {
                           </span>
                           {ev.createdByName && <span>Direkod oleh: {ev.createdByName}</span>}
                         </div>
+                        <div className="flex items-center gap-2 flex-wrap text-[10px] text-slate-400">
+                          <span className={`px-1 py-0.5 rounded font-semibold ${txnSourceBadgeClass(getTxnSource(ev))}`}>{txnSourceLabel(getTxnSource(ev))}</span>
+                          <span>Ref: {ev.referenceNumber}</span>
+                          {ev.businessId && <span>🏢 {businesses.find(b => b.id === ev.businessId)?.businessName || "Bisnes"}</span>}
+                          {ev.description && <span className="italic truncate max-w-[160px]">📝 {ev.description}</span>}
+                        </div>
                         <input value={editTxnDraft.partyName} onChange={e => setEditTxnDraft(d => ({ ...d, partyName: e.target.value }))} placeholder="Pihak Berkaitan" className="w-full px-2 py-1 rounded border border-slate-300 text-xs" />
                         <input value={editTxnDraft.categoryName} onChange={e => setEditTxnDraft(d => ({ ...d, categoryName: e.target.value }))} placeholder="Kategori" className="w-full px-2 py-1 rounded border border-slate-300 text-xs" />
                         <input value={editTxnDraft.amountMyr} onChange={e => setEditTxnDraft(d => ({ ...d, amountMyr: e.target.value }))} type="number" placeholder="Jumlah (RM)" className="w-full px-2 py-1 rounded border border-slate-300 text-xs" />
@@ -2685,7 +2780,7 @@ export function OwnerDashboard() {
                               {ev.date}{ev.createdAt ? ` ${new Date(ev.createdAt).toLocaleTimeString("ms-MY", { hour: "2-digit", minute: "2-digit" })}` : ""}
                               {ev.createdByName ? ` - ${ev.createdByName}` : ""}
                             </p>
-                            <div className="flex items-center gap-2 mt-0.5">
+                            <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                               <span className={`text-[9px] px-1 py-0.5 rounded font-semibold ${txnSourceBadgeClass(getTxnSource(ev))}`}>{txnSourceLabel(getTxnSource(ev))}</span>
                               {findTxnConfidence(ev) !== null && (
                                 <span className="text-[9px] px-1 py-0.5 rounded bg-indigo-50 text-indigo-500 font-semibold">Confiden {findTxnConfidence(ev)}%</span>
@@ -2696,7 +2791,18 @@ export function OwnerDashboard() {
                                   <Receipt className="w-2.5 h-2.5" /> Resit
                                 </button>
                               )}
+                              {ev.businessId && (
+                                <span className="text-[9px] px-1 py-0.5 rounded bg-slate-100 text-slate-600 font-semibold">
+                                  🏢 {businesses.find(b => b.id === ev.businessId)?.businessName || "Bisnes"}
+                                </span>
+                              )}
+                              {getHealthFlags(ev).map(f => (
+                                <span key={f} className={`text-[9px] px-1 py-0.5 rounded font-semibold ${healthFlagBadgeClass(f)}`}>{healthFlagLabel(f)}</span>
+                              ))}
                             </div>
+                            {ev.description && (
+                              <p className="text-[10px] text-slate-400 italic truncate max-w-[220px] mt-0.5">📝 {ev.description}</p>
+                            )}
                           </div>
                         </div>
                         <div className="flex items-center gap-2 shrink-0">
@@ -3048,27 +3154,123 @@ export function OwnerDashboard() {
             {morePage === "history" && (
               <div className="space-y-3">
                 <h2 className="text-lg font-bold text-slate-900">Sejarah Aktiviti</h2>
-                {myEvents.length === 0 ? (
+
+                <div className="bg-white border border-slate-200 rounded-2xl p-3 space-y-2 shadow-sm">
+                  <input
+                    type="text"
+                    value={historySearch}
+                    onChange={e => setHistorySearch(e.target.value)}
+                    placeholder="Cari penerangan, pihak, rujukan atau kategori..."
+                    className="w-full text-xs border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-indigo-400"
+                  />
+                  <div className="grid grid-cols-2 gap-2">
+                    <input
+                      type="date"
+                      value={historyFilterFrom}
+                      onChange={e => setHistoryFilterFrom(e.target.value)}
+                      className="text-xs border border-slate-200 rounded-lg px-2 py-1.5"
+                    />
+                    <input
+                      type="date"
+                      value={historyFilterTo}
+                      onChange={e => setHistoryFilterTo(e.target.value)}
+                      className="text-xs border border-slate-200 rounded-lg px-2 py-1.5"
+                    />
+                  </div>
+                  <div className="grid grid-cols-3 gap-2">
+                    <select
+                      value={historyFilterSource}
+                      onChange={e => setHistoryFilterSource(e.target.value as typeof historyFilterSource)}
+                      className="text-xs border border-slate-200 rounded-lg px-2 py-1.5"
+                    >
+                      <option value="ALL">Semua Sumber</option>
+                      <option value="AI_CHAT">{txnSourceLabel("AI_CHAT")}</option>
+                      <option value="RECEIPT_OCR">{txnSourceLabel("RECEIPT_OCR")}</option>
+                      <option value="INVOICE_OCR">{txnSourceLabel("INVOICE_OCR")}</option>
+                      <option value="BANK_STATEMENT">{txnSourceLabel("BANK_STATEMENT")}</option>
+                      <option value="MANUAL">{txnSourceLabel("MANUAL")}</option>
+                    </select>
+                    <select
+                      value={historyFilterBusiness}
+                      onChange={e => setHistoryFilterBusiness(e.target.value)}
+                      className="text-xs border border-slate-200 rounded-lg px-2 py-1.5"
+                    >
+                      <option value="ALL">Semua Bisnes</option>
+                      {businesses.map(b => (
+                        <option key={b.id} value={b.id}>{b.businessName}</option>
+                      ))}
+                    </select>
+                    <select
+                      value={historyFilterType}
+                      onChange={e => setHistoryFilterType(e.target.value as typeof historyFilterType)}
+                      className="text-xs border border-slate-200 rounded-lg px-2 py-1.5"
+                    >
+                      <option value="ALL">Semua Jenis</option>
+                      <option value="INCOME">Pendapatan</option>
+                      <option value="EXPENSE">Perbelanjaan</option>
+                      <option value="RECEIVABLE">Belum Terima</option>
+                      <option value="PAYABLE">Belum Bayar</option>
+                    </select>
+                  </div>
+                </div>
+
+                {historyFilteredEvents.length === 0 ? (
                   <div className="bg-white border border-slate-200 rounded-2xl p-10 text-center shadow-sm">
                     <History className="w-10 h-10 text-slate-200 mx-auto mb-2" />
-                    <p className="text-sm text-slate-400">Tiada aktiviti lagi</p>
+                    <p className="text-sm text-slate-400">Tiada aktiviti dijumpai</p>
                   </div>
-                ) : myEvents.slice().reverse().map(ev => (
-                  <div key={ev.id} className="bg-white border border-slate-200 rounded-xl p-3 flex items-center justify-between shadow-sm">
-                    <div className="flex items-center space-x-3">
-                      <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${ev.type === "INCOME" ? "bg-emerald-50" : "bg-rose-50"}`}>
-                        {ev.type === "INCOME" ? <TrendingUp className="w-3.5 h-3.5 text-emerald-500" /> : <TrendingDown className="w-3.5 h-3.5 text-rose-500" />}
+                ) : (
+                  <>
+                    {pagedHistoryEvents.map(ev => (
+                      <div key={ev.id} className="bg-white border border-slate-200 rounded-xl p-3 flex items-center justify-between shadow-sm gap-2">
+                        <div className="flex items-center space-x-3 min-w-0">
+                          <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${ev.type === "INCOME" ? "bg-emerald-50" : "bg-rose-50"}`}>
+                            {ev.type === "INCOME" ? <TrendingUp className="w-3.5 h-3.5 text-emerald-500" /> : <TrendingDown className="w-3.5 h-3.5 text-rose-500" />}
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-xs font-semibold text-slate-800 truncate">{ev.partyName || ev.categoryName}</p>
+                            <p className="text-[10px] text-slate-400">{ev.date} &middot; Ref: {ev.referenceNumber}</p>
+                            <div className="flex items-center gap-1 mt-0.5 flex-wrap">
+                              <span className={`text-[9px] px-1 py-0.5 rounded font-semibold ${txnSourceBadgeClass(getTxnSource(ev))}`}>{txnSourceLabel(getTxnSource(ev))}</span>
+                              {ev.businessId && (
+                                <span className="text-[9px] px-1 py-0.5 rounded bg-slate-100 text-slate-600 font-semibold">
+                                  🏢 {businesses.find(b => b.id === ev.businessId)?.businessName || "Bisnes"}
+                                </span>
+                              )}
+                              {getHealthFlags(ev).map(f => (
+                                <span key={f} className={`text-[9px] px-1 py-0.5 rounded font-semibold ${healthFlagBadgeClass(f)}`}>{healthFlagLabel(f)}</span>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                        <span className={`text-sm font-bold shrink-0 ${ev.type === "INCOME" ? "text-emerald-600" : "text-rose-500"}`}>
+                          {ev.type === "INCOME" ? "+" : "-"}RM {ev.amountMyr.toFixed(2)}
+                        </span>
                       </div>
-                      <div>
-                        <p className="text-xs font-semibold text-slate-800">{ev.partyName || ev.categoryName}</p>
-                        <p className="text-[10px] text-slate-400">{ev.date}</p>
-                      </div>
+                    ))}
+                    <div className="flex items-center justify-between pt-1">
+                      <button
+                        type="button"
+                        disabled={historyPage === 0}
+                        onClick={() => setHistoryPage(p => Math.max(0, p - 1))}
+                        className="text-xs px-3 py-1.5 rounded-lg border border-slate-200 disabled:opacity-40 disabled:cursor-not-allowed"
+                      >
+                        Sebelum
+                      </button>
+                      <span className="text-[11px] text-slate-400">
+                        Halaman {historyPage + 1} / {historyTotalPages}
+                      </span>
+                      <button
+                        type="button"
+                        disabled={historyPage >= historyTotalPages - 1}
+                        onClick={() => setHistoryPage(p => Math.min(historyTotalPages - 1, p + 1))}
+                        className="text-xs px-3 py-1.5 rounded-lg border border-slate-200 disabled:opacity-40 disabled:cursor-not-allowed"
+                      >
+                        Seterus
+                      </button>
                     </div>
-                    <span className={`text-sm font-bold ${ev.type === "INCOME" ? "text-emerald-600" : "text-rose-500"}`}>
-                      {ev.type === "INCOME" ? "+" : "-"}RM {ev.amountMyr.toFixed(2)}
-                    </span>
-                  </div>
-                ))}
+                  </>
+                )}
               </div>
             )}
 
