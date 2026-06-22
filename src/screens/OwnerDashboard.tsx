@@ -663,6 +663,23 @@ export function OwnerDashboard() {
     suggestedCategory: string; confidenceScore: number; include: boolean;
     matchedEventId?: string; matchedLabel?: string;
     isInternalTransfer?: boolean; transferPairLabel?: string;
+    isOwnBusinessMatch?: boolean; ownBusinessMatchLabel?: string;
+  };
+
+  // A transaction line whose description names one of the user's OWN registered
+  // businesses (e.g. "KILANG CETAK SR") is an inter-business movement, not an
+  // external expense/income — surface it as a flagged match so the user reviews
+  // and confirms it explicitly, rather than the AI silently suggesting it as a
+  // normal external counterparty.
+  const normalizeForMatch = (s: string) => s.toUpperCase().replace(/[^A-Z0-9 ]/g, " ").replace(/\s+/g, " ").trim();
+  const matchOwnBusiness = (description: string, ownBusinesses: Business[]): Business | undefined => {
+    const normDesc = normalizeForMatch(description);
+    if (!normDesc) return undefined;
+    return ownBusinesses.find((b) => {
+      const normName = normalizeForMatch(b.businessName || "");
+      if (normName.length < 3) return false;
+      return normDesc.includes(normName) || normName.includes(normDesc);
+    });
   };
 
   // Reuse the same Internal Transfer Detection engine as the Historical Recovery
@@ -719,6 +736,9 @@ export function OwnerDashboard() {
     lines?: DocReviewLine[];
     pagesFound?: number | null;
     transactionsFound?: number;
+    chunksTotal?: number | null;
+    chunksFailed?: number | null;
+    extractionIncomplete?: boolean;
   }>(null);
 
   // Load documents when workspace ready
@@ -776,6 +796,9 @@ export function OwnerDashboard() {
           rawExtractedText: payload.rawExtractedText || "",
           pagesFound: payload.pagesFound ?? null,
           transactionsFound: payload.transactionsFound ?? payload.transactions.length,
+          chunksTotal: payload.chunksTotal ?? null,
+          chunksFailed: payload.chunksFailed ?? null,
+          extractionIncomplete: Boolean(payload.extractionIncomplete),
           lines: (() => {
             const rawLines = payload.transactions.map((t: any) => ({
               date: t.date || "", description: t.description || "", amount: Number(t.amount) || 0,
@@ -786,6 +809,7 @@ export function OwnerDashboard() {
             // Internal Transfer Detection — debit/credit pairs of matching
             // amount within this statement must not double-count as Income+Expense.
             const transferPairByIndex = detectTransferPairsInLines(rawLines);
+            const activeOwnBusinesses = businesses.filter((b) => b.isActive);
             return rawLines.map((line, i) => {
               const transferPairLabel = transferPairByIndex.get(i);
               if (transferPairLabel) {
@@ -794,6 +818,15 @@ export function OwnerDashboard() {
                   include: false,
                   isInternalTransfer: true,
                   transferPairLabel,
+                };
+              }
+              const ownBusinessMatch = matchOwnBusiness(line.description, activeOwnBusinesses);
+              if (ownBusinessMatch) {
+                return {
+                  ...line,
+                  include: false,
+                  isOwnBusinessMatch: true,
+                  ownBusinessMatchLabel: `Padanan dengan bisnes anda sendiri: ${ownBusinessMatch.businessName}`,
                 };
               }
               // Padankan dengan rekod sedia ada (cth: dimasukkan sendiri oleh
@@ -3828,13 +3861,18 @@ export function OwnerDashboard() {
                     <div><p className="text-[10px] text-slate-400">Extracted</p><p className="text-sm font-bold text-slate-800">{docReview.lines.length}</p></div>
                     <div><p className="text-[10px] text-slate-400">To Import</p><p className="text-sm font-bold text-emerald-600">{docReview.lines.filter(l => l.include).length}</p></div>
                   </div>
+                  {docReview.extractionIncomplete && (
+                    <p className="text-[11px] font-semibold text-rose-600 bg-rose-50 border border-rose-200 rounded-xl p-2">
+                      ⚠ Sebahagian penyata ini gagal diproses oleh AI ({docReview.chunksFailed ?? "?"} daripada {docReview.chunksTotal ?? "?"} bahagian) — sesetengah transaksi mungkin TIDAK dipaparkan di bawah. Sila semak semula dokumen asal atau muat naik semula.
+                    </p>
+                  )}
                   <p className="text-[11px] text-slate-500">
                     AI mengesan {docReview.lines.length} transaksi dalam penyata ini, padankan dengan rekod yang anda dah masukkan sendiri,
-                    dan kenal pasti {docReview.lines.filter(l => l.isInternalTransfer).length} pemindahan dalaman.
-                    {" "}Transaksi yang <span className="font-semibold text-emerald-600">sudah sepadan</span> atau <span className="font-semibold text-violet-600">pemindahan dalaman</span> tak akan direkod sebagai Pendapatan/Perbelanjaan — batalkan tanda untuk yang tidak mahu direkod, atau tanda balik jika padanan tersilap.
+                    dan kenal pasti {docReview.lines.filter(l => l.isInternalTransfer).length} pemindahan dalaman serta {docReview.lines.filter(l => l.isOwnBusinessMatch).length} transaksi dengan bisnes anda sendiri.
+                    {" "}Transaksi yang <span className="font-semibold text-emerald-600">sudah sepadan</span>, <span className="font-semibold text-violet-600">pemindahan dalaman</span>, atau <span className="font-semibold text-amber-600">bisnes sendiri</span> tak akan direkod sebagai Pendapatan/Perbelanjaan — batalkan tanda untuk yang tidak mahu direkod, atau tanda balik jika padanan tersilap.
                   </p>
                   {docReview.lines.map((l, i) => (
-                    <div key={i} className={`border rounded-xl p-3 space-y-1.5 ${l.isInternalTransfer ? "border-violet-200 bg-violet-50/40" : l.matchedEventId ? "border-emerald-200 bg-emerald-50/40" : "border-slate-200"}`}>
+                    <div key={i} className={`border rounded-xl p-3 space-y-1.5 ${l.isInternalTransfer ? "border-violet-200 bg-violet-50/40" : l.isOwnBusinessMatch ? "border-amber-200 bg-amber-50/40" : l.matchedEventId ? "border-emerald-200 bg-emerald-50/40" : "border-slate-200"}`}>
                       <div className="flex items-center gap-2">
                         <input type="checkbox" checked={l.include}
                           onChange={e => setDocReview(d => d ? { ...d, lines: d.lines!.map((x, xi) => xi === i ? { ...x, include: e.target.checked } : x) } : d)}
@@ -3846,6 +3884,11 @@ export function OwnerDashboard() {
                       {l.isInternalTransfer && (
                         <p className="pl-6 text-[10px] font-semibold text-violet-600">
                           ⇄ Pemindahan Dalaman — sepadan dengan "{l.transferPairLabel}" dalam penyata ini, bukan Pendapatan/Perbelanjaan sebenar
+                        </p>
+                      )}
+                      {l.isOwnBusinessMatch && (
+                        <p className="pl-6 text-[10px] font-semibold text-amber-600">
+                          🏢 {l.ownBusinessMatchLabel} — semak sama ada ini perlu direkod sebagai Pendapatan/Perbelanjaan luaran
                         </p>
                       )}
                       {l.matchedEventId && (

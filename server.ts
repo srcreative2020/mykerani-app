@@ -739,24 +739,80 @@ Provide your output precisely formatted as raw JSON matching exactly this shape,
       let parsedResult: any = null;
       let lastErr: any = null;
       let usedCandidate: AiCandidate | null = null;
-      for (const candidate of candidates) {
-        try {
-          parsedResult = extractedPdfText !== null
-            ? await callAiProviderTextOcr(candidate, extractedPdfText, ocrPrompt)
-            : await callAiProviderOcr(candidate, mimeType, base64Data, ocrPrompt);
-          usedCandidate = candidate;
-          break;
-        } catch (err: any) {
-          lastErr = err;
-          console.error(`AI provider "${candidate.provider}" OCR call failed, trying next candidate:`, err?.message || err);
+
+      // Bank statements: split the extracted text into chunks and run extraction per
+      // chunk, then merge every chunk's transactions so nothing is dropped to a token
+      // ceiling. Other document types keep the original single-call path.
+      const isChunkedStatement = isStatement && extractedPdfText !== null;
+      let rowsFound = 0;
+      let chunksTotal = 0;
+      let chunksSucceeded = 0;
+      let chunksFailed = 0;
+
+      if (isChunkedStatement) {
+        const nonEmptyLines = extractedPdfText!.split(/\r\n|\r|\n/).filter((l) => l.trim().length > 0);
+        rowsFound = nonEmptyLines.length;
+        const chunks = chunkStatementText(extractedPdfText!);
+        chunksTotal = chunks.length;
+        const mergedTransactions: any[] = [];
+        let mergedHeader: any = null;
+
+        for (let i = 0; i < chunks.length; i++) {
+          const chunkPrompt = chunks.length > 1
+            ? `${ocrPrompt}\n\nNOTE: This is PART ${i + 1} of ${chunks.length} of the same bank statement (split for processing). Extract EVERY transaction line present in THIS part only into the "transactions" array — do not skip any line, and do not worry about transactions from other parts.`
+            : ocrPrompt;
+
+          let chunkResult: any = null;
+          let chunkErr: any = null;
+          for (const candidate of candidates) {
+            try {
+              chunkResult = await callAiProviderTextOcr(candidate, chunks[i], chunkPrompt);
+              usedCandidate = candidate;
+              break;
+            } catch (err: any) {
+              chunkErr = err;
+              console.error(`AI provider "${candidate.provider}" OCR call failed on chunk ${i + 1}/${chunks.length}, trying next candidate:`, err?.message || err);
+            }
+          }
+
+          if (!chunkResult) {
+            chunksFailed++;
+            lastErr = chunkErr || lastErr;
+            console.error(`[BANK_STATEMENT_CHUNK_FAILED] chunk ${i + 1}/${chunks.length} could not be extracted by any provider; transactions in this chunk are MISSING from the result.`);
+            continue;
+          }
+          chunksSucceeded++;
+          if (!mergedHeader) mergedHeader = chunkResult;
+          if (Array.isArray(chunkResult.transactions)) {
+            mergedTransactions.push(...chunkResult.transactions);
+          }
+        }
+
+        if (chunksSucceeded === 0) {
+          throw lastErr || new Error("All configured AI providers failed for OCR on every chunk");
+        }
+
+        parsedResult = { ...(mergedHeader || {}), transactions: mergedTransactions };
+      } else {
+        for (const candidate of candidates) {
+          try {
+            parsedResult = extractedPdfText !== null
+              ? await callAiProviderTextOcr(candidate, extractedPdfText, ocrPrompt)
+              : await callAiProviderOcr(candidate, mimeType, base64Data, ocrPrompt);
+            usedCandidate = candidate;
+            break;
+          } catch (err: any) {
+            lastErr = err;
+            console.error(`AI provider "${candidate.provider}" OCR call failed, trying next candidate:`, err?.message || err);
+          }
+        }
+
+        if (!parsedResult) {
+          throw lastErr || new Error("All configured AI providers failed for OCR");
         }
       }
 
-      if (!parsedResult) {
-        throw lastErr || new Error("All configured AI providers failed for OCR");
-      }
-
-      console.info(`[AI_ROUTER_DEBUG][OCR] servedBy=${usedCandidate!.provider}:${usedCandidate!.model} mode=${extractedPdfText !== null ? "pdf-text" : "vision"}`);
+      console.info(`[AI_ROUTER_DEBUG][OCR] servedBy=${usedCandidate!.provider}:${usedCandidate!.model} mode=${extractedPdfText !== null ? "pdf-text" : "vision"}${isChunkedStatement ? ` chunks=${chunksSucceeded}/${chunksTotal}` : ""}`);
       logAiUsage(tenantId, workspaceId, userId, "ocr", usedCandidate!.provider, usedCandidate!.model);
 
       if (isStatement) {
@@ -764,8 +820,13 @@ Provide your output precisely formatted as raw JSON matching exactly this shape,
         return res.json({
           ...parsedResult,
           pagesFound: pdfPagesFound,
+          rowsFound: isChunkedStatement ? rowsFound : null,
+          chunksTotal: isChunkedStatement ? chunksTotal : null,
+          chunksSucceeded: isChunkedStatement ? chunksSucceeded : null,
+          chunksFailed: isChunkedStatement ? chunksFailed : null,
           transactionsFound,
           transactionsExtracted: transactionsFound,
+          extractionIncomplete: isChunkedStatement && chunksFailed > 0,
         });
       }
 
@@ -1745,6 +1806,32 @@ Only include a "CONFIRM_TRANSACTION" suggestion entry when financialIntent.detec
   // every PDF upload to exhaust all candidates and fall back to fabricated mock data.
   // Instead, the PDF's text layer is extracted locally (pdf-parse) and sent as plain text,
   // which every provider's standard chat-completions endpoint already supports natively.
+  // Bank statements with many pages produce a wall of extracted text that can exceed a
+  // single AI call's effective output budget — the model silently stops emitting
+  // transactions once it nears its token ceiling, so a 129-page statement could come
+  // back with only 27 transactions instead of the hundreds actually present. Splitting
+  // the text into line-aligned chunks and issuing one extraction call per chunk (then
+  // merging the results) keeps every call's output well within budget so no transaction
+  // range is ever silently dropped.
+  function chunkStatementText(text: string, maxCharsPerChunk: number = 6000): string[] {
+    const lines = text.split(/\r\n|\r|\n/);
+    const chunks: string[] = [];
+    let current: string[] = [];
+    let currentLen = 0;
+    for (const line of lines) {
+      const lineLen = line.length + 1;
+      if (currentLen + lineLen > maxCharsPerChunk && current.length > 0) {
+        chunks.push(current.join("\n"));
+        current = [];
+        currentLen = 0;
+      }
+      current.push(line);
+      currentLen += lineLen;
+    }
+    if (current.length > 0) chunks.push(current.join("\n"));
+    return chunks.length > 0 ? chunks : [text];
+  }
+
   async function callAiProviderTextOcr(candidate: AiCandidate, extractedText: string, ocrPrompt: string): Promise<any> {
     const fullPrompt = `${ocrPrompt}\n\nDocument text extracted from the PDF:\n"""\n${extractedText}\n"""`;
     if (candidate.provider === "gemini") {
