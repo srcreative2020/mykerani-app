@@ -775,7 +775,8 @@ export function OwnerDashboard() {
       });
       if (!response.ok) {
         const errBody = await response.json().catch(() => ({}));
-        setDocReviewError(errBody.error || "AI tidak dapat membaca dokumen ini. Cuba lagi.");
+        const baseMsg = errBody.error || "AI tidak dapat membaca dokumen ini. Cuba lagi.";
+        setDocReviewError(errBody.detail ? `${baseMsg} [${errBody.detail}]` : baseMsg);
         return;
       }
       const payload = await response.json();

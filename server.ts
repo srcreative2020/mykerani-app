@@ -843,9 +843,14 @@ Provide your output precisely formatted as raw JSON matching exactly this shape,
           ? "Pembekal AI tidak dapat diakses sekarang (had penggunaan/bil dicapai). Dokumen ini TIDAK dapat dianalisis. Sila cuba lagi kemudian."
           : "AI tidak dapat membaca dokumen ini. Dokumen ini TIDAK dapat dianalisis. Sila cuba semula atau muat naik fail yang lebih jelas.",
         code: isBillingOrCreditIssue ? "AI_PROVIDER_UNAVAILABLE" : "OCR_FAILED",
+        // Surfaced so a failure can be diagnosed from the browser response alone —
+        // this endpoint's only other visibility is server-side console.error, which
+        // isn't reachable when investigating from outside the deployment.
+        detail: errStr ? String(errStr).slice(0, 500) : null,
       });
     }
   });
+
 
   // Voice note transcription (Whisper) — lets a chat-attached audio recording
   // actually be understood instead of the assistant just saying it can't listen.
