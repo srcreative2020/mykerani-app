@@ -204,7 +204,8 @@ export const OCREngineConsole: React.FC = () => {
         return;
       }
       if (!response.ok) {
-        throw new Error(`Extraction service returned HTTP code ${response.status}`);
+        const errBody = await response.json().catch(() => ({}));
+        throw new Error(errBody.error || `Extraction service returned HTTP code ${response.status}`);
       }
 
       const payload = await response.json();
@@ -258,53 +259,8 @@ export const OCREngineConsole: React.FC = () => {
 
     } catch (err: any) {
       console.error(err);
-      setErrorText(`Primary OCR extraction pipe stalled. Retrying with sandbox local decryption rules...`);
-      
-      // Fallback details generated locally if server is blocked
-      const fallbackPayload = {
-        merchantName: documentType === "RECEIPT" ? "Starbucks Coffee Retail" : "Maybank Corporate Service",
-        documentNumber: "MOCK-TX-" + Math.floor(Math.random() * 9000),
-        date: new Date().toISOString().split("T")[0],
-        amount: documentType === "RECEIPT" ? 42.50 : 2500.00,
-        currency: "MYR",
-        suggestedCategory: documentType === "RECEIPT" ? "Meals" : "Utilities",
-        confidenceScore: 0.82,
-        rawExtractedText: `Encountered offline boundary extraction parameters for file '${file.name}'`
-      };
-
-      // Check learning layer in fallback too!
-      const fallbackMatched = ocrLearnedPatterns.find(
-        (p) => p.vendorName.toLowerCase() === fallbackPayload.merchantName.toLowerCase()
-      );
-
-      if (fallbackMatched) {
-        const confidenceScoreStr = fallbackMatched.confidenceScore;
-        const adjustedPayload = {
-          ...fallbackPayload,
-          merchantName: fallbackMatched.vendorName,
-          suggestedCategory: fallbackMatched.category,
-          confidenceScore: confidenceScoreStr,
-        };
-        setExtractedData(adjustedPayload);
-        setReviewedMerchantName(fallbackMatched.vendorName);
-        setReviewedDocumentNumber(fallbackPayload.documentNumber);
-        setReviewedDate(fallbackPayload.date);
-        setReviewedAmount(fallbackPayload.amount);
-        setReviewedCurrency(fallbackPayload.currency);
-        setReviewedCategory(fallbackMatched.category);
-        setSelectedRecordType(fallbackMatched.recordType);
-        
-        setSuccessText(`🤖 Learning Layer Matched (Sandbox Fallback): Found historical pattern Memory for "${fallbackMatched.vendorName}". Pre-classified category to "${fallbackMatched.category}".`);
-      } else {
-        setExtractedData(fallbackPayload);
-        setReviewedMerchantName(fallbackPayload.merchantName);
-        setReviewedDocumentNumber(fallbackPayload.documentNumber);
-        setReviewedDate(fallbackPayload.date);
-        setReviewedAmount(fallbackPayload.amount);
-        setReviewedCurrency(fallbackPayload.currency);
-        setReviewedCategory(fallbackPayload.suggestedCategory);
-        setSelectedRecordType(documentType === "RECEIPT" ? "EXPENSE" : documentType === "INVOICE" ? "PAYABLE" : "INCOME");
-      }
+      setErrorText(err?.message || "Pengekstrakan OCR gagal. Sila cuba muat naik semula, atau gunakan format CSV/Excel jika dokumen ini hasil imbasan/scan tanpa teks.");
+      setExtractedData(null);
     } finally {
       setIsAnalyzing(false);
       setAnalysisStep("");
