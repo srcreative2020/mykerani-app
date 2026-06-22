@@ -774,9 +774,9 @@ export function OwnerDashboard() {
         }),
       });
       if (!response.ok) {
-        const errBody = await response.json().catch(() => ({}));
-        const baseMsg = errBody.error || "AI tidak dapat membaca dokumen ini. Cuba lagi.";
-        setDocReviewError(errBody.detail ? `${baseMsg} [${errBody.detail}]` : baseMsg);
+        const errBody = await response.json().catch(() => null);
+        const baseMsg = errBody?.error || `AI tidak dapat membaca dokumen ini. Cuba lagi. [HTTP ${response.status}, non-JSON response — likely a gateway/timeout error before the server could respond]`;
+        setDocReviewError(errBody?.detail ? `${baseMsg} [${errBody.detail}]` : baseMsg);
         return;
       }
       const payload = await response.json();
@@ -856,7 +856,8 @@ export function OwnerDashboard() {
         });
       }
     } catch (ex: any) {
-      setDocReviewError("AI tidak dapat membaca dokumen ini. Anda boleh cuba semula atau abaikan (dokumen tetap disimpan).");
+      const baseMsg = "AI tidak dapat membaca dokumen ini. Anda boleh cuba semula atau abaikan (dokumen tetap disimpan).";
+      setDocReviewError(ex?.message ? `${baseMsg} [${ex.message}]` : baseMsg);
     } finally {
       setDocAnalyzing(false);
     }

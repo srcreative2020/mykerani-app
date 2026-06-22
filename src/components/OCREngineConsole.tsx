@@ -204,8 +204,9 @@ export const OCREngineConsole: React.FC = () => {
         return;
       }
       if (!response.ok) {
-        const errBody = await response.json().catch(() => ({}));
-        throw new Error(errBody.error || `Extraction service returned HTTP code ${response.status}`);
+        const errBody = await response.json().catch(() => null);
+        const baseMsg = errBody?.error || `Extraction service returned HTTP code ${response.status} (non-JSON response — likely a gateway/timeout error before the server could respond)`;
+        throw new Error(errBody?.detail ? `${baseMsg} [${errBody.detail}]` : baseMsg);
       }
 
       const payload = await response.json();
