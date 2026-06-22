@@ -30,8 +30,10 @@ import { exportToCSV, exportToExcel, exportToJSON, exportToPDF, type ExportColum
 import { computeFinancialHealthScoring, computeFinancialHealthV1 } from "../lib/financialHealth";
 import { computeLoanReadiness } from "../lib/loanReadiness";
 import { computeLhdnReadiness } from "../lib/lhdnReadiness";
-import { buildReportBuckets, flattenBuckets } from "../lib/reportBucketAggregator";
+import { buildReportBuckets, flattenBuckets, getProfitAndLossSubtotals, getBalanceSheetTieOut } from "../lib/reportBucketAggregator";
 import { buildEvidenceIndex, getEvidenceCoverageRatio } from "../lib/evidenceDrilldown";
+import { loadAssetPurchases, loadOwnerTransactions } from "../lib/assetOwnerData";
+import { getCashFlowActivityTotals } from "../lib/cashFlowClassifier";
 import { ProfitLossReport } from "./ProfitLossReport";
 import { BalanceSheetReport } from "./BalanceSheetReport";
 import { CashFlowReport } from "./CashFlowReport";
@@ -57,6 +59,16 @@ export const FinancialReportsAnalytics: React.FC = () => {
   const [businessProfile, setBusinessProfile] = useState<BusinessProfile>(EMPTY_BUSINESS_PROFILE);
   useEffect(() => {
     if (activeWorkspace?.id) loadBusinessProfile(activeWorkspace.id, isMockUser).then(setBusinessProfile);
+  }, [activeWorkspace?.id, isMockUser]);
+
+  // Asset purchases / owner transactions — needed so P&L / Balance Sheet
+  // export rows match the real bucketed dataset the screens themselves use.
+  const [assetPurchases, setAssetPurchases] = useState<import("../lib/assetOwnerData").AssetPurchase[]>([]);
+  const [ownerTransactions, setOwnerTransactions] = useState<import("../lib/assetOwnerData").OwnerTransaction[]>([]);
+  useEffect(() => {
+    if (!activeWorkspace?.id) return;
+    loadAssetPurchases(activeWorkspace.id, isMockUser).then(setAssetPurchases);
+    loadOwnerTransactions(activeWorkspace.id, isMockUser).then(setOwnerTransactions);
   }, [activeWorkspace?.id, isMockUser]);
 
   // Search filter inside specific reports
@@ -297,6 +309,15 @@ export const FinancialReportsAnalytics: React.FC = () => {
     [financialEvents, debtRecords, receivablesAgingData, healthScoring, businessProfile, baseDate]
   );
 
+  // All-time buckets — the same shared aggregation API ProfitLossReport /
+  // BalanceSheetReport / CashFlowReport read from, used here only so the
+  // export switch (below) emits the real report dataset instead of the
+  // generic summary. Does not alter any locked report's own calculation.
+  const allTimeBuckets = useMemo(
+    () => buildReportBuckets({ financialEvents, debtRecords, financialCommitments, assetPurchases, ownerTransactions, cashAccounts, bankAccounts }),
+    [financialEvents, debtRecords, financialCommitments, assetPurchases, ownerTransactions, cashAccounts, bankAccounts]
+  );
+
   // Build the export dataset for the currently selected report
   const exportDataset = useMemo((): { columns: ExportColumn[]; rows: Record<string, unknown>[]; title: string } => {
     const eventColumns: ExportColumn[] = [
@@ -365,6 +386,41 @@ export const FinancialReportsAnalytics: React.FC = () => {
         const rows = bankReadiness.checks.map(c => ({ label: c.label, status: c.pass ? "Lulus" : "Belum Lulus", detail: c.detail }));
         return { columns, rows, title: "Laporan Kesediaan Pembiayaan/Pinjaman" };
       }
+      case "profit_loss": {
+        const subtotals = getProfitAndLossSubtotals(allTimeBuckets);
+        const columns: ExportColumn[] = [{ key: "lineItem", label: "Item" }, { key: "amountMyr", label: "Jumlah (RM)" }];
+        const rows = [
+          { lineItem: "Hasil Jualan (Revenue)", amountMyr: subtotals.revenue },
+          { lineItem: "Kos Jualan (Cost of Sales)", amountMyr: subtotals.costOfSales },
+          { lineItem: "Untung Kasar (Gross Profit)", amountMyr: subtotals.grossProfit },
+          { lineItem: "Perbelanjaan Operasi (Operating Expenses)", amountMyr: subtotals.operatingExpenses },
+          { lineItem: "Untung Operasi (Operating Profit)", amountMyr: subtotals.operatingProfit },
+        ];
+        return { columns, rows, title: "Penyata Untung Rugi (Profit & Loss)" };
+      }
+      case "balance_sheet": {
+        const tieOut = getBalanceSheetTieOut(allTimeBuckets);
+        const columns: ExportColumn[] = [{ key: "lineItem", label: "Item" }, { key: "amountMyr", label: "Jumlah (RM)" }];
+        const rows = [
+          { lineItem: "Jumlah Aset (Assets)", amountMyr: tieOut.assets },
+          { lineItem: "Jumlah Liabiliti (Liabilities)", amountMyr: tieOut.liabilities },
+          { lineItem: "Ekuiti Pemilik (Equity)", amountMyr: tieOut.equity },
+          { lineItem: "Untung Tertahan (Retained Earnings)", amountMyr: tieOut.retainedEarnings },
+          { lineItem: "Jumlah Liabiliti + Ekuiti", amountMyr: tieOut.totalEquityAndLiabilities },
+        ];
+        return { columns, rows, title: "Kunci Kira-Kira (Balance Sheet)" };
+      }
+      case "cash_flow_v1": {
+        const cashFlowTotals = getCashFlowActivityTotals(flattenBuckets(allTimeBuckets));
+        const columns: ExportColumn[] = [{ key: "lineItem", label: "Item" }, { key: "amountMyr", label: "Jumlah (RM)" }];
+        const rows = [
+          { lineItem: "Aliran Tunai Operasi (Operating)", amountMyr: cashFlowTotals.operating },
+          { lineItem: "Aliran Tunai Pelaburan (Investing)", amountMyr: cashFlowTotals.investing },
+          { lineItem: "Aliran Tunai Pembiayaan (Financing)", amountMyr: cashFlowTotals.financing },
+          { lineItem: "Aliran Tunai Bersih (Net Cash Flow)", amountMyr: cashFlowTotals.netCashFlow },
+        ];
+        return { columns, rows, title: "Penyata Aliran Tunai (Cash Flow)" };
+      }
       default: {
         const columns: ExportColumn[] = [{ key: "metric", label: "Metrik" }, { key: "value", label: "Nilai (RM)" }];
         const rows = [
@@ -381,7 +437,7 @@ export const FinancialReportsAnalytics: React.FC = () => {
   }, [
     selectedReport, financialEvents, receivablesAgingData, payablesAgingData, commitmentBurnData,
     healthScoring, healthV1, totalLiquidAssets, totalReceivables, totalPayables, totalDebts, aggregateAssets, aggregateLiabilities,
-    taxReadiness, bankReadiness,
+    taxReadiness, bankReadiness, allTimeBuckets,
   ]);
 
   const exportFilenameBase = `MyKerani_${activeWorkspace.name}_${selectedReport}_${new Date().toISOString().slice(0, 10)}`.replace(/\s+/g, "_");

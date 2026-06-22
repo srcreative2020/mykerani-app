@@ -29,6 +29,7 @@ import {
   ShieldCheck,
   Database,
   Bell,
+  History,
 } from "lucide-react";
 import { type FinancialEvent, type CashAccount, type BankAccount, type DebtRecord, type FinancialRecordType, type FinancialCommitment, type ModuleName } from "../types";
 import { FinancialCommitmentsManager } from "./FinancialCommitmentsManager";
@@ -42,6 +43,7 @@ import { FinancialReportsAnalytics } from "./FinancialReportsAnalytics";
 import { MyKeraniBackupRecovery } from "./MyKeraniBackupRecovery";
 import { StorageSettingsConsole } from "./StorageSettingsConsole";
 import { NotificationCenterConsole } from "./NotificationCenterConsole";
+import { HistoricalRecoveryWorkspace } from "./HistoricalRecoveryWorkspace";
 import { usePermission } from "../context/PermissionContext";
 import { Sparkles, Archive } from "lucide-react";
 
@@ -169,7 +171,7 @@ export const FinancialRecordsConsole: React.FC<FinancialRecordsConsoleProps> = (
 
   // Selected sub-module navigation
   const [activeModule, setActiveModule] = useState<
-    "dashboard" | "reports" | "backup" | "income" | "expense" | "receivable" | "payable" | "debt" | "cash" | "bank" | "commitments" | "forecast" | "evidence" | "permissions" | "audit" | "ocr"
+    "dashboard" | "reports" | "backup" | "income" | "expense" | "receivable" | "payable" | "debt" | "cash" | "bank" | "commitments" | "forecast" | "evidence" | "permissions" | "audit" | "ocr" | "recovery"
   >("dashboard");
 
   React.useEffect(() => {
@@ -532,6 +534,16 @@ export const FinancialRecordsConsole: React.FC<FinancialRecordsConsoleProps> = (
           Statutory Reports
         </button>
         <button
+          onClick={() => { setActiveModule("recovery"); setShowAddForm(false); }}
+          className={`flex-1 min-w-[140px] px-3 py-2.5 rounded-lg text-xs font-semibold flex items-center justify-center transition cursor-pointer ${
+            activeModule === "recovery" ? "bg-slate-900 text-white shadow-xs" : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+          }`}
+          id="tab_nav_recovery"
+        >
+          <History className="w-4 h-4 mr-1.5 text-amber-500" />
+          Historical Recovery
+        </button>
+        <button
           onClick={() => { setActiveModule("income"); setShowAddForm(false); }}
           className={`flex-1 min-w-[120px] px-3 py-2.5 rounded-lg text-xs font-semibold flex items-center justify-center transition cursor-pointer ${
             activeModule === "income" ? "bg-slate-900 text-white shadow-xs" : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
@@ -754,6 +766,8 @@ export const FinancialRecordsConsole: React.FC<FinancialRecordsConsoleProps> = (
                 ? "Financial Summary"
                 : activeModule === "reports"
                 ? "Autonomous Financial & Statutory Reports"
+                : activeModule === "recovery"
+                ? "Historical Recovery Workspace"
                 : activeModule === "storage"
                 ? "BYOS Storage Settings Console (Sprint 5 Foundation)"
                 : activeModule === "notifications"
@@ -781,6 +795,7 @@ export const FinancialRecordsConsole: React.FC<FinancialRecordsConsoleProps> = (
             <p className="text-xs text-slate-500 mt-0.5 font-sans">
               {activeModule === "dashboard" && "Consolidated overview of financial states, business financial health, and recent activities."}
               {activeModule === "reports" && "Compliant financial statements, cashflow assessments, vendor aging penuaan matrix, and solvency health scores."}
+              {activeModule === "recovery" && "Import old bank statements, recover categorized records, detect internal transfers, and track financial data completeness."}
               {activeModule === "storage" && "Manage multi-tenant isolated physical file roots and configure Bring-Your-Own-Storage (BYOS) cloud endpoints."}
               {activeModule === "notifications" && "Broadcast secure in-app, email, and push communications relating to workspace indicators."}
               {activeModule === "backup" && "Auditable, user-owned workspace backup snapshots, downloadable JSON archives, and policy-gated restore actions."}
@@ -797,7 +812,7 @@ export const FinancialRecordsConsole: React.FC<FinancialRecordsConsoleProps> = (
             </p>
           </div>
 
-          {activeModule !== "dashboard" && activeModule !== "reports" && activeModule !== "backup" && activeModule !== "commitments" && activeModule !== "forecast" && activeModule !== "ai_assistant" && activeModule !== "storage" && activeModule !== "notifications" && (
+          {activeModule !== "dashboard" && activeModule !== "reports" && activeModule !== "recovery" && activeModule !== "backup" && activeModule !== "commitments" && activeModule !== "forecast" && activeModule !== "ai_assistant" && activeModule !== "storage" && activeModule !== "notifications" && (
             <button
               onClick={() => setShowAddForm(!showAddForm)}
               className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-semibold flex items-center transition self-start sm:self-auto cursor-pointer"
@@ -2013,6 +2028,10 @@ export const FinancialRecordsConsole: React.FC<FinancialRecordsConsoleProps> = (
 
         {activeModule === "reports" && (
           <FinancialReportsAnalytics />
+        )}
+
+        {activeModule === "recovery" && (
+          <HistoricalRecoveryWorkspace />
         )}
 
         {activeModule === "storage" && (
