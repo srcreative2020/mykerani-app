@@ -1151,6 +1151,7 @@ Provide your output precisely formatted as raw JSON matching exactly this shape,
 
   // AI FINANCIAL ASSISTANT SECURE PROXY ROUTE
   app.post("/api/ai/assistant", async (req, res) => {
+    let candidates: AiCandidate[] = [];
     try {
       const { query, financialContext, userId } = req.body;
       if (!query) {
@@ -1163,7 +1164,7 @@ Provide your output precisely formatted as raw JSON matching exactly this shape,
         return res.status(402).json({ error: "Kredit AI anda telah habis. Sila beli tambahan kredit atau naik taraf pelan anda." });
       }
 
-      const candidates = await getAiProviderCandidates();
+      candidates = await getAiProviderCandidates();
       // TEMP RUNTIME VERIFICATION LOGGING — remove after diagnosis.
       console.info("[AI_ROUTER_DEBUG]", JSON.stringify({
         candidateCount: candidates.length,
@@ -1330,6 +1331,13 @@ Only include a "CONFIRM_TRANSACTION" suggestion entry when financialIntent.detec
       } else {
         console.info("AI Assistant query resolved seamlessly to robust local cognitive fallback.");
       }
+      logAiFallback(
+        req.body.financialContext?.activeTenant?.id,
+        req.body.financialContext?.activeWorkspace?.id,
+        req.body.userId,
+        candidates.map(c => ({ provider: c.provider, model: c.model })),
+        errStr
+      );
 
       const fallbackResult = generateFallbackAssistantResponse(req.body.query, req.body.financialContext || {});
       const advisoryBanner = isBillingOrCreditIssue 
@@ -1548,6 +1556,36 @@ Only include a "CONFIRM_TRANSACTION" suggestion entry when financialIntent.detec
     } catch (err) {
       console.error("Failed to write event log for AI usage:", err);
     }
+  }
+
+  // Records why a request fell back to the Simulator (every candidate
+  // provider failed) into event_logs, so the failure reason (auth/quota/
+  // network/parsing) is queryable from the DB afterwards without needing
+  // host log access. Best-effort — never blocks the fallback response.
+  // errStr is the thrown error's message only (status code + provider
+  // response body), never request headers, so it cannot leak an API key.
+  function logAiFallback(tenantId: string | undefined | null, workspaceId: string | undefined | null, userId: string | undefined | null, candidates: { provider: string; model: string }[], errStr: string): void {
+    if (!tenantId) return;
+    const supabaseUrl = process.env.VITE_SUPABASE_URL;
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    if (!supabaseUrl || !serviceRoleKey) return;
+    fetch(`${supabaseUrl}/rest/v1/event_logs`, {
+      method: "POST",
+      headers: {
+        apikey: serviceRoleKey,
+        Authorization: `Bearer ${serviceRoleKey}`,
+        "Content-Type": "application/json",
+        Prefer: "return=minimal",
+      },
+      body: JSON.stringify({
+        tenant_id: tenantId,
+        workspace_id: workspaceId || null,
+        user_id: userId || null,
+        event_type: "AI_ANALYSIS",
+        description: "AI Assistant fell back to Simulator Mode (all candidate providers failed)",
+        metadata: { outcome: "SIMULATOR_FALLBACK", candidatesTried: candidates, lastError: String(errStr).slice(0, 500) },
+      }),
+    }).catch(err => console.error("Failed to log AI fallback diagnostic:", err));
   }
 
   // Resource Governance Layer enforcement: debits one credit from the tenant's
