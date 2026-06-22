@@ -33,6 +33,8 @@ import { supabase, isSupabaseConfigured } from "../lib/supabase";
 import { isDemoWorkspace } from "../lib/seeder";
 import { loadChatHistory, saveChatMessage } from "../lib/chatHistory";
 import { logEvent } from "../lib/eventLog";
+import { detectInternalTransfers } from "../lib/internalTransferDetection";
+import type { ImportedBankTransaction } from "../lib/bankStatementImport";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import JSZip from "jszip";
@@ -660,6 +662,31 @@ export function OwnerDashboard() {
     date: string; description: string; amount: number; type: "CREDIT" | "DEBIT";
     suggestedCategory: string; confidenceScore: number; include: boolean;
     matchedEventId?: string; matchedLabel?: string;
+    isInternalTransfer?: boolean; transferPairLabel?: string;
+  };
+
+  // Reuse the same Internal Transfer Detection engine as the Historical Recovery
+  // Workspace (lib/internalTransferDetection.ts) on the lines extracted from THIS
+  // statement — debit/credit pairs of matching amount within a short window must
+  // not double-count as Income+Expense. Each line gets a unique synthetic
+  // `account` id (its own index) so the engine compares every debit against
+  // every credit in the batch, since a single document carries no real
+  // per-line account identity.
+  const detectTransferPairsInLines = (lines: { date: string; description: string; amount: number; type: "CREDIT" | "DEBIT" }[]) => {
+    const asTransactions: ImportedBankTransaction[] = lines.map((l, i) => ({
+      date: l.date, description: l.description, amountMyr: l.amount,
+      direction: l.type, referenceNumber: "", account: `line-${i}`,
+      sourceBank: "GENERIC", sourceRowIndex: i,
+    }));
+    const matches = detectInternalTransfers(asTransactions);
+    const pairByIndex = new Map<number, string>();
+    matches.forEach((m) => {
+      const debitIdx = Number(m.debitTransaction.account.replace("line-", ""));
+      const creditIdx = Number(m.creditTransaction.account.replace("line-", ""));
+      pairByIndex.set(debitIdx, lines[creditIdx].description);
+      pairByIndex.set(creditIdx, lines[debitIdx].description);
+    });
+    return pairByIndex;
   };
 
   // Padankan satu baris transaksi penyata bank dengan rekod sedia ada (yang
@@ -741,23 +768,37 @@ export function OwnerDashboard() {
           recordType: "EXPENSE",
           confidenceScore: payload.confidenceScore || 0.7,
           rawExtractedText: payload.rawExtractedText || "",
-          lines: payload.transactions.map((t: any) => {
-            const line = {
+          lines: (() => {
+            const rawLines = payload.transactions.map((t: any) => ({
               date: t.date || "", description: t.description || "", amount: Number(t.amount) || 0,
               type: (t.type === "CREDIT" ? "CREDIT" : "DEBIT") as "CREDIT" | "DEBIT",
               suggestedCategory: t.suggestedCategory || "Lain-lain",
               confidenceScore: Number(t.confidenceScore) || 0.7,
-            };
-            // Padankan dengan rekod sedia ada (cth: dimasukkan sendiri oleh
-            // user melalui chat) supaya transaksi yang sama tak direkod dua kali.
-            const matched = findMatchingEvent(line, myEvents);
-            return {
-              ...line,
-              include: !matched,
-              matchedEventId: matched?.id,
-              matchedLabel: matched ? `${matched.partyName} · RM${matched.amountMyr.toFixed(2)} · ${matched.date}` : undefined,
-            };
-          }),
+            }));
+            // Internal Transfer Detection — debit/credit pairs of matching
+            // amount within this statement must not double-count as Income+Expense.
+            const transferPairByIndex = detectTransferPairsInLines(rawLines);
+            return rawLines.map((line, i) => {
+              const transferPairLabel = transferPairByIndex.get(i);
+              if (transferPairLabel) {
+                return {
+                  ...line,
+                  include: false,
+                  isInternalTransfer: true,
+                  transferPairLabel,
+                };
+              }
+              // Padankan dengan rekod sedia ada (cth: dimasukkan sendiri oleh
+              // user melalui chat) supaya transaksi yang sama tak direkod dua kali.
+              const matched = findMatchingEvent(line, myEvents);
+              return {
+                ...line,
+                include: !matched,
+                matchedEventId: matched?.id,
+                matchedLabel: matched ? `${matched.partyName} · RM${matched.amountMyr.toFixed(2)} · ${matched.date}` : undefined,
+              };
+            });
+          })(),
         });
       } else {
         const matchedPattern = ocrLearnedPatterns.find(p => p.vendorName.toLowerCase() === (payload.merchantName || "").toLowerCase());
@@ -3774,11 +3815,12 @@ export function OwnerDashboard() {
               {docReview.lines ? (
                 <>
                   <p className="text-[11px] text-slate-500">
-                    AI mengesan {docReview.lines.length} transaksi dalam penyata ini, dan padankan dengan rekod yang anda dah masukkan sendiri.
-                    {" "}Transaksi yang <span className="font-semibold text-emerald-600">sudah sepadan</span> tak akan direkod dua kali — batalkan tanda untuk yang tidak mahu direkod, atau tanda balik jika padanan tersilap.
+                    AI mengesan {docReview.lines.length} transaksi dalam penyata ini, padankan dengan rekod yang anda dah masukkan sendiri,
+                    dan kenal pasti {docReview.lines.filter(l => l.isInternalTransfer).length} pemindahan dalaman.
+                    {" "}Transaksi yang <span className="font-semibold text-emerald-600">sudah sepadan</span> atau <span className="font-semibold text-violet-600">pemindahan dalaman</span> tak akan direkod sebagai Pendapatan/Perbelanjaan — batalkan tanda untuk yang tidak mahu direkod, atau tanda balik jika padanan tersilap.
                   </p>
                   {docReview.lines.map((l, i) => (
-                    <div key={i} className={`border rounded-xl p-3 space-y-1.5 ${l.matchedEventId ? "border-emerald-200 bg-emerald-50/40" : "border-slate-200"}`}>
+                    <div key={i} className={`border rounded-xl p-3 space-y-1.5 ${l.isInternalTransfer ? "border-violet-200 bg-violet-50/40" : l.matchedEventId ? "border-emerald-200 bg-emerald-50/40" : "border-slate-200"}`}>
                       <div className="flex items-center gap-2">
                         <input type="checkbox" checked={l.include}
                           onChange={e => setDocReview(d => d ? { ...d, lines: d.lines!.map((x, xi) => xi === i ? { ...x, include: e.target.checked } : x) } : d)}
@@ -3787,6 +3829,11 @@ export function OwnerDashboard() {
                           className="flex-1 px-2 py-1 rounded border border-slate-200 text-xs" placeholder="Penerangan" />
                         <span className={`text-xs font-bold ${l.type === "CREDIT" ? "text-emerald-600" : "text-rose-500"}`}>{l.type === "CREDIT" ? "+" : "-"}RM{l.amount.toFixed(2)}</span>
                       </div>
+                      {l.isInternalTransfer && (
+                        <p className="pl-6 text-[10px] font-semibold text-violet-600">
+                          ⇄ Pemindahan Dalaman — sepadan dengan "{l.transferPairLabel}" dalam penyata ini, bukan Pendapatan/Perbelanjaan sebenar
+                        </p>
+                      )}
                       {l.matchedEventId && (
                         <p className="pl-6 text-[10px] font-semibold text-emerald-600">
                           ✓ Sudah sepadan dengan rekod sedia ada ({l.matchedLabel}) — tidak akan direkod semula
