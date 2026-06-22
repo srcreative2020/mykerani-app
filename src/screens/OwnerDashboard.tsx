@@ -342,7 +342,7 @@ export function OwnerDashboard() {
   const [historyFilterBusiness, setHistoryFilterBusiness] = useState<string>("ALL");
   const [historyFilterType, setHistoryFilterType] = useState<"ALL" | "INCOME" | "EXPENSE" | "RECEIVABLE" | "PAYABLE" | "DEBT">("ALL");
   const [historyPage, setHistoryPage] = useState(0);
-  const HISTORY_PAGE_SIZE = 50;
+  const [historyPageSize, setHistoryPageSize] = useState(100);
   const getTxnSource = (ev: { referenceNumber: string }): "AI_CHAT" | "RECEIPT_OCR" | "INVOICE_OCR" | "BANK_STATEMENT" | "MANUAL" => {
     const ref = ev.referenceNumber || "";
     if (ref.startsWith("STMT-")) return "BANK_STATEMENT";
@@ -436,12 +436,12 @@ export function OwnerDashboard() {
       return inRange && matchesSource && matchesBusiness && matchesType && matchesSearch;
     }).slice().reverse();
   }, [myEvents, historySearch, historyFilterFrom, historyFilterTo, historyFilterSource, historyFilterBusiness, historyFilterType]);
-  const historyTotalPages = Math.max(1, Math.ceil(historyFilteredEvents.length / HISTORY_PAGE_SIZE));
+  const historyTotalPages = Math.max(1, Math.ceil(historyFilteredEvents.length / historyPageSize));
   const pagedHistoryEvents = useMemo(() => {
-    const start = historyPage * HISTORY_PAGE_SIZE;
-    return historyFilteredEvents.slice(start, start + HISTORY_PAGE_SIZE);
-  }, [historyFilteredEvents, historyPage]);
-  useEffect(() => { setHistoryPage(0); }, [historySearch, historyFilterFrom, historyFilterTo, historyFilterSource, historyFilterBusiness, historyFilterType]);
+    const start = historyPage * historyPageSize;
+    return historyFilteredEvents.slice(start, start + historyPageSize);
+  }, [historyFilteredEvents, historyPage, historyPageSize]);
+  useEffect(() => { setHistoryPage(0); }, [historySearch, historyFilterFrom, historyFilterTo, historyFilterSource, historyFilterBusiness, historyFilterType, historyPageSize]);
 
   // â•â• Phase 2: computed-only Transaction Health Flags. No new tables/state --
   // derived purely from fields already on FinancialEvent at render time.
@@ -3319,6 +3319,18 @@ export function OwnerDashboard() {
                       <option value="EXPENSE">Perbelanjaan</option>
                       <option value="RECEIVABLE">Belum Terima</option>
                       <option value="PAYABLE">Belum Bayar</option>
+                    </select>
+                  </div>
+                  <div className="flex items-center justify-end gap-2 pt-1">
+                    <label className="text-[11px] text-slate-400">Papar setiap halaman:</label>
+                    <select
+                      value={historyPageSize}
+                      onChange={e => setHistoryPageSize(Number(e.target.value))}
+                      className="text-xs border border-slate-200 rounded-lg px-2 py-1"
+                    >
+                      {[100, 500, 1000, 5000, 10000].map(size => (
+                        <option key={size} value={size}>{size.toLocaleString("ms-MY")}</option>
+                      ))}
                     </select>
                   </div>
                 </div>
