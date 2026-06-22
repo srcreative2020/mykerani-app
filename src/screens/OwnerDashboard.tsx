@@ -324,6 +324,35 @@ export function OwnerDashboard() {
   // â•â• Dashboard period (day/week/month/year) + income/expense type filter â•â•
   const [dashboardPeriod, setDashboardPeriod] = useState<"day" | "week" | "month" | "year">("month");
   const [dashboardTypeFilter, setDashboardTypeFilter] = useState<"ALL" | "INCOME" | "EXPENSE">("ALL");
+  // â•â• Phase 1: search, business/category/source filters, pagination â•â•
+  const [txnSearch, setTxnSearch] = useState("");
+  const [txnFilterBusiness, setTxnFilterBusiness] = useState<string>("ALL");
+  const [txnFilterCategory, setTxnFilterCategory] = useState<string>("ALL");
+  const [txnFilterSource, setTxnFilterSource] = useState<"ALL" | "AI_CHAT" | "RECEIPT_OCR" | "INVOICE_OCR" | "BANK_STATEMENT" | "MANUAL">("ALL");
+  const [txnPageSize, setTxnPageSize] = useState<50 | 100 | 250 | 500>(50);
+  const [txnPage, setTxnPage] = useState(0);
+  const getTxnSource = (ev: { referenceNumber: string }): "AI_CHAT" | "RECEIPT_OCR" | "INVOICE_OCR" | "BANK_STATEMENT" | "MANUAL" => {
+    const ref = ev.referenceNumber || "";
+    if (ref.startsWith("STMT-")) return "BANK_STATEMENT";
+    if (ref.startsWith("AI-")) return "AI_CHAT";
+    if (ref.startsWith("DOC-")) return "RECEIPT_OCR";
+    if (ref.startsWith("INV-")) return "INVOICE_OCR";
+    return "MANUAL";
+  };
+  const txnSourceLabel = (src: ReturnType<typeof getTxnSource>) => ({
+    AI_CHAT: "Chat AI",
+    RECEIPT_OCR: "Resit (OCR)",
+    INVOICE_OCR: "Invois (OCR)",
+    BANK_STATEMENT: "Penyata Bank",
+    MANUAL: "Manual",
+  }[src]);
+  const txnSourceBadgeClass = (src: ReturnType<typeof getTxnSource>) => ({
+    AI_CHAT: "bg-violet-50 text-violet-600",
+    RECEIPT_OCR: "bg-amber-50 text-amber-600",
+    INVOICE_OCR: "bg-blue-50 text-blue-600",
+    BANK_STATEMENT: "bg-indigo-50 text-indigo-600",
+    MANUAL: "bg-slate-100 text-slate-500",
+  }[src]);
   const periodRange = useMemo(() => {
     const pad = (n: number) => String(n).padStart(2, "0");
     const toIso = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
@@ -354,14 +383,31 @@ export function OwnerDashboard() {
   const expenseInPeriod = useMemo(() => periodEvents.filter(e => e.type === "EXPENSE").reduce((s, e) => s + e.amountMyr, 0), [periodEvents]);
   const filteredEvents = useMemo(() => {
     const usingCustomRange = !!(txnFilterFrom || txnFilterTo);
+    const q = txnSearch.trim().toLowerCase();
     return myEvents.filter(e => {
       const inRange = usingCustomRange
         ? (!txnFilterFrom || e.date >= txnFilterFrom) && (!txnFilterTo || e.date <= txnFilterTo)
         : (e.date >= periodRange.from && e.date <= periodRange.to);
       const matchesType = dashboardTypeFilter === "ALL" || e.type === dashboardTypeFilter;
-      return inRange && matchesType;
+      const matchesBusiness = txnFilterBusiness === "ALL" || (e.businessId || "") === txnFilterBusiness;
+      const matchesCategory = txnFilterCategory === "ALL" || e.categoryName === txnFilterCategory;
+      const matchesSource = txnFilterSource === "ALL" || getTxnSource(e) === txnFilterSource;
+      const matchesSearch = !q ||
+        e.description?.toLowerCase().includes(q) ||
+        e.partyName?.toLowerCase().includes(q) ||
+        e.referenceNumber?.toLowerCase().includes(q) ||
+        e.categoryName?.toLowerCase().includes(q);
+      return inRange && matchesType && matchesBusiness && matchesCategory && matchesSource && matchesSearch;
     });
-  }, [myEvents, txnFilterFrom, txnFilterTo, periodRange, dashboardTypeFilter]);
+  }, [myEvents, txnFilterFrom, txnFilterTo, periodRange, dashboardTypeFilter, txnSearch, txnFilterBusiness, txnFilterCategory, txnFilterSource]);
+  const txnCategoryOptions = useMemo(() => Array.from(new Set(myEvents.map(e => e.categoryName).filter(Boolean))).sort(), [myEvents]);
+  const sortedFilteredEvents = useMemo(() => [...filteredEvents].reverse(), [filteredEvents]);
+  const txnTotalPages = Math.max(1, Math.ceil(sortedFilteredEvents.length / txnPageSize));
+  const pagedEvents = useMemo(() => {
+    const start = txnPage * txnPageSize;
+    return sortedFilteredEvents.slice(start, start + txnPageSize);
+  }, [sortedFilteredEvents, txnPage, txnPageSize]);
+  useEffect(() => { setTxnPage(0); }, [txnSearch, txnFilterBusiness, txnFilterCategory, txnFilterSource, txnFilterFrom, txnFilterTo, dashboardTypeFilter, txnPageSize]);
   const [editingTxnId, setEditingTxnId] = useState<string | null>(null);
   const [editTxnDraft, setEditTxnDraft] = useState({ amountMyr: "", categoryName: "", partyName: "", date: "" });
   const txnReceiptInputRef = useRef<HTMLInputElement>(null);
@@ -2510,12 +2556,15 @@ export function OwnerDashboard() {
                   <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">
                     {dashboardTypeFilter === "INCOME" ? "Senarai Pendapatan" : dashboardTypeFilter === "EXPENSE" ? "Senarai Perbelanjaan" : "Transaksi Terkini"}
                   </p>
-                  {(txnFilterFrom || txnFilterTo || dashboardTypeFilter !== "ALL") && (
-                    <button onClick={() => { setTxnFilterFrom(""); setTxnFilterTo(""); setDashboardTypeFilter("ALL"); }} className="text-[10px] text-indigo-500 font-semibold cursor-pointer hover:underline">
+                  {(txnFilterFrom || txnFilterTo || dashboardTypeFilter !== "ALL" || txnSearch || txnFilterBusiness !== "ALL" || txnFilterCategory !== "ALL" || txnFilterSource !== "ALL") && (
+                    <button onClick={() => { setTxnFilterFrom(""); setTxnFilterTo(""); setDashboardTypeFilter("ALL"); setTxnSearch(""); setTxnFilterBusiness("ALL"); setTxnFilterCategory("ALL"); setTxnFilterSource("ALL"); }} className="text-[10px] text-indigo-500 font-semibold cursor-pointer hover:underline">
                       Kosongkan tapisan
                     </button>
                   )}
                 </div>
+                <input type="text" value={txnSearch} onChange={e => setTxnSearch(e.target.value)}
+                  placeholder="Cari deskripsi, pihak, nombor rujukan, kategori..."
+                  className="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 text-[11px] text-slate-600" />
                 <div className="flex items-center gap-2">
                   <input type="date" value={txnFilterFrom} onChange={e => setTxnFilterFrom(e.target.value)}
                     className="flex-1 px-2.5 py-1.5 rounded-lg border border-slate-200 text-[11px] text-slate-600" />
@@ -2523,10 +2572,31 @@ export function OwnerDashboard() {
                   <input type="date" value={txnFilterTo} onChange={e => setTxnFilterTo(e.target.value)}
                     className="flex-1 px-2.5 py-1.5 rounded-lg border border-slate-200 text-[11px] text-slate-600" />
                 </div>
+                <div className="grid grid-cols-3 gap-2">
+                  <select value={txnFilterBusiness} onChange={e => setTxnFilterBusiness(e.target.value)}
+                    className="px-2 py-1.5 rounded-lg border border-slate-200 text-[10px] text-slate-600">
+                    <option value="ALL">Semua Perniagaan</option>
+                    {businesses.map(b => <option key={b.id} value={b.id}>{b.businessName}</option>)}
+                  </select>
+                  <select value={txnFilterCategory} onChange={e => setTxnFilterCategory(e.target.value)}
+                    className="px-2 py-1.5 rounded-lg border border-slate-200 text-[10px] text-slate-600">
+                    <option value="ALL">Semua Kategori</option>
+                    {txnCategoryOptions.map(c => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                  <select value={txnFilterSource} onChange={e => setTxnFilterSource(e.target.value as typeof txnFilterSource)}
+                    className="px-2 py-1.5 rounded-lg border border-slate-200 text-[10px] text-slate-600">
+                    <option value="ALL">Semua Sumber</option>
+                    <option value="AI_CHAT">Chat AI</option>
+                    <option value="RECEIPT_OCR">Resit (OCR)</option>
+                    <option value="INVOICE_OCR">Invois (OCR)</option>
+                    <option value="BANK_STATEMENT">Penyata Bank</option>
+                    <option value="MANUAL">Manual</option>
+                  </select>
+                </div>
                 {filteredEvents.length === 0 && (
                   <p className="text-[11px] text-slate-400 text-center py-3">Tiada transaksi dalam tempoh ini.</p>
                 )}
-                {filteredEvents.slice(-30).reverse().map(ev => (
+                {pagedEvents.map(ev => (
                   <div key={ev.id} className="bg-white border border-slate-200 rounded-xl p-3 shadow-sm">
                     {editingTxnId === ev.id ? (
                       <div className="space-y-1.5">
@@ -2576,6 +2646,7 @@ export function OwnerDashboard() {
                               {ev.createdByName ? ` - ${ev.createdByName}` : ""}
                             </p>
                             <div className="flex items-center gap-2 mt-0.5">
+                              <span className={`text-[9px] px-1 py-0.5 rounded font-semibold ${txnSourceBadgeClass(getTxnSource(ev))}`}>{txnSourceLabel(getTxnSource(ev))}</span>
                               {findTxnConfidence(ev) !== null && (
                                 <span className="text-[9px] px-1 py-0.5 rounded bg-indigo-50 text-indigo-500 font-semibold">Confiden {findTxnConfidence(ev)}%</span>
                               )}
@@ -2600,6 +2671,28 @@ export function OwnerDashboard() {
                     )}
                   </div>
                 ))}
+                {filteredEvents.length > 0 && (
+                  <div className="flex items-center justify-between pt-2">
+                    <select value={txnPageSize} onChange={e => setTxnPageSize(Number(e.target.value) as typeof txnPageSize)}
+                      className="px-2 py-1 rounded-lg border border-slate-200 text-[10px] text-slate-600">
+                      <option value={50}>50 / muka</option>
+                      <option value={100}>100 / muka</option>
+                      <option value={250}>250 / muka</option>
+                      <option value={500}>500 / muka</option>
+                    </select>
+                    <div className="flex items-center gap-2">
+                      <button disabled={txnPage === 0} onClick={() => setTxnPage(p => Math.max(0, p - 1))}
+                        className="px-2 py-1 rounded-lg border border-slate-200 text-[10px] font-semibold text-slate-500 disabled:opacity-40 cursor-pointer">
+                        Sebelum
+                      </button>
+                      <span className="text-[10px] text-slate-400">Muka {txnPage + 1} / {txnTotalPages}</span>
+                      <button disabled={txnPage >= txnTotalPages - 1} onClick={() => setTxnPage(p => Math.min(txnTotalPages - 1, p + 1))}
+                        className="px-2 py-1 rounded-lg border border-slate-200 text-[10px] font-semibold text-slate-500 disabled:opacity-40 cursor-pointer">
+                        Seterus
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             ) : (
               <div className="bg-white border border-slate-200 rounded-2xl p-8 text-center shadow-sm">
