@@ -13,9 +13,21 @@
 >   constitution — defines product scope (100% financial only; no HR/CRM/POS/
 >   inventory). All architecture, database, API, AI and feature decisions must
 >   comply with it.
+> - `MYKERANI_OWNER_STAFF_PARITY_RULE.md` (STATUS: LOCKED, V1.0) governs
+>   multi-user architecture — Tenant Owner and Tenant Staff may have
+>   different screens/permissions but must NEVER have different financial
+>   engines (OCR, AI transaction processing, voice note processing,
+>   business mapping, branch mapping, evidence linking, import recovery,
+>   learning memory, duplicate detection, ledger processing). Before
+>   marking any feature touching one of these engines COMPLETE, verify
+>   both the Owner flow and the Staff flow per that document's Mandatory
+>   Audit (A-E questions). Modifying `OwnerDashboard.tsx` for one of these
+>   engines without verifying `StaffHomeScreen.tsx`'s equivalent flow is a
+>   RED FLAG — the feature is not complete.
 > - Where these overlap: the vision document defines WHY/intent, the
->   constitution defines WHAT is in/out of scope, and this file adds
->   implementation-level detail on top of both.
+>   constitution defines WHAT is in/out of scope, the parity rule defines
+>   HOW multi-user logic must be structured, and this file adds
+>   implementation-level detail on top of all three.
 
 ## Data Ownership Rule
 
