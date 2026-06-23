@@ -84,6 +84,16 @@ Resolved (Owner/Staff Pipeline Unification):
   `matchOwnBusinessAndBranch` (same engine as Owner), and
   `StaffHomeScreen.tsx` now fetches `businessBranches` the same way
   `OwnerDashboard.tsx` does.
+- Cross-Workspace Pattern Hint (Learning Memory, AI Chat): `checkCrossWorkspacePattern`
+  was Owner-only with no Staff equivalent and untracked here. Audit found
+  `StaffHomeScreen.tsx` already renders a workspace switcher
+  (`workspaces.length > 1`) and shares the same `useWorkspace()` data as
+  Owner, so multi-workspace Staff sessions are real, not theoretical — this
+  was an unintended parity gap (B), not an intended permission difference.
+  Fixed by extracting the logic into the shared `useCrossWorkspacePattern()`
+  hook (`src/hooks/useCrossWorkspacePattern.ts`), now called identically
+  from both `OwnerDashboard.tsx` and `StaffHomeScreen.tsx`'s `sendChat`, with
+  the matching hint banner rendered on both screens.
 
 Still open:
 - Import Recovery / Bulk Bank Statement Import: Owner-only; no Staff

@@ -16,6 +16,7 @@ import { addAssetPurchase, addOwnerTransaction } from "../lib/assetOwnerData";
 import { matchOwnBusiness, matchOwnBusinessAndBranch } from "../lib/businessMatching";
 import { loadBusinessBranches, type BusinessBranch } from "../lib/profileData";
 import { useConfirmChatSuggestion } from "../hooks/useConfirmChatSuggestion";
+import { useCrossWorkspacePattern } from "../hooks/useCrossWorkspacePattern";
 import type { ChatSuggestion, ChatSuggestionExtra, ChatSuggestionRecordType, ChatSuggestionStatus, ChatSuggestionStatusValue, PendingChatEvidence } from "../lib/chatSuggestionTypes";
 import {
   Home, Plus, Upload, Search, Bell, User as UserIcon,
@@ -144,6 +145,7 @@ export function StaffHomeScreen() {
   const { financialEvents, addFinancialEvent, editFinancialEvent, addDebtRecord, addDebtRecordAwaited, editDebtRecord, addFinancialCommitment, addFinancialCommitmentAwaited, editFinancialCommitment, learnOcrPattern, addFinancialEvidencePackage, linkEvidenceToRecord } = useFinancials();
   const { activeTenant } = useTenant();
   const { confirmChatSuggestion } = useConfirmChatSuggestion();
+  const { crossWorkspaceHints, checkCrossWorkspacePattern } = useCrossWorkspacePattern();
 
   const [activeTab, setActiveTab] = useState<StaffTab>("home");
   const [addDefaultType, setAddDefaultType] = useState<"INCOME" | "EXPENSE">("EXPENSE");
@@ -385,6 +387,7 @@ export function StaffHomeScreen() {
         : [];
       setChatMessages(prev => [...prev, { id: aiMsgId, sender: "ai", text: reply, suggestions, createdAt: new Date().toISOString() }]);
       saveChatMessage(wsId, user?.id, isMockUser, { sender: "ai", text: reply, suggestions }, activeSessionId ?? undefined);
+      suggestions.forEach(s => checkCrossWorkspacePattern(s));
       const activeBusinesses = businesses.filter(b => b.isActive);
       // If this AI reply was triggered by an OCR/image/PDF attachment upload, that
       // attachment is the evidence for whatever transaction the AI now suggests —
@@ -899,6 +902,18 @@ export function StaffHomeScreen() {
                               <div>Jumlah: RM{Number(statusObj.editedAmount ?? s.payload?.amount ?? 0).toFixed(2)}</div>
                               <div>Confidence: <span className={`font-bold ${confidenceClass}`}>{confidencePct}%</span></div>
                             </div>
+                            {status === "pending" && crossWorkspaceHints[s.id] && (
+                              <div className="flex items-center justify-between gap-2 bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-1.5 text-2xs text-amber-800">
+                                <span>Berdasarkan sejarah, "{s.payload?.relatedParty}" biasa direkodkan di bawah <strong>{crossWorkspaceHints[s.id].workspaceName}</strong>.</span>
+                                <button
+                                  type="button"
+                                  onClick={() => selectWorkspace(crossWorkspaceHints[s.id].workspaceId)}
+                                  className="shrink-0 px-2 py-1 rounded-md bg-amber-600 hover:bg-amber-700 text-white font-semibold"
+                                >
+                                  Tukar
+                                </button>
+                              </div>
+                            )}
                             {status === "pending" && s.accountingMatchStatus && s.accountingMatchStatus !== "MATCH" && !accountingBannerDismissed[s.id] && (
                               <div className={`space-y-1 rounded-lg px-2.5 py-1.5 text-2xs border ${s.accountingRiskLevel === "HIGH" ? "bg-rose-50 border-rose-200 text-rose-800" : "bg-amber-50 border-amber-200 text-amber-800"}`}>
                                 <div className="font-bold">Cadangan Semakan</div>

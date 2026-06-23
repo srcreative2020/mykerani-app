@@ -77,6 +77,7 @@ const todayLocalIso = (): string => {
 
 import type { ChatSuggestion, ChatSuggestionExtra, ChatSuggestionRecordType, ChatSuggestionStatus, ChatSuggestionStatusValue, PendingChatEvidence } from "../lib/chatSuggestionTypes";
 import { useConfirmChatSuggestion } from "../hooks/useConfirmChatSuggestion";
+import { useCrossWorkspacePattern } from "../hooks/useCrossWorkspacePattern";
 
 interface ChatMsg {
   id: string;
@@ -177,6 +178,7 @@ export function OwnerDashboard() {
   }, [userRoles]);
   const { financialEvents, addFinancialEvent, addFinancialEventAwaited, addFinancialEventsBatch, editFinancialEvent, deleteFinancialEvent, addDebtRecord, addDebtRecordAwaited, editDebtRecord, deleteDebtRecord, addFinancialCommitment, addFinancialCommitmentAwaited, editFinancialCommitment, deleteFinancialCommitment, learnOcrPattern, learnOcrPatternsBatch, ocrLearnedPatterns, cashAccounts, bankAccounts, debtRecords, financialCommitments, financialEvidencePackages, addFinancialEvidencePackage } = useFinancials();
   const { confirmChatSuggestion } = useConfirmChatSuggestion();
+  const { crossWorkspaceHints, checkCrossWorkspacePattern } = useCrossWorkspacePattern();
 
   const [activeTab, setActiveTab] = useState<MainTab>("home");
   const [morePage, setMorePage] = useState<MorePage>("menu");
@@ -198,9 +200,6 @@ export function OwnerDashboard() {
   const chatEvidenceFilesRef = useRef<Record<string, File>>({});
   const pendingChatEvidenceRef = useRef<Record<string, PendingChatEvidence>>({});
   const chatEvidenceInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
-  // Cross-workspace learning: suggestionId -> { workspaceName } when AI has learned
-  // this vendor is usually recorded under a DIFFERENT company. Suggestion-only, never auto-switched.
-  const [crossWorkspaceHints, setCrossWorkspaceHints] = useState<Record<string, { workspaceId: string; workspaceName: string }>>({});
   // Accounting Knowledge Base V1: per-suggestion dismissal of the "Cadangan Semakan" review banner.
   const [accountingBannerDismissed, setAccountingBannerDismissed] = useState<Record<string, boolean>>({});
 
@@ -1784,35 +1783,6 @@ export function OwnerDashboard() {
     setChatRecording(false);
   };
 
-  // Multi-business pattern learning: if this vendor/party has been confirmed
-  // repeatedly under a DIFFERENT company workspace, surface that as a hint —
-  // the user still picks; AI never auto-switches the workspace.
-  const checkCrossWorkspacePattern = async (s: ChatSuggestion) => {
-    const vendorName = s.payload?.relatedParty;
-    if (!vendorName || !activeTenant || !activeWorkspace || isMockUser || !isSupabaseConfigured() || !supabase) return;
-    const otherWorkspaceIds = workspaces.filter(w => w.id !== activeWorkspace.id).map(w => w.id);
-    if (otherWorkspaceIds.length === 0) return;
-
-    try {
-      const { data, error } = await supabase
-        .from("ocr_learned_patterns")
-        .select("workspace_id, vendor_name, confidence_score, occurrence_count")
-        .in("workspace_id", otherWorkspaceIds)
-        .ilike("vendor_name", vendorName)
-        .gte("confidence_score", 0.7)
-        .gte("occurrence_count", 2)
-        .order("occurrence_count", { ascending: false })
-        .limit(1);
-      if (error || !data || data.length === 0) return;
-
-      const matchWorkspace = workspaces.find(w => w.id === data[0].workspace_id);
-      if (!matchWorkspace) return;
-
-      setCrossWorkspaceHints(prev => ({ ...prev, [s.id]: { workspaceId: matchWorkspace.id, workspaceName: matchWorkspace.name } }));
-    } catch {
-      // Best-effort hint only — never block the underlying suggestion flow.
-    }
-  };
 
   const handleChatRejectSuggestion = (id: string) => {
     markChatSuggestionStatus(id, { status: "rejected" });
