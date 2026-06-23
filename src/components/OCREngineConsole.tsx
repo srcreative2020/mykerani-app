@@ -311,8 +311,9 @@ export const OCREngineConsole: React.FC = () => {
         description: `Linked automated OCR upload for ${reviewedMerchantName} (${documentType})`,
         isCompleted: true, // Assume complete since document represents evidence of transfer
         cashAccountId: targetCashId,
-        bankAccountId: targetBankId
-      });
+        bankAccountId: targetBankId,
+        sourceSystem: "OCR"
+      }, undefined, "OCR");
 
       // 3. SECURELY ASSOCIATE BOTH ENTITIES
       // Under MyKerani structure, we can link them using the newly assigned record id!
@@ -411,8 +412,9 @@ export const OCREngineConsole: React.FC = () => {
         date: txn.date,
         referenceNumber: `STMT-${index}`,
         description: `Linked automated OCR bank statement line item: ${txn.description}`,
-        isCompleted: true
-      });
+        isCompleted: true,
+        sourceSystem: "BANK_STATEMENT"
+      }, undefined, "BANK_STATEMENT");
 
       freshEvidencePackage.relatedRecordId = freshEvent.id;
       freshEvidencePackage.relatedRecordType = recordType;

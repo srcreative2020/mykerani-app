@@ -1,10 +1,11 @@
 import React, { createContext, useContext, useState, useEffect } from "react";
-import { type FinancialEvent, type CashAccount, type BankAccount, type DebtRecord, type Workspace, type FinancialRecordType, type FinancialCommitment, type FinancialEvidencePackage, type OcrLearnedPattern } from "../types";
+import { type FinancialEvent, type CashAccount, type BankAccount, type DebtRecord, type Workspace, type FinancialRecordType, type FinancialCommitment, type FinancialEvidencePackage, type OcrLearnedPattern, type SourceSystem, type DuplicateFlag, type DuplicateClassification } from "../types";
 import { useAuth } from "./AuthContext";
 import { useWorkspace } from "./WorkspaceContext";
 import { useAudit } from "./AuditContext";
 import { supabase, isSupabaseConfigured } from "../lib/supabase";
 import { isDemoWorkspace } from "../lib/seeder";
+import { detectCrossSourceDuplicates } from "../lib/duplicateDetectionEngine";
 
 interface FinancialRecordsContextType {
   financialEvents: FinancialEvent[];
@@ -14,18 +15,23 @@ interface FinancialRecordsContextType {
   financialCommitments: FinancialCommitment[];
   financialEvidencePackages: FinancialEvidencePackage[];
   ocrLearnedPatterns: OcrLearnedPattern[];
+  duplicateFlags: DuplicateFlag[];
   loading: boolean;
   error: string | null;
-  
-  addFinancialEvent: (event: Omit<FinancialEvent, "id">, onDbError?: (err: Error) => void) => FinancialEvent;
+
+  // `sourceSystem` defaults to "MANUAL" when omitted -- only known automated
+  // call sites (OCR confirm, bank statement import, AI chat confirm) pass an
+  // explicit override. See CLAUDE.md / Phase 2C for the full wiring list.
+  addFinancialEvent: (event: Omit<FinancialEvent, "id">, onDbError?: (err: Error) => void, sourceSystem?: SourceSystem) => FinancialEvent;
   // Same record-creation logic as addFinancialEvent, but awaits the Supabase
   // write and rejects if it fails, so callers that must not report success
   // before the database actually confirms the write (e.g. AI chat confirm,
   // single-document OCR confirm) can gate their "success" UI state on it.
-  addFinancialEventAwaited: (event: Omit<FinancialEvent, "id">) => Promise<FinancialEvent>;
+  addFinancialEventAwaited: (event: Omit<FinancialEvent, "id">, sourceSystem?: SourceSystem) => Promise<FinancialEvent>;
   addFinancialEventsBatch: (
     events: Omit<FinancialEvent, "id">[],
-    onProgress?: (progress: { submitted: number; inserted: number; failed: number; batchNumber: number; totalBatches: number; batchDurationMs: number }) => void
+    onProgress?: (progress: { submitted: number; inserted: number; failed: number; batchNumber: number; totalBatches: number; batchDurationMs: number }) => void,
+    sourceSystem?: SourceSystem
   ) => Promise<{ events: FinancialEvent[]; inserted: number; failed: number; failedEvents: { event: FinancialEvent; error: string }[] }>;
   editFinancialEvent: (id: string, updated: Partial<FinancialEvent>) => void;
   deleteFinancialEvent: (id: string) => void;
@@ -85,6 +91,20 @@ interface FinancialRecordsContextType {
     businessId?: string | null,
     branchId?: string | null
   ) => OcrLearnedPattern | undefined;
+
+  // Phase 2C — Cross-Source Duplicate Detection. ONE shared engine/table for
+  // both Tenant Owner and Tenant Staff (no role split) -- see
+  // MYKERANI_OWNER_STAFF_PARITY_RULE.md, Duplicate Detection is a listed
+  // shared financial engine. Runs the pure duplicateDetectionEngine over the
+  // in-memory financialEvents for the active workspace and upserts results
+  // into duplicate_flags, WITHOUT ever overwriting an existing
+  // CONFIRMED_DUPLICATE/REVIEWED_NOT_DUPLICATE row (those are permanent user
+  // decisions). Never deletes/merges/hides any financial record.
+  scanForDuplicates: () => Promise<DuplicateFlag[]>;
+  // The ONLY way classification may move to CONFIRMED_DUPLICATE or
+  // REVIEWED_NOT_DUPLICATE -- always an explicit user action. Never deletes
+  // or merges the underlying financial records.
+  reviewDuplicateFlag: (id: string, decision: "CONFIRMED_DUPLICATE" | "REVIEWED_NOT_DUPLICATE") => Promise<void>;
 
   resetWorkspaceData: () => void;
   restoreWorkspaceData: (data: {
@@ -337,6 +357,7 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
   const [financialCommitments, setFinancialCommitments] = useState<FinancialCommitment[]>([]);
   const [financialEvidencePackages, setFinancialEvidencePackages] = useState<FinancialEvidencePackage[]>([]);
   const [ocrLearnedPatterns, setOcrLearnedPatterns] = useState<OcrLearnedPattern[]>([]);
+  const [duplicateFlags, setDuplicateFlags] = useState<DuplicateFlag[]>([]);
   const [loading, setLoading] = useState(true);
 
   const [error, setError] = useState<string | null>(null);
@@ -553,6 +574,7 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
               createdByUserId: row.created_by_user_id || undefined,
               createdByName: row.created_by_name || undefined,
               createdAt: row.created_at || undefined,
+              sourceSystem: row.source_system || "MANUAL",
             });
           });
 
@@ -577,6 +599,7 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
               createdByUserId: row.created_by_user_id || undefined,
               createdByName: row.created_by_name || undefined,
               createdAt: row.created_at || undefined,
+              sourceSystem: row.source_system || "MANUAL",
             });
           });
 
@@ -596,6 +619,7 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
               isCompleted: row.status === "PAID",
               businessId: row.business_id || undefined,
               branchId: row.branch_id || undefined,
+              sourceSystem: row.source_system || "MANUAL",
             });
           });
 
@@ -615,6 +639,7 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
               isCompleted: row.status === "PAID",
               businessId: row.business_id || undefined,
               branchId: row.branch_id || undefined,
+              sourceSystem: row.source_system || "MANUAL",
             });
           });
 
@@ -725,6 +750,43 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
           }
           setOcrLearnedPatterns(loadedPatterns);
 
+          // Load duplicate_flags (Phase 2C Review Queue) for the active
+          // workspace. Local-storage fallback is intentionally not used here
+          // (unlike ocr_learned_patterns) -- the Review Queue is meaningless
+          // without a live Supabase connection since scanForDuplicates()
+          // upserts directly to the duplicate_flags table.
+          let loadedDuplicateFlags: DuplicateFlag[] = [];
+          if (isSupabaseConfigured() && !isMockUser && supabase) {
+            try {
+              const { data: dupData, error: dupError } = await supabase
+                .from("duplicate_flags")
+                .select("*")
+                .eq("workspace_id", wsId);
+              if (!dupError && dupData) {
+                loadedDuplicateFlags = dupData.map((row) => ({
+                  id: row.id,
+                  workspaceId: row.workspace_id,
+                  recordAType: row.record_a_type,
+                  recordAId: row.record_a_id,
+                  recordBType: row.record_b_type,
+                  recordBId: row.record_b_id,
+                  score: parseFloat(row.score || 0),
+                  classification: row.classification,
+                  factorBreakdown: row.factor_breakdown || {},
+                  reviewedByUserId: row.reviewed_by_user_id || undefined,
+                  reviewedAt: row.reviewed_at || undefined,
+                  createdAt: row.created_at || undefined,
+                  updatedAt: row.updated_at || undefined,
+                }));
+              } else if (dupError) {
+                console.warn("Could not load duplicate_flags from database:", dupError.message);
+              }
+            } catch (ex) {
+              console.warn("Could not load duplicate_flags from database:", ex);
+            }
+          }
+          setDuplicateFlags(loadedDuplicateFlags);
+
           setFinancialEvents(eventsList);
           setCashAccounts(mappedCash);
           setBankAccounts(mappedBank);
@@ -742,6 +804,7 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
           setFinancialCommitments([]);
           setFinancialEvidencePackages([]);
           setOcrLearnedPatterns([]);
+          setDuplicateFlags([]);
           setError(null);
           setLoading(false);
         }
@@ -839,6 +902,7 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
         branch_id: newEvent.branchId || null,
         created_by_user_id: newEvent.createdByUserId || null,
         created_by_name: newEvent.createdByName || null,
+        source_system: newEvent.sourceSystem || "MANUAL",
       }, isAiConfirmed ? { onConflict: "workspace_id,reference_number", ignoreDuplicates: true } : undefined));
     } else if (newEvent.type === "EXPENSE" || newEvent.type === "DEBT") {
       ({ error: dbError } = await supabase.from("expense_records").upsert({
@@ -857,6 +921,7 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
         description: newEvent.type === "DEBT" ? `[DEBT] ${newEvent.description}` : newEvent.description,
         business_id: newEvent.businessId || null,
         branch_id: newEvent.branchId || null,
+        source_system: newEvent.sourceSystem || "MANUAL",
       }, isAiConfirmed ? { onConflict: "workspace_id,reference_number", ignoreDuplicates: true } : undefined));
     } else if (newEvent.type === "RECEIVABLE") {
       ({ error: dbError } = await supabase.from("receivables").upsert({
@@ -872,6 +937,7 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
         category_id: catId,
         business_id: newEvent.businessId || null,
         branch_id: newEvent.branchId || null,
+        source_system: newEvent.sourceSystem || "MANUAL",
       }, isAiConfirmed ? { onConflict: "workspace_id,invoice_number", ignoreDuplicates: true } : undefined));
     } else if (newEvent.type === "PAYABLE") {
       ({ error: dbError } = await supabase.from("payables").upsert({
@@ -887,13 +953,14 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
         category_id: catId,
         business_id: newEvent.businessId || null,
         branch_id: newEvent.branchId || null,
+        source_system: newEvent.sourceSystem || "MANUAL",
       }, isAiConfirmed ? { onConflict: "workspace_id,bill_number", ignoreDuplicates: true } : undefined));
     }
 
     if (dbError) throw new Error(dbError.message);
   };
 
-  const addFinancialEvent = (event: Omit<FinancialEvent, "id">, onDbError?: (err: Error) => void): FinancialEvent => {
+  const addFinancialEvent = (event: Omit<FinancialEvent, "id">, onDbError?: (err: Error) => void, sourceSystem?: SourceSystem): FinancialEvent => {
     const newId = generateUUID();
     const newEvent: FinancialEvent = {
       ...event,
@@ -901,6 +968,7 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
       createdByUserId: event.createdByUserId || user?.id || undefined,
       createdByName: event.createdByName || user?.fullName || undefined,
       createdAt: event.createdAt || new Date().toISOString(),
+      sourceSystem: event.sourceSystem || sourceSystem || "MANUAL",
     };
 
     // Update locally optimistically
@@ -964,7 +1032,7 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
   // firing it in the background) and rejects if it fails, so the caller can
   // gate its own "saved successfully" UI state on a real database
   // confirmation instead of just the optimistic local update.
-  const addFinancialEventAwaited = async (event: Omit<FinancialEvent, "id">): Promise<FinancialEvent> => {
+  const addFinancialEventAwaited = async (event: Omit<FinancialEvent, "id">, sourceSystem?: SourceSystem): Promise<FinancialEvent> => {
     const newId = generateUUID();
     const newEvent: FinancialEvent = {
       ...event,
@@ -972,6 +1040,7 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
       createdByUserId: event.createdByUserId || user?.id || undefined,
       createdByName: event.createdByName || user?.fullName || undefined,
       createdAt: event.createdAt || new Date().toISOString(),
+      sourceSystem: event.sourceSystem || sourceSystem || "MANUAL",
     };
 
     const updated = [newEvent, ...financialEvents];
@@ -1039,7 +1108,8 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
       batchNumber: number;
       totalBatches: number;
       batchDurationMs: number;
-    }) => void
+    }) => void,
+    sourceSystem?: SourceSystem
   ): Promise<{ events: FinancialEvent[]; inserted: number; failed: number; failedEvents: { event: FinancialEvent; error: string }[] }> => {
     const newEvents: FinancialEvent[] = events.map((event) => ({
       ...event,
@@ -1047,6 +1117,7 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
       createdByUserId: event.createdByUserId || user?.id || undefined,
       createdByName: event.createdByName || user?.fullName || undefined,
       createdAt: event.createdAt || new Date().toISOString(),
+      sourceSystem: event.sourceSystem || sourceSystem || "MANUAL",
     }));
 
     // Single optimistic local state update for the whole batch.
@@ -2247,6 +2318,137 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
     return matchAtTier(null, null);
   };
 
+  // Phase 2C — Cross-Source Duplicate Detection. Single shared engine call
+  // site for both Tenant Owner and Tenant Staff (no role split) -- runs the
+  // pure duplicateDetectionEngine over the current in-memory
+  // financialEvents for the active workspace, then upserts the candidate
+  // pairs into duplicate_flags. Upsert deliberately never overwrites a row
+  // that a human has already reviewed (CONFIRMED_DUPLICATE /
+  // REVIEWED_NOT_DUPLICATE) -- those are permanent decisions until the user
+  // changes them via reviewDuplicateFlag. This function never deletes,
+  // merges, or hides any financial record -- it only writes Review Queue
+  // metadata rows.
+  const scanForDuplicates = async (): Promise<DuplicateFlag[]> => {
+    if (!activeWorkspace) return duplicateFlags;
+    const workspaceEvents = financialEvents.filter((e) => e.workspaceId === activeWorkspace.id);
+    const candidates = detectCrossSourceDuplicates(workspaceEvents);
+
+    if (candidates.length === 0) return duplicateFlags;
+
+    // Index existing flags by pair key so we know which ones are already
+    // user-reviewed and must not be overwritten.
+    const existingByKey = new Map<string, DuplicateFlag>();
+    for (const flag of duplicateFlags) {
+      existingByKey.set(`${flag.recordAType}::${flag.recordAId}::${flag.recordBType}::${flag.recordBId}`, flag);
+    }
+
+    const REVIEWED_STATES: DuplicateClassification[] = ["CONFIRMED_DUPLICATE", "REVIEWED_NOT_DUPLICATE"];
+    const rowsToUpsert: any[] = [];
+    const localFlags: DuplicateFlag[] = [...duplicateFlags];
+
+    for (const candidate of candidates) {
+      const [first, second] = candidate.recordA.id < candidate.recordB.id
+        ? [candidate.recordA, candidate.recordB]
+        : [candidate.recordB, candidate.recordA];
+      const pairKey = `${first.type}::${first.id}::${second.type}::${second.id}`;
+      const existing = existingByKey.get(pairKey);
+      if (existing && REVIEWED_STATES.includes(existing.classification)) {
+        // Permanent user decision -- never resurfaced/overwritten.
+        continue;
+      }
+
+      rowsToUpsert.push({
+        workspace_id: activeWorkspace.id,
+        record_a_type: first.type,
+        record_a_id: first.id,
+        record_b_type: second.type,
+        record_b_id: second.id,
+        score: candidate.score,
+        classification: candidate.suggestedClassification === "CONFIRMED_DUPLICATE" ? "LIKELY_DUPLICATE" : candidate.suggestedClassification,
+        // Note: the engine's own "CONFIRMED_DUPLICATE" suggestion is
+        // deliberately downgraded to "LIKELY_DUPLICATE" when writing to the
+        // DB row's classification -- CONFIRMED_DUPLICATE in duplicate_flags
+        // must ONLY ever be set by an explicit user review action, never by
+        // the automatic scan, to avoid the engine's own high-confidence
+        // suggestion being mistaken for a user decision anywhere downstream.
+        factor_breakdown: candidate.factorBreakdown,
+      });
+    }
+
+    if (rowsToUpsert.length === 0) return duplicateFlags;
+
+    if (isSupabaseConfigured() && !isMockUser && supabase && !isDemoWorkspace(activeWorkspace.id)) {
+      try {
+        const { data, error: upsertError } = await supabase
+          .from("duplicate_flags")
+          .upsert(rowsToUpsert, { onConflict: "workspace_id,record_a_type,record_a_id,record_b_type,record_b_id", ignoreDuplicates: false })
+          .select("*");
+        if (upsertError) {
+          console.warn("scanForDuplicates: upsert failed:", upsertError.message);
+          return duplicateFlags;
+        }
+        const mapped: DuplicateFlag[] = (data || []).map((row: any) => ({
+          id: row.id,
+          workspaceId: row.workspace_id,
+          recordAType: row.record_a_type,
+          recordAId: row.record_a_id,
+          recordBType: row.record_b_type,
+          recordBId: row.record_b_id,
+          score: parseFloat(row.score || 0),
+          classification: row.classification,
+          factorBreakdown: row.factor_breakdown || {},
+          reviewedByUserId: row.reviewed_by_user_id || undefined,
+          reviewedAt: row.reviewed_at || undefined,
+          createdAt: row.created_at || undefined,
+          updatedAt: row.updated_at || undefined,
+        }));
+        // Merge results back into local state (replace by id, append new).
+        const mergedById = new Map(localFlags.map((f) => [f.id, f]));
+        for (const flag of mapped) mergedById.set(flag.id, flag);
+        const merged = Array.from(mergedById.values());
+        setDuplicateFlags(merged);
+        return merged;
+      } catch (ex: any) {
+        console.warn("scanForDuplicates: exception during upsert:", ex.message);
+        return duplicateFlags;
+      }
+    }
+
+    return duplicateFlags;
+  };
+
+  // The ONLY function that may move a duplicate_flags row to
+  // CONFIRMED_DUPLICATE or REVIEWED_NOT_DUPLICATE -- always triggered by an
+  // explicit user action (clicking a Review Queue button). Only ever
+  // updates classification/reviewed_by/reviewed_at on the flag row itself;
+  // never touches the underlying financial records (no delete/merge/hide).
+  const reviewDuplicateFlag = async (id: string, decision: "CONFIRMED_DUPLICATE" | "REVIEWED_NOT_DUPLICATE"): Promise<void> => {
+    if (!activeWorkspace) return;
+    const reviewedAt = new Date().toISOString();
+    const reviewedByUserId = user?.id || undefined;
+
+    const updatedLocal = duplicateFlags.map((flag) =>
+      flag.id === id ? { ...flag, classification: decision, reviewedByUserId, reviewedAt } : flag
+    );
+    setDuplicateFlags(updatedLocal);
+
+    if (isSupabaseConfigured() && !isMockUser && supabase && !isDemoWorkspace(activeWorkspace.id)) {
+      const { error: updateError } = await supabase
+        .from("duplicate_flags")
+        .update({
+          classification: decision,
+          reviewed_by_user_id: reviewedByUserId || null,
+          reviewed_at: reviewedAt,
+        })
+        .eq("id", id)
+        .eq("workspace_id", activeWorkspace.id);
+      if (updateError) {
+        console.warn("reviewDuplicateFlag: update failed:", updateError.message);
+        throw new Error(updateError.message);
+      }
+    }
+  };
+
   const resetWorkspaceData = () => {
     if (!activeWorkspace) return;
     const wsId = activeWorkspace.id;
@@ -2539,6 +2741,7 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
         financialCommitments,
         financialEvidencePackages,
         ocrLearnedPatterns,
+        duplicateFlags,
         loading,
         error,
         addFinancialEvent,
@@ -2569,6 +2772,8 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
         deleteOcrLearnedPattern,
         reactivateOcrLearnedPattern,
         findLearnedPattern,
+        scanForDuplicates,
+        reviewDuplicateFlag,
         resetWorkspaceData,
         restoreWorkspaceData,
       }}

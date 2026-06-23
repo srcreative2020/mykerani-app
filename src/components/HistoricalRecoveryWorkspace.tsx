@@ -130,7 +130,8 @@ export const HistoricalRecoveryWorkspace: React.FC = () => {
       referenceNumber: txn.referenceNumber || `RECOVERY-${txn.sourceRowIndex}`,
       description: `Recovered from historical ${txn.sourceBank} statement (${txn.account}): ${txn.description}`,
       isCompleted: true,
-    });
+      sourceSystem: "BANK_STATEMENT",
+    }, undefined, "BANK_STATEMENT");
 
     const freshEvidencePackage = addFinancialEvidencePackage({
       workspaceId: activeWorkspace.id,

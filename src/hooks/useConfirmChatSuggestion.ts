@@ -69,8 +69,8 @@ export const useConfirmChatSuggestion = () => {
         const ev = await addFinancialEventAwaited({
           workspaceId: activeWorkspace.id, businessId: businessId || undefined, branchId: branchId || undefined,
           type: transactionType, categoryName: category, amountMyr: amount, partyName: relatedParty, date,
-          referenceNumber: `AI-${s.id}`, description, isCompleted: true,
-        });
+          referenceNumber: `AI-${s.id}`, description, isCompleted: true, sourceSystem: "AI_CHAT",
+        }, "AI_CHAT");
         newRecordId = ev.id; newRecordType = transactionType;
       } else if (transactionType === "DEBT") {
         const debt = await addDebtRecordAwaited({
@@ -82,15 +82,15 @@ export const useConfirmChatSuggestion = () => {
         const ev = await addFinancialEventAwaited({
           workspaceId: activeWorkspace.id, businessId: businessId || undefined, branchId: branchId || undefined,
           type: "RECEIVABLE", categoryName: category, amountMyr: amount, partyName: relatedParty, date,
-          referenceNumber: `AI-${s.id}`, description, isCompleted: false,
-        });
+          referenceNumber: `AI-${s.id}`, description, isCompleted: false, sourceSystem: "AI_CHAT",
+        }, "AI_CHAT");
         newRecordId = ev.id; newRecordType = "RECEIVABLE";
       } else if (transactionType === "PAYABLE") {
         const ev = await addFinancialEventAwaited({
           workspaceId: activeWorkspace.id, businessId: businessId || undefined, branchId: branchId || undefined,
           type: "PAYABLE", categoryName: category, amountMyr: amount, partyName: relatedParty, date,
-          referenceNumber: `AI-${s.id}`, description, isCompleted: false,
-        });
+          referenceNumber: `AI-${s.id}`, description, isCompleted: false, sourceSystem: "AI_CHAT",
+        }, "AI_CHAT");
         newRecordId = ev.id; newRecordType = "PAYABLE";
       } else if (transactionType === "COMMITMENT") {
         const cmt = await addFinancialCommitmentAwaited({
