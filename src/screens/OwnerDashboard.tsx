@@ -1798,7 +1798,10 @@ export function OwnerDashboard() {
         suggestions.forEach(s => {
           const evidenceStatus: ChatSuggestionExtra["evidenceStatus"] = attachment ? "ATTACHED" : "NONE";
           if (activeBusinesses.length === 0) {
-            next[s.id] = { businessId: null, businessName: "Personal", businessPicked: true, evidenceStatus };
+            // No branch concept applies to the implicit "Personal" workspace —
+            // branchPicked must be true here or the Sahkan button never renders
+            // (its gate checks businessPicked && branchPicked && evidence).
+            next[s.id] = { businessId: null, businessName: "Personal", businessPicked: true, branchPicked: true, evidenceStatus };
             return;
           }
           // Reuse the same Business/Branch Mapping engine used by Bank Statement and
@@ -2049,14 +2052,14 @@ export function OwnerDashboard() {
     pendingChatEvidenceRef.current[suggestionId] = { documentType: "RECEIPT", fileName: file.name, fileUrl };
     setChatSuggestionExtra(prev => ({
       ...prev,
-      [suggestionId]: { ...(prev[suggestionId] || { businessId: null, businessName: "Personal", businessPicked: true, evidenceStatus: "NONE" }), evidenceStatus: "ATTACHED" },
+      [suggestionId]: { ...(prev[suggestionId] || { businessId: null, businessName: "Personal", businessPicked: true, branchPicked: true, evidenceStatus: "NONE" }), evidenceStatus: "ATTACHED" },
     }));
   };
 
   const handleChatEvidenceSkip = (suggestionId: string) => {
     setChatSuggestionExtra(prev => ({
       ...prev,
-      [suggestionId]: { ...(prev[suggestionId] || { businessId: null, businessName: "Personal", businessPicked: true, evidenceStatus: "NONE" }), evidenceStatus: "SKIPPED" },
+      [suggestionId]: { ...(prev[suggestionId] || { businessId: null, businessName: "Personal", businessPicked: true, branchPicked: true, evidenceStatus: "NONE" }), evidenceStatus: "SKIPPED" },
     }));
   };
 
