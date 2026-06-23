@@ -585,11 +585,20 @@ async function startServer() {
         return res.status(400).json({ success: false, error: "Tiada tenant dikesan untuk akaun anda. Sila log masuk semula." });
       }
 
-      // Generate temporary password
-      const tempPassword = `MyKerani@${Math.random().toString(36).slice(2, 8).toUpperCase()}${Date.now().toString().slice(-4)}!`;
-
-      // Call Supabase Admin API to create user
-      const createRes = await fetch(`${supabaseUrl}/auth/v1/admin/users`, {
+      // AUTH-02B: prefer Supabase Auth's native invite-by-email flow over the
+      // old admin.createUser()+share-a-temp-password approach. POST
+      // /auth/v1/invite creates the auth user AND (when the project has an
+      // email provider configured in the Supabase dashboard) sends Supabase's
+      // own "you've been invited" email containing a magic link that lets the
+      // invited staff member set their own password on first click — no
+      // temp password ever needs to be manually copied/shared by the Owner.
+      // user_metadata is stamped at invite time so it survives onto the
+      // created auth user exactly like the old createUser() call did. The
+      // redirect target is derived from the inbound request's own host, not
+      // a hardcoded domain, so this keeps working unchanged if the app moves
+      // off the current Railway URL onto a custom domain.
+      const requestOrigin = `${req.protocol}://${req.get("host")}`;
+      const inviteRes = await fetch(`${supabaseUrl}/auth/v1/invite`, {
         method: "POST",
         headers: {
           "Authorization": `Bearer ${serviceRoleKey}`,
@@ -598,21 +607,46 @@ async function startServer() {
         },
         body: JSON.stringify({
           email: email.trim().toLowerCase(),
-          password: tempPassword,
-          email_confirm: true,
-          user_metadata: {
+          data: {
             fullName,
             role,
             tenantId: newStaffTenantId,
-          }
+          },
+          redirect_to: requestOrigin,
         })
       });
 
-      const createData = await createRes.json() as any;
+      let createData = await inviteRes.json() as any;
+      let usedFallbackPassword = false;
+      let tempPassword: string | null = null;
 
-      if (!createRes.ok) {
-        const errMsg = createData?.msg || createData?.message || createData?.error_description || "Gagal cipta akaun.";
-        return res.status(400).json({ success: false, error: errMsg });
+      if (!inviteRes.ok) {
+        // Fallback path: a project with no email provider configured at all
+        // (e.g. this sandbox) can fail /invite rather than degrading
+        // gracefully. Fall back to the previous createUser()+temp-password
+        // flow so staff creation still works — just without a real invite
+        // email — and tell the caller honestly via the response message.
+        tempPassword = `MyKerani@${Math.random().toString(36).slice(2, 8).toUpperCase()}${Date.now().toString().slice(-4)}!`;
+        const createRes = await fetch(`${supabaseUrl}/auth/v1/admin/users`, {
+          method: "POST",
+          headers: {
+            "Authorization": `Bearer ${serviceRoleKey}`,
+            "apikey": serviceRoleKey,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            email: email.trim().toLowerCase(),
+            password: tempPassword,
+            email_confirm: true,
+            user_metadata: { fullName, role, tenantId: newStaffTenantId },
+          })
+        });
+        createData = await createRes.json() as any;
+        if (!createRes.ok) {
+          const errMsg = createData?.msg || createData?.message || createData?.error_description || "Gagal cipta akaun.";
+          return res.status(400).json({ success: false, error: errMsg });
+        }
+        usedFallbackPassword = true;
       }
 
       // BUG FIX (AUTH-02A): the auth user above only carries role/tenantId in
@@ -652,7 +686,10 @@ async function startServer() {
         userId: createData.id,
         email: createData.email,
         tempPassword,
-        message: `Akaun ${role} berjaya dicipta. Kongsikan kata laluan sementara kepada staf anda.`
+        usedFallbackPassword,
+        message: usedFallbackPassword
+          ? `Akaun ${role} berjaya dicipta. E-mel jemputan TIDAK dapat dihantar (pembekal e-mel Supabase belum dikonfigurasi) — kongsikan kata laluan sementara kepada staf anda secara manual.`
+          : `Akaun ${role} berjaya dicipta. E-mel jemputan telah dihantar oleh Supabase ke ${createData.email} — staf perlu klik pautan dalam e-mel itu untuk tetapkan kata laluan sendiri.`,
       });
 
     } catch (err: any) {

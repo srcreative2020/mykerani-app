@@ -11,10 +11,14 @@ import {
   AlertCircle,
   ChevronRight,
   MailCheck,
+  ShieldCheck,
 } from "lucide-react";
 
-// Akaun demo — diselaraskan dengan DEMO_ACCOUNTS dalam AuthContext
-const DEMO_USERS = [
+// Akaun demo — diselaraskan dengan DEMO_ACCOUNTS dalam AuthContext.
+// Dipisahkan kepada dua kumpulan supaya skrin Log Masuk biasa (tenant) tidak
+// pernah tunjuk akaun demo HQ, dan skrin "HQ Console Login" tidak tunjuk
+// akaun demo tenant — selaras dengan keperluan Login Separation (AUTH-02B).
+const HQ_DEMO_USERS = [
   {
     email: "hq@mykerani.demo",
     label: "HQ Pemilik (Demo)",
@@ -41,6 +45,9 @@ const DEMO_USERS = [
     colorIcon: "bg-orange-100 text-orange-700",
     colorChevron: "text-orange-400",
   },
+];
+
+const TENANT_DEMO_USERS = [
   {
     email: "owner@mykerani.demo",
     label: "Pemilik Syarikat (Demo)",
@@ -72,12 +79,29 @@ const DEMO_USERS = [
 interface LoginScreenProps {
   initialMode?: "login" | "signup";
   onBack?: () => void;
+  // AUTH-02B — Login Separation. When true, this renders as the distinct,
+  // non-advertised "HQ Console Login" experience: different branding/copy,
+  // only HQ demo accounts shown, signup disabled, and after a successful
+  // signIn() any non-HQ account is immediately signed back out with an
+  // error — so a tenant user can never end up inside the app via this entry
+  // point. The reverse (HQ user signing in through the *normal* tenant
+  // login) is intentionally allowed: the ticket only requires HQ to have no
+  // landing-page visibility and a separate dedicated entry point, not a
+  // hard block on the normal path, so the simpler/safer one-directional
+  // guard is enough for a beta-readiness ticket.
+  forceHQ?: boolean;
+  // Reaches the hidden HQ login entry point from the regular login screen.
+  // Only rendered on the normal (non-HQ, non-signup) login screen — never
+  // on LandingPage, never inside the HQ screen itself.
+  onHQConsoleLink?: () => void;
 }
 
-export default function LoginScreen({ initialMode = "login", onBack }: LoginScreenProps) {
-  const { signIn, signUp, resetPassword, error, clearError } = useAuth();
+export default function LoginScreen({ initialMode = "login", onBack, forceHQ = false, onHQConsoleLink }: LoginScreenProps) {
+  const { signIn, signUp, signOut, resetPassword, error, clearError } = useAuth();
 
-  const [isSignUpMode, setIsSignUpMode] = useState(initialMode === "signup");
+  // Signup is never available on the HQ login entry point — HQ accounts are
+  // invite-only (Flow 4), per ticket scope.
+  const [isSignUpMode, setIsSignUpMode] = useState(!forceHQ && initialMode === "signup");
   const [isForgotMode, setIsForgotMode] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -125,6 +149,22 @@ export default function LoginScreen({ initialMode = "login", onBack }: LoginScre
     }
   };
 
+  // AUTH-02B — Login Separation guard. Called right after signIn() resolves
+  // on the HQ entry point only. useAuth()'s `user` state hasn't necessarily
+  // re-rendered into this closure yet by the time signIn()'s promise
+  // resolves, so this re-reads the freshly-created session directly from
+  // Supabase rather than trusting the (possibly stale) `user` from render
+  // scope.
+  const enforceHQEntryPoint = async () => {
+    if (!forceHQ || !supabase) return;
+    const { data } = await supabase.auth.getSession();
+    const sessionRole = data.session?.user?.user_metadata?.role as UserRole | undefined;
+    if (sessionRole && sessionRole !== "HQ_OWNER" && sessionRole !== "HQ_STAFF") {
+      await signOut();
+      setCustomError("Akaun ini bukan akaun HQ. Sila gunakan Log Masuk biasa.");
+    }
+  };
+
   const handleAuthSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setCustomError(null);
@@ -153,6 +193,7 @@ export default function LoginScreen({ initialMode = "login", onBack }: LoginScre
         }
       } else {
         await signIn(email, password);
+        await enforceHQEntryPoint();
       }
     } catch (err: any) {
       setCustomError(err?.message || "E-mel atau kata laluan tidak sah.");
@@ -199,55 +240,65 @@ export default function LoginScreen({ initialMode = "login", onBack }: LoginScre
 
   return (
     <div
-      className="min-h-screen bg-slate-50 flex flex-col justify-center items-center p-4 md:p-8 font-sans select-none"
+      className={`min-h-screen flex flex-col justify-center items-center p-4 md:p-8 font-sans select-none ${forceHQ ? "bg-slate-950" : "bg-slate-50"}`}
       id="login_screen_container"
     >
       <div
-        className="w-full max-w-md bg-white border border-slate-200/80 rounded-3xl p-6 md:p-8 shadow-[0_8px_30px_rgb(0,0,0,0.04)] space-y-6"
+        className={`w-full max-w-md border rounded-3xl p-6 md:p-8 shadow-[0_8px_30px_rgb(0,0,0,0.04)] space-y-6 ${forceHQ ? "bg-slate-900 border-slate-700/80" : "bg-white border-slate-200/80"}`}
         id="login_card_wrapper"
       >
         {onBack && (
           <button
             type="button"
             onClick={onBack}
-            className="text-xs text-slate-400 hover:text-slate-700 transition cursor-pointer flex items-center gap-1"
+            className={`text-xs transition cursor-pointer flex items-center gap-1 ${forceHQ ? "text-slate-500 hover:text-slate-300" : "text-slate-400 hover:text-slate-700"}`}
             id="back_to_landing_btn"
           >
             ← Kembali ke Laman Utama
           </button>
         )}
-        {/* Branding */}
+        {/* Branding — visually distinct for the HQ Console entry point so it
+            never reads as the same screen a tenant would see. */}
         <div className="flex flex-col items-center text-center space-y-3" id="login_branding_header">
-          <div className="w-14 h-14 rounded-2xl bg-slate-900 flex items-center justify-center shadow-lg">
-            <span className="font-display font-extrabold text-white text-xl tracking-tight">MK</span>
+          <div className={`w-14 h-14 rounded-2xl flex items-center justify-center shadow-lg ${forceHQ ? "bg-rose-700" : "bg-slate-900"}`}>
+            {forceHQ ? <ShieldCheck className="w-7 h-7 text-white" /> : <span className="font-display font-extrabold text-white text-xl tracking-tight">MK</span>}
           </div>
           <div>
-            <h1 className="text-2xl font-display font-bold text-slate-900 tracking-tight">
-              MYKERANI
+            <h1 className={`text-2xl font-display font-bold tracking-tight ${forceHQ ? "text-white" : "text-slate-900"}`}>
+              {forceHQ ? "MYKERANI HQ CONSOLE" : "MYKERANI"}
             </h1>
-            <p className="text-xs font-semibold text-slate-400 tracking-widest uppercase mt-0.5">
-              Pembantu Kewangan Pintar Anda
+            <p className={`text-xs font-semibold tracking-widest uppercase mt-0.5 ${forceHQ ? "text-rose-400" : "text-slate-400"}`}>
+              {forceHQ ? "Akses Pentadbiran HQ Sahaja" : "Pembantu Kewangan Pintar Anda"}
             </p>
           </div>
         </div>
 
-        {/* Ciri-ciri utama */}
-        <div className="grid grid-cols-2 gap-2.5" id="feature_highlights_grid">
-          {[
-            { emoji: "📈", label: "Pantau Pendapatan" },
-            { emoji: "📉", label: "Kawal Perbelanjaan" },
-            { emoji: "💰", label: "Urus Aliran Tunai" },
-            { emoji: "📂", label: "Simpan Dokumen Kewangan" },
-          ].map(f => (
-            <div
-              key={f.label}
-              className="p-3 bg-slate-50 border border-slate-100 rounded-2xl flex items-center space-x-2"
-            >
-              <span className="text-base">{f.emoji}</span>
-              <span className="text-[11px] font-semibold text-slate-700 leading-tight">{f.label}</span>
-            </div>
-          ))}
-        </div>
+        {forceHQ && (
+          <div className="p-3 bg-rose-950/40 border border-rose-800/60 rounded-xl text-[11px] text-rose-300 flex items-start gap-2" id="hq_console_warning_box">
+            <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+            <span>Skrin ini hanya untuk Pemilik HQ dan Kakitangan HQ MyKerani. Akaun pelanggan (tenant) tidak boleh log masuk di sini.</span>
+          </div>
+        )}
+
+        {/* Ciri-ciri utama — tidak relevan pada skrin HQ, hanya tunjuk pada tenant login */}
+        {!forceHQ && (
+          <div className="grid grid-cols-2 gap-2.5" id="feature_highlights_grid">
+            {[
+              { emoji: "📈", label: "Pantau Pendapatan" },
+              { emoji: "📉", label: "Kawal Perbelanjaan" },
+              { emoji: "💰", label: "Urus Aliran Tunai" },
+              { emoji: "📂", label: "Simpan Dokumen Kewangan" },
+            ].map(f => (
+              <div
+                key={f.label}
+                className="p-3 bg-slate-50 border border-slate-100 rounded-2xl flex items-center space-x-2"
+              >
+                <span className="text-base">{f.emoji}</span>
+                <span className="text-[11px] font-semibold text-slate-700 leading-tight">{f.label}</span>
+              </div>
+            ))}
+          </div>
+        )}
 
         {/* Step 2 — Semak Email Anda (selepas signUp() berjaya tapi belum sah emel) */}
         {pendingVerificationEmail ? (
@@ -435,14 +486,16 @@ export default function LoginScreen({ initialMode = "login", onBack }: LoginScre
         </form>
         )}
 
-        {/* Akses Demo — hanya tunjuk pada skrin Log Masuk */}
+        {/* Akses Demo — hanya tunjuk pada skrin Log Masuk. HQ entry point
+            hanya tunjuk akaun demo HQ; skrin tenant biasa hanya tunjuk
+            akaun demo tenant — tiada percampuran (Login Separation). */}
         {!isSignUpMode && !isForgotMode && (
-          <div className="pt-1 border-t border-slate-100 space-y-3" id="demo_access_section">
-            <p className="text-center text-[10px] font-bold tracking-widest text-slate-400 uppercase">
+          <div className={`pt-1 border-t space-y-3 ${forceHQ ? "border-slate-700" : "border-slate-100"}`} id="demo_access_section">
+            <p className={`text-center text-[10px] font-bold tracking-widest uppercase ${forceHQ ? "text-slate-500" : "text-slate-400"}`}>
               Akses Demo Segera (Tap Sekali Terus Masuk)
             </p>
             <div className="space-y-2">
-              {DEMO_USERS.map(demo => (
+              {(forceHQ ? HQ_DEMO_USERS : TENANT_DEMO_USERS).map(demo => (
                 <button
                   key={demo.email}
                   type="button"
@@ -467,8 +520,8 @@ export default function LoginScreen({ initialMode = "login", onBack }: LoginScre
           </div>
         )}
 
-        {/* Toggle Log Masuk / Daftar */}
-        {!isForgotMode && <div className="pt-2 border-t border-slate-100 text-center">
+        {/* Toggle Log Masuk / Daftar — tiada signup pada skrin HQ */}
+        {!isForgotMode && !forceHQ && <div className="pt-2 border-t border-slate-100 text-center">
           {isSignUpMode ? (
             <p className="text-xs text-slate-500">
               Sudah ada akaun?{" "}
@@ -495,6 +548,24 @@ export default function LoginScreen({ initialMode = "login", onBack }: LoginScre
             </p>
           )}
         </div>}
+
+        {/* AUTH-02B — hidden HQ Console entry point. Deliberately tiny,
+            unstyled-looking text so an average tenant user has no reason to
+            ever notice or click it; only someone told about it (or HQ staff
+            themselves) would. Never rendered on LandingPage, signup, forgot
+            password, or the HQ screen itself. */}
+        {!forceHQ && !isSignUpMode && !isForgotMode && onHQConsoleLink && (
+          <div className="text-center pt-1">
+            <button
+              type="button"
+              onClick={onHQConsoleLink}
+              className="text-[10px] text-slate-300 hover:text-slate-400 transition cursor-pointer"
+              id="hq_console_entry_link"
+            >
+              HQ Console
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

@@ -15,7 +15,7 @@ import {
   BookOpen, Ticket, MessageCircle, Zap, Database, Edit3,
   UserCheck, UserX, KeyRound, AlertCircle, CheckCircle2,
   ToggleLeft, ToggleRight, ExternalLink, Trash2, Download,
-  Paperclip, Mic, Square, File as FileIcon,
+  Paperclip, Mic, Square, File as FileIcon, Plus, Building2,
 } from "lucide-react";
 import { FinancialEvidencePackageManager } from "../components/FinancialEvidencePackage";
 import { FinancialReportsAnalytics } from "../components/FinancialReportsAnalytics";
@@ -175,7 +175,7 @@ function QuickAddModal({
 // â"€â"€â"€ Main Component â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 export function OwnerDashboard() {
   const { user, signOut, isMockUser, updateProfile } = useAuth();
-  const { activeWorkspace, workspaces, selectWorkspace } = useWorkspace();
+  const { activeWorkspace, workspaces, selectWorkspace, createWorkspace } = useWorkspace();
   const { activeTenant } = useTenant();
   const { userRoles } = usePermission();
   const userNameById = useMemo(() => {
@@ -283,6 +283,29 @@ export function OwnerDashboard() {
   const [inviteName, setInviteName] = useState("");
   const [inviteLoading, setInviteLoading] = useState(false);
   const [inviteResult, setInviteResult] = useState<{ success: boolean; message: string; tempPassword?: string } | null>(null);
+
+  // â"€â"€ Create Workspace (AUTH-02B â€" Tenant Owner can create additional
+  // workspaces beyond their initial provisioned one, scoped to their own
+  // tenant_id via WorkspaceContext.createWorkspace) â"€â"€
+  const [showCreateWorkspace, setShowCreateWorkspace] = useState(false);
+  const [newWorkspaceName, setNewWorkspaceName] = useState("");
+  const [createWSLoading, setCreateWSLoading] = useState(false);
+  const [createWSResult, setCreateWSResult] = useState<{ success: boolean; message: string } | null>(null);
+
+  const handleCreateWorkspace = async () => {
+    if (!newWorkspaceName.trim()) return;
+    setCreateWSLoading(true);
+    setCreateWSResult(null);
+    try {
+      const ws = await createWorkspace(newWorkspaceName.trim());
+      setCreateWSResult({ success: true, message: `Ruang kerja "${ws.name}" berjaya dicipta.` });
+      setNewWorkspaceName("");
+    } catch (err: any) {
+      setCreateWSResult({ success: false, message: err?.message || "Gagal cipta ruang kerja." });
+    } finally {
+      setCreateWSLoading(false);
+    }
+  };
 
   // â"€â"€ Support Center â"€â"€
   const [supportMessages, setSupportMessages] = useState<{ id: string; sender: "user" | "ai"; text: string }[]>([]);
@@ -3924,6 +3947,46 @@ export function OwnerDashboard() {
             {morePage === "settings" && (
               <div className="space-y-4">
                 <h2 className="text-lg font-bold text-slate-900">Tetapan</h2>
+
+                {/* Workspaces â€" AUTH-02B Create Workspace */}
+                <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-3">
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Ruang Kerja</p>
+                    <button onClick={() => { setShowCreateWorkspace(v => !v); setCreateWSResult(null); }}
+                      className="flex items-center space-x-1.5 px-3 py-1.5 bg-indigo-600 text-white rounded-xl text-xs font-bold cursor-pointer">
+                      <Plus className="w-3.5 h-3.5" /><span>Ruang Kerja Baru</span>
+                    </button>
+                  </div>
+                  {showCreateWorkspace && (
+                    <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-4 space-y-3">
+                      <input type="text" value={newWorkspaceName} onChange={e => setNewWorkspaceName(e.target.value)}
+                        placeholder="Contoh: Cawangan Subang Jaya"
+                        className="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-400 bg-white" />
+                      <button onClick={handleCreateWorkspace} disabled={createWSLoading || !newWorkspaceName.trim()}
+                        className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 text-white rounded-xl text-xs font-bold cursor-pointer transition">
+                        {createWSLoading ? "Mencipta..." : "Cipta Ruang Kerja"}
+                      </button>
+                      {createWSResult && (
+                        <div className={`rounded-xl p-3 text-xs ${createWSResult.success ? "bg-emerald-50 border border-emerald-200 text-emerald-700" : "bg-rose-50 border border-rose-200 text-rose-700"}`}>
+                          {createWSResult.message}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  <div className="space-y-1.5">
+                    {workspaces.map(ws => (
+                      <button key={ws.id} onClick={() => selectWorkspace(ws.id)}
+                        className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-left transition cursor-pointer ${activeWorkspace?.id === ws.id ? "bg-indigo-50 border border-indigo-200" : "bg-slate-50 border border-slate-100 hover:bg-slate-100"}`}>
+                        <div className="flex items-center gap-2.5">
+                          <Building2 className={`w-4 h-4 ${activeWorkspace?.id === ws.id ? "text-indigo-600" : "text-slate-400"}`} />
+                          <span className={`text-xs font-semibold ${activeWorkspace?.id === ws.id ? "text-indigo-800" : "text-slate-700"}`}>{ws.name}</span>
+                        </div>
+                        {activeWorkspace?.id === ws.id && <span className="text-[10px] font-bold text-indigo-600 uppercase">Aktif</span>}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
                 {/* Company info */}
                 <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-3">
                   <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Maklumat Syarikat</p>

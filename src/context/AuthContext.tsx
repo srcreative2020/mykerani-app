@@ -22,6 +22,12 @@ interface AuthContextType extends AuthState {
   clearError: () => void;
   toggleBypassAuth: (enabled: boolean) => void;
   isMockUser: boolean;
+  // AUTH-02B — set true when Supabase fires PASSWORD_RECOVERY (user clicked
+  // the "reset password" link in their e-mail). The UI must show a "Set New
+  // Password" screen instead of the normal app while this is true.
+  passwordRecoveryMode: boolean;
+  setNewPasswordAfterRecovery: (newPassword: string) => Promise<{ success: boolean; message: string }>;
+  cancelPasswordRecovery: () => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -36,6 +42,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     error: null,
     isMockUser: false,
   });
+
+  // AUTH-02B — true between the moment Supabase fires PASSWORD_RECOVERY
+  // (user clicked the e-mail link) and the moment they successfully set a
+  // new password (or cancel). Guard.tsx renders a dedicated screen while
+  // this is true, regardless of whatever `user` session state exists.
+  const [passwordRecoveryMode, setPasswordRecoveryMode] = useState(false);
 
   const clearError = () => setState(prev => ({ ...prev, error: null }));
 
@@ -86,6 +98,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // Dengar perubahan sesi Supabase — ref guard memastikan demo session tidak ditimpa
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       if (isMockRef.current) return; // demo aktif — abaikan semua Supabase events
+
+      // AUTH-02B — Supabase fires this event when the user lands back on the
+      // app via the password-reset e-mail link (it creates a transient
+      // recovery session). Switch the whole app into a "Set New Password"
+      // screen instead of routing them into the dashboard with whatever
+      // stale password they still have.
+      if (_event === "PASSWORD_RECOVERY") {
+        setPasswordRecoveryMode(true);
+      }
+
       if (session?.user) {
         setState({
           user: {
@@ -361,6 +383,39 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  // AUTH-02B — called from the "Set New Password" screen shown while
+  // passwordRecoveryMode is true. Uses the transient recovery session
+  // Supabase already created when the user clicked the e-mail link, so no
+  // separate token handling is needed here.
+  const setNewPasswordAfterRecovery = async (newPassword: string): Promise<{ success: boolean; message: string }> => {
+    if (!isSupabaseConfigured() || !supabase) {
+      return { success: false, message: "Sistem tidak dikonfigurasi. Sila hubungi pentadbir." };
+    }
+    if (!newPassword || newPassword.length < 6) {
+      return { success: false, message: "Kata laluan mestilah sekurang-kurangnya 6 aksara." };
+    }
+    try {
+      const { error } = await supabase.auth.updateUser({ password: newPassword });
+      if (error) {
+        return { success: false, message: error.message };
+      }
+      setPasswordRecoveryMode(false);
+      return { success: true, message: "Kata laluan baharu berjaya ditetapkan. Sila log masuk semula." };
+    } catch {
+      return { success: false, message: "Ralat sambungan. Sila cuba lagi." };
+    }
+  };
+
+  // Lets the user back out of the recovery screen (e.g. opened the link by
+  // mistake) without setting a new password — falls back to a normal
+  // sign-out so they land on the regular login screen.
+  const cancelPasswordRecovery = () => {
+    setPasswordRecoveryMode(false);
+    if (supabase) {
+      supabase.auth.signOut().catch(() => {});
+    }
+  };
+
   const updateProfile = async (fullName: string, email: string): Promise<{ success: boolean; message: string }> => {
     if (!state.user) return { success: false, message: "Tiada sesi aktif." };
     const cleanName = fullName.trim();
@@ -431,6 +486,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         updateProfile,
         clearError,
         toggleBypassAuth,
+        passwordRecoveryMode,
+        setNewPasswordAfterRecovery,
+        cancelPasswordRecovery,
       }}
     >
       {children}
