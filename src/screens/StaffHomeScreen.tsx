@@ -18,6 +18,7 @@ import { loadBusinessBranches, type BusinessBranch } from "../lib/profileData";
 import { computeFinancialHealth, type HealthBucketKey } from "../lib/financialHealthCenter";
 import { FinancialHealthCenter } from "../components/FinancialHealthCenter";
 import { FinancialHealthSummary } from "../components/FinancialHealthSummary";
+import { FinancialReportsAnalytics } from "../components/FinancialReportsAnalytics";
 import { QuickActionsRow } from "../components/QuickActionsRow";
 import { DuplicateReviewQueue } from "../components/DuplicateReviewQueue";
 import { HistoricalRecoveryWorkspace } from "../components/HistoricalRecoveryWorkspace";
@@ -149,7 +150,7 @@ function AddRecordForm({
 export function StaffHomeScreen() {
   const { user, signOut, isMockUser } = useAuth();
   const { activeWorkspace, workspaces, selectWorkspace } = useWorkspace();
-  const { financialEvents, addFinancialEvent, editFinancialEvent, addDebtRecord, addDebtRecordAwaited, editDebtRecord, addFinancialCommitment, addFinancialCommitmentAwaited, editFinancialCommitment, learnOcrPattern, addFinancialEvidencePackage, linkEvidenceToRecord, financialEvidencePackages, duplicateFlags } = useFinancials();
+  const { financialEvents, addFinancialEvent, editFinancialEvent, addDebtRecord, addDebtRecordAwaited, editDebtRecord, addFinancialCommitment, addFinancialCommitmentAwaited, editFinancialCommitment, learnOcrPattern, addFinancialEvidencePackage, linkEvidenceToRecord, financialEvidencePackages, duplicateFlags, addBankAccount } = useFinancials();
   const { activeTenant } = useTenant();
   const { confirmChatSuggestion } = useConfirmChatSuggestion();
   const { crossWorkspaceHints, checkCrossWorkspacePattern } = useCrossWorkspacePattern();
@@ -254,6 +255,30 @@ export function StaffHomeScreen() {
   // FinancialHealthCenter detail is now hidden behind this toggle; the
   // compact FinancialHealthSummary card is shown by default instead.
   const [showHealthDetail, setShowHealthDetail] = useState(false);
+  // Phase 2 finalization — Report Center parity: identical "Tambah Akaun
+  // Bank" modal to OwnerDashboard.tsx's (same addBankAccount() context
+  // action, no new permission boundary — Staff already has create access
+  // to financial records and there is no bank-account-specific role gate
+  // in PermissionContext.tsx's DEFAULT_PERMISSION_MATRIX).
+  const [showAddBankAccountModal, setShowAddBankAccountModal] = useState(false);
+  const [newBankName, setNewBankName] = useState("");
+  const [newBankNumber, setNewBankNumber] = useState("");
+  const [newBankHolder, setNewBankHolder] = useState("");
+  const [newBankBalance, setNewBankBalance] = useState("");
+  const handleAddBankAccountSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!activeWorkspace || !newBankName || !newBankNumber || !newBankHolder || !newBankBalance) return;
+    addBankAccount({
+      workspaceId: activeWorkspace.id,
+      bankName: newBankName,
+      accountNumber: newBankNumber,
+      accountName: newBankHolder,
+      branchName: "",
+      currentBalanceMyr: parseFloat(newBankBalance) || 0,
+    });
+    setNewBankName(""); setNewBankNumber(""); setNewBankHolder(""); setNewBankBalance("");
+    setShowAddBankAccountModal(false);
+  };
   // Phase 2D.1 — Financial Overview (Section 1): Staff had no income/expense/
   // P&L/receivable/payable summary at all prior to this change. Scoped to
   // myRecords (Staff's own record set), same aggregation approach as Owner's
@@ -1425,6 +1450,61 @@ export function StaffHomeScreen() {
                 </div>
               </div>
             )}
+
+            {/* Phase 2 finalization sprint — Owner/Staff Report Center parity:
+                identical component, identical health source, identical
+                navigation wiring as OwnerDashboard.tsx's "reports" tab — just
+                routed to Staff's own "rekod" tab instead of Owner's
+                "dashboard" tab for the drilldown target. */}
+            <div className="pt-2" id="staff_report_center_section">
+              <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Laporan</h3>
+              <FinancialReportsAnalytics
+                health={financialHealth}
+                onNavigateToRecords={(recordIds, label) => {
+                  setHealthFilterRecordIds(recordIds);
+                  setHealthFilterLabel(label);
+                  setActiveTab("rekod");
+                }}
+                onAddBankAccount={() => setShowAddBankAccountModal(true)}
+              />
+            </div>
+          </div>
+        )}
+
+        {/* Phase 2 finalization sprint — Tambah Akaun Bank modal, identical to
+            OwnerDashboard.tsx's, reachable from Staff's Report Center "Tunai
+            Semasa" empty state. */}
+        {showAddBankAccountModal && (
+          <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" id="staff_add_bank_account_modal_overlay">
+            <div className="bg-white rounded-2xl p-5 w-full max-w-sm space-y-3" id="staff_add_bank_account_modal">
+              <h3 className="text-sm font-bold text-slate-900">Tambah Akaun Bank</h3>
+              <form onSubmit={handleAddBankAccountSubmit} className="space-y-2.5">
+                <input
+                  type="text" required placeholder="Nama Bank (cth: Maybank)"
+                  value={newBankName} onChange={(e) => setNewBankName(e.target.value)}
+                  className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-lg outline-none"
+                />
+                <input
+                  type="text" required placeholder="No. Akaun"
+                  value={newBankNumber} onChange={(e) => setNewBankNumber(e.target.value)}
+                  className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-lg outline-none"
+                />
+                <input
+                  type="text" required placeholder="Nama Pemilik Akaun"
+                  value={newBankHolder} onChange={(e) => setNewBankHolder(e.target.value)}
+                  className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-lg outline-none"
+                />
+                <input
+                  type="number" step="0.01" required placeholder="Baki Semasa (RM)"
+                  value={newBankBalance} onChange={(e) => setNewBankBalance(e.target.value)}
+                  className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-lg outline-none"
+                />
+                <div className="flex justify-end gap-2 pt-1">
+                  <button type="button" onClick={() => setShowAddBankAccountModal(false)} className="px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-lg">Batal</button>
+                  <button type="submit" className="px-3.5 py-1.5 text-xs font-semibold text-white bg-slate-900 hover:bg-slate-800 rounded-lg">Simpan</button>
+                </div>
+              </form>
+            </div>
           </div>
         )}
 
