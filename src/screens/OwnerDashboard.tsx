@@ -1861,10 +1861,24 @@ export function OwnerDashboard() {
           if (isDuplicate) {
             setChatMessages(prev => [...prev, { id: `dup-${Date.now()}`, sender: "ai", text: `Fail "${file.name}" ini sudah pernah dimuat naik sebelum ini — saya guna rekod sedia ada, tidak muat naik dua kali.` }]);
           }
+          logEvent({
+            tenantId: activeWorkspace.tenantId, workspaceId: activeWorkspace.id, userId: user?.id,
+            userEmail: user?.email, userRole: user?.role, eventType: "UPLOAD",
+            description: `Receipt/document uploaded via chat: ${file.name}`,
+            metadata: { fileName: file.name, docId: doc.id, filePath: doc.file_path_supabase },
+          });
+        } else if (kind !== "audio") {
+          // Storage success must be verified before OCR/AI ever runs on this file —
+          // a receipt must never be analyzed if it was not actually persisted.
+          setChatMessages(prev => [...prev, { id: `e-${Date.now()}`, sender: "ai", text: `Muat naik "${file.name}" gagal disimpan${error ? ` (${error})` : ""}. Sila cuba muat naik semula — saya tidak akan menganalisis fail yang gagal disimpan.` }]);
+          setChatAttaching(false);
+          return;
         }
       }
       if (!fileUrl) {
         // Fallback: embed as a local object URL so the attachment still shows in-session.
+        // Only reached for demo/mock sessions (canPersistDoc false) — real workspaces
+        // already returned above on any persistence failure.
         fileUrl = URL.createObjectURL(file);
       }
       // Voice notes are transcribed, not filed as accounting evidence — only
@@ -2587,6 +2601,11 @@ export function OwnerDashboard() {
                                     Padam
                                   </button>
                                 </div>
+                              </div>
+                            )}
+                            {status === "pending" && (!extra.businessPicked || !extra.branchPicked || extra.evidenceStatus === "NONE") && (
+                              <div className="bg-blue-50 border border-blue-200 rounded-lg px-2.5 py-1.5 text-2xs text-blue-800 font-medium">
+                                ⚠️ Cadangan ini belum disahkan — lengkapkan langkah di bawah untuk melihat butang [Sahkan].
                               </div>
                             )}
                             {status === "pending" && !extra.businessPicked && activeBusinesses.length > 0 && (

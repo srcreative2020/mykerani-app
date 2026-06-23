@@ -2,6 +2,7 @@ import { useAuth } from "../context/AuthContext";
 import { useWorkspace } from "../context/WorkspaceContext";
 import { useFinancials } from "../context/FinancialRecordsContext";
 import { addAssetPurchase, addOwnerTransaction } from "../lib/assetOwnerData";
+import { logEvent } from "../lib/eventLog";
 import type { ChatSuggestion, ChatSuggestionExtra, ChatSuggestionRecordType, PendingChatEvidence } from "../lib/chatSuggestionTypes";
 
 export interface ConfirmChatSuggestionDraft {
@@ -38,7 +39,7 @@ export interface ConfirmChatSuggestionResult {
 // confirm tap -- it never auto-approves anything (AI Suggests -> User
 // Confirms -> AI Learns).
 export const useConfirmChatSuggestion = () => {
-  const { isMockUser } = useAuth();
+  const { isMockUser, user } = useAuth();
   const { activeWorkspace } = useWorkspace();
   const { addFinancialEventAwaited, addDebtRecordAwaited, addFinancialCommitmentAwaited, linkEvidenceToRecord, learnOcrPattern } = useFinancials();
 
@@ -50,6 +51,13 @@ export const useConfirmChatSuggestion = () => {
   ): Promise<ConfirmChatSuggestionResult> => {
     if (!activeWorkspace) return { ok: false, error: "Tiada ruang kerja aktif." };
     if (!extra || !extra.businessPicked) return { ok: false, error: "Sila pilih bisnes terlebih dahulu." };
+
+    logEvent({
+      tenantId: activeWorkspace.tenantId, workspaceId: activeWorkspace.id, userId: user?.id,
+      userEmail: user?.email, userRole: user?.role, eventType: "CONFIRMATION",
+      description: `User confirmed AI chat suggestion: ${s.title}`,
+      metadata: { suggestionId: s.id, transactionType: s.payload?.transactionType },
+    });
 
     const businessId = extra.businessId;
     const branchId = extra.branchId;
@@ -113,6 +121,13 @@ export const useConfirmChatSuggestion = () => {
     } catch (err: any) {
       return { ok: false, error: `Gagal menyimpan rekod ke pangkalan data: ${err?.message || "ralat tidak diketahui"}. Cadangan TIDAK disahkan, sila cuba lagi.` };
     }
+
+    logEvent({
+      tenantId: activeWorkspace.tenantId, workspaceId: activeWorkspace.id, userId: user?.id,
+      userEmail: user?.email, userRole: user?.role, eventType: "RECORD_CREATION",
+      description: `Financial record created from AI chat suggestion: ${s.title}`,
+      metadata: { recordId: newRecordId, recordType: newRecordType, amount, category, relatedParty, date },
+    });
 
     // Evidence Linking: the one shared engine -- if a receipt/invoice was
     // attached (explicitly, or automatically because this suggestion came

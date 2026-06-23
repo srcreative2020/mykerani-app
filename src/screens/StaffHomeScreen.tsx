@@ -8,6 +8,7 @@ import { getOrCreateActiveSession } from "../lib/chatSession";
 import { supabase, isSupabaseConfigured } from "../lib/supabase";
 import { isDemoWorkspace } from "../lib/seeder";
 import { uploadDocument, getDocumentUrl } from "../lib/documentStorage";
+import { logEvent } from "../lib/eventLog";
 import {
   loadPersonalProfile, loadBusinessProfile, loadVehicles, loadDependents, loadBusinesses,
   EMPTY_PERSONAL_PROFILE, EMPTY_BUSINESS_PROFILE, type Vehicle, type Dependent, type Business,
@@ -745,6 +746,17 @@ export function StaffHomeScreen() {
           if (isDuplicate) {
             setChatMessages(prev => [...prev, { id: `dup-${Date.now()}`, sender: "ai", text: `Fail "${file.name}" ini sudah pernah dimuat naik sebelum ini — saya guna rekod sedia ada, tidak muat naik dua kali.` }]);
           }
+          logEvent({
+            tenantId: activeWorkspace?.tenantId || "", workspaceId: wsId, userId: user?.id,
+            userEmail: user?.email, userRole: user?.role, eventType: "UPLOAD",
+            description: `Receipt/document uploaded via chat: ${file.name}`,
+            metadata: { fileName: file.name, docId: doc.id, filePath: doc.file_path_supabase },
+          });
+        } else if (kind !== "audio") {
+          // Storage success must be verified before OCR/AI ever runs on this file —
+          // a receipt must never be analyzed if it was not actually persisted.
+          setChatMessages(prev => [...prev, { id: `e-${Date.now()}`, sender: "ai", text: `Muat naik "${file.name}" gagal disimpan${error ? ` (${error})` : ""}. Sila cuba muat naik semula — saya tidak akan menganalisis fail yang gagal disimpan.` }]);
+          return;
         }
       }
       if (!url) url = URL.createObjectURL(file);
@@ -1048,6 +1060,11 @@ export function StaffHomeScreen() {
                                   className="px-3 py-1.5 rounded-lg bg-slate-200 hover:bg-slate-300 text-slate-800 font-semibold text-xs">
                                   Edit
                                 </button>
+                              </div>
+                            )}
+                            {status === "pending" && (!extra.businessPicked || !extra.branchPicked || extra.evidenceStatus === "NONE") && (
+                              <div className="bg-blue-50 border border-blue-200 rounded-lg px-2.5 py-1.5 text-2xs text-blue-800 font-medium">
+                                ⚠️ Cadangan ini belum disahkan — lengkapkan langkah di bawah untuk melihat butang [Sahkan].
                               </div>
                             )}
                             {status === "pending" && !extra.businessPicked && activeBusinesses.length > 0 && (

@@ -9,7 +9,9 @@ export type EventType =
   | "REPORT_GENERATION"
   | "EXPORT"
   | "BACKUP"
-  | "RESTORE";
+  | "RESTORE"
+  | "CONFIRMATION"
+  | "RECORD_CREATION";
 
 export interface LogEventParams {
   tenantId: string;
