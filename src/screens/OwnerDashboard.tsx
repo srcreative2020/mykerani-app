@@ -45,6 +45,8 @@ import JSZip from "jszip";
 import { matchOwnBusiness, matchOwnBusinessAndBranch } from "../lib/businessMatching";
 import { computeFinancialHealth, type HealthBucketKey } from "../lib/financialHealthCenter";
 import { FinancialHealthCenter } from "../components/FinancialHealthCenter";
+import { FinancialHealthSummary } from "../components/FinancialHealthSummary";
+import { QuickActionsRow } from "../components/QuickActionsRow";
 import { DuplicateReviewQueue } from "../components/DuplicateReviewQueue";
 import { HistoricalRecoveryWorkspace } from "../components/HistoricalRecoveryWorkspace";
 import { getImportFailures } from "../lib/importFailureLog";
@@ -381,6 +383,10 @@ export function OwnerDashboard() {
   const [showDuplicateQueue, setShowDuplicateQueue] = useState(false);
   const [showImportRecovery, setShowImportRecovery] = useState(false);
   const [importFailureRefresh, setImportFailureRefresh] = useState(0);
+  // Phase 2D.1 — Mobile Dashboard UX Redesign: the full 6-bucket/4-score
+  // FinancialHealthCenter detail is now hidden behind this toggle; the
+  // compact FinancialHealthSummary card is shown by default instead.
+  const [showHealthDetail, setShowHealthDetail] = useState(false);
 
   const filteredEvents = useMemo(() => {
     if (healthFilterRecordIds) {
@@ -2692,12 +2698,7 @@ export function OwnerDashboard() {
         {/* â•â•â•â• DASHBOARD â•â•â•â• */}
         {activeTab === "dashboard" && (
           <div className="flex-1 overflow-y-auto p-4 space-y-4 max-w-2xl mx-auto w-full pb-20" id="owner_dashboard_pane">
-            <FinancialHealthCenter
-              health={financialHealth}
-              onSelectBucket={handleHealthBucketSelect}
-              onOpenDuplicateQueue={() => setShowDuplicateQueue(true)}
-              onOpenImportRecovery={() => setShowImportRecovery(true)}
-            />
+            {/* Section 1 — Financial Overview: visible without scrolling */}
             <div className="flex items-center justify-between">
               <div>
                 <h2 className="text-lg font-bold text-slate-900">Dashboard</h2>
@@ -2749,6 +2750,10 @@ export function OwnerDashboard() {
               </div>
             </div>
 
+            {/* Section 2 — Financial Health Summary (compact card; full detail
+                and quick actions only render below when expanded) */}
+            <FinancialHealthSummary health={financialHealth} onExpand={() => setShowHealthDetail(v => !v)} />
+
             <div className="grid grid-cols-2 gap-3">
               <button onClick={() => setDashboardTypeFilter(f => f === "INCOME" ? "ALL" : "INCOME")}
                 className={`flex items-center justify-center space-x-2 rounded-2xl px-4 py-3 transition cursor-pointer border ${dashboardTypeFilter === "INCOME" ? "bg-emerald-600 border-emerald-600 text-white shadow" : "bg-emerald-50 border-emerald-100 text-emerald-700 hover:bg-emerald-100"}`}>
@@ -2760,6 +2765,7 @@ export function OwnerDashboard() {
               </button>
             </div>
 
+            {/* Section 4 — Recent Transactions (moved higher; minimal scrolling) */}
             {myEvents.length > 0 ? (
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
@@ -2948,6 +2954,34 @@ export function OwnerDashboard() {
                 <button onClick={() => setActiveTab("home")} className="mt-3 px-4 py-2 bg-indigo-600 text-white rounded-xl text-xs font-bold cursor-pointer hover:bg-indigo-700">
                   Beritahu MYKERANI
                 </button>
+              </div>
+            )}
+
+            {/* Section 5 — Financial Health Detail: full 6-bucket / 4-score
+                command center, only rendered when expanded from the summary
+                card above. Reuses the existing engine/handlers/filters as-is. */}
+            {showHealthDetail && (
+              <div className="bg-white border border-slate-200 rounded-2xl p-3.5 shadow-sm" id="financial_health_detail_section">
+                <div className="flex items-center justify-between mb-2">
+                  <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Butiran Kesihatan Kewangan</h3>
+                  <button onClick={() => setShowHealthDetail(false)} className="text-[10px] text-indigo-500 font-semibold cursor-pointer hover:underline">
+                    Tutup
+                  </button>
+                </div>
+                <QuickActionsRow
+                  onReview={() => handleHealthBucketSelect("pendingConfirmation")}
+                  onDuplicate={() => setShowDuplicateQueue(true)}
+                  onEvidence={() => handleHealthBucketSelect("missingEvidence")}
+                  onImport={() => setShowImportRecovery(true)}
+                />
+                <div className="mt-3">
+                  <FinancialHealthCenter
+                    health={financialHealth}
+                    onSelectBucket={handleHealthBucketSelect}
+                    onOpenDuplicateQueue={() => setShowDuplicateQueue(true)}
+                    onOpenImportRecovery={() => setShowImportRecovery(true)}
+                  />
+                </div>
               </div>
             )}
           </div>

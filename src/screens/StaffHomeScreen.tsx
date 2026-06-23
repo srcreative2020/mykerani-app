@@ -17,6 +17,8 @@ import { matchOwnBusiness, matchOwnBusinessAndBranch } from "../lib/businessMatc
 import { loadBusinessBranches, type BusinessBranch } from "../lib/profileData";
 import { computeFinancialHealth, type HealthBucketKey } from "../lib/financialHealthCenter";
 import { FinancialHealthCenter } from "../components/FinancialHealthCenter";
+import { FinancialHealthSummary } from "../components/FinancialHealthSummary";
+import { QuickActionsRow } from "../components/QuickActionsRow";
 import { DuplicateReviewQueue } from "../components/DuplicateReviewQueue";
 import { HistoricalRecoveryWorkspace } from "../components/HistoricalRecoveryWorkspace";
 import { getImportFailures } from "../lib/importFailureLog";
@@ -248,6 +250,19 @@ export function StaffHomeScreen() {
   const [showDuplicateQueue, setShowDuplicateQueue] = useState(false);
   const [showImportRecovery, setShowImportRecovery] = useState(false);
   const [importFailureRefresh, setImportFailureRefresh] = useState(0);
+  // Phase 2D.1 — Mobile Dashboard UX Redesign: the full 6-bucket/4-score
+  // FinancialHealthCenter detail is now hidden behind this toggle; the
+  // compact FinancialHealthSummary card is shown by default instead.
+  const [showHealthDetail, setShowHealthDetail] = useState(false);
+  // Phase 2D.1 — Financial Overview (Section 1): Staff had no income/expense/
+  // P&L/receivable/payable summary at all prior to this change. Scoped to
+  // myRecords (Staff's own record set), same aggregation approach as Owner's
+  // myEvents-based totals in OwnerDashboard.tsx, just without the
+  // day/week/month/year period toggle Staff's UI doesn't have.
+  const myIncomeTotal = useMemo(() => myRecords.filter(r => r.type === "INCOME").reduce((s, r) => s + r.amountMyr, 0), [myRecords]);
+  const myExpenseTotal = useMemo(() => myRecords.filter(r => r.type === "EXPENSE").reduce((s, r) => s + r.amountMyr, 0), [myRecords]);
+  const myReceivableTotal = useMemo(() => myRecords.filter(r => r.type === "RECEIVABLE" && !r.isCompleted).reduce((s, r) => s + r.amountMyr, 0), [myRecords]);
+  const myPayableTotal = useMemo(() => myRecords.filter(r => r.type === "PAYABLE" && !r.isCompleted).reduce((s, r) => s + r.amountMyr, 0), [myRecords]);
   const filteredRecords = useMemo(() => {
     if (healthFilterRecordIds) {
       const idSet = new Set(healthFilterRecordIds);
@@ -1269,12 +1284,44 @@ export function StaffHomeScreen() {
         {activeTab === "rekod" && (
           <div className="flex-1 overflow-y-auto p-4 pb-24 max-w-lg mx-auto w-full space-y-3" id="staff_records_pane">
             <h2 className="text-lg font-bold text-slate-900">Rekod Saya</h2>
-            <FinancialHealthCenter
-              health={financialHealth}
-              onSelectBucket={handleHealthBucketSelect}
-              onOpenDuplicateQueue={() => setShowDuplicateQueue(true)}
-              onOpenImportRecovery={() => setShowImportRecovery(true)}
-            />
+
+            {/* Section 1 — Financial Overview: visible without scrolling */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-2xl p-4 text-white shadow">
+                <p className="text-[11px] text-emerald-100">Pendapatan</p>
+                <p className="text-xl font-bold mt-1">RM {myIncomeTotal.toLocaleString("ms-MY", { minimumFractionDigits: 2 })}</p>
+                <TrendingUp className="w-4 h-4 text-emerald-200 mt-1" />
+              </div>
+              <div className="bg-gradient-to-br from-rose-500 to-pink-600 rounded-2xl p-4 text-white shadow">
+                <p className="text-[11px] text-rose-100">Perbelanjaan</p>
+                <p className="text-xl font-bold mt-1">RM {myExpenseTotal.toLocaleString("ms-MY", { minimumFractionDigits: 2 })}</p>
+                <TrendingDown className="w-4 h-4 text-rose-200 mt-1" />
+              </div>
+            </div>
+
+            <div className={`rounded-2xl p-4 shadow-sm border bg-white ${(myIncomeTotal - myExpenseTotal) >= 0 ? "border-emerald-100" : "border-rose-100"}`}>
+              <p className="text-xs text-slate-500">Untung / Rugi</p>
+              <p className={`text-2xl font-bold mt-1 ${(myIncomeTotal - myExpenseTotal) >= 0 ? "text-emerald-600" : "text-rose-500"}`}>
+                {(myIncomeTotal - myExpenseTotal) >= 0 ? "+" : "-"}RM {Math.abs(myIncomeTotal - myExpenseTotal).toLocaleString("ms-MY", { minimumFractionDigits: 2 })}
+              </p>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
+                <p className="text-[11px] text-slate-500 mb-1">Perlu Dikutip</p>
+                <p className="text-lg font-bold text-amber-600">RM {myReceivableTotal.toLocaleString("ms-MY", { minimumFractionDigits: 2 })}</p>
+              </div>
+              <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
+                <p className="text-[11px] text-slate-500 mb-1">Perlu Dibayar</p>
+                <p className="text-lg font-bold text-indigo-600">RM {myPayableTotal.toLocaleString("ms-MY", { minimumFractionDigits: 2 })}</p>
+              </div>
+            </div>
+
+            {/* Section 2 — Financial Health Summary (compact card; full detail
+                and quick actions only render below when expanded) */}
+            <FinancialHealthSummary health={financialHealth} onExpand={() => setShowHealthDetail(v => !v)} />
+
+            {/* Section 4 — Recent Transactions (moved higher; minimal scrolling) */}
             {myRecords.length === 0 ? (
               <div className="bg-white border border-slate-200 rounded-2xl p-10 text-center shadow-sm space-y-3">
                 <ClipboardList className="w-10 h-10 text-slate-200 mx-auto" />
@@ -1349,6 +1396,34 @@ export function StaffHomeScreen() {
                   </div>
                 ))}
               </>
+            )}
+
+            {/* Section 5 -- Financial Health Detail: full 6-bucket / 4-score
+                command center, only rendered when expanded from the summary
+                card above. Reuses the existing engine/handlers/filters as-is. */}
+            {showHealthDetail && (
+              <div className="bg-white border border-slate-200 rounded-2xl p-3.5 shadow-sm" id="financial_health_detail_section">
+                <div className="flex items-center justify-between mb-2">
+                  <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Butiran Kesihatan Kewangan</h3>
+                  <button onClick={() => setShowHealthDetail(false)} className="text-[10px] text-indigo-500 font-semibold cursor-pointer hover:underline">
+                    Tutup
+                  </button>
+                </div>
+                <QuickActionsRow
+                  onReview={() => handleHealthBucketSelect("pendingConfirmation")}
+                  onDuplicate={() => setShowDuplicateQueue(true)}
+                  onEvidence={() => handleHealthBucketSelect("missingEvidence")}
+                  onImport={() => setShowImportRecovery(true)}
+                />
+                <div className="mt-3">
+                  <FinancialHealthCenter
+                    health={financialHealth}
+                    onSelectBucket={handleHealthBucketSelect}
+                    onOpenDuplicateQueue={() => setShowDuplicateQueue(true)}
+                    onOpenImportRecovery={() => setShowImportRecovery(true)}
+                  />
+                </div>
+              </div>
             )}
           </div>
         )}

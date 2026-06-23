@@ -94,7 +94,7 @@ export const FinancialHealthCenter: React.FC<FinancialHealthCenterProps> = ({
             >
               <div className="flex items-center justify-between">
                 <p className="text-[11px] font-bold">{r.label}</p>
-                <span className="text-lg font-extrabold">{r.score}</span>
+                <span className="text-lg font-extrabold">{r.score}%</span>
               </div>
               <p className="text-[10px] opacity-75 mt-0.5">
                 {r.reasons.length === 0 ? "No issues found." : "Tap to see why"}
