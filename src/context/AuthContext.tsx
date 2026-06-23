@@ -210,8 +210,28 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           tenantId = roleRows[0].tenant_id;
           role     = roleRows[0].role as UserRole;
           fullName = roleRows[0].full_name || fullName;
+        } else if (data.user.user_metadata?.role && data.user.user_metadata.role !== "TENANT_OWNER" && data.user.user_metadata?.tenantId) {
+          // BUG FIX (AUTH-02A): no row in user_role_assignments does NOT
+          // always mean "brand-new self-registrant." An invited TENANT_STAFF/
+          // HQ_STAFF/HQ_OWNER account is created with role+tenantId already
+          // stamped into user_metadata by /api/admin/create-staff — if that
+          // row insert is ever missing (e.g. transient failure), the OLD
+          // behavior here silently demoted/reprovisioned them as a brand-new
+          // TENANT_OWNER in a new tenant, discarding the invite. Detect this
+          // signal (a non-owner role + a tenantId already present in
+          // metadata) and self-heal the missing row into the INVITED
+          // tenant/role instead of ever calling provisionNewTenant().
+          const invitedRole = data.user.user_metadata.role as UserRole;
+          const invitedTenantId = data.user.user_metadata.tenantId as string;
+          await supabase.from("user_role_assignments").insert({
+            user_id: data.user.id, email: cleanEmail, full_name: fullName,
+            role: invitedRole, tenant_id: invitedTenantId,
+          });
+          tenantId = invitedTenantId;
+          role     = invitedRole;
         } else {
-          // First login — auto-provision tenant + workspace + role assignment
+          // Genuine first login with no invite signal at all — auto-provision
+          // a brand-new tenant + workspace + role assignment (self-registration).
           const provisioned = await provisionNewTenant(data.user.id, cleanEmail, fullName);
           tenantId = provisioned.tenantId;
           role     = provisioned.role;

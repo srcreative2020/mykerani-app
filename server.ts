@@ -577,7 +577,13 @@ async function startServer() {
       // A tenant owner can only create staff inside their own tenant — the
       // tenantId always comes from the caller's verified session, never
       // from the request body, so it cannot be spoofed to another tenant.
-      const newStaffTenantId = role === "TENANT_STAFF" ? (caller.tenantId || "") : "";
+      // HQ_STAFF must land in the inviting HQ_OWNER's own (HQ-category) tenant,
+      // same as TENANT_STAFF lands in the inviting TENANT_OWNER's tenant —
+      // never an empty/new tenant.
+      const newStaffTenantId = caller.tenantId || "";
+      if (!newStaffTenantId) {
+        return res.status(400).json({ success: false, error: "Tiada tenant dikesan untuk akaun anda. Sila log masuk semula." });
+      }
 
       // Generate temporary password
       const tempPassword = `MyKerani@${Math.random().toString(36).slice(2, 8).toUpperCase()}${Date.now().toString().slice(-4)}!`;
@@ -607,6 +613,38 @@ async function startServer() {
       if (!createRes.ok) {
         const errMsg = createData?.msg || createData?.message || createData?.error_description || "Gagal cipta akaun.";
         return res.status(400).json({ success: false, error: errMsg });
+      }
+
+      // BUG FIX (AUTH-02A): the auth user above only carries role/tenantId in
+      // user_metadata — without a matching user_role_assignments row, signIn()
+      // finds no role row on this user's first login and silently reprovisions
+      // them as a brand-new TENANT_OWNER in their own new tenant, discarding
+      // the invite entirely. Insert the row in the same request so the invited
+      // user is fully provisioned before they ever log in.
+      const roleInsertRes = await fetch(`${supabaseUrl}/rest/v1/user_role_assignments`, {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${serviceRoleKey}`,
+          "apikey": serviceRoleKey,
+          "Content-Type": "application/json",
+          "Prefer": "return=minimal",
+        },
+        body: JSON.stringify({
+          user_id: createData.id,
+          email: createData.email,
+          full_name: fullName,
+          role,
+          tenant_id: newStaffTenantId,
+        }),
+      });
+
+      if (!roleInsertRes.ok) {
+        const roleErrBody = await roleInsertRes.text().catch(() => "");
+        console.error("create-staff: user_role_assignments insert failed:", roleErrBody);
+        return res.status(500).json({
+          success: false,
+          error: "Akaun auth dicipta tetapi gagal tetapkan role/tenant. Sila hubungi sokongan — jangan minta staf log masuk dahulu.",
+        });
       }
 
       return res.json({
