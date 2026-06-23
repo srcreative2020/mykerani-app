@@ -183,7 +183,7 @@ export function OwnerDashboard() {
     userRoles.forEach(r => { map[r.userId] = r.fullName; });
     return map;
   }, [userRoles]);
-  const { financialEvents, addFinancialEvent, addFinancialEventAwaited, addFinancialEventsBatch, editFinancialEvent, deleteFinancialEvent, addDebtRecord, addDebtRecordAwaited, editDebtRecord, deleteDebtRecord, addFinancialCommitment, addFinancialCommitmentAwaited, editFinancialCommitment, deleteFinancialCommitment, learnOcrPattern, learnOcrPatternsBatch, ocrLearnedPatterns, cashAccounts, bankAccounts, debtRecords, financialCommitments, financialEvidencePackages, addFinancialEvidencePackage, duplicateFlags } = useFinancials();
+  const { financialEvents, addFinancialEvent, addFinancialEventAwaited, addFinancialEventsBatch, editFinancialEvent, deleteFinancialEvent, addDebtRecord, addDebtRecordAwaited, editDebtRecord, deleteDebtRecord, addFinancialCommitment, addFinancialCommitmentAwaited, editFinancialCommitment, deleteFinancialCommitment, learnOcrPattern, learnOcrPatternsBatch, ocrLearnedPatterns, cashAccounts, bankAccounts, addBankAccount, debtRecords, financialCommitments, financialEvidencePackages, addFinancialEvidencePackage, duplicateFlags } = useFinancials();
   const { confirmChatSuggestion } = useConfirmChatSuggestion();
   const { crossWorkspaceHints, checkCrossWorkspacePattern } = useCrossWorkspacePattern();
 
@@ -387,6 +387,33 @@ export function OwnerDashboard() {
   // FinancialHealthCenter detail is now hidden behind this toggle; the
   // compact FinancialHealthSummary card is shown by default instead.
   const [showHealthDetail, setShowHealthDetail] = useState(false);
+  // Phase 2D.3A — Problem 1: Report Center's "Tunai Semasa" empty state
+  // ("Tiada Akaun Bank Direkodkan") needs a real "[Tambah Akaun Bank]"
+  // navigation target. OwnerDashboard.tsx had no existing bank-account-add
+  // UI of its own (the only existing form lives in FinancialRecordsConsole.tsx,
+  // mounted under the separate MyKeraniAppTabs.tsx HQ/mock-user surface, not
+  // reachable from the real tenant Owner app) — this reuses the existing
+  // addBankAccount() context action verbatim, just adding the missing
+  // lightweight form UI for it, no new financial calculation.
+  const [showAddBankAccountModal, setShowAddBankAccountModal] = useState(false);
+  const [newBankName, setNewBankName] = useState("");
+  const [newBankNumber, setNewBankNumber] = useState("");
+  const [newBankHolder, setNewBankHolder] = useState("");
+  const [newBankBalance, setNewBankBalance] = useState("");
+  const handleAddBankAccountSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newBankName || !newBankNumber || !newBankHolder || !newBankBalance) return;
+    addBankAccount({
+      workspaceId: activeWorkspace.id,
+      bankName: newBankName,
+      accountNumber: newBankNumber,
+      accountName: newBankHolder,
+      branchName: "",
+      currentBalanceMyr: parseFloat(newBankBalance) || 0,
+    });
+    setNewBankName(""); setNewBankNumber(""); setNewBankHolder(""); setNewBankBalance("");
+    setShowAddBankAccountModal(false);
+  };
 
   const filteredEvents = useMemo(() => {
     if (healthFilterRecordIds) {
@@ -3190,7 +3217,45 @@ export function OwnerDashboard() {
                 setHealthFilterLabel(label);
                 setActiveTab("dashboard");
               }}
+              health={financialHealth}
+              onAddBankAccount={() => setShowAddBankAccountModal(true)}
             />
+          </div>
+        )}
+
+        {/* Phase 2D.3A — Tambah Akaun Bank modal, reachable from Report
+            Center's "Tunai Semasa" empty state ([Tambah Akaun Bank] button). */}
+        {showAddBankAccountModal && (
+          <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" id="add_bank_account_modal_overlay">
+            <div className="bg-white rounded-2xl p-5 w-full max-w-sm space-y-3" id="add_bank_account_modal">
+              <h3 className="text-sm font-bold text-slate-900">Tambah Akaun Bank</h3>
+              <form onSubmit={handleAddBankAccountSubmit} className="space-y-2.5">
+                <input
+                  type="text" required placeholder="Nama Bank (cth: Maybank)"
+                  value={newBankName} onChange={(e) => setNewBankName(e.target.value)}
+                  className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-lg outline-none"
+                />
+                <input
+                  type="text" required placeholder="No. Akaun"
+                  value={newBankNumber} onChange={(e) => setNewBankNumber(e.target.value)}
+                  className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-lg outline-none"
+                />
+                <input
+                  type="text" required placeholder="Nama Pemilik Akaun"
+                  value={newBankHolder} onChange={(e) => setNewBankHolder(e.target.value)}
+                  className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-lg outline-none"
+                />
+                <input
+                  type="number" step="0.01" required placeholder="Baki Semasa (RM)"
+                  value={newBankBalance} onChange={(e) => setNewBankBalance(e.target.value)}
+                  className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-lg outline-none"
+                />
+                <div className="flex justify-end gap-2 pt-1">
+                  <button type="button" onClick={() => setShowAddBankAccountModal(false)} className="px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-lg">Batal</button>
+                  <button type="submit" className="px-3.5 py-1.5 text-xs font-semibold text-white bg-slate-900 hover:bg-slate-800 rounded-lg">Simpan</button>
+                </div>
+              </form>
+            </div>
           </div>
         )}
 

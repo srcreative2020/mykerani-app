@@ -20,6 +20,7 @@ import {
 import { type FinancialEvent, type FinancialCommitment } from "../types";
 import { exportToCSV, exportToExcel, exportToJSON, exportToPDF, type ExportColumn } from "../lib/exportUtils";
 import { computeFinancialHealthScoring, computeFinancialHealthV1 } from "../lib/financialHealth";
+import { computeFinancialHealth, type FinancialHealthResult } from "../lib/financialHealthCenter";
 import { computeLoanReadiness } from "../lib/loanReadiness";
 import { computeLhdnReadiness } from "../lib/lhdnReadiness";
 import { buildReportBuckets, flattenBuckets, getProfitAndLossSubtotals, getBalanceSheetTieOut } from "../lib/reportBucketAggregator";
@@ -45,9 +46,24 @@ export interface FinancialReportsAnalyticsProps {
   // back to simply opening the relevant report section — no broken
   // behavior, no new filter mechanism invented.
   onNavigateToRecords?: (recordIds: string[], label: string) => void;
+  // Phase 2D.3A — single source of truth for "Kesihatan Kewangan". When the
+  // host screen (OwnerDashboard.tsx) already computes computeFinancialHealth()
+  // (it needs the same data for its own Dashboard health card), it passes the
+  // identical result here so Dashboard and Report Center always show the same
+  // band/issue-count for the same underlying data. When omitted (no host
+  // wiring yet), this component computes a local fallback below using
+  // whatever inputs it already has access to via useFinancials() — same
+  // engine, same formula, just without chat-suggestion/import-failure data
+  // this component does not otherwise read.
+  health?: FinancialHealthResult;
+  // Phase 2D.3A — Problem 1: "Tiada Akaun Bank Direkodkan" empty state's
+  // "[Tambah Akaun Bank]" button navigates to the host's existing
+  // bank-account-add flow. When omitted, the button is hidden (no broken
+  // navigation invented).
+  onAddBankAccount?: () => void;
 }
 
-export const FinancialReportsAnalytics: React.FC<FinancialReportsAnalyticsProps> = ({ onNavigateToRecords }) => {
+export const FinancialReportsAnalytics: React.FC<FinancialReportsAnalyticsProps> = ({ onNavigateToRecords, health: hostHealth, onAddBankAccount }) => {
   const { activeWorkspace } = useWorkspace();
   const { user, isMockUser } = useAuth();
   const { activeTenant } = useTenant();
@@ -58,6 +74,7 @@ export const FinancialReportsAnalytics: React.FC<FinancialReportsAnalyticsProps>
     debtRecords,
     financialCommitments,
     financialEvidencePackages,
+    duplicateFlags,
   } = useFinancials();
 
   // Active Report Selection state: 9 reports
@@ -302,18 +319,35 @@ export const FinancialReportsAnalytics: React.FC<FinancialReportsAnalyticsProps>
     return getEvidenceCoverageRatio(evidenceBuckets, evidenceIndex);
   }, [evidenceBuckets, financialEvidencePackages]);
 
-  // Phase 2D.3 — Audit Readiness "why"/"how many"/"navigate to" data. Reuses
-  // the existing evidenceDrilldown.getDrilldownForRecords() (unchanged, no
-  // engine modified) to list which specific bucketed records have no
-  // evidence package linked — this is the same underlying check
-  // evidenceCoverageRatio already summarizes into a %, just exposed at the
-  // record level here.
+  // Phase 2D.3A — single source of truth for "Kesihatan Kewangan". Prefers
+  // the host's computeFinancialHealth() result (identical inputs/engine as
+  // OwnerDashboard.tsx's Dashboard health card, see financialHealthCenter.ts)
+  // so Dashboard and Report Center never disagree on the same data. Falls
+  // back to computing it locally with the inputs this component already has
+  // via useFinancials() when no host prop is wired (e.g. a future mount
+  // point with no health-filter host) — same engine, same formula, just
+  // without chat-suggestion/import-failure data this screen doesn't read.
+  const health = useMemo<FinancialHealthResult>(() => {
+    if (hostHealth) return hostHealth;
+    return computeFinancialHealth({
+      events: financialEvents,
+      evidencePackages: financialEvidencePackages,
+      duplicateFlags,
+      chatSuggestions: [],
+      chatSuggestionStatus: {},
+      importFailureCount: 0,
+      importFailureBatchCount: 0,
+    });
+  }, [hostHealth, financialEvents, financialEvidencePackages, duplicateFlags]);
+
+  // Audit Readiness "why"/"how many"/"navigate to" data — sourced from the
+  // canonical computeFinancialHealth() "missingEvidence" bucket (identical
+  // to the Dashboard's Health Center bucket of the same name) instead of a
+  // second, locally-built evidence check, so the count never disagrees with
+  // Dashboard's Health Center.
   const missingEvidenceRecordIds = useMemo(() => {
-    const evidenceIndex = buildEvidenceIndex(financialEvidencePackages);
-    return getDrilldownForRecords(evidenceBuckets, evidenceIndex)
-      .filter((d) => !d.hasEvidence)
-      .map((d) => d.record.recordId);
-  }, [evidenceBuckets, financialEvidencePackages]);
+    return health.buckets.find((b) => b.key === "missingEvidence")?.recordIds ?? [];
+  }, [health]);
 
   const healthV1 = useMemo(
     () => computeFinancialHealthV1(cashAccounts, bankAccounts, financialEvents, debtRecords, financialCommitments, evidenceCoverageRatio, baseDate),
@@ -407,7 +441,7 @@ export const FinancialReportsAnalytics: React.FC<FinancialReportsAnalyticsProps>
           { metric: "Evidence Coverage %", value: healthV1.evidenceCoveragePct.toFixed(1), grade: "" },
           { metric: "Data Completeness %", value: healthV1.dataCompletenessPct.toFixed(1), grade: "" },
         ];
-        return { columns, rows, title: "Laporan Kesihatan Kewangan" };
+        return { columns, rows, title: "Laporan Nisbah Kewangan" };
       }
       case "tax_readiness": {
         const columns: ExportColumn[] = [{ key: "label", label: "Pemeriksaan" }, { key: "status", label: "Status" }, { key: "detail", label: "Butiran" }];
@@ -478,54 +512,63 @@ export const FinancialReportsAnalytics: React.FC<FinancialReportsAnalyticsProps>
   // profit_loss / summary report exports; no new calculation logic.
   const netProfit = useMemo(() => getProfitAndLossSubtotals(allTimeBuckets).operatingProfit, [allTimeBuckets]);
   const currentCash = totalLiquidAssets;
+  // Phase 2D.3A — Problem 1: distinguish "no bank/cash account recorded at
+  // all" from "RM0.00 balance" so Tunai Semasa can show the right empty state.
+  const hasAnyAccount = cashAccounts.length > 0 || bankAccounts.length > 0;
 
-  // Section 3 Financial Health % — a presentation-only rollup of the 3
-  // existing health grades (solvency/quick/runway) already computed by
-  // computeFinancialHealthScoring() above. Each grade counts as "good" if it
-  // is the best-band grade for that metric; pct = good / 3. No new scoring
-  // engine is introduced — this only summarizes existing grades into one
-  // headline number for the snapshot card.
+  // Phase 2D.3A — Problem 2: Popular Report tiles' live values, reusing the
+  // exact same totals already computed above (getProfitAndLossSubtotals /
+  // getCashFlowActivityTotals) for the profit_loss / cash_flow_v1 exports and
+  // detail report views — no new aggregation logic. "Analisis Pendapatan"/
+  // "Analisis Perbelanjaan" reuse the P&L's revenue/operatingExpenses line
+  // items, the same mapping handleSelectPopularReport() already uses to
+  // route both tiles into the profit_loss report (see comment there).
+  const popularReportValues = useMemo(() => {
+    const subtotals = getProfitAndLossSubtotals(allTimeBuckets);
+    const cashFlowTotals = getCashFlowActivityTotals(flattenBuckets(allTimeBuckets));
+    return {
+      profit_loss: subtotals.operatingProfit,
+      income_analysis: subtotals.revenue,
+      expense_analysis: subtotals.operatingExpenses,
+      cash_flow_v1: cashFlowTotals.netCashFlow,
+    };
+  }, [allTimeBuckets]);
+
+  // Phase 2D.3A — Section 3 "Kesihatan Kewangan" now reads the SAME
+  // computeFinancialHealth() result the Dashboard's <FinancialHealthSummary>
+  // card uses (financialHealthCenter.ts), instead of the separate ratio-based
+  // computeFinancialHealthScoring(). pct = % of records that are "complete"
+  // (evidenced + not duplicate-flagged) — identical band/issue-count as
+  // Dashboard for the same underlying data. The solvency/quick/runway ratio
+  // engine below (healthScoring) is NOT deleted — it is still a legitimate
+  // calculation, just relabelled "Nisbah Kewangan" in the detail view (see
+  // Report 6) so it is never presented under the "Kesihatan Kewangan" label.
   const financialHealthPct = useMemo(() => {
-    const goodFlags = [
-      healthScoring.solvencyGrade !== "Critical Risk" && healthScoring.solvencyGrade !== "Moderate",
-      healthScoring.quickGrade !== "Strained" && healthScoring.quickGrade !== "Adequate",
-      healthScoring.runwayGrade !== "Immediate Action Required (< 2 Months)" && healthScoring.runwayGrade !== "Moderate Buffer (2-5 Months)",
-    ];
-    const goodCount = goodFlags.filter(Boolean).length;
-    return (goodCount / goodFlags.length) * 100;
-  }, [healthScoring]);
+    if (health.totalEvents === 0) return 100;
+    const completeBucket = health.buckets.find((b) => b.key === "complete");
+    return ((completeBucket?.count ?? 0) / health.totalEvents) * 100;
+  }, [health]);
 
-  // Phase 2D.3 — plain-language "why" for the Financial Health card. Reuses
-  // the exact grade thresholds already in healthScoring (financialHealth.ts)
-  // — no new scoring, just surfacing which of the 3 sub-grades are weak and
-  // the raw ratio/grade context already computed above.
+  // Phase 2D.3A — plain-language "why" for the Health card, sourced from the
+  // same computeFinancialHealth() buckets driving the pct above (missing
+  // evidence / possible duplicates / review recommended), instead of the
+  // ratio engine's solvency/quick/runway grades.
   const healthWeakGrades = useMemo((): WeakHealthSubGrade[] => {
     const weak: WeakHealthSubGrade[] = [];
-    if (healthScoring.solvencyGrade !== "Excellent") {
-      weak.push({
-        id: "solvency",
-        label: "Solvensi",
-        reason: `Nisbah aset/liabiliti ${healthScoring.solvencyRatio.toFixed(2)}x (${healthScoring.solvencyGrade}) — aset semasa hampir tidak menutupi liabiliti.`,
-      });
+    const missingEvidence = health.buckets.find((b) => b.key === "missingEvidence");
+    const duplicates = health.buckets.find((b) => b.key === "possibleDuplicates");
+    const reviewRecommended = health.buckets.find((b) => b.key === "reviewRecommended");
+    if (missingEvidence && missingEvidence.count > 0) {
+      weak.push({ id: "solvency", label: "Bukti Hilang", reason: `${missingEvidence.count} rekod tiada dokumen sokongan (resit/invois) dimuat naik.` });
     }
-    if (healthScoring.quickGrade !== "Secure") {
-      weak.push({
-        id: "quick",
-        label: "Mudah Tunai",
-        reason: `Nisbah cepat ${healthScoring.quickRatio.toFixed(2)}x (${healthScoring.quickGrade}) — tunai/bank berbanding bil belum bayar adalah ketat.`,
-      });
+    if (duplicates && duplicates.count > 0) {
+      weak.push({ id: "quick", label: "Kemungkinan Duplikasi", reason: `${duplicates.count} pasangan rekod dikesan berkemungkinan duplikasi — belum disemak.` });
     }
-    if (healthScoring.runwayGrade !== "Healthy (6+ Months)") {
-      weak.push({
-        id: "runway",
-        label: "Tempoh Survival",
-        reason: healthScoring.runwayMonths === 999
-          ? "Tiada komitmen bulanan direkodkan — tidak dapat dinilai sepenuhnya."
-          : `Tunai semasa hanya cukup untuk ${healthScoring.runwayMonths.toFixed(1)} bulan komitmen (${healthScoring.runwayGrade}).`,
-      });
+    if (reviewRecommended && reviewRecommended.count > 0) {
+      weak.push({ id: "runway", label: "Perlu Disemak", reason: `${reviewRecommended.count} cadangan AI dengan keyakinan rendah menunggu semakan anda.` });
     }
     return weak;
-  }, [healthScoring]);
+  }, [health]);
 
   // Section 4 Business Readiness cards — Tax/Financing reuse the existing
   // LHDN/Loan readiness engines verbatim, now enriched with each readiness's
@@ -553,13 +596,18 @@ export const FinancialReportsAnalytics: React.FC<FinancialReportsAnalyticsProps>
     const auditTopIssue = missingEvidenceRecordIds.length > 0
       ? { detail: `${missingEvidenceRecordIds.length} rekod tiada dokumen sokongan (resit/invois) dimuat naik.`, affectedCount: missingEvidenceRecordIds.length, recordIds: missingEvidenceRecordIds }
       : undefined;
+    // Phase 2D.3A — Audit Readiness % now reads health.readiness's
+    // "documentationReadiness" score, the same canonical computeFinancialHealth()
+    // output the missing-evidence count above (and Dashboard's Health Center)
+    // already derive from, instead of the separate healthV1.evidenceCoveragePct.
+    const auditPct = health.readiness.find((r) => r.key === "documentationReadiness")?.score ?? 100;
 
     return [
       { key: "tax_readiness", emoji: "🧾", label: "Tax Readiness", pct: taxReadiness.scorePct, topIssue: tax.topIssue, moreIssueCount: tax.moreIssueCount },
       { key: "bank_readiness", emoji: "🏦", label: "Financing Readiness", pct: bankReadiness.scorePct, topIssue: bank.topIssue, moreIssueCount: bank.moreIssueCount },
-      { key: "health", emoji: "📂", label: "Audit Readiness", pct: healthV1.evidenceCoveragePct, topIssue: auditTopIssue, moreIssueCount: 0 },
+      { key: "health", emoji: "📂", label: "Audit Readiness", pct: auditPct, topIssue: auditTopIssue, moreIssueCount: 0 },
     ];
-  }, [taxReadiness, bankReadiness, healthV1, missingEvidenceRecordIds]);
+  }, [taxReadiness, bankReadiness, health, missingEvidenceRecordIds]);
 
   // Section "Top 3 Actions Required" — ranking rule: pool every failing
   // check across Tax/Financing readiness plus the Audit evidence gap (all
@@ -669,6 +717,15 @@ export const FinancialReportsAnalytics: React.FC<FinancialReportsAnalyticsProps>
         currentCash={currentCash}
         onSelectPopularReport={handleSelectPopularReport}
         topActionsSlot={<ReportCenterTopActions actions={topActions} onNavigate={handleTopActionNavigate} />}
+        // Problem 1 — Untung Bersih taps into the same Profit & Loss report
+        // the "Untung & Rugi" Popular Report tile already opens.
+        onOpenNetProfit={() => { setSelectedReport("profit_loss"); setSearchTerm(""); }}
+        // Problem 1 — Tunai Semasa taps into the same Cash Flow report the
+        // "Aliran Tunai" Popular Report tile already opens.
+        onOpenCurrentCash={() => { setSelectedReport("cash_flow_v1"); setSearchTerm(""); }}
+        hasAnyAccount={hasAnyAccount}
+        onAddBankAccount={onAddBankAccount}
+        popularValues={popularReportValues}
       />
 
       {/* Section 3 — Financial Health */}
@@ -810,7 +867,7 @@ export const FinancialReportsAnalytics: React.FC<FinancialReportsAnalyticsProps>
               {selectedReport === "receivables_aging" && "3. Laporan Penuaan Tuntutan Jualan Terkumpul"}
               {selectedReport === "payables_aging" && "4. Laporan Penuaan Hutang Pembekal & Bil Belum Bayar"}
               {selectedReport === "commitments" && "5. Laporan Inventori Komitmen Operasional & Kontrak"}
-              {selectedReport === "health" && "6. Skor Kesihatan Syarikat & Ramalan Jangka Kelangsungan"}
+              {selectedReport === "health" && "6. Nisbah Kewangan Syarikat & Ramalan Jangka Kelangsungan"}
               {selectedReport === "tax_readiness" && "7. Senarai Semak Kesediaan Cukai LHDN"}
               {selectedReport === "bank_readiness" && "8. Senarai Semak Kesediaan Pembiayaan/Pinjaman"}
               {selectedReport === "profit_loss" && "9. Penyata Untung Rugi (Profit & Loss Statement)"}
