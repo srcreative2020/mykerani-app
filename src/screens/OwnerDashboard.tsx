@@ -1596,12 +1596,23 @@ export function OwnerDashboard() {
     if (wsId && localStorage.getItem(`mk_profile_nudge_dismissed_${wsId}`)) setProfileNudgeDismissed(true);
   }, [wsId]);
 
+  // BUG-UI-01 — personalProfile/businesses/vehicles start out as empty
+  // defaults (EMPTY_PERSONAL_PROFILE/[]/[]) on every render until their async
+  // loads resolve, so the "fill profile" nudge below — which decides whether
+  // to render based on those being empty — briefly evaluates true even for a
+  // user with an already-complete profile. profileLoading gates the nudge so
+  // it is only ever decided once the real data has actually arrived.
+  const [profileLoading, setProfileLoading] = useState(true);
+
   const refreshProfileData = () => {
     if (!wsId) return;
-    loadPersonalProfile(wsId, isMockUser).then(setPersonalProfile);
-    loadBusinesses(wsId, isMockUser).then(setBusinesses);
+    setProfileLoading(true);
+    Promise.all([
+      loadPersonalProfile(wsId, isMockUser).then(setPersonalProfile),
+      loadBusinesses(wsId, isMockUser).then(setBusinesses),
+      loadVehicles(wsId, isMockUser).then(setVehicles),
+    ]).finally(() => setProfileLoading(false));
     setAllBranchesLoaded(false);
-    loadVehicles(wsId, isMockUser).then(setVehicles);
     loadDependents(wsId, isMockUser).then(setDependents);
     loadAssetPurchases(wsId, isMockUser).then(setAssetPurchases);
     loadOwnerTransactions(wsId, isMockUser).then(setOwnerTransactions);
@@ -2371,7 +2382,7 @@ export function OwnerDashboard() {
                   </div>
 
                   {/* Onboarding nudge: encourage filling the optional Profile System so AI can disambiguate */}
-                  {!profileNudgeDismissed && !personalProfile.fullName && businesses.length === 0 && vehicles.length === 0 && (
+                  {!profileLoading && !profileNudgeDismissed && !personalProfile.fullName && businesses.length === 0 && vehicles.length === 0 && (
                     <div className="bg-indigo-50 border border-indigo-100 rounded-2xl p-4 flex items-start gap-3">
                       <Brain className="w-5 h-5 text-indigo-500 shrink-0 mt-0.5" />
                       <div className="flex-1">
