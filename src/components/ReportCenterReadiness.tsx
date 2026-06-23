@@ -40,14 +40,27 @@ export function bandFromPct(pct: number): ReadinessBand {
   return "red";
 }
 
+// Phase 2D.3 — one weak sub-grade surfaced on the Health card, in plain
+// language. Sourced from healthScoring's existing solvency/quick/runway
+// grades + raw ratios (computeFinancialHealthScoring in financialHealth.ts)
+// — no new calculation, just a plain-language rendering of an already-weak
+// grade so the user knows *why* the % isn't 100 without expanding anything.
+export interface WeakHealthSubGrade {
+  id: "solvency" | "quick" | "runway";
+  label: string;
+  reason: string;
+}
+
 export interface ReportCenterHealthCardProps {
   pct: number;
   onExpand: () => void;
+  weakGrades?: WeakHealthSubGrade[];
 }
 
-export const ReportCenterHealthCard: React.FC<ReportCenterHealthCardProps> = ({ pct, onExpand }) => {
+export const ReportCenterHealthCard: React.FC<ReportCenterHealthCardProps> = ({ pct, onExpand, weakGrades = [] }) => {
   const band = bandFromPct(pct);
   const meta = BAND_META[band];
+  const topWeak = weakGrades[0];
 
   return (
     <div className="space-y-2" id="report_center_health">
@@ -56,19 +69,27 @@ export const ReportCenterHealthCard: React.FC<ReportCenterHealthCardProps> = ({ 
       </p>
       <button
         onClick={onExpand}
-        className={`w-full text-left rounded-2xl border ${meta.border} ${meta.bg} p-3.5 flex items-center justify-between gap-3 hover:shadow-sm transition cursor-pointer`}
+        className={`w-full text-left rounded-2xl border ${meta.border} ${meta.bg} p-3.5 flex flex-col gap-2 hover:shadow-sm transition cursor-pointer`}
         id="report_center_health_card"
       >
-        <div className="flex items-center gap-3 min-w-0">
-          <span className="text-2xl leading-none shrink-0">❤️</span>
-          <div className="min-w-0">
-            <p className={`text-sm font-mono font-bold ${meta.text}`}>{pct.toFixed(0)}%</p>
-            <p className="text-[10px] text-slate-500 mt-0.5">Status: {meta.label}</p>
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3 min-w-0">
+            <span className="text-2xl leading-none shrink-0">❤️</span>
+            <div className="min-w-0">
+              <p className={`text-sm font-mono font-bold ${meta.text}`}>{pct.toFixed(0)}%</p>
+              <p className="text-[10px] text-slate-500 mt-0.5">Status: {meta.label}</p>
+            </div>
           </div>
+          <span className={`shrink-0 inline-flex items-center gap-0.5 text-[10px] font-semibold ${meta.text}`}>
+            Lihat Analisis <ChevronRight className="w-3 h-3" />
+          </span>
         </div>
-        <span className={`shrink-0 inline-flex items-center gap-0.5 text-[10px] font-semibold ${meta.text}`}>
-          Lihat Analisis <ChevronRight className="w-3 h-3" />
-        </span>
+        {topWeak && (
+          <div className={`text-[10px] ${meta.text} bg-white/60 rounded-xl px-2.5 py-1.5 leading-snug`} id="report_center_health_weak_reason">
+            <span className="font-bold">{topWeak.label}:</span> {topWeak.reason}
+            {weakGrades.length > 1 && <span className="opacity-70"> (+{weakGrades.length - 1} lagi isu)</span>}
+          </div>
+        )}
       </button>
     </div>
   );
@@ -79,14 +100,26 @@ export interface ReadinessCardItem {
   emoji: string;
   label: string;
   pct: number;
+  // Phase 2D.3 — top failing check for this readiness, already computed by
+  // computeLhdnReadiness()/computeLoanReadiness() (checks[].detail + the
+  // additive affectedRecordIds/affectedCount fields), or the evidence-gap
+  // proxy for Audit Readiness. Undefined when every check passes.
+  topIssue?: { detail: string; affectedCount: number; recordIds: string[] };
+  moreIssueCount?: number;
 }
 
 export interface ReportCenterReadinessGridProps {
   items: ReadinessCardItem[];
   onSelect: (key: string) => void;
+  // Phase 2D.3 — tapping the top-issue line navigates straight to the
+  // affected records (via the host's existing health-filter mechanism)
+  // instead of just opening the readiness report. Falls back to onSelect
+  // (report navigation) when there is nothing record-level to jump to, or
+  // when the host hasn't wired record navigation.
+  onNavigateToIssue?: (recordIds: string[], label: string) => void;
 }
 
-export const ReportCenterReadinessGrid: React.FC<ReportCenterReadinessGridProps> = ({ items, onSelect }) => {
+export const ReportCenterReadinessGrid: React.FC<ReportCenterReadinessGridProps> = ({ items, onSelect, onNavigateToIssue }) => {
   return (
     <div className="space-y-2" id="report_center_readiness">
       <p className="text-[10px] font-mono text-slate-400 uppercase font-bold tracking-wider px-0.5">
@@ -97,22 +130,48 @@ export const ReportCenterReadinessGrid: React.FC<ReportCenterReadinessGridProps>
           const band = bandFromPct(item.pct);
           const meta = BAND_META[band];
           return (
-            <button
+            <div
               key={item.key}
-              onClick={() => onSelect(item.key)}
-              className={`w-full text-left rounded-2xl border ${meta.border} ${meta.bg} p-3.5 flex items-center justify-between gap-3 hover:shadow-sm transition cursor-pointer`}
+              className={`w-full rounded-2xl border ${meta.border} ${meta.bg} p-3.5 space-y-2`}
               id={`readiness_card_${item.key}`}
             >
-              <div className="flex items-center gap-2.5 min-w-0">
-                <span className="text-lg leading-none shrink-0">{item.emoji}</span>
-                <span className="text-[11px] font-semibold text-slate-800">{item.label}</span>
-              </div>
-              <div className="flex items-center gap-1.5 shrink-0">
-                <span className={`text-sm font-mono font-bold ${meta.text}`}>{item.pct.toFixed(0)}%</span>
-                <span className={`text-[9px] font-bold uppercase ${meta.text}`}>{meta.label}</span>
-                <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
-              </div>
-            </button>
+              <button
+                onClick={() => onSelect(item.key)}
+                className="w-full text-left flex items-center justify-between gap-3 hover:opacity-80 transition cursor-pointer"
+                id={`readiness_card_${item.key}_open`}
+              >
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <span className="text-lg leading-none shrink-0">{item.emoji}</span>
+                  <span className="text-[11px] font-semibold text-slate-800">{item.label}</span>
+                </div>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <span className={`text-sm font-mono font-bold ${meta.text}`}>{item.pct.toFixed(0)}%</span>
+                  <span className={`text-[9px] font-bold uppercase ${meta.text}`}>{meta.label}</span>
+                  <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
+                </div>
+              </button>
+              {item.topIssue && (
+                <button
+                  onClick={() =>
+                    item.topIssue && item.topIssue.recordIds.length > 0 && onNavigateToIssue
+                      ? onNavigateToIssue(item.topIssue.recordIds, `${item.label}: ${item.topIssue.detail}`)
+                      : onSelect(item.key)
+                  }
+                  className="w-full text-left bg-white/70 hover:bg-white rounded-xl px-2.5 py-1.5 text-[10px] text-slate-600 leading-snug transition cursor-pointer flex items-center justify-between gap-2"
+                  id={`readiness_card_${item.key}_issue`}
+                >
+                  <span className="min-w-0">
+                    {item.topIssue.detail}
+                    {(item.moreIssueCount ?? 0) > 0 && (
+                      <span className="opacity-60"> (+{item.moreIssueCount} isu lain)</span>
+                    )}
+                  </span>
+                  {item.topIssue.affectedCount > 0 && (
+                    <ChevronRight className="w-3 h-3 text-slate-400 shrink-0" />
+                  )}
+                </button>
+              )}
+            </div>
           );
         })}
       </div>

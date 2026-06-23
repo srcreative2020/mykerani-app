@@ -3184,7 +3184,13 @@ export function OwnerDashboard() {
         {activeTab === "reports" && (
           <div className="flex-1 overflow-y-auto p-4 space-y-4 max-w-2xl mx-auto w-full pb-20" id="owner_reports_pane">
             <h2 className="text-lg font-bold text-slate-900">Laporan</h2>
-            <FinancialReportsAnalytics />
+            <FinancialReportsAnalytics
+              onNavigateToRecords={(recordIds, label) => {
+                setHealthFilterRecordIds(recordIds);
+                setHealthFilterLabel(label);
+                setActiveTab("dashboard");
+              }}
+            />
           </div>
         )}
 

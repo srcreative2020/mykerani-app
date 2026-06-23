@@ -19,6 +19,11 @@ export interface LoanReadinessCheck {
   label: string;
   pass: boolean;
   detail: string;
+  // Phase 2D.3 — Actionable Report Center: additive only. Record ids behind
+  // a failing check's count (debt/receivable records), for direct
+  // navigation. Empty for checks with no record-level target.
+  affectedRecordIds: string[];
+  affectedCount: number;
 }
 
 export interface LoanReadinessResult {
@@ -36,7 +41,13 @@ export function computeLoanReadiness(
   businessProfile: BusinessProfile,
   healthScoring: FinancialHealthScoring,
   receivablesOver60DaysMyr: number,
-  baseDate: Date
+  baseDate: Date,
+  // Phase 2D.3 — Actionable Report Center: additive, optional. The caller
+  // already computes this exact bucket (receivablesAgingData.b61_plusList in
+  // FinancialReportsAnalytics.tsx) to derive receivablesOver60DaysMyr; passing
+  // the ids alongside lets the "receivables_quality" check expose which
+  // records to navigate to, without recomputing the aging bucket here.
+  receivablesOver60DaysRecordIds: string[] = []
 ): LoanReadinessResult {
   const incomeRecords = financialEvents.filter((e) => e.type === "INCOME");
   const monthsWithIncome = new Set(incomeRecords.map((e) => e.date?.slice(0, 7)).filter(Boolean));
@@ -64,12 +75,16 @@ export function computeLoanReadiness(
       detail: businessProfile.registrationNo
         ? `No. pendaftaran: ${businessProfile.registrationNo}`
         : "Sila lengkapkan No. Pendaftaran Perniagaan dalam Profil Kewangan AI — biasanya diperlukan dalam permohonan pembiayaan.",
+      affectedRecordIds: [],
+      affectedCount: 0,
     },
     {
       id: "solvency",
       label: "Nisbah Aset/Liabiliti Sihat",
       pass: healthScoring.solvencyRatio >= 1.5,
       detail: `Nisbah solvensi semasa: ${healthScoring.solvencyRatio.toFixed(2)}x (gred: ${healthScoring.solvencyGrade}). Kebanyakan pemberi pinjaman mahukan sekurang-kurangnya 1.5x.`,
+      affectedRecordIds: [],
+      affectedCount: 0,
     },
     {
       id: "runway",
@@ -79,6 +94,8 @@ export function computeLoanReadiness(
         healthScoring.runwayMonths === 999
           ? "Tiada komitmen bulanan aktif direkodkan — tidak boleh dinilai sepenuhnya."
           : `Penampan kelangsungan semasa: ${healthScoring.runwayMonths.toFixed(1)} bulan. Disasarkan sekurang-kurangnya 3 bulan.`,
+      affectedRecordIds: [],
+      affectedCount: 0,
     },
     {
       id: "debt_repayment",
@@ -88,6 +105,8 @@ export function computeLoanReadiness(
         overdueDebts.length === 0
           ? "Tiada rekod hutang yang melepasi tarikh matang tanpa dibayar penuh."
           : `${overdueDebts.length} rekod hutang telah melepasi tarikh matang tanpa dibayar penuh — ini menjejaskan rekod pembayaran kredit anda.`,
+      affectedRecordIds: overdueDebts.map((d) => d.id),
+      affectedCount: overdueDebts.length,
     },
     {
       id: "receivables_quality",
@@ -97,12 +116,16 @@ export function computeLoanReadiness(
         receivablesOver60DaysMyr === 0
           ? "Tiada baki piutang lapuk melebihi 60 hari."
           : `RM ${receivablesOver60DaysMyr.toLocaleString()} piutang telah lapuk melebihi 60 hari — pemberi pinjaman melihat ini sebagai risiko aliran tunai.`,
+      affectedRecordIds: receivablesOver60DaysRecordIds,
+      affectedCount: receivablesOver60DaysRecordIds.length,
     },
     {
       id: "income_consistency",
       label: "Pendapatan Konsisten (6 Bulan Lepas)",
       pass: incomeConsistencyPct >= 80,
       detail: `${incomeMonthsCovered}/${monthKeys.length} bulan dalam tempoh 6 bulan lepas mempunyai sekurang-kurangnya satu rekod pendapatan.`,
+      affectedRecordIds: [],
+      affectedCount: monthKeys.length - incomeMonthsCovered,
     },
   ];
 

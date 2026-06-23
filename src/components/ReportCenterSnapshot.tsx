@@ -26,12 +26,19 @@ export interface ReportCenterSnapshotProps {
   netProfit: number;
   currentCash: number;
   onSelectPopularReport: (key: string) => void;
+  // Phase 2D.3 — Actionable Report Center: optional slot rendered between
+  // Section 1 (Financial Snapshot cards immediately above) and Section 2
+  // (Popular Reports grid immediately below), so the new "Top 3 Actions
+  // Required" section can sit exactly where the spec requires without
+  // duplicating this component's layout/markup.
+  topActionsSlot?: React.ReactNode;
 }
 
 export const ReportCenterSnapshot: React.FC<ReportCenterSnapshotProps> = ({
   netProfit,
   currentCash,
   onSelectPopularReport,
+  topActionsSlot,
 }) => {
   const profitPositive = netProfit >= 0;
 
@@ -67,6 +74,8 @@ export const ReportCenterSnapshot: React.FC<ReportCenterSnapshotProps> = ({
           </span>
         </div>
       </div>
+
+      {topActionsSlot}
 
       {/* Section 2 — Popular Reports */}
       <div className="space-y-2" id="report_center_popular">

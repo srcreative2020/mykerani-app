@@ -23,17 +23,31 @@ import { computeFinancialHealthScoring, computeFinancialHealthV1 } from "../lib/
 import { computeLoanReadiness } from "../lib/loanReadiness";
 import { computeLhdnReadiness } from "../lib/lhdnReadiness";
 import { buildReportBuckets, flattenBuckets, getProfitAndLossSubtotals, getBalanceSheetTieOut } from "../lib/reportBucketAggregator";
-import { buildEvidenceIndex, getEvidenceCoverageRatio } from "../lib/evidenceDrilldown";
+import { buildEvidenceIndex, getEvidenceCoverageRatio, getDrilldownForRecords } from "../lib/evidenceDrilldown";
 import { loadAssetPurchases, loadOwnerTransactions } from "../lib/assetOwnerData";
 import { getCashFlowActivityTotals } from "../lib/cashFlowClassifier";
 import { ProfitLossReport } from "./ProfitLossReport";
 import { BalanceSheetReport } from "./BalanceSheetReport";
 import { CashFlowReport } from "./CashFlowReport";
 import { ReportCenterSnapshot } from "./ReportCenterSnapshot";
-import { ReportCenterHealthCard, ReportCenterReadinessGrid, type ReadinessCardItem } from "./ReportCenterReadiness";
+import { ReportCenterHealthCard, ReportCenterReadinessGrid, type ReadinessCardItem, type WeakHealthSubGrade } from "./ReportCenterReadiness";
+import { ReportCenterTopActions, type TopActionItem } from "./ReportCenterTopActions";
 import { ReportExportMenu } from "./ReportExportMenu";
 
-export const FinancialReportsAnalytics: React.FC = () => {
+export interface FinancialReportsAnalyticsProps {
+  // Phase 2D.3 — Actionable Report Center: optional host-level navigation
+  // callback. When the host (OwnerDashboard.tsx / StaffHomeScreen.tsx) wires
+  // this, tapping a readiness issue or a Top-3 Action jumps straight to the
+  // affected records using the host's existing health-filter mechanism (the
+  // same setHealthFilterRecordIds/setHealthFilterLabel pattern from Phase
+  // 2D.1). When omitted (FinancialRecordsConsole.tsx / MyKeraniAppTabs.tsx
+  // today have no equivalent record-level filter), this component falls
+  // back to simply opening the relevant report section — no broken
+  // behavior, no new filter mechanism invented.
+  onNavigateToRecords?: (recordIds: string[], label: string) => void;
+}
+
+export const FinancialReportsAnalytics: React.FC<FinancialReportsAnalyticsProps> = ({ onNavigateToRecords }) => {
   const { activeWorkspace } = useWorkspace();
   const { user, isMockUser } = useAuth();
   const { activeTenant } = useTenant();
@@ -279,11 +293,27 @@ export const FinancialReportsAnalytics: React.FC = () => {
 
   // Financial Health V1 (Report Delivery Closeout Sprint) — Evidence Coverage % and
   // Data Completeness % sub-metrics, additive to healthScoring above (no formula changed).
+  const evidenceBuckets = useMemo(
+    () => flattenBuckets(buildReportBuckets({ financialEvents, debtRecords, financialCommitments, assetPurchases: [], ownerTransactions: [] })),
+    [financialEvents, debtRecords, financialCommitments]
+  );
   const evidenceCoverageRatio = useMemo(() => {
-    const buckets = buildReportBuckets({ financialEvents, debtRecords, financialCommitments, assetPurchases: [], ownerTransactions: [] });
     const evidenceIndex = buildEvidenceIndex(financialEvidencePackages);
-    return getEvidenceCoverageRatio(flattenBuckets(buckets), evidenceIndex);
-  }, [financialEvents, debtRecords, financialCommitments, financialEvidencePackages]);
+    return getEvidenceCoverageRatio(evidenceBuckets, evidenceIndex);
+  }, [evidenceBuckets, financialEvidencePackages]);
+
+  // Phase 2D.3 — Audit Readiness "why"/"how many"/"navigate to" data. Reuses
+  // the existing evidenceDrilldown.getDrilldownForRecords() (unchanged, no
+  // engine modified) to list which specific bucketed records have no
+  // evidence package linked — this is the same underlying check
+  // evidenceCoverageRatio already summarizes into a %, just exposed at the
+  // record level here.
+  const missingEvidenceRecordIds = useMemo(() => {
+    const evidenceIndex = buildEvidenceIndex(financialEvidencePackages);
+    return getDrilldownForRecords(evidenceBuckets, evidenceIndex)
+      .filter((d) => !d.hasEvidence)
+      .map((d) => d.record.recordId);
+  }, [evidenceBuckets, financialEvidencePackages]);
 
   const healthV1 = useMemo(
     () => computeFinancialHealthV1(cashAccounts, bankAccounts, financialEvents, debtRecords, financialCommitments, evidenceCoverageRatio, baseDate),
@@ -301,9 +331,14 @@ export const FinancialReportsAnalytics: React.FC = () => {
   // creditworthiness checklist computed from existing solvency, liquidity,
   // collections and debt-repayment data. Real banks vary in exact criteria,
   // so this surfaces the underlying signals lenders commonly check rather
-  // than a single institution's rule set.
+  // than a single institution's rule set. receivablesAgingData.b61_plusList
+  // is the same already-computed list backing b61_plus's amount — passed
+  // through additively so the "receivables_quality" check can expose ids.
   const bankReadiness = useMemo(
-    () => computeLoanReadiness(financialEvents, debtRecords, businessProfile, healthScoring, receivablesAgingData.b61_plus, baseDate),
+    () => computeLoanReadiness(
+      financialEvents, debtRecords, businessProfile, healthScoring, receivablesAgingData.b61_plus, baseDate,
+      receivablesAgingData.b61_plusList.map((e) => e.id)
+    ),
     [financialEvents, debtRecords, receivablesAgingData, healthScoring, businessProfile, baseDate]
   );
 
@@ -460,17 +495,122 @@ export const FinancialReportsAnalytics: React.FC = () => {
     return (goodCount / goodFlags.length) * 100;
   }, [healthScoring]);
 
+  // Phase 2D.3 — plain-language "why" for the Financial Health card. Reuses
+  // the exact grade thresholds already in healthScoring (financialHealth.ts)
+  // — no new scoring, just surfacing which of the 3 sub-grades are weak and
+  // the raw ratio/grade context already computed above.
+  const healthWeakGrades = useMemo((): WeakHealthSubGrade[] => {
+    const weak: WeakHealthSubGrade[] = [];
+    if (healthScoring.solvencyGrade !== "Excellent") {
+      weak.push({
+        id: "solvency",
+        label: "Solvensi",
+        reason: `Nisbah aset/liabiliti ${healthScoring.solvencyRatio.toFixed(2)}x (${healthScoring.solvencyGrade}) — aset semasa hampir tidak menutupi liabiliti.`,
+      });
+    }
+    if (healthScoring.quickGrade !== "Secure") {
+      weak.push({
+        id: "quick",
+        label: "Mudah Tunai",
+        reason: `Nisbah cepat ${healthScoring.quickRatio.toFixed(2)}x (${healthScoring.quickGrade}) — tunai/bank berbanding bil belum bayar adalah ketat.`,
+      });
+    }
+    if (healthScoring.runwayGrade !== "Healthy (6+ Months)") {
+      weak.push({
+        id: "runway",
+        label: "Tempoh Survival",
+        reason: healthScoring.runwayMonths === 999
+          ? "Tiada komitmen bulanan direkodkan — tidak dapat dinilai sepenuhnya."
+          : `Tunai semasa hanya cukup untuk ${healthScoring.runwayMonths.toFixed(1)} bulan komitmen (${healthScoring.runwayGrade}).`,
+      });
+    }
+    return weak;
+  }, [healthScoring]);
+
   // Section 4 Business Readiness cards — Tax/Financing reuse the existing
-  // LHDN/Loan readiness engines verbatim. Audit Readiness has no dedicated
-  // calculation in this file/engine set; the closest existing computed
-  // figure is healthV1.evidenceCoveragePct (document/evidence linkage
-  // completeness), reused here as the Audit Readiness proxy — see
-  // ReportCenterReadiness.tsx header comment for the full rationale.
-  const businessReadinessItems = useMemo((): ReadinessCardItem[] => [
-    { key: "tax_readiness", emoji: "🧾", label: "Tax Readiness", pct: taxReadiness.scorePct },
-    { key: "bank_readiness", emoji: "🏦", label: "Financing Readiness", pct: bankReadiness.scorePct },
-    { key: "health", emoji: "📂", label: "Audit Readiness", pct: healthV1.evidenceCoveragePct },
-  ], [taxReadiness, bankReadiness, healthV1]);
+  // LHDN/Loan readiness engines verbatim, now enriched with each readiness's
+  // top failing check (checks[] already carries Malay detail strings +
+  // affectedCount/affectedRecordIds, see lhdnReadiness.ts/loanReadiness.ts
+  // additive fields above). Audit Readiness has no dedicated checklist
+  // engine; the closest existing computed figure is healthV1.evidenceCoveragePct
+  // with missingEvidenceRecordIds (evidenceDrilldown.ts, unmodified) reused
+  // as the Audit Readiness proxy — see ReportCenterReadiness.tsx header
+  // comment for the full rationale. Top issue per card = the single failing
+  // check with the highest affectedCount (a plain sort, not a new score).
+  const businessReadinessItems = useMemo((): ReadinessCardItem[] => {
+    const topFailingCheck = (checks: { detail: string; pass: boolean; affectedCount: number; affectedRecordIds: string[] }[]) => {
+      const failing = checks.filter((c) => !c.pass).sort((a, b) => b.affectedCount - a.affectedCount);
+      if (failing.length === 0) return { topIssue: undefined, moreIssueCount: 0 };
+      const [top, ...rest] = failing;
+      return {
+        topIssue: { detail: top.detail, affectedCount: top.affectedCount, recordIds: top.affectedRecordIds },
+        moreIssueCount: rest.length,
+      };
+    };
+
+    const tax = topFailingCheck(taxReadiness.checks);
+    const bank = topFailingCheck(bankReadiness.checks);
+    const auditTopIssue = missingEvidenceRecordIds.length > 0
+      ? { detail: `${missingEvidenceRecordIds.length} rekod tiada dokumen sokongan (resit/invois) dimuat naik.`, affectedCount: missingEvidenceRecordIds.length, recordIds: missingEvidenceRecordIds }
+      : undefined;
+
+    return [
+      { key: "tax_readiness", emoji: "🧾", label: "Tax Readiness", pct: taxReadiness.scorePct, topIssue: tax.topIssue, moreIssueCount: tax.moreIssueCount },
+      { key: "bank_readiness", emoji: "🏦", label: "Financing Readiness", pct: bankReadiness.scorePct, topIssue: bank.topIssue, moreIssueCount: bank.moreIssueCount },
+      { key: "health", emoji: "📂", label: "Audit Readiness", pct: healthV1.evidenceCoveragePct, topIssue: auditTopIssue, moreIssueCount: 0 },
+    ];
+  }, [taxReadiness, bankReadiness, healthV1, missingEvidenceRecordIds]);
+
+  // Section "Top 3 Actions Required" — ranking rule: pool every failing
+  // check across Tax/Financing readiness plus the Audit evidence gap (all
+  // already computed above, see businessReadinessItems), sort by
+  // affectedCount descending, take the top 3. This is a plain sort over
+  // existing counts — no new weighted scoring engine.
+  const topActions = useMemo((): TopActionItem[] => {
+    const candidates: TopActionItem[] = [];
+    taxReadiness.checks.filter((c) => !c.pass && c.affectedCount > 0).forEach((c) => {
+      candidates.push({ id: `tax_${c.id}`, problem: `[Cukai] ${c.label}`, affectedCount: c.affectedCount, recordIds: c.affectedRecordIds, band: "yellow" });
+    });
+    bankReadiness.checks.filter((c) => !c.pass && c.affectedCount > 0).forEach((c) => {
+      candidates.push({ id: `bank_${c.id}`, problem: `[Pembiayaan] ${c.label}`, affectedCount: c.affectedCount, recordIds: c.affectedRecordIds, band: "yellow" });
+    });
+    if (missingEvidenceRecordIds.length > 0) {
+      candidates.push({
+        id: "audit_missing_evidence",
+        problem: "[Audit] Rekod tiada dokumen sokongan",
+        affectedCount: missingEvidenceRecordIds.length,
+        recordIds: missingEvidenceRecordIds,
+        band: missingEvidenceRecordIds.length > evidenceBuckets.length / 2 ? "red" : "yellow",
+      });
+    }
+    return candidates
+      .sort((a, b) => b.affectedCount - a.affectedCount)
+      .slice(0, 3)
+      .map((c) => (c.affectedCount >= 10 ? { ...c, band: "red" as const } : c));
+  }, [taxReadiness, bankReadiness, missingEvidenceRecordIds, evidenceBuckets]);
+
+  // Phase 2D.3 — shared navigation handler for both the readiness grid's
+  // top-issue line and the Top 3 Actions cards. Prefers the host's
+  // record-level filter (onNavigateToRecords, wired in OwnerDashboard.tsx /
+  // StaffHomeScreen.tsx); falls back to opening the relevant report section
+  // in place when no record ids exist or no host callback is wired.
+  const handleNavigateToIssue = (recordIds: string[], label: string, fallbackReport: typeof selectedReport) => {
+    if (recordIds.length > 0 && onNavigateToRecords) {
+      onNavigateToRecords(recordIds, label);
+      return;
+    }
+    setSelectedReport(fallbackReport);
+    setSearchTerm("");
+  };
+
+  const handleTopActionNavigate = (action: TopActionItem) => {
+    const fallbackReport: typeof selectedReport = action.id.startsWith("tax_")
+      ? "tax_readiness"
+      : action.id.startsWith("bank_")
+        ? "bank_readiness"
+        : "health";
+    handleNavigateToIssue(action.recordIds, action.problem, fallbackReport);
+  };
 
   const exportFilenameBase = `MyKerani_${activeWorkspace.name}_${selectedReport}_${new Date().toISOString().slice(0, 10)}`.replace(/\s+/g, "_");
 
@@ -521,23 +661,28 @@ export const FinancialReportsAnalytics: React.FC = () => {
   return (
     <div className="max-w-lg mx-auto w-full space-y-5" id="reports_foundation_root">
 
-      {/* Section 1 + 2 — Financial Snapshot & Popular Reports */}
+      {/* Section 1 — Financial Snapshot, with Phase 2D.3's "Top 3 Actions
+          Required" slotted in immediately below it and above Section 2
+          (Popular Reports), per spec. */}
       <ReportCenterSnapshot
         netProfit={netProfit}
         currentCash={currentCash}
         onSelectPopularReport={handleSelectPopularReport}
+        topActionsSlot={<ReportCenterTopActions actions={topActions} onNavigate={handleTopActionNavigate} />}
       />
 
       {/* Section 3 — Financial Health */}
       <ReportCenterHealthCard
         pct={financialHealthPct}
         onExpand={() => { setSelectedReport("health"); setSearchTerm(""); }}
+        weakGrades={healthWeakGrades}
       />
 
       {/* Section 4 — Business Readiness */}
       <ReportCenterReadinessGrid
         items={businessReadinessItems}
         onSelect={(key) => { setSelectedReport(key as typeof selectedReport); setSearchTerm(""); }}
+        onNavigateToIssue={(recordIds, label) => handleNavigateToIssue(recordIds, label, selectedReport)}
       />
 
       {/* Section 5 — Export Center */}
