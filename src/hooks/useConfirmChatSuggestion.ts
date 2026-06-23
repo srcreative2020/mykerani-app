@@ -139,6 +139,8 @@ export const useConfirmChatSuggestion = () => {
         category,
         recordType: (transactionType === "COMMITMENT" ? "EXPENSE" : transactionType) as "INCOME" | "EXPENSE" | "RECEIVABLE" | "PAYABLE" | "DEBT",
         confidenceScore,
+        businessId: businessId || null,
+        branchId: branchId || null,
       });
     }
 

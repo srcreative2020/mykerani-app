@@ -72,7 +72,19 @@ interface FinancialRecordsContextType {
   
   learnOcrPattern: (pattern: Omit<OcrLearnedPattern, "id" | "occurrenceCount" | "lastUpdated">) => void;
   learnOcrPatternsBatch: (patterns: Omit<OcrLearnedPattern, "id" | "occurrenceCount" | "lastUpdated">[]) => Promise<void>;
+  // Soft-disable only — no hard delete path (Phase 2B Pattern Lifecycle).
+  // Disabled patterns stay visible/auditable and can be re-enabled.
   deleteOcrLearnedPattern: (id: string) => void;
+  reactivateOcrLearnedPattern: (id: string) => void;
+  // Tier-aware lookup: Branch -> Business -> Workspace. Cross-Workspace Hint
+  // stays a separate, informational-only engine (useCrossWorkspacePattern)
+  // and is never folded into this lookup — it must never auto-apply.
+  // Reused identically by OCR, Bank Statement, AI Chat, and Voice Notes.
+  findLearnedPattern: (
+    vendorName: string,
+    businessId?: string | null,
+    branchId?: string | null
+  ) => OcrLearnedPattern | undefined;
 
   resetWorkspaceData: () => void;
   restoreWorkspaceData: (data: {
@@ -699,7 +711,12 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
                   recordType: row.record_type as any,
                   confidenceScore: parseFloat(row.confidence_score || 0),
                   occurrenceCount: parseInt(row.occurrence_count || 1),
-                  lastUpdated: row.last_updated || new Date().toISOString()
+                  lastUpdated: row.last_updated || new Date().toISOString(),
+                  patternType: row.pattern_type || "VENDOR_CATEGORY",
+                  businessId: row.business_id || null,
+                  branchId: row.branch_id || null,
+                  metadata: row.metadata || {},
+                  isActive: row.is_active !== false,
                 }));
               }
             } catch (ex) {
@@ -1876,6 +1893,14 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
     }
   };
 
+  // Tier-aware match: a pattern only merges with another pattern that shares
+  // the exact same (business_id, branch_id) tier — a branch-level pattern
+  // never merges into the workspace-wide one or vice versa, since they
+  // represent different scopes in the Branch -> Business -> Workspace
+  // learning hierarchy.
+  const sameTier = (p: OcrLearnedPattern, businessId?: string | null, branchId?: string | null) =>
+    (p.businessId ?? null) === (businessId ?? null) && (p.branchId ?? null) === (branchId ?? null);
+
   const learnOcrPattern = (pattern: Omit<OcrLearnedPattern, "id" | "occurrenceCount" | "lastUpdated">) => {
     if (!activeWorkspace) return;
 
@@ -1883,17 +1908,20 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
     const normalizedVendorInput = pattern.vendorName.trim();
     const vendorLower = normalizedVendorInput.toLowerCase();
     const vendorKey = vendorMatchKey(normalizedVendorInput);
+    const businessId = pattern.businessId ?? null;
+    const branchId = pattern.branchId ?? null;
 
     // Look for matches: exact (case-insensitive) first, then a fuzzy match on a
     // normalized key (strips Sdn Bhd/Enterprise/punctuation, allows small spelling
     // drift) so e.g. "Tenaga Nasional Bhd" and "TENAGA NASIONAL BERHAD" merge into
-    // one learned pattern instead of fragmenting into duplicates.
+    // one learned pattern instead of fragmenting into duplicates. Restricted to the
+    // same hierarchy tier (Phase 2B).
     let existingIndex = ocrLearnedPatterns.findIndex(
-      (p) => p.vendorName.toLowerCase() === vendorLower && p.workspaceId === activeWorkspace.id
+      (p) => p.vendorName.toLowerCase() === vendorLower && p.workspaceId === activeWorkspace.id && sameTier(p, businessId, branchId)
     );
     if (existingIndex === -1) {
       existingIndex = ocrLearnedPatterns.findIndex(
-        (p) => p.workspaceId === activeWorkspace.id && isFuzzyVendorMatch(vendorKey, vendorMatchKey(p.vendorName))
+        (p) => p.workspaceId === activeWorkspace.id && sameTier(p, businessId, branchId) && isFuzzyVendorMatch(vendorKey, vendorMatchKey(p.vendorName))
       );
     }
 
@@ -1908,9 +1936,10 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
       action = "UPDATE";
       const oldElement = ocrLearnedPatterns[existingIndex];
       oldValue = { ...oldElement };
-      
+
       const newOccurrence = oldElement.occurrenceCount + 1;
-      // Formula for rolling average confidence score:
+      // Formula for rolling average confidence score (unchanged — Phase 2B
+      // explicitly keeps this formula as-is, no decay):
       const newConfidence = parseFloat(
         ((oldElement.confidenceScore * oldElement.occurrenceCount + pattern.confidenceScore) / newOccurrence).toFixed(4)
       );
@@ -1922,7 +1951,9 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
         recordType: pattern.recordType,
         confidenceScore: newConfidence,
         occurrenceCount: newOccurrence,
-        lastUpdated: timestamp
+        lastUpdated: timestamp,
+        isActive: true, // re-learning a confirmed match reactivates a previously disabled pattern
+        metadata: pattern.metadata ?? oldElement.metadata,
       };
 
       updatedPatterns[existingIndex] = newValue;
@@ -1937,7 +1968,12 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
         recordType: pattern.recordType,
         confidenceScore: pattern.confidenceScore,
         occurrenceCount: 1,
-        lastUpdated: timestamp
+        lastUpdated: timestamp,
+        patternType: "VENDOR_CATEGORY",
+        businessId,
+        branchId,
+        metadata: pattern.metadata ?? {},
+        isActive: true,
       };
 
       updatedPatterns = [newValue, ...updatedPatterns];
@@ -1976,7 +2012,12 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
               record_type: newValue.recordType,
               confidence_score: newValue.confidenceScore,
               occurrence_count: newValue.occurrenceCount,
-              last_updated: newValue.lastUpdated
+              last_updated: newValue.lastUpdated,
+              pattern_type: newValue.patternType ?? "VENDOR_CATEGORY",
+              business_id: newValue.businessId ?? null,
+              branch_id: newValue.branchId ?? null,
+              metadata: newValue.metadata ?? {},
+              is_active: true
             });
           } else {
             await supabase.from("ocr_learned_patterns").update({
@@ -1985,7 +2026,9 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
               record_type: newValue.recordType,
               confidence_score: newValue.confidenceScore,
               occurrence_count: newValue.occurrenceCount,
-              last_updated: newValue.lastUpdated
+              last_updated: newValue.lastUpdated,
+              metadata: newValue.metadata ?? {},
+              is_active: true
             }).eq("id", newValue.id).eq("workspace_id", activeWorkspace.id);
           }
         } catch (ex: any) {
@@ -2013,13 +2056,15 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
       const normalizedVendorInput = pattern.vendorName.trim();
       const vendorLower = normalizedVendorInput.toLowerCase();
       const vendorKey = vendorMatchKey(normalizedVendorInput);
+      const businessId = pattern.businessId ?? null;
+      const branchId = pattern.branchId ?? null;
 
       let existingIndex = workingPatterns.findIndex(
-        (p) => p.vendorName.toLowerCase() === vendorLower && p.workspaceId === activeWorkspace.id
+        (p) => p.vendorName.toLowerCase() === vendorLower && p.workspaceId === activeWorkspace.id && sameTier(p, businessId, branchId)
       );
       if (existingIndex === -1) {
         existingIndex = workingPatterns.findIndex(
-          (p) => p.workspaceId === activeWorkspace.id && isFuzzyVendorMatch(vendorKey, vendorMatchKey(p.vendorName))
+          (p) => p.workspaceId === activeWorkspace.id && sameTier(p, businessId, branchId) && isFuzzyVendorMatch(vendorKey, vendorMatchKey(p.vendorName))
         );
       }
 
@@ -2038,6 +2083,8 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
           confidenceScore: newConfidence,
           occurrenceCount: newOccurrence,
           lastUpdated: timestamp,
+          isActive: true,
+          metadata: pattern.metadata ?? oldElement.metadata,
         };
         workingPatterns[existingIndex] = newValue;
       } else {
@@ -2050,6 +2097,11 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
           confidenceScore: pattern.confidenceScore,
           occurrenceCount: 1,
           lastUpdated: timestamp,
+          patternType: "VENDOR_CATEGORY",
+          businessId,
+          branchId,
+          metadata: pattern.metadata ?? {},
+          isActive: true,
         };
         workingPatterns = [newValue, ...workingPatterns];
       }
@@ -2097,6 +2149,11 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
                 confidence_score: p.confidenceScore,
                 occurrence_count: p.occurrenceCount,
                 last_updated: p.lastUpdated,
+                pattern_type: p.patternType ?? "VENDOR_CATEGORY",
+                business_id: p.businessId ?? null,
+                branch_id: p.branchId ?? null,
+                metadata: p.metadata ?? {},
+                is_active: true,
               });
             } catch (ex: any) {
               console.warn("DB learn batch upsert skipped:", ex.message);
@@ -2107,10 +2164,16 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
     }
   };
 
-  const deleteOcrLearnedPattern = (id: string) => {
+  // Phase 2B Pattern Lifecycle: no hard delete path. "Disabling" a pattern
+  // sets is_active = false — it disappears from suggestion lookups
+  // (findLearnedPattern) but stays visible in the management UI and fully
+  // auditable, and can always be re-enabled. History is never destroyed.
+  const setOcrLearnedPatternActive = (id: string, isActive: boolean) => {
     if (!activeWorkspace) return;
     const original = ocrLearnedPatterns.find((item) => item.id === id);
-    const nextList = ocrLearnedPatterns.filter((item) => item.id !== id);
+    if (!original) return;
+    const updated: OcrLearnedPattern = { ...original, isActive };
+    const nextList = ocrLearnedPatterns.map((item) => (item.id === id ? updated : item));
     setOcrLearnedPatterns(nextList);
     persistCurrentState(
       financialEvents,
@@ -2122,25 +2185,66 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
       nextList
     );
 
-    if (original) {
-      writeAuditLog({
-        workspaceId: activeWorkspace.id,
-        module: "OCR Learning",
-        action: "DELETE",
-        oldValue: original,
-        newValue: null
-      });
-    }
+    writeAuditLog({
+      workspaceId: activeWorkspace.id,
+      module: "OCR Learning",
+      action: isActive ? "UPDATE" : "DELETE",
+      oldValue: original,
+      newValue: updated
+    });
 
     if (isSupabaseConfigured() && !isMockUser && supabase) {
       (async () => {
         try {
-          await supabase.from("ocr_learned_patterns").delete().eq("id", id).eq("workspace_id", activeWorkspace.id);
+          await supabase.from("ocr_learned_patterns").update({ is_active: isActive }).eq("id", id).eq("workspace_id", activeWorkspace.id);
         } catch (ex: any) {
-          console.warn("DB pattern delete skipped:", ex.message);
+          console.warn("DB pattern active-state update skipped:", ex.message);
         }
       })();
     }
+  };
+
+  const deleteOcrLearnedPattern = (id: string) => setOcrLearnedPatternActive(id, false);
+  const reactivateOcrLearnedPattern = (id: string) => setOcrLearnedPatternActive(id, true);
+
+  // Tier-aware lookup engine (Phase 2B): Branch -> Business -> Workspace.
+  // Single source of truth reused identically by OCR, Bank Statement
+  // recovery, AI Chat, and Voice Notes, for both Tenant Owner and Tenant
+  // Staff -- never re-implemented per-screen. Cross-Workspace Hint is a
+  // separate, informational-only engine (useCrossWorkspacePattern) and is
+  // intentionally NOT folded in here, since it must never auto-apply.
+  const findLearnedPattern = (
+    vendorName: string,
+    businessId?: string | null,
+    branchId?: string | null
+  ): OcrLearnedPattern | undefined => {
+    if (!activeWorkspace || !vendorName) return undefined;
+    const vendorLower = vendorName.trim().toLowerCase();
+    const vendorKey = vendorMatchKey(vendorName);
+    const activePatterns = ocrLearnedPatterns.filter((p) => p.workspaceId === activeWorkspace.id && p.isActive !== false);
+
+    const matchAtTier = (tierBusinessId: string | null, tierBranchId: string | null) => {
+      const exact = activePatterns.find(
+        (p) => p.vendorName.toLowerCase() === vendorLower && sameTier(p, tierBusinessId, tierBranchId)
+      );
+      if (exact) return exact;
+      return activePatterns.find(
+        (p) => sameTier(p, tierBusinessId, tierBranchId) && isFuzzyVendorMatch(vendorKey, vendorMatchKey(p.vendorName))
+      );
+    };
+
+    // 1. Branch tier (most specific)
+    if (branchId) {
+      const branchMatch = matchAtTier(businessId ?? null, branchId);
+      if (branchMatch) return branchMatch;
+    }
+    // 2. Business tier (any branch under this business)
+    if (businessId) {
+      const businessMatch = matchAtTier(businessId, null);
+      if (businessMatch) return businessMatch;
+    }
+    // 3. Workspace tier (default, matches pre-Phase-2B behavior)
+    return matchAtTier(null, null);
   };
 
   const resetWorkspaceData = () => {
@@ -2463,6 +2567,8 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
         learnOcrPattern,
         learnOcrPatternsBatch,
         deleteOcrLearnedPattern,
+        reactivateOcrLearnedPattern,
+        findLearnedPattern,
         resetWorkspaceData,
         restoreWorkspaceData,
       }}

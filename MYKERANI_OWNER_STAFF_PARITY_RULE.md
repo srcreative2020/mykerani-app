@@ -94,6 +94,27 @@ Resolved (Owner/Staff Pipeline Unification):
   hook (`src/hooks/useCrossWorkspacePattern.ts`), now called identically
   from both `OwnerDashboard.tsx` and `StaffHomeScreen.tsx`'s `sendChat`, with
   the matching hint banner rendered on both screens.
+- Learning Memory Engine (Phase 2B hierarchy expansion): `findLearnedPattern()`
+  (Branch -> Business -> Workspace tier-aware lookup) and the extended
+  `learnOcrPattern()`/`learnOcrPatternsBatch()`/`deleteOcrLearnedPattern()`/
+  `reactivateOcrLearnedPattern()` all live in the one shared
+  `FinancialRecordsContext.tsx`, used identically by both screens — no
+  Owner-only or Staff-only learning/lookup code was introduced.
+  `OCREngineConsole.tsx` and `HistoricalRecoveryWorkspace.tsx` are shared
+  components rendered by both roles, and `useConfirmChatSuggestion.ts`
+  (AI Chat + Voice Notes write path) already serves both per the entry
+  above — so this expansion inherits parity automatically rather than
+  needing a separate audit.
+
+Reserved for Phase 2C (intentionally not implemented in 2B):
+- Pattern Merge UI (manual user-triggered merge of two learned patterns).
+- Auto Merge (automatic merge beyond the existing same-tier fuzzy-name match).
+- Auto Approval / Auto Posting of AI suggestions (would violate "AI Suggests
+  -> User Confirms -> AI Learns" — out of scope permanently, not just deferred).
+- Confidence Decay (time-based automatic reduction of confidence_score).
+- Cross-Workspace Auto-Apply (the cross-workspace hint must stay
+  informational-only; auto-switching workspace or auto-filling from another
+  workspace's pattern is explicitly excluded).
 
 Still open:
 - Import Recovery / Bulk Bank Statement Import: Owner-only; no Staff

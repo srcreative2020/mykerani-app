@@ -174,7 +174,16 @@ export interface OcrLearnedPattern {
   confidenceScore: number;
   occurrenceCount: number;
   lastUpdated: string;
+  // Phase 2B — Learning Memory Engine hierarchy. All optional/additive:
+  // absent/undefined business/branch means a workspace-wide (tier-3) pattern,
+  // identical to pre-Phase-2B behavior.
+  patternType?: "VENDOR_CATEGORY";
+  businessId?: string | null;
+  branchId?: string | null;
+  metadata?: Record<string, unknown>;
+  isActive?: boolean;
 }
+
 
 export interface AuditLogEntry {
   id: string;

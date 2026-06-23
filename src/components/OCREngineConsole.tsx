@@ -41,7 +41,8 @@ export const OCREngineConsole: React.FC = () => {
     addFinancialEvidencePackage,
     addFinancialEvent,
     learnOcrPattern,
-    deleteOcrLearnedPattern
+    deleteOcrLearnedPattern,
+    findLearnedPattern
   } = useFinancials();
 
   const { activeWorkspace } = useWorkspace();
@@ -214,11 +215,11 @@ export const OCREngineConsole: React.FC = () => {
 
       const payload = finalJob.result;
 
-      // Look in OCR Learning Layer memory
+      // Look in OCR Learning Layer memory — shared tier-aware lookup engine
+      // (Branch -> Business -> Workspace), same one used by Bank Statement
+      // recovery, AI Chat, and Voice Notes, for both Owner and Staff.
       const merchantInput = payload.merchantName || "";
-      const matchedPattern = ocrLearnedPatterns.find(
-        (p) => p.vendorName.toLowerCase() === merchantInput.toLowerCase()
-      );
+      const matchedPattern = findLearnedPattern(merchantInput);
 
       if (matchedPattern) {
         // AI Suggests with Learning memory!

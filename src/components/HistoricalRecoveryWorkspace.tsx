@@ -62,9 +62,16 @@ export const HistoricalRecoveryWorkspace: React.FC = () => {
   const [archiveStatus, setArchiveStatus] = useState<string>("");
   const [importError, setImportError] = useState<string>("");
 
+  // Pattern Lifecycle (Phase 2B): disabled patterns must never feed suggestions
+  // -- same rule the shared findLearnedPattern() lookup engine enforces.
+  const activeLearnedPatterns = useMemo(
+    () => ocrLearnedPatterns.filter((p) => p.isActive !== false),
+    [ocrLearnedPatterns]
+  );
+
   const suggestions: RecoverySuggestion[] = useMemo(
-    () => suggestCategoriesForTransactions(parsedTransactions, ocrLearnedPatterns),
-    [parsedTransactions, ocrLearnedPatterns]
+    () => suggestCategoriesForTransactions(parsedTransactions, activeLearnedPatterns),
+    [parsedTransactions, activeLearnedPatterns]
   );
 
   const transferMatches = useMemo(() => detectInternalTransfers(parsedTransactions), [parsedTransactions]);
