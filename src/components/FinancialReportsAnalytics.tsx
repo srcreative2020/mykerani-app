@@ -6,24 +6,16 @@ import { useTenant } from "../context/TenantContext";
 import { logEvent } from "../lib/eventLog";
 import { loadBusinessProfile, EMPTY_BUSINESS_PROFILE, type BusinessProfile } from "../lib/profileData";
 import {
-  TrendingUp, 
-  ArrowDownLeft, 
-  ArrowUpRight, 
-  Clock, 
-  AlertCircle, 
-  Scale, 
+  Clock,
+  AlertCircle,
   Calendar,
   Building2,
-  Wallet, 
-  Printer, 
-  Download, 
-  Info, 
-  ShieldCheck, 
-  FileText,
+  Info,
+  ShieldCheck,
   PieChart,
-  BarChart4,
-  Activity,
-  Landmark
+  Landmark,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
 import { type FinancialEvent, type FinancialCommitment } from "../types";
 import { exportToCSV, exportToExcel, exportToJSON, exportToPDF, type ExportColumn } from "../lib/exportUtils";
@@ -37,6 +29,9 @@ import { getCashFlowActivityTotals } from "../lib/cashFlowClassifier";
 import { ProfitLossReport } from "./ProfitLossReport";
 import { BalanceSheetReport } from "./BalanceSheetReport";
 import { CashFlowReport } from "./CashFlowReport";
+import { ReportCenterSnapshot } from "./ReportCenterSnapshot";
+import { ReportCenterHealthCard, ReportCenterReadinessGrid, type ReadinessCardItem } from "./ReportCenterReadiness";
+import { ReportExportMenu } from "./ReportExportMenu";
 
 export const FinancialReportsAnalytics: React.FC = () => {
   const { activeWorkspace } = useWorkspace();
@@ -73,6 +68,9 @@ export const FinancialReportsAnalytics: React.FC = () => {
 
   // Search filter inside specific reports
   const [searchTerm, setSearchTerm] = useState("");
+
+  // Phase 2D.2 Report Center: Advanced Reports section is collapsed by default.
+  const [advancedReportsOpen, setAdvancedReportsOpen] = useState(false);
 
   const baseDate = useMemo(() => {
     const today = new Date();
@@ -440,6 +438,40 @@ export const FinancialReportsAnalytics: React.FC = () => {
     taxReadiness, bankReadiness, allTimeBuckets,
   ]);
 
+  // Phase 2D.2 Report Center — Section 1 Financial Snapshot figures. Both
+  // reuse the same buckets/balances already computed above for the
+  // profit_loss / summary report exports; no new calculation logic.
+  const netProfit = useMemo(() => getProfitAndLossSubtotals(allTimeBuckets).operatingProfit, [allTimeBuckets]);
+  const currentCash = totalLiquidAssets;
+
+  // Section 3 Financial Health % — a presentation-only rollup of the 3
+  // existing health grades (solvency/quick/runway) already computed by
+  // computeFinancialHealthScoring() above. Each grade counts as "good" if it
+  // is the best-band grade for that metric; pct = good / 3. No new scoring
+  // engine is introduced — this only summarizes existing grades into one
+  // headline number for the snapshot card.
+  const financialHealthPct = useMemo(() => {
+    const goodFlags = [
+      healthScoring.solvencyGrade !== "Critical Risk" && healthScoring.solvencyGrade !== "Moderate",
+      healthScoring.quickGrade !== "Strained" && healthScoring.quickGrade !== "Adequate",
+      healthScoring.runwayGrade !== "Immediate Action Required (< 2 Months)" && healthScoring.runwayGrade !== "Moderate Buffer (2-5 Months)",
+    ];
+    const goodCount = goodFlags.filter(Boolean).length;
+    return (goodCount / goodFlags.length) * 100;
+  }, [healthScoring]);
+
+  // Section 4 Business Readiness cards — Tax/Financing reuse the existing
+  // LHDN/Loan readiness engines verbatim. Audit Readiness has no dedicated
+  // calculation in this file/engine set; the closest existing computed
+  // figure is healthV1.evidenceCoveragePct (document/evidence linkage
+  // completeness), reused here as the Audit Readiness proxy — see
+  // ReportCenterReadiness.tsx header comment for the full rationale.
+  const businessReadinessItems = useMemo((): ReadinessCardItem[] => [
+    { key: "tax_readiness", emoji: "🧾", label: "Tax Readiness", pct: taxReadiness.scorePct },
+    { key: "bank_readiness", emoji: "🏦", label: "Financing Readiness", pct: bankReadiness.scorePct },
+    { key: "health", emoji: "📂", label: "Audit Readiness", pct: healthV1.evidenceCoveragePct },
+  ], [taxReadiness, bankReadiness, healthV1]);
+
   const exportFilenameBase = `MyKerani_${activeWorkspace.name}_${selectedReport}_${new Date().toISOString().slice(0, 10)}`.replace(/\s+/g, "_");
 
   const handleExport = (format: "csv" | "excel" | "pdf" | "json") => {
@@ -471,234 +503,158 @@ export const FinancialReportsAnalytics: React.FC = () => {
     }
   };
 
+  // Phase 2D.2 Report Center: maps a Popular Report tile key to the
+  // existing report state. "income_analysis" / "expense_analysis" have no
+  // dedicated engine in this file — they route into the existing
+  // profit_loss report, which already contains the Revenue and Operating
+  // Expenses line items (see ProfitLossReport.tsx), the closest existing
+  // breakdown for each.
+  const handleSelectPopularReport = (key: string) => {
+    if (key === "income_analysis" || key === "expense_analysis") {
+      setSelectedReport("profit_loss");
+    } else {
+      setSelectedReport(key as typeof selectedReport);
+    }
+    setSearchTerm("");
+  };
+
   return (
-    <div className="space-y-6" id="reports_foundation_root">
-      
-      {/* Upper Report Deck Description Bar */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-slate-50 p-4 border border-slate-200 rounded-xl">
-        <div className="space-y-1">
-          <span className="text-[10px] font-mono uppercase bg-slate-900 text-slate-100 px-2.5 py-0.5 rounded-md font-bold">
-            Read-Only Analytics Panel
-          </span>
-          <p className="text-xs text-slate-500 font-sans">
-            Laporan berkanun ini dikompilasi secara automatik berasaskan rekod-rekod dwi-lejar berasingan yang sah dalam workspace <strong>{activeWorkspace.name}</strong>.
-          </p>
-        </div>
-        <div className="flex items-center gap-2 flex-wrap">
-          <button
-            onClick={handlePrint}
-            className="px-3 py-1.5 border border-slate-300 hover:border-slate-400 bg-white hover:bg-slate-50 text-slate-700 rounded-lg text-xs font-medium flex items-center transition cursor-pointer"
-            id="btn_print_report"
-          >
-            <Printer className="w-3.5 h-3.5 mr-1.5 text-slate-500" />
-            Cetak Laporan
-          </button>
-          <button
-            onClick={() => handleExport("csv")}
-            className="px-3 py-1.5 border border-slate-300 hover:border-slate-400 bg-white hover:bg-slate-50 text-slate-700 rounded-lg text-xs font-medium flex items-center transition cursor-pointer"
-            id="btn_export_csv"
-          >
-            <Download className="w-3.5 h-3.5 mr-1.5 text-slate-500" />
-            CSV
-          </button>
-          <button
-            onClick={() => handleExport("excel")}
-            className="px-3 py-1.5 border border-slate-300 hover:border-slate-400 bg-white hover:bg-slate-50 text-slate-700 rounded-lg text-xs font-medium flex items-center transition cursor-pointer"
-            id="btn_export_excel"
-          >
-            <Download className="w-3.5 h-3.5 mr-1.5 text-slate-500" />
-            Excel
-          </button>
-          <button
-            onClick={() => handleExport("pdf")}
-            className="px-3 py-1.5 border border-slate-300 hover:border-slate-400 bg-white hover:bg-slate-50 text-slate-700 rounded-lg text-xs font-medium flex items-center transition cursor-pointer"
-            id="btn_export_pdf"
-          >
-            <Download className="w-3.5 h-3.5 mr-1.5 text-slate-500" />
-            PDF
-          </button>
-          <button
-            onClick={() => handleExport("json")}
-            className="px-3 py-1.5 border border-slate-300 hover:border-slate-400 bg-white hover:bg-slate-50 text-slate-700 rounded-lg text-xs font-medium flex items-center transition cursor-pointer"
-            id="btn_export_json"
-          >
-            <Download className="w-3.5 h-3.5 mr-1.5 text-slate-500" />
-            JSON
-          </button>
-        </div>
+    <div className="max-w-lg mx-auto w-full space-y-5" id="reports_foundation_root">
+
+      {/* Section 1 + 2 — Financial Snapshot & Popular Reports */}
+      <ReportCenterSnapshot
+        netProfit={netProfit}
+        currentCash={currentCash}
+        onSelectPopularReport={handleSelectPopularReport}
+      />
+
+      {/* Section 3 — Financial Health */}
+      <ReportCenterHealthCard
+        pct={financialHealthPct}
+        onExpand={() => { setSelectedReport("health"); setSearchTerm(""); }}
+      />
+
+      {/* Section 4 — Business Readiness */}
+      <ReportCenterReadinessGrid
+        items={businessReadinessItems}
+        onSelect={(key) => { setSelectedReport(key as typeof selectedReport); setSearchTerm(""); }}
+      />
+
+      {/* Section 5 — Export Center */}
+      <ReportExportMenu
+        onExport={(format) => handleExport(format)}
+        onPrint={handlePrint}
+      />
+
+      {/* Section 6 — Advanced Reports (collapsed by default) */}
+      <div className="space-y-2" id="report_center_advanced">
+        <button
+          onClick={() => setAdvancedReportsOpen((v) => !v)}
+          className="w-full flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-xs font-semibold text-slate-700 hover:bg-slate-100 transition cursor-pointer"
+          id="btn_toggle_advanced_reports"
+        >
+          <span>Laporan Lanjutan (Advanced Reports)</span>
+          {advancedReportsOpen ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+        </button>
+
+        {advancedReportsOpen && (
+          <div className="flex flex-col space-y-2" id="advanced_reports_list">
+            <button
+              onClick={() => { setSelectedReport("summary"); setSearchTerm(""); }}
+              className={`w-full text-left px-3.5 py-3 rounded-xl text-xs font-semibold flex items-center justify-between transition border ${
+                selectedReport === "summary"
+                  ? "bg-slate-950 border-slate-950 text-white shadow-xs"
+                  : "bg-white border-slate-200 text-slate-700 hover:bg-slate-50 hover:text-slate-950"
+              }`}
+              id="nav_report_summary"
+            >
+              <div className="flex items-center space-x-2">
+                <PieChart className="w-4 h-4 text-emerald-500" />
+                <span>Ringkasan Kedudukan Kewangan</span>
+              </div>
+            </button>
+
+            <button
+              onClick={() => { setSelectedReport("receivables_aging"); setSearchTerm(""); }}
+              className={`w-full text-left px-3.5 py-3 rounded-xl text-xs font-semibold flex items-center justify-between transition border ${
+                selectedReport === "receivables_aging"
+                  ? "bg-slate-950 border-slate-950 text-white shadow-xs"
+                  : "bg-white border-slate-200 text-slate-700 hover:bg-slate-50 hover:text-slate-950"
+              }`}
+              id="nav_report_receivables_aging"
+            >
+              <div className="flex items-center space-x-2">
+                <Clock className="w-4 h-4 text-blue-500" />
+                <span>Penuaan Tuntutan (Receivable Aging)</span>
+              </div>
+            </button>
+
+            <button
+              onClick={() => { setSelectedReport("payables_aging"); setSearchTerm(""); }}
+              className={`w-full text-left px-3.5 py-3 rounded-xl text-xs font-semibold flex items-center justify-between transition border ${
+                selectedReport === "payables_aging"
+                  ? "bg-slate-950 border-slate-950 text-white shadow-xs"
+                  : "bg-white border-slate-200 text-slate-700 hover:bg-slate-50 hover:text-slate-950"
+              }`}
+              id="nav_report_payables_aging"
+            >
+              <div className="flex items-center space-x-2">
+                <AlertCircle className="w-4 h-4 text-amber-500" />
+                <span>Penuaan Hutang Pembekal (Payables)</span>
+              </div>
+            </button>
+
+            <button
+              onClick={() => { setSelectedReport("commitments"); setSearchTerm(""); }}
+              className={`w-full text-left px-3.5 py-3 rounded-xl text-xs font-semibold flex items-center justify-between transition border ${
+                selectedReport === "commitments"
+                  ? "bg-slate-950 border-slate-950 text-white shadow-xs"
+                  : "bg-white border-slate-200 text-slate-700 hover:bg-slate-50 hover:text-slate-950"
+              }`}
+              id="nav_report_commitments"
+            >
+              <div className="flex items-center space-x-2">
+                <Calendar className="w-4 h-4 text-rose-500" />
+                <span>Komitmen Kontrak (Contract Commitments)</span>
+              </div>
+            </button>
+
+            <button
+              onClick={() => { setSelectedReport("balance_sheet"); setSearchTerm(""); }}
+              className={`w-full text-left px-3.5 py-3 rounded-xl text-xs font-semibold flex items-center justify-between transition border ${
+                selectedReport === "balance_sheet"
+                  ? "bg-slate-950 border-slate-950 text-white shadow-xs"
+                  : "bg-white border-slate-200 text-slate-700 hover:bg-slate-50 hover:text-slate-950"
+              }`}
+              id="nav_report_balance_sheet"
+            >
+              <div className="flex items-center space-x-2">
+                <Landmark className="w-4 h-4 text-violet-600" />
+                <span>Kunci Kira-Kira (Balance Sheet / Debt Analysis)</span>
+              </div>
+            </button>
+
+            <button
+              onClick={() => { setSelectedReport("bank_readiness"); setSearchTerm(""); }}
+              className={`w-full text-left px-3.5 py-3 rounded-xl text-xs font-semibold flex items-center justify-between transition border ${
+                selectedReport === "bank_readiness"
+                  ? "bg-slate-950 border-slate-950 text-white shadow-xs"
+                  : "bg-white border-slate-200 text-slate-700 hover:bg-slate-50 hover:text-slate-950"
+              }`}
+              id="nav_report_bank_readiness_advanced"
+            >
+              <div className="flex items-center space-x-2">
+                <Building2 className="w-4 h-4 text-cyan-600" />
+                <span>Kesediaan Pembiayaan — Butiran Penuh (Financing Analysis)</span>
+              </div>
+            </button>
+          </div>
+        )}
       </div>
 
-      {/* Main Structural Boundary Layout */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        
-        {/* Navigation Sidebar Selector (Col span 3) */}
-        <div className="lg:col-span-3 flex flex-col space-y-2">
-          <p className="text-[10px] font-mono text-slate-400 uppercase font-bold tracking-wider mb-1 px-2">
-            Senarai Laporan Berkanun
-          </p>
-          <button
-            onClick={() => { setSelectedReport("summary"); setSearchTerm(""); }}
-            className={`w-full text-left px-3.5 py-3 rounded-xl text-xs font-semibold flex items-center justify-between transition border ${
-              selectedReport === "summary"
-                ? "bg-slate-950 border-slate-950 text-white shadow-xs"
-                : "bg-white border-slate-200 text-slate-700 hover:bg-slate-50 hover:text-slate-950"
-            }`}
-            id="nav_report_summary"
-          >
-            <div className="flex items-center space-x-2">
-              <PieChart className="w-4 h-4 text-emerald-500" />
-              <span>1. Ringkasan Kedudukan Kewangan</span>
-            </div>
-          </button>
+      {/* Active Report Detail Canvas */}
+      <div className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-6 shadow-xs space-y-6">
 
-          <button
-            onClick={() => { setSelectedReport("receivables_aging"); setSearchTerm(""); }}
-            className={`w-full text-left px-3.5 py-3 rounded-xl text-xs font-semibold flex items-center justify-between transition border ${
-              selectedReport === "receivables_aging"
-                ? "bg-slate-950 border-slate-950 text-white shadow-xs"
-                : "bg-white border-slate-200 text-slate-700 hover:bg-slate-50 hover:text-slate-950"
-            }`}
-            id="nav_report_receivables_aging"
-          >
-            <div className="flex items-center space-x-2">
-              <Clock className="w-4 h-4 text-blue-500" />
-              <span>3. Penuaan Tuntutan (Receivable Aging)</span>
-            </div>
-          </button>
-
-          <button
-            onClick={() => { setSelectedReport("payables_aging"); setSearchTerm(""); }}
-            className={`w-full text-left px-3.5 py-3 rounded-xl text-xs font-semibold flex items-center justify-between transition border ${
-              selectedReport === "payables_aging"
-                ? "bg-slate-950 border-slate-950 text-white shadow-xs"
-                : "bg-white border-slate-200 text-slate-700 hover:bg-slate-50 hover:text-slate-950"
-            }`}
-            id="nav_report_payables_aging"
-          >
-            <div className="flex items-center space-x-2">
-              <AlertCircle className="w-4 h-4 text-amber-500" />
-              <span>4. Penuaan Hutang Pembekal (Payables)</span>
-            </div>
-          </button>
-
-          <button
-            onClick={() => { setSelectedReport("commitments"); setSearchTerm(""); }}
-            className={`w-full text-left px-3.5 py-3 rounded-xl text-xs font-semibold flex items-center justify-between transition border ${
-              selectedReport === "commitments"
-                ? "bg-slate-950 border-slate-950 text-white shadow-xs"
-                : "bg-white border-slate-200 text-slate-700 hover:bg-slate-50 hover:text-slate-950"
-            }`}
-            id="nav_report_commitments"
-          >
-            <div className="flex items-center space-x-2">
-              <Calendar className="w-4 h-4 text-rose-500" />
-              <span>5. Laporan Sektor Komitmen Kontrak</span>
-            </div>
-          </button>
-
-          <button
-            onClick={() => { setSelectedReport("health"); setSearchTerm(""); }}
-            className={`w-full text-left px-3.5 py-3 rounded-xl text-xs font-semibold flex items-center justify-between transition border ${
-              selectedReport === "health"
-                ? "bg-slate-950 border-slate-950 text-white shadow-xs"
-                : "bg-white border-slate-200 text-slate-700 hover:bg-slate-50 hover:text-slate-950"
-            }`}
-            id="nav_report_health"
-          >
-            <div className="flex items-center space-x-2">
-              <BarChart4 className="w-4 h-4 text-purple-500" />
-              <span>6. Penilaian Kesihatan & Kelangsungan</span>
-            </div>
-          </button>
-
-          <button
-            onClick={() => { setSelectedReport("tax_readiness"); setSearchTerm(""); }}
-            className={`w-full text-left px-3.5 py-3 rounded-xl text-xs font-semibold flex items-center justify-between transition border ${
-              selectedReport === "tax_readiness"
-                ? "bg-slate-950 border-slate-950 text-white shadow-xs"
-                : "bg-white border-slate-200 text-slate-700 hover:bg-slate-50 hover:text-slate-950"
-            }`}
-            id="nav_report_tax_readiness"
-          >
-            <div className="flex items-center space-x-2">
-              <ShieldCheck className="w-4 h-4 text-teal-500" />
-              <span>7. Kesediaan Cukai LHDN</span>
-            </div>
-          </button>
-
-          <button
-            onClick={() => { setSelectedReport("bank_readiness"); setSearchTerm(""); }}
-            className={`w-full text-left px-3.5 py-3 rounded-xl text-xs font-semibold flex items-center justify-between transition border ${
-              selectedReport === "bank_readiness"
-                ? "bg-slate-950 border-slate-950 text-white shadow-xs"
-                : "bg-white border-slate-200 text-slate-700 hover:bg-slate-50 hover:text-slate-950"
-            }`}
-            id="nav_report_bank_readiness"
-          >
-            <div className="flex items-center space-x-2">
-              <Building2 className="w-4 h-4 text-cyan-600" />
-              <span>8. Kesediaan Pembiayaan/Pinjaman</span>
-            </div>
-          </button>
-
-          <button
-            onClick={() => { setSelectedReport("profit_loss"); setSearchTerm(""); }}
-            className={`w-full text-left px-3.5 py-3 rounded-xl text-xs font-semibold flex items-center justify-between transition border ${
-              selectedReport === "profit_loss"
-                ? "bg-slate-950 border-slate-950 text-white shadow-xs"
-                : "bg-white border-slate-200 text-slate-700 hover:bg-slate-50 hover:text-slate-950"
-            }`}
-            id="nav_report_profit_loss"
-          >
-            <div className="flex items-center space-x-2">
-              <TrendingUp className="w-4 h-4 text-emerald-600" />
-              <span>9. Untung Rugi (Profit & Loss)</span>
-            </div>
-          </button>
-
-          <button
-            onClick={() => { setSelectedReport("balance_sheet"); setSearchTerm(""); }}
-            className={`w-full text-left px-3.5 py-3 rounded-xl text-xs font-semibold flex items-center justify-between transition border ${
-              selectedReport === "balance_sheet"
-                ? "bg-slate-950 border-slate-950 text-white shadow-xs"
-                : "bg-white border-slate-200 text-slate-700 hover:bg-slate-50 hover:text-slate-950"
-            }`}
-            id="nav_report_balance_sheet"
-          >
-            <div className="flex items-center space-x-2">
-              <Landmark className="w-4 h-4 text-violet-600" />
-              <span>10. Kunci Kira-Kira (Balance Sheet)</span>
-            </div>
-          </button>
-
-          <button
-            onClick={() => { setSelectedReport("cash_flow_v1"); setSearchTerm(""); }}
-            className={`w-full text-left px-3.5 py-3 rounded-xl text-xs font-semibold flex items-center justify-between transition border ${
-              selectedReport === "cash_flow_v1"
-                ? "bg-slate-950 border-slate-950 text-white shadow-xs"
-                : "bg-white border-slate-200 text-slate-700 hover:bg-slate-50 hover:text-slate-950"
-            }`}
-            id="nav_report_cash_flow_v1"
-          >
-            <div className="flex items-center space-x-2">
-              <Activity className="w-4 h-4 text-sky-600" />
-              <span>11. Penyata Aliran Tunai (Cash Flow V1)</span>
-            </div>
-          </button>
-
-          <div className="p-4 bg-indigo-50 rounded-xl space-y-2.5 mt-4 border border-indigo-100">
-            <span className="text-[10px] font-mono uppercase bg-indigo-100 text-indigo-800 px-1.5 py-0.5 rounded font-bold">
-              Nota Kedaulatan Data
-            </span>
-            <p className="text-[11px] text-indigo-900 leading-relaxed font-sans">
-              Semua paparan bersifat automatik dan dilarang untuk diubah dari skrin ini. Bagi mengubah rekod asas, sila guna skrin transaksi masing-masing.
-            </p>
-          </div>
-        </div>
-
-        {/* Selected Canvas Frame (Col span 9) */}
-        <div className="lg:col-span-9 bg-white border border-slate-200 rounded-2xl p-6 shadow-xs space-y-6">
-          
           {/* Active Canvas Header */}
           <div className="border-b border-slate-100 pb-4">
             <div className="flex items-center space-x-2 text-rose-500 font-mono text-[10px] uppercase font-bold tracking-wider">
@@ -1605,8 +1561,6 @@ export const FinancialReportsAnalytics: React.FC = () => {
           )}
 
         </div>
-
-      </div>
 
     </div>
   );
