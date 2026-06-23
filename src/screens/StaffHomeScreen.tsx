@@ -149,7 +149,7 @@ function AddRecordForm({
 
 // â"€â"€â"€ Main Component â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 export function StaffHomeScreen() {
-  const { user, signOut, isMockUser } = useAuth();
+  const { user, signOut, isMockUser, updateProfile } = useAuth();
   const { activeWorkspace, workspaces, selectWorkspace } = useWorkspace();
   const { financialEvents, addFinancialEvent, editFinancialEvent, addDebtRecord, addDebtRecordAwaited, editDebtRecord, addFinancialCommitment, addFinancialCommitmentAwaited, editFinancialCommitment, learnOcrPattern, addFinancialEvidencePackage, linkEvidenceToRecord, financialEvidencePackages, duplicateFlags, addBankAccount } = useFinancials();
   const { activeTenant } = useTenant();
@@ -167,7 +167,10 @@ export function StaffHomeScreen() {
   const [chatHistoryAll, setChatHistoryAll] = useState<typeof chatMessages>([]);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [showChatArchive, setShowChatArchive] = useState(false);
-  const [showProfileView, setShowProfileView] = useState(false);
+  const [editingAccount, setEditingAccount] = useState(false);
+  const [accountDraft, setAccountDraft] = useState({ fullName: "", email: "" });
+  const [accountSaving, setAccountSaving] = useState(false);
+  const [accountMsg, setAccountMsg] = useState<string | null>(null);
   const [chatArchiveDate, setChatArchiveDate] = useState<string | null>(null);
   const [chatArchiveYear, setChatArchiveYear] = useState<string | null>(null);
   const [chatArchiveMonth, setChatArchiveMonth] = useState<string | null>(null);
@@ -213,6 +216,14 @@ export function StaffHomeScreen() {
 
   const wsId = activeWorkspace?.id || "";
   const firstName = user?.fullName?.split(" ")[0] || "Anda";
+  const startEditAccount = () => { setAccountDraft({ fullName: user?.fullName || "", email: user?.email || "" }); setAccountMsg(null); setEditingAccount(true); };
+  const saveAccount = async () => {
+    setAccountSaving(true);
+    const res = await updateProfile(accountDraft.fullName, accountDraft.email);
+    setAccountSaving(false);
+    setAccountMsg(res.message);
+    if (res.success) setEditingAccount(false);
+  };
   const greeting = getGreeting();
   const today = new Date().toLocaleDateString("ms-MY", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
 
@@ -280,13 +291,40 @@ export function StaffHomeScreen() {
     setNewBankName(""); setNewBankNumber(""); setNewBankHolder(""); setNewBankBalance("");
     setShowAddBankAccountModal(false);
   };
-  // Phase 2D.1 — Financial Overview (Section 1): Staff had no income/expense/
-  // P&L/receivable/payable summary at all prior to this change. Scoped to
-  // myRecords (Staff's own record set), same aggregation approach as Owner's
-  // myEvents-based totals in OwnerDashboard.tsx, just without the
-  // day/week/month/year period toggle Staff's UI doesn't have.
-  const myIncomeTotal = useMemo(() => myRecords.filter(r => r.type === "INCOME").reduce((s, r) => s + r.amountMyr, 0), [myRecords]);
-  const myExpenseTotal = useMemo(() => myRecords.filter(r => r.type === "EXPENSE").reduce((s, r) => s + r.amountMyr, 0), [myRecords]);
+  // Phase 2D.1 — Financial Overview (Section 1): mirrors OwnerDashboard.tsx's
+  // day/week/month/year period toggle so both screens show totals scoped to
+  // the same window — previously Staff summed all-time while Owner summed
+  // only the selected period, making the two screens' totals diverge.
+  const [dashboardPeriod, setDashboardPeriod] = useState<"day" | "week" | "month" | "year">("month");
+  const now = new Date();
+  const periodRange = useMemo(() => {
+    const pad = (n: number) => String(n).padStart(2, "0");
+    const toIso = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    if (dashboardPeriod === "day") {
+      const iso = toIso(today);
+      return { from: iso, to: iso, label: today.toLocaleDateString("ms-MY", { day: "numeric", month: "long", year: "numeric" }) };
+    }
+    if (dashboardPeriod === "week") {
+      const dow = today.getDay();
+      const monday = new Date(today);
+      monday.setDate(today.getDate() - ((dow + 6) % 7));
+      const sunday = new Date(monday);
+      sunday.setDate(monday.getDate() + 6);
+      return { from: toIso(monday), to: toIso(sunday), label: `${monday.toLocaleDateString("ms-MY", { day: "numeric", month: "short" })} - ${sunday.toLocaleDateString("ms-MY", { day: "numeric", month: "short" })}` };
+    }
+    if (dashboardPeriod === "year") {
+      return { from: `${today.getFullYear()}-01-01`, to: `${today.getFullYear()}-12-31`, label: String(today.getFullYear()) };
+    }
+    const lastDay = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+    return { from: toIso(new Date(today.getFullYear(), today.getMonth(), 1)), to: toIso(lastDay), label: today.toLocaleDateString("ms-MY", { month: "long", year: "numeric" }) };
+  }, [dashboardPeriod, now]);
+  const periodRecords = useMemo(
+    () => myRecords.filter(r => r.date >= periodRange.from && r.date <= periodRange.to),
+    [myRecords, periodRange]
+  );
+  const myIncomeTotal = useMemo(() => periodRecords.filter(r => r.type === "INCOME").reduce((s, r) => s + r.amountMyr, 0), [periodRecords]);
+  const myExpenseTotal = useMemo(() => periodRecords.filter(r => r.type === "EXPENSE").reduce((s, r) => s + r.amountMyr, 0), [periodRecords]);
   const myReceivableTotal = useMemo(() => myRecords.filter(r => r.type === "RECEIVABLE" && !r.isCompleted).reduce((s, r) => s + r.amountMyr, 0), [myRecords]);
   const myPayableTotal = useMemo(() => myRecords.filter(r => r.type === "PAYABLE" && !r.isCompleted).reduce((s, r) => s + r.amountMyr, 0), [myRecords]);
   const filteredRecords = useMemo(() => {
@@ -1328,7 +1366,25 @@ export function StaffHomeScreen() {
         {/* â•â•â•â• REKOD â•â•â•â• */}
         {activeTab === "rekod" && (
           <div className="flex-1 overflow-y-auto p-4 pb-24 max-w-lg mx-auto w-full space-y-3" id="staff_records_pane">
-            <h2 className="text-lg font-bold text-slate-900">Rekod Saya</h2>
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-lg font-bold text-slate-900">Rekod Saya</h2>
+                <p className="text-xs text-slate-400">{periodRange.label}</p>
+              </div>
+              <div className="flex bg-slate-100 rounded-xl p-0.5 gap-0.5">
+                {([
+                  { key: "day", label: "Harian" },
+                  { key: "week", label: "Mingguan" },
+                  { key: "month", label: "Bulanan" },
+                  { key: "year", label: "Tahunan" },
+                ] as const).map(({ key, label }) => (
+                  <button key={key} onClick={() => setDashboardPeriod(key)}
+                    className={`px-2 py-1.5 rounded-lg text-[10px] font-bold transition cursor-pointer ${dashboardPeriod === key ? "bg-indigo-600 text-white shadow" : "text-slate-500 hover:bg-slate-200"}`}>
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
 
             {/* Section 1 — Financial Overview: visible without scrolling */}
             <div className="grid grid-cols-2 gap-3">
@@ -1345,7 +1401,7 @@ export function StaffHomeScreen() {
             </div>
 
             <div className={`rounded-2xl p-4 shadow-sm border bg-white ${(myIncomeTotal - myExpenseTotal) >= 0 ? "border-emerald-100" : "border-rose-100"}`}>
-              <p className="text-xs text-slate-500">Untung / Rugi</p>
+              <p className="text-xs text-slate-500">Untung / Rugi ({periodRange.label})</p>
               <p className={`text-2xl font-bold mt-1 ${(myIncomeTotal - myExpenseTotal) >= 0 ? "text-emerald-600" : "text-rose-500"}`}>
                 {(myIncomeTotal - myExpenseTotal) >= 0 ? "+" : "-"}RM {Math.abs(myIncomeTotal - myExpenseTotal).toLocaleString("ms-MY", { minimumFractionDigits: 2 })}
               </p>
@@ -1545,15 +1601,41 @@ export function StaffHomeScreen() {
             <h2 className="text-lg font-bold text-slate-900">Profil Saya</h2>
             <div className="bg-white border border-slate-200 rounded-2xl p-6 space-y-5 shadow-sm">
               <div className="flex items-center space-x-4">
-                <div className="w-14 h-14 rounded-2xl bg-slate-800 text-white flex items-center justify-center text-2xl font-bold shadow">
+                <div className="w-14 h-14 rounded-2xl bg-slate-800 text-white flex items-center justify-center text-2xl font-bold shadow shrink-0">
                   {firstName.charAt(0).toUpperCase()}
                 </div>
-                <div>
-                  <p className="font-bold text-slate-900">{user?.fullName || "Kakitangan"}</p>
-                  <p className="text-xs text-slate-500">{user?.email}</p>
-                  <span className="text-[10px] bg-slate-100 text-slate-600 font-bold px-2 py-0.5 rounded-full mt-1 inline-block">Kakitangan Syarikat</span>
-                </div>
+                {!editingAccount ? (
+                  <div className="min-w-0">
+                    <p className="font-bold text-slate-900 truncate">{user?.fullName || "Kakitangan"}</p>
+                    <p className="text-xs text-slate-500 truncate">{user?.email}</p>
+                    <span className="text-[10px] bg-slate-100 text-slate-600 font-bold px-2 py-0.5 rounded-full mt-1 inline-block">Kakitangan Syarikat</span>
+                  </div>
+                ) : (
+                  <div className="min-w-0 flex-1 space-y-1.5">
+                    <input value={accountDraft.fullName} onChange={e => setAccountDraft(d => ({ ...d, fullName: e.target.value }))} placeholder="Nama penuh" className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg text-sm" />
+                    <input value={accountDraft.email} onChange={e => setAccountDraft(d => ({ ...d, email: e.target.value }))} placeholder="Email" type="email" className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg text-sm" />
+                  </div>
+                )}
               </div>
+
+              {accountMsg && (
+                <p className={`text-xs ${accountMsg.startsWith("Profil") || accountMsg.startsWith("Nama") ? "text-emerald-600" : "text-rose-500"}`}>{accountMsg}</p>
+              )}
+
+              {!editingAccount ? (
+                <button onClick={startEditAccount} className="w-full py-2.5 border border-slate-200 text-slate-700 rounded-xl text-sm font-semibold hover:bg-slate-50 transition cursor-pointer">
+                  Edit Profil
+                </button>
+              ) : (
+                <div className="flex gap-2">
+                  <button onClick={saveAccount} disabled={accountSaving} className="flex-1 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-semibold disabled:opacity-50 cursor-pointer">
+                    {accountSaving ? "Menyimpan..." : "Simpan"}
+                  </button>
+                  <button onClick={() => setEditingAccount(false)} className="flex-1 py-2.5 bg-slate-200 hover:bg-slate-300 text-slate-800 rounded-xl text-sm font-semibold cursor-pointer">
+                    Batal
+                  </button>
+                </div>
+              )}
               {activeWorkspace && (
                 <div className="border-t border-slate-100 pt-4 space-y-2">
                   <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Syarikat Aktif</p>
@@ -1576,11 +1658,6 @@ export function StaffHomeScreen() {
                 <MessageCircle className="w-4 h-4" /><span>Arkib Perbualan</span>
               </button>
 
-              <button onClick={() => setShowProfileView(true)}
-                className="w-full py-3 border border-slate-200 text-slate-600 rounded-xl text-sm font-semibold hover:bg-slate-50 transition cursor-pointer flex items-center justify-center space-x-2">
-                <Brain className="w-4 h-4" /><span>Profil Kewangan AI</span>
-              </button>
-
               <button onClick={() => signOut()}
                 className="w-full py-3 border border-rose-200 text-rose-500 rounded-xl text-sm font-semibold hover:bg-rose-50 transition cursor-pointer">
                 Log Keluar
@@ -1589,44 +1666,6 @@ export function StaffHomeScreen() {
           </div>
         )}
 
-        {/* Profile System view (read-only — Owner manages edits in OwnerDashboard) */}
-        {showProfileView && (
-          <div className="fixed inset-0 z-50 flex flex-col bg-slate-50">
-            <div className="bg-white border-b border-slate-200 px-4 py-3 flex items-center justify-between shrink-0">
-              <div className="flex items-center space-x-2">
-                <Brain className="w-5 h-5 text-indigo-500" />
-                <h2 className="font-bold text-slate-900 text-base">Profil Kewangan AI</h2>
-              </div>
-              <button onClick={() => setShowProfileView(false)} className="p-1.5 rounded-xl hover:bg-slate-100 transition cursor-pointer">
-                <X className="w-5 h-5 text-slate-500" />
-              </button>
-            </div>
-            <div className="flex-1 overflow-y-auto p-4 max-w-lg mx-auto w-full space-y-4">
-              <p className="text-xs text-slate-400">Maklumat ini membantu AI bezakan transaksi peribadi & perniagaan. Hanya Pemilik boleh kemas kini.</p>
-              <div className="bg-white border border-slate-200 rounded-2xl p-4 space-y-1 shadow-sm">
-                <h3 className="text-sm font-bold text-slate-800 mb-1">Profil Peribadi</h3>
-                <p className="text-xs text-slate-600">{personalProfile.fullName || "Belum diisi"}</p>
-                {personalProfile.occupation && <p className="text-xs text-slate-400">{personalProfile.occupation}</p>}
-              </div>
-              <div className="bg-white border border-slate-200 rounded-2xl p-4 space-y-1 shadow-sm">
-                <h3 className="text-sm font-bold text-slate-800 mb-1">Profil Perniagaan</h3>
-                <p className="text-xs text-slate-600">{businessProfile.industry || "Belum diisi"}</p>
-                {businessProfile.branchName && <p className="text-xs text-slate-400">Cawangan: {businessProfile.branchName}</p>}
-              </div>
-              <div className="bg-white border border-slate-200 rounded-2xl p-4 space-y-2 shadow-sm">
-                <h3 className="text-sm font-bold text-slate-800">Kenderaan</h3>
-                {vehicles.length === 0 ? (
-                  <p className="text-xs text-slate-400">Tiada kenderaan didaftarkan</p>
-                ) : vehicles.map(v => (
-                  <div key={v.id} className="flex items-center justify-between bg-slate-50 border border-slate-100 rounded-xl px-3 py-2">
-                    <p className="text-sm font-semibold text-slate-800">{v.name} {v.plateNumber && <span className="text-slate-400 font-normal">· {v.plateNumber}</span>}</p>
-                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${v.ownership === "BUSINESS" ? "bg-indigo-100 text-indigo-700" : "bg-amber-100 text-amber-700"}`}>{v.ownership === "BUSINESS" ? "Perniagaan" : "Peribadi"}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
 
         {/* Chat Archive Modal */}
         {showChatArchive && (
