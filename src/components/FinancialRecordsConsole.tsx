@@ -44,6 +44,7 @@ import { MyKeraniBackupRecovery } from "./MyKeraniBackupRecovery";
 import { StorageSettingsConsole } from "./StorageSettingsConsole";
 import { NotificationCenterConsole } from "./NotificationCenterConsole";
 import { HistoricalRecoveryWorkspace } from "./HistoricalRecoveryWorkspace";
+import { DuplicateReviewQueue } from "./DuplicateReviewQueue";
 import { usePermission } from "../context/PermissionContext";
 import { Sparkles, Archive } from "lucide-react";
 
@@ -171,7 +172,7 @@ export const FinancialRecordsConsole: React.FC<FinancialRecordsConsoleProps> = (
 
   // Selected sub-module navigation
   const [activeModule, setActiveModule] = useState<
-    "dashboard" | "reports" | "backup" | "income" | "expense" | "receivable" | "payable" | "debt" | "cash" | "bank" | "commitments" | "forecast" | "evidence" | "permissions" | "audit" | "ocr" | "recovery"
+    "dashboard" | "reports" | "backup" | "income" | "expense" | "receivable" | "payable" | "debt" | "cash" | "bank" | "commitments" | "forecast" | "evidence" | "permissions" | "audit" | "ocr" | "recovery" | "duplicates"
   >("dashboard");
 
   React.useEffect(() => {
@@ -544,6 +545,16 @@ export const FinancialRecordsConsole: React.FC<FinancialRecordsConsoleProps> = (
           Historical Recovery
         </button>
         <button
+          onClick={() => { setActiveModule("duplicates"); setShowAddForm(false); }}
+          className={`flex-1 min-w-[140px] px-3 py-2.5 rounded-lg text-xs font-semibold flex items-center justify-center transition cursor-pointer ${
+            activeModule === "duplicates" ? "bg-slate-900 text-white shadow-xs" : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+          }`}
+          id="tab_nav_duplicates"
+        >
+          <AlertCircle className="w-4 h-4 mr-1.5 text-amber-500" />
+          Duplicate Review
+        </button>
+        <button
           onClick={() => { setActiveModule("income"); setShowAddForm(false); }}
           className={`flex-1 min-w-[120px] px-3 py-2.5 rounded-lg text-xs font-semibold flex items-center justify-center transition cursor-pointer ${
             activeModule === "income" ? "bg-slate-900 text-white shadow-xs" : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
@@ -766,6 +777,8 @@ export const FinancialRecordsConsole: React.FC<FinancialRecordsConsoleProps> = (
                 ? "Financial Summary"
                 : activeModule === "reports"
                 ? "Autonomous Financial & Statutory Reports"
+                : activeModule === "duplicates"
+                ? "Duplicate Review Queue"
                 : activeModule === "recovery"
                 ? "Historical Recovery Workspace"
                 : activeModule === "storage"
@@ -796,6 +809,7 @@ export const FinancialRecordsConsole: React.FC<FinancialRecordsConsoleProps> = (
               {activeModule === "dashboard" && "Consolidated overview of financial states, business financial health, and recent activities."}
               {activeModule === "reports" && "Compliant financial statements, cashflow assessments, vendor aging penuaan matrix, and solvency health scores."}
               {activeModule === "recovery" && "Import old bank statements, recover categorized records, detect internal transfers, and track financial data completeness."}
+              {activeModule === "duplicates" && "Review system-suggested possible duplicate transactions across different sources (e.g. OCR receipt vs. bank statement import). Nothing is ever auto-deleted or auto-merged -- you decide."}
               {activeModule === "storage" && "Manage multi-tenant isolated physical file roots and configure Bring-Your-Own-Storage (BYOS) cloud endpoints."}
               {activeModule === "notifications" && "Broadcast secure in-app, email, and push communications relating to workspace indicators."}
               {activeModule === "backup" && "Auditable, user-owned workspace backup snapshots, downloadable JSON archives, and policy-gated restore actions."}
@@ -812,7 +826,7 @@ export const FinancialRecordsConsole: React.FC<FinancialRecordsConsoleProps> = (
             </p>
           </div>
 
-          {activeModule !== "dashboard" && activeModule !== "reports" && activeModule !== "recovery" && activeModule !== "backup" && activeModule !== "commitments" && activeModule !== "forecast" && activeModule !== "ai_assistant" && activeModule !== "storage" && activeModule !== "notifications" && (
+          {activeModule !== "dashboard" && activeModule !== "reports" && activeModule !== "recovery" && activeModule !== "duplicates" && activeModule !== "backup" && activeModule !== "commitments" && activeModule !== "forecast" && activeModule !== "ai_assistant" && activeModule !== "storage" && activeModule !== "notifications" && (
             <button
               onClick={() => setShowAddForm(!showAddForm)}
               className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-semibold flex items-center transition self-start sm:self-auto cursor-pointer"
@@ -2032,6 +2046,10 @@ export const FinancialRecordsConsole: React.FC<FinancialRecordsConsoleProps> = (
 
         {activeModule === "recovery" && (
           <HistoricalRecoveryWorkspace />
+        )}
+
+        {activeModule === "duplicates" && (
+          <DuplicateReviewQueue />
         )}
 
         {activeModule === "storage" && (

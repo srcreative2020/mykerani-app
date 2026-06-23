@@ -3,8 +3,9 @@
 // text) against the user's own registered businesses and branches.
 //
 // Used identically by: Bank Statement import, OCR Receipt/Invoice review,
-// and AI Chat transaction confirmation in OwnerDashboard.tsx. Do not
-// duplicate this logic anywhere else — extend this file instead.
+// and AI Chat transaction confirmation in both OwnerDashboard.tsx and
+// StaffHomeScreen.tsx (Owner-Staff Parity Rule). Do not duplicate this
+// logic anywhere else — extend this file instead.
 
 export type Business = { id: string; businessName: string; isActive?: boolean };
 export type BusinessBranch = { id: string; businessId: string; branchName: string; isActive?: boolean };

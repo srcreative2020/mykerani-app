@@ -68,23 +68,60 @@ NOT inside Owner-only screens. Screen files (`OwnerDashboard.tsx`,
 
 One Financial Engine. Many Users. Different UI. Same Financial Logic.
 
-## Known Open Divergences (as of Phase 2A.1 audit)
+## Known Open Divergences
 
-Tracked here so they aren't silently re-introduced or forgotten — see
-`MYKERANI_PHASE2A1_OWNER_STAFF_AUDIT.md` (if present) for full evidence:
+Tracked here so they aren't silently re-introduced or forgotten.
 
-- Business/Branch Mapping: Owner-only (`matchOwnBusiness`/
-  `matchOwnBusinessAndBranch` not called from `StaffHomeScreen.tsx`).
-- AI Chat Confirmation: forked implementation
-  (`handleChatConfirmSuggestion` exists separately in both screens);
-  Staff's DEBT/COMMITMENT branches use the non-awaited, non-error-surfacing
-  `addDebtRecord`/`addFinancialCommitment` instead of the `*Awaited`
-  variants Owner uses.
-- Evidence Linking: two independent call sites (Owner's `linkDocEvidence`
-  in doc-review, Staff's inline block in chat-confirm) with no shared
-  helper; Owner's chat-confirm path has no evidence-linking step at all.
+Resolved (Owner/Staff Pipeline Unification):
+- AI Chat Confirmation: both screens now call the shared
+  `useConfirmChatSuggestion()` hook (`src/hooks/useConfirmChatSuggestion.ts`)
+  instead of separate `handleChatConfirmSuggestion` implementations. Staff's
+  DEBT/COMMITMENT branches now use the `*Awaited` variants with the same
+  try/catch error-surfacing Owner uses.
+- Evidence Linking: both screens call the shared `linkEvidenceToRecord()`
+  (`src/context/FinancialRecordsContext.tsx`) via the same hook.
+- Business/Branch Mapping for AI Chat: Staff's `sendChat` now calls
+  `matchOwnBusinessAndBranch` (same engine as Owner), and
+  `StaffHomeScreen.tsx` now fetches `businessBranches` the same way
+  `OwnerDashboard.tsx` does.
+- Cross-Workspace Pattern Hint (Learning Memory, AI Chat): `checkCrossWorkspacePattern`
+  was Owner-only with no Staff equivalent and untracked here. Audit found
+  `StaffHomeScreen.tsx` already renders a workspace switcher
+  (`workspaces.length > 1`) and shares the same `useWorkspace()` data as
+  Owner, so multi-workspace Staff sessions are real, not theoretical — this
+  was an unintended parity gap (B), not an intended permission difference.
+  Fixed by extracting the logic into the shared `useCrossWorkspacePattern()`
+  hook (`src/hooks/useCrossWorkspacePattern.ts`), now called identically
+  from both `OwnerDashboard.tsx` and `StaffHomeScreen.tsx`'s `sendChat`, with
+  the matching hint banner rendered on both screens.
+- Learning Memory Engine (Phase 2B hierarchy expansion): `findLearnedPattern()`
+  (Branch -> Business -> Workspace tier-aware lookup) and the extended
+  `learnOcrPattern()`/`learnOcrPatternsBatch()`/`deleteOcrLearnedPattern()`/
+  `reactivateOcrLearnedPattern()` all live in the one shared
+  `FinancialRecordsContext.tsx`, used identically by both screens — no
+  Owner-only or Staff-only learning/lookup code was introduced.
+  `OCREngineConsole.tsx` and `HistoricalRecoveryWorkspace.tsx` are shared
+  components rendered by both roles, and `useConfirmChatSuggestion.ts`
+  (AI Chat + Voice Notes write path) already serves both per the entry
+  above — so this expansion inherits parity automatically rather than
+  needing a separate audit.
+
+Reserved for Phase 2C (intentionally not implemented in 2B):
+- Pattern Merge UI (manual user-triggered merge of two learned patterns).
+- Auto Merge (automatic merge beyond the existing same-tier fuzzy-name match).
+- Auto Approval / Auto Posting of AI suggestions (would violate "AI Suggests
+  -> User Confirms -> AI Learns" — out of scope permanently, not just deferred).
+- Confidence Decay (time-based automatic reduction of confidence_score).
+- Cross-Workspace Auto-Apply (the cross-workspace hint must stay
+  informational-only; auto-switching workspace or auto-filling from another
+  workspace's pattern is explicitly excluded).
+
+Still open:
 - Import Recovery / Bulk Bank Statement Import: Owner-only; no Staff
   equivalent exists.
+- Business/Branch Mapping for OCR Receipt/Invoice review and Voice Note
+  confirmation flows: still Owner-only; Staff's OCR/voice-note confirm
+  paths have not yet been audited against this rule.
 
 These must be resolved (or explicitly deferred with owner sign-off)
 before any further feature work touches the affected engines.

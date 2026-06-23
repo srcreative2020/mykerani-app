@@ -41,7 +41,8 @@ export const OCREngineConsole: React.FC = () => {
     addFinancialEvidencePackage,
     addFinancialEvent,
     learnOcrPattern,
-    deleteOcrLearnedPattern
+    deleteOcrLearnedPattern,
+    findLearnedPattern
   } = useFinancials();
 
   const { activeWorkspace } = useWorkspace();
@@ -214,11 +215,11 @@ export const OCREngineConsole: React.FC = () => {
 
       const payload = finalJob.result;
 
-      // Look in OCR Learning Layer memory
+      // Look in OCR Learning Layer memory — shared tier-aware lookup engine
+      // (Branch -> Business -> Workspace), same one used by Bank Statement
+      // recovery, AI Chat, and Voice Notes, for both Owner and Staff.
       const merchantInput = payload.merchantName || "";
-      const matchedPattern = ocrLearnedPatterns.find(
-        (p) => p.vendorName.toLowerCase() === merchantInput.toLowerCase()
-      );
+      const matchedPattern = findLearnedPattern(merchantInput);
 
       if (matchedPattern) {
         // AI Suggests with Learning memory!
@@ -310,8 +311,9 @@ export const OCREngineConsole: React.FC = () => {
         description: `Linked automated OCR upload for ${reviewedMerchantName} (${documentType})`,
         isCompleted: true, // Assume complete since document represents evidence of transfer
         cashAccountId: targetCashId,
-        bankAccountId: targetBankId
-      });
+        bankAccountId: targetBankId,
+        sourceSystem: "OCR"
+      }, undefined, "OCR");
 
       // 3. SECURELY ASSOCIATE BOTH ENTITIES
       // Under MyKerani structure, we can link them using the newly assigned record id!
@@ -410,8 +412,9 @@ export const OCREngineConsole: React.FC = () => {
         date: txn.date,
         referenceNumber: `STMT-${index}`,
         description: `Linked automated OCR bank statement line item: ${txn.description}`,
-        isCompleted: true
-      });
+        isCompleted: true,
+        sourceSystem: "BANK_STATEMENT"
+      }, undefined, "BANK_STATEMENT");
 
       freshEvidencePackage.relatedRecordId = freshEvent.id;
       freshEvidencePackage.relatedRecordType = recordType;

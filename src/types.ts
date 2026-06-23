@@ -85,6 +85,15 @@ export interface WorkspaceState {
 
 export type FinancialRecordType = "INCOME" | "EXPENSE" | "RECEIVABLE" | "PAYABLE" | "DEBT";
 
+// Phase 2C — Cross-Source Duplicate Detection. Identifies which engine/flow
+// originally created a financial record, so duplicate detection can scope
+// itself to cross-source pairs (same-source duplicates are already blocked
+// by existing partial unique indexes on reference_number, e.g. 'AI-%' /
+// 'STMT-%'). Only ever set explicitly by a known caller; defaults to
+// "MANUAL" when truly unknown (manual entry, or legacy rows backfilled at
+// migration time) — never inferred from reference numbers/filenames/text.
+export type SourceSystem = "OCR" | "BANK_STATEMENT" | "AI_CHAT" | "VOICE_NOTE" | "MANUAL";
+
 export interface FinancialEvent {
   id: string;
   workspaceId: string;
@@ -104,6 +113,7 @@ export interface FinancialEvent {
   createdByUserId?: string; // Who recorded this transaction (accounting trail)
   createdByName?: string;
   createdAt?: string; // When the record was actually entered (vs. transaction `date`)
+  sourceSystem?: SourceSystem; // Phase 2C — which engine/flow created this record; defaults to "MANUAL" when absent.
 }
 
 export interface CashAccount {
@@ -174,6 +184,47 @@ export interface OcrLearnedPattern {
   confidenceScore: number;
   occurrenceCount: number;
   lastUpdated: string;
+  // Phase 2B — Learning Memory Engine hierarchy. All optional/additive:
+  // absent/undefined business/branch means a workspace-wide (tier-3) pattern,
+  // identical to pre-Phase-2B behavior.
+  patternType?: "VENDOR_CATEGORY";
+  businessId?: string | null;
+  branchId?: string | null;
+  metadata?: Record<string, unknown>;
+  isActive?: boolean;
+}
+
+
+// Phase 2C — Cross-Source Duplicate Detection Review Queue.
+//
+// `classification` is the field a human reviewer (Owner or Staff — same
+// engine, same table, no role split) can set via explicit action.
+// CONFIRMED_DUPLICATE / REVIEWED_NOT_DUPLICATE are ONLY ever written by a
+// user clicking a review button — the detection engine itself only ever
+// *suggests* UNIQUE / POSSIBLE_DUPLICATE / LIKELY_DUPLICATE (see
+// `duplicateDetectionEngine.ts`'s `suggestedClassification`); it never
+// writes CONFIRMED_DUPLICATE/REVIEWED_NOT_DUPLICATE directly.
+export type DuplicateClassification =
+  | "UNIQUE"
+  | "POSSIBLE_DUPLICATE"
+  | "LIKELY_DUPLICATE"
+  | "CONFIRMED_DUPLICATE"
+  | "REVIEWED_NOT_DUPLICATE";
+
+export interface DuplicateFlag {
+  id: string;
+  workspaceId: string;
+  recordAType: FinancialRecordType;
+  recordAId: string;
+  recordBType: FinancialRecordType;
+  recordBId: string;
+  score: number; // 0..1, engine-computed weighted similarity score
+  classification: DuplicateClassification;
+  factorBreakdown: Record<string, number>; // per-factor scores (amount/date/description/referenceNumber/business/branch)
+  reviewedByUserId?: string;
+  reviewedAt?: string;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface AuditLogEntry {
