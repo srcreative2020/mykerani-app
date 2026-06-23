@@ -230,10 +230,44 @@ export function StaffHomeScreen() {
   const [txnFilterFrom, setTxnFilterFrom] = useState("");
   const [txnFilterTo, setTxnFilterTo] = useState("");
   const [editingTxnId, setEditingTxnId] = useState<string | null>(null);
-  const [editTxnDraft, setEditTxnDraft] = useState({ amountMyr: "", categoryName: "", partyName: "", date: "" });
-  const startEditTxn = (ev: { id: string; amountMyr: number; categoryName: string; partyName: string; date: string }) => {
+  const [editTxnDraft, setEditTxnDraft] = useState({ amountMyr: "", categoryName: "", partyName: "", date: "", businessId: "", branchId: "" });
+  const txnReceiptInputRef = useRef<HTMLInputElement>(null);
+  const [uploadingTxnReceipt, setUploadingTxnReceipt] = useState(false);
+  const evidenceByRecordId = useMemo(() => {
+    const map: Record<string, typeof financialEvidencePackages> = {};
+    financialEvidencePackages.forEach(pkg => {
+      if (!pkg.relatedRecordId) return;
+      (map[pkg.relatedRecordId] ||= []).push(pkg);
+    });
+    return map;
+  }, [financialEvidencePackages]);
+  const previewTxnEvidence = async (pkg: { fileUrl: string }) => {
+    const url = pkg.fileUrl.startsWith("http") ? pkg.fileUrl : await getDocumentUrl(pkg.fileUrl);
+    if (url) window.open(url, "_blank");
+  };
+  const startEditTxn = (ev: { id: string; amountMyr: number; categoryName: string; partyName: string; date: string; businessId?: string; branchId?: string }) => {
     setEditingTxnId(ev.id);
-    setEditTxnDraft({ amountMyr: String(ev.amountMyr), categoryName: ev.categoryName, partyName: ev.partyName, date: ev.date });
+    setEditTxnDraft({ amountMyr: String(ev.amountMyr), categoryName: ev.categoryName, partyName: ev.partyName, date: ev.date, businessId: ev.businessId || "", branchId: ev.branchId || "" });
+  };
+  const attachTxnReceipt = async (ev: { id: string; type: string }, file: File) => {
+    if (!activeWorkspace) return;
+    setUploadingTxnReceipt(true);
+    try {
+      if (!isSupabaseConfigured() || isMockUser || !supabase || isDemoWorkspace(activeWorkspace.id) || !user) return;
+      const { doc, error } = await uploadDocument(file, activeWorkspace.id, user.id, "RECEIPT");
+      if (error || !doc) return;
+      addFinancialEvidencePackage({
+        workspaceId: activeWorkspace.id,
+        documentType: "RECEIPT",
+        uploadDate: new Date().toISOString().slice(0, 10),
+        fileName: doc.file_name,
+        fileUrl: doc.file_path_supabase,
+        relatedRecordType: ev.type,
+        relatedRecordId: ev.id,
+      });
+    } finally {
+      setUploadingTxnReceipt(false);
+    }
   };
   const saveEditTxn = () => {
     if (!editingTxnId) return;
@@ -243,6 +277,8 @@ export function StaffHomeScreen() {
       categoryName: editTxnDraft.categoryName,
       partyName: editTxnDraft.partyName,
       date: editTxnDraft.date,
+      businessId: editTxnDraft.businessId || undefined,
+      branchId: editTxnDraft.businessId ? (editTxnDraft.branchId || undefined) : undefined,
     });
     if (editedEvent && editTxnDraft.partyName.trim() && (editTxnDraft.categoryName !== editedEvent.categoryName || editTxnDraft.partyName !== editedEvent.partyName)) {
       learnOcrPattern({
@@ -491,7 +527,7 @@ export function StaffHomeScreen() {
         headers: { "Content-Type": "application/json", ...(await getAuthHeader()) },
         body: JSON.stringify({
           query: q,
-          financialContext: { activeTenant, activeWorkspace, financialEvents, personalProfile, businessProfile, vehicles, dependents },
+          financialContext: { activeTenant, activeWorkspace, financialEvents, personalProfile, businessProfile, businesses, vehicles, dependents },
           userId: user?.id,
         }),
       });
@@ -875,6 +911,28 @@ export function StaffHomeScreen() {
     uploadChatAttachment(file, kind);
   };
 
+  // Issue #3 fix: "Muat Naik Dokumen" tab and the Resit/Invois/Penyata
+  // shortcuts previously had no onChange/onClick handlers at all (dead,
+  // cosmetic UI — violates the "everything must be real" rule). Rather than
+  // duplicating Owner's separate document-review pipeline, these now route
+  // into the same already-working, parity-verified chat attachment + OCR +
+  // AI-suggestion pipeline used by the paperclip button in AI Chat, then
+  // jump to Home so the user sees OCR/AI processing happen immediately.
+  const docUploadInputRef = useRef<HTMLInputElement>(null);
+  const triggerDocUpload = () => docUploadInputRef.current?.click();
+  const handleDocUploadPicked = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    if (file.size > 10 * 1024 * 1024) {
+      alert("Saiz fail terlalu besar. Maksimum 10MB.");
+      return;
+    }
+    const kind: "image" | "pdf" = file.type.startsWith("image/") ? "image" : "pdf";
+    setActiveTab("home");
+    uploadChatAttachment(file, kind);
+  };
+
   const startChatVoiceRecording = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -1248,7 +1306,7 @@ export function StaffHomeScreen() {
                 { label: "Invois" },
                 { label: "Penyata" },
               ].map(({ label }) => (
-                <button key={label} onClick={() => setActiveTab("muat_naik")}
+                <button key={label} onClick={triggerDocUpload}
                   className="flex-1 py-2 bg-white border border-slate-200 rounded-xl text-xs font-semibold text-slate-600 hover:border-slate-400 hover:bg-slate-50 transition cursor-pointer shadow-sm">
                   {label}
                 </button>
@@ -1337,12 +1395,11 @@ export function StaffHomeScreen() {
                 <p className="font-semibold text-slate-800">Muat Naik Dokumen</p>
                 <p className="text-xs text-slate-400 mt-1">Foto atau fail PDF resit, invois & penyata</p>
               </div>
-              <label className="block cursor-pointer">
-                <span className="inline-block px-6 py-2.5 bg-slate-900 text-white rounded-xl text-xs font-bold hover:bg-slate-800 transition shadow cursor-pointer">
-                  Pilih Fail
-                </span>
-                <input type="file" accept="image/*,.pdf" className="hidden" />
-              </label>
+              <input ref={docUploadInputRef} type="file" accept="image/*,.pdf" className="hidden" onChange={handleDocUploadPicked} />
+              <button onClick={triggerDocUpload}
+                className="inline-block px-6 py-2.5 bg-slate-900 text-white rounded-xl text-xs font-bold hover:bg-slate-800 transition shadow cursor-pointer">
+                Pilih Fail
+              </button>
               <p className="text-[10px] text-slate-300">JPG, PNG atau PDF · Maks 10MB</p>
             </div>
 
@@ -1352,7 +1409,7 @@ export function StaffHomeScreen() {
                 { label: "Invois", icon: FileSpreadsheet, bg: "bg-blue-50 text-blue-500 border-blue-100" },
                 { label: "Penyata", icon: Landmark, bg: "bg-violet-50 text-violet-500 border-violet-100" },
               ].map(({ label, icon: Icon, bg }) => (
-                <button key={label} className={`flex flex-col items-center space-y-2 p-4 bg-white border ${bg} rounded-2xl shadow-sm cursor-pointer hover:shadow-md transition`}>
+                <button key={label} onClick={triggerDocUpload} className={`flex flex-col items-center space-y-2 p-4 bg-white border ${bg} rounded-2xl shadow-sm cursor-pointer hover:shadow-md transition`}>
                   <div className={`w-9 h-9 rounded-lg flex items-center justify-center ${bg}`}>
                     <Icon className="w-4.5 h-4.5" />
                   </div>
@@ -1462,6 +1519,36 @@ export function StaffHomeScreen() {
                         <input value={editTxnDraft.categoryName} onChange={e => setEditTxnDraft(d => ({ ...d, categoryName: e.target.value }))} placeholder="Kategori" className="w-full px-2 py-1 rounded border border-slate-300 text-xs" />
                         <input value={editTxnDraft.amountMyr} onChange={e => setEditTxnDraft(d => ({ ...d, amountMyr: e.target.value }))} type="number" placeholder="Jumlah (RM)" className="w-full px-2 py-1 rounded border border-slate-300 text-xs" />
                         <input value={editTxnDraft.date} onChange={e => setEditTxnDraft(d => ({ ...d, date: e.target.value }))} type="date" className="w-full px-2 py-1 rounded border border-slate-300 text-xs" />
+                        <select value={editTxnDraft.businessId} onChange={e => setEditTxnDraft(d => ({ ...d, businessId: e.target.value, branchId: "" }))}
+                          className="w-full px-2 py-1 rounded border border-slate-300 text-xs">
+                          <option value="">Tiada Bisnes (Personal)</option>
+                          {businesses.filter(b => b.isActive).map(b => (
+                            <option key={b.id} value={b.id}>{b.businessName}</option>
+                          ))}
+                        </select>
+                        {editTxnDraft.businessId && (businessBranches[editTxnDraft.businessId] || []).filter(br => br.isActive).length > 0 && (
+                          <select value={editTxnDraft.branchId} onChange={e => setEditTxnDraft(d => ({ ...d, branchId: e.target.value }))}
+                            className="w-full px-2 py-1 rounded border border-slate-300 text-xs">
+                            <option value="">Tiada Cawangan Tertentu</option>
+                            {(businessBranches[editTxnDraft.businessId] || []).filter(br => br.isActive).map(br => (
+                              <option key={br.id} value={br.id}>{br.branchName}</option>
+                            ))}
+                          </select>
+                        )}
+                        <div className="pt-1">
+                          <input ref={txnReceiptInputRef} type="file" className="hidden" accept=".pdf,.png,.jpg,.jpeg,.webp"
+                            onChange={(e) => { const f = e.target.files?.[0]; if (f) attachTxnReceipt(rec, f); e.target.value = ""; }} />
+                          {(evidenceByRecordId[rec.id] || []).map(pkg => (
+                            <button key={pkg.id} type="button" onClick={() => previewTxnEvidence(pkg)}
+                              className="w-full flex items-center gap-2 px-2 py-1.5 mb-1 rounded border border-emerald-200 bg-emerald-50 text-emerald-700 text-[11px] font-semibold cursor-pointer hover:bg-emerald-100">
+                              <Receipt className="w-3 h-3 shrink-0" /> <span className="truncate">{pkg.fileName}</span> <span className="ml-auto text-[10px] text-emerald-500">Lihat</span>
+                            </button>
+                          ))}
+                          <button type="button" onClick={() => txnReceiptInputRef.current?.click()} disabled={uploadingTxnReceipt}
+                            className="w-full flex items-center justify-center gap-1.5 px-2 py-1.5 rounded border border-dashed border-slate-300 text-[11px] font-semibold text-slate-500 hover:border-indigo-400 hover:text-indigo-600 cursor-pointer disabled:opacity-50">
+                            <Paperclip className="w-3 h-3" /> {uploadingTxnReceipt ? "Memuat naik..." : "Lampirkan Resit"}
+                          </button>
+                        </div>
                         <div className="flex gap-2 pt-1">
                           <button onClick={saveEditTxn} className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold cursor-pointer">Simpan</button>
                           <button onClick={() => setEditingTxnId(null)} className="px-3 py-1.5 rounded-lg bg-slate-200 hover:bg-slate-300 text-slate-800 text-xs font-semibold cursor-pointer">Batal</button>
