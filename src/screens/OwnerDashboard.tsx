@@ -43,6 +43,11 @@ import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import JSZip from "jszip";
 import { matchOwnBusiness, matchOwnBusinessAndBranch } from "../lib/businessMatching";
+import { computeFinancialHealth, type HealthBucketKey } from "../lib/financialHealthCenter";
+import { FinancialHealthCenter } from "../components/FinancialHealthCenter";
+import { DuplicateReviewQueue } from "../components/DuplicateReviewQueue";
+import { HistoricalRecoveryWorkspace } from "../components/HistoricalRecoveryWorkspace";
+import { getImportFailures } from "../lib/importFailureLog";
 import {
   loadPersonalProfile, savePersonalProfile,
   loadVehicles, addVehicle, updateVehicle, deleteVehicle, loadDependents, addDependent, updateDependent, deleteDependent,
@@ -176,7 +181,7 @@ export function OwnerDashboard() {
     userRoles.forEach(r => { map[r.userId] = r.fullName; });
     return map;
   }, [userRoles]);
-  const { financialEvents, addFinancialEvent, addFinancialEventAwaited, addFinancialEventsBatch, editFinancialEvent, deleteFinancialEvent, addDebtRecord, addDebtRecordAwaited, editDebtRecord, deleteDebtRecord, addFinancialCommitment, addFinancialCommitmentAwaited, editFinancialCommitment, deleteFinancialCommitment, learnOcrPattern, learnOcrPatternsBatch, ocrLearnedPatterns, cashAccounts, bankAccounts, debtRecords, financialCommitments, financialEvidencePackages, addFinancialEvidencePackage } = useFinancials();
+  const { financialEvents, addFinancialEvent, addFinancialEventAwaited, addFinancialEventsBatch, editFinancialEvent, deleteFinancialEvent, addDebtRecord, addDebtRecordAwaited, editDebtRecord, deleteDebtRecord, addFinancialCommitment, addFinancialCommitmentAwaited, editFinancialCommitment, deleteFinancialCommitment, learnOcrPattern, learnOcrPatternsBatch, ocrLearnedPatterns, cashAccounts, bankAccounts, debtRecords, financialCommitments, financialEvidencePackages, addFinancialEvidencePackage, duplicateFlags } = useFinancials();
   const { confirmChatSuggestion } = useConfirmChatSuggestion();
   const { crossWorkspaceHints, checkCrossWorkspacePattern } = useCrossWorkspacePattern();
 
@@ -367,7 +372,21 @@ export function OwnerDashboard() {
   );
   const incomeInPeriod = useMemo(() => periodEvents.filter(e => e.type === "INCOME").reduce((s, e) => s + e.amountMyr, 0), [periodEvents]);
   const expenseInPeriod = useMemo(() => periodEvents.filter(e => e.type === "EXPENSE").reduce((s, e) => s + e.amountMyr, 0), [periodEvents]);
+  // Phase 2D — Financial Health Command Center: clicking a health card jumps
+  // straight to the underlying records instead of making the owner search.
+  // When set, this overrides every other dashboard filter so the exact set
+  // of flagged records is always shown regardless of period/search state.
+  const [healthFilterRecordIds, setHealthFilterRecordIds] = useState<string[] | null>(null);
+  const [healthFilterLabel, setHealthFilterLabel] = useState<string>("");
+  const [showDuplicateQueue, setShowDuplicateQueue] = useState(false);
+  const [showImportRecovery, setShowImportRecovery] = useState(false);
+  const [importFailureRefresh, setImportFailureRefresh] = useState(0);
+
   const filteredEvents = useMemo(() => {
+    if (healthFilterRecordIds) {
+      const idSet = new Set(healthFilterRecordIds);
+      return myEvents.filter(e => idSet.has(e.id));
+    }
     const usingCustomRange = !!(txnFilterFrom || txnFilterTo);
     const q = txnSearch.trim().toLowerCase();
     return myEvents.filter(e => {
@@ -385,7 +404,39 @@ export function OwnerDashboard() {
         e.categoryName?.toLowerCase().includes(q);
       return inRange && matchesType && matchesBusiness && matchesCategory && matchesSource && matchesSearch;
     });
-  }, [myEvents, txnFilterFrom, txnFilterTo, periodRange, dashboardTypeFilter, txnSearch, txnFilterBusiness, txnFilterCategory, txnFilterSource]);
+  }, [myEvents, txnFilterFrom, txnFilterTo, periodRange, dashboardTypeFilter, txnSearch, txnFilterBusiness, txnFilterCategory, txnFilterSource, healthFilterRecordIds]);
+  const allChatSuggestions = useMemo(() => {
+    const seen = new Set<string>();
+    const list: ChatSuggestion[] = [];
+    chatMessages.forEach(m => (m.suggestions || []).forEach(s => {
+      if (!seen.has(s.id)) { seen.add(s.id); list.push(s); }
+    }));
+    return list;
+  }, [chatMessages]);
+  const importFailures = useMemo(
+    () => (activeWorkspace ? getImportFailures(activeWorkspace.id) : []),
+    [activeWorkspace, importFailureRefresh]
+  );
+  const financialHealth = useMemo(() => computeFinancialHealth({
+    events: myEvents,
+    evidencePackages: financialEvidencePackages,
+    duplicateFlags,
+    chatSuggestions: allChatSuggestions,
+    chatSuggestionStatus,
+    importFailureCount: importFailures.reduce((s, r) => s + r.skippedCount, 0),
+    importFailureBatchCount: importFailures.length,
+  }), [myEvents, financialEvidencePackages, duplicateFlags, allChatSuggestions, chatSuggestionStatus, importFailures]);
+  const handleHealthBucketSelect = (key: HealthBucketKey) => {
+    if (key === "pendingConfirmation" || key === "reviewRecommended") {
+      setActiveTab("home");
+      return;
+    }
+    const bucket = financialHealth.buckets.find(b => b.key === key);
+    if (!bucket) return;
+    setHealthFilterRecordIds(bucket.recordIds);
+    setHealthFilterLabel(bucket.label);
+    setActiveTab("dashboard");
+  };
   const txnCategoryOptions = useMemo(() => Array.from(new Set(myEvents.map(e => e.categoryName).filter(Boolean))).sort(), [myEvents]);
   const sortedFilteredEvents = useMemo(() => [...filteredEvents].reverse(), [filteredEvents]);
   const txnTotalPages = Math.max(1, Math.ceil(sortedFilteredEvents.length / txnPageSize));
@@ -2641,10 +2692,16 @@ export function OwnerDashboard() {
         {/* â•â•â•â• DASHBOARD â•â•â•â• */}
         {activeTab === "dashboard" && (
           <div className="flex-1 overflow-y-auto p-4 space-y-4 max-w-2xl mx-auto w-full pb-20" id="owner_dashboard_pane">
+            <FinancialHealthCenter
+              health={financialHealth}
+              onSelectBucket={handleHealthBucketSelect}
+              onOpenDuplicateQueue={() => setShowDuplicateQueue(true)}
+              onOpenImportRecovery={() => setShowImportRecovery(true)}
+            />
             <div className="flex items-center justify-between">
               <div>
                 <h2 className="text-lg font-bold text-slate-900">Dashboard</h2>
-                <p className="text-xs text-slate-400">{periodRange.label}</p>
+                <p className="text-xs text-slate-400">{healthFilterRecordIds ? `Ditapis: ${healthFilterLabel}` : periodRange.label}</p>
               </div>
               <div className="flex bg-slate-100 rounded-xl p-0.5 gap-0.5">
                 {([
@@ -2709,8 +2766,8 @@ export function OwnerDashboard() {
                   <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">
                     {dashboardTypeFilter === "INCOME" ? "Senarai Pendapatan" : dashboardTypeFilter === "EXPENSE" ? "Senarai Perbelanjaan" : "Transaksi Terkini"}
                   </p>
-                  {(txnFilterFrom || txnFilterTo || dashboardTypeFilter !== "ALL" || txnSearch || txnFilterBusiness !== "ALL" || txnFilterCategory !== "ALL" || txnFilterSource !== "ALL") && (
-                    <button onClick={() => { setTxnFilterFrom(""); setTxnFilterTo(""); setDashboardTypeFilter("ALL"); setTxnSearch(""); setTxnFilterBusiness("ALL"); setTxnFilterCategory("ALL"); setTxnFilterSource("ALL"); }} className="text-[10px] text-indigo-500 font-semibold cursor-pointer hover:underline">
+                  {(txnFilterFrom || txnFilterTo || dashboardTypeFilter !== "ALL" || txnSearch || txnFilterBusiness !== "ALL" || txnFilterCategory !== "ALL" || txnFilterSource !== "ALL" || healthFilterRecordIds) && (
+                    <button onClick={() => { setTxnFilterFrom(""); setTxnFilterTo(""); setDashboardTypeFilter("ALL"); setTxnSearch(""); setTxnFilterBusiness("ALL"); setTxnFilterCategory("ALL"); setTxnFilterSource("ALL"); setHealthFilterRecordIds(null); setHealthFilterLabel(""); }} className="text-[10px] text-indigo-500 font-semibold cursor-pointer hover:underline">
                       Kosongkan tapisan
                     </button>
                   )}
@@ -4378,6 +4435,32 @@ export function OwnerDashboard() {
 
       {/* Quick Add Modals */}
       {quickAdd && <QuickAddModal type={quickAdd} onClose={() => setQuickAdd(null)} onSave={handleSaveRecord} />}
+
+      {/* Phase 2D — Financial Health Command Center drill-downs. Same shared
+          components rendered by FinancialRecordsConsole's HQ console — no
+          Owner-only duplicate-review or import-recovery logic. */}
+      {showDuplicateQueue && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div className="bg-white rounded-t-3xl sm:rounded-3xl w-full max-w-2xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col">
+            <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between shrink-0">
+              <h3 className="text-sm font-bold text-slate-900">Semakan Kemungkinan Pendua</h3>
+              <button onClick={() => setShowDuplicateQueue(false)} className="text-slate-300 hover:text-slate-600 cursor-pointer"><X className="w-5 h-5" /></button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-5"><DuplicateReviewQueue /></div>
+          </div>
+        </div>
+      )}
+      {showImportRecovery && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div className="bg-white rounded-t-3xl sm:rounded-3xl w-full max-w-2xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col">
+            <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between shrink-0">
+              <h3 className="text-sm font-bold text-slate-900">Pemulihan Import Penyata Bank</h3>
+              <button onClick={() => { setShowImportRecovery(false); setImportFailureRefresh(n => n + 1); }} className="text-slate-300 hover:text-slate-600 cursor-pointer"><X className="w-5 h-5" /></button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-5"><HistoricalRecoveryWorkspace /></div>
+          </div>
+        </div>
+      )}
 
       {/* AI Document Review: tenant owner confirms, edits, or rejects what AI read from the upload */}
       {docReview && (

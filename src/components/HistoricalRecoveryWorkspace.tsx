@@ -30,6 +30,7 @@ import { detectInternalTransfers, getInternalTransferTransactionSet } from "../l
 import { computeFinancialCompleteness } from "../lib/financialCompletenessEngine";
 import { buildReportBuckets, flattenBuckets } from "../lib/reportBucketAggregator";
 import { buildEvidenceIndex, getEvidenceCoverageRatio } from "../lib/evidenceDrilldown";
+import { recordImportFailures } from "../lib/importFailureLog";
 import type { FinancialRecordType } from "../types";
 
 export const HistoricalRecoveryWorkspace: React.FC = () => {
@@ -98,6 +99,9 @@ export const HistoricalRecoveryWorkspace: React.FC = () => {
       setDetectedBank(result.bank);
       setParsedTransactions(result.transactions);
       setSkippedRows(result.skippedRows);
+      if (activeWorkspace && result.skippedRows.length > 0) {
+        recordImportFailures(activeWorkspace.id, file.name, result.skippedRows.length);
+      }
       if (result.transactions.length === 0) {
         setImportError("Tiada transaksi sah dapat dikenal pasti dalam fail ini.");
       }

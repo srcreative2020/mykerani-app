@@ -15,6 +15,11 @@ import {
 import { addAssetPurchase, addOwnerTransaction } from "../lib/assetOwnerData";
 import { matchOwnBusiness, matchOwnBusinessAndBranch } from "../lib/businessMatching";
 import { loadBusinessBranches, type BusinessBranch } from "../lib/profileData";
+import { computeFinancialHealth, type HealthBucketKey } from "../lib/financialHealthCenter";
+import { FinancialHealthCenter } from "../components/FinancialHealthCenter";
+import { DuplicateReviewQueue } from "../components/DuplicateReviewQueue";
+import { HistoricalRecoveryWorkspace } from "../components/HistoricalRecoveryWorkspace";
+import { getImportFailures } from "../lib/importFailureLog";
 import { useConfirmChatSuggestion } from "../hooks/useConfirmChatSuggestion";
 import { useCrossWorkspacePattern } from "../hooks/useCrossWorkspacePattern";
 import type { ChatSuggestion, ChatSuggestionExtra, ChatSuggestionRecordType, ChatSuggestionStatus, ChatSuggestionStatusValue, PendingChatEvidence } from "../lib/chatSuggestionTypes";
@@ -142,7 +147,7 @@ function AddRecordForm({
 export function StaffHomeScreen() {
   const { user, signOut, isMockUser } = useAuth();
   const { activeWorkspace, workspaces, selectWorkspace } = useWorkspace();
-  const { financialEvents, addFinancialEvent, editFinancialEvent, addDebtRecord, addDebtRecordAwaited, editDebtRecord, addFinancialCommitment, addFinancialCommitmentAwaited, editFinancialCommitment, learnOcrPattern, addFinancialEvidencePackage, linkEvidenceToRecord } = useFinancials();
+  const { financialEvents, addFinancialEvent, editFinancialEvent, addDebtRecord, addDebtRecordAwaited, editDebtRecord, addFinancialCommitment, addFinancialCommitmentAwaited, editFinancialCommitment, learnOcrPattern, addFinancialEvidencePackage, linkEvidenceToRecord, financialEvidencePackages, duplicateFlags } = useFinancials();
   const { activeTenant } = useTenant();
   const { confirmChatSuggestion } = useConfirmChatSuggestion();
   const { crossWorkspaceHints, checkCrossWorkspacePattern } = useCrossWorkspacePattern();
@@ -238,10 +243,50 @@ export function StaffHomeScreen() {
   const myRecords = useMemo(() =>
     financialEvents.filter(e => e.workspaceId === wsId).slice().reverse(),
     [financialEvents, wsId]);
-  const filteredRecords = useMemo(
-    () => myRecords.filter(r => (!txnFilterFrom || r.date >= txnFilterFrom) && (!txnFilterTo || r.date <= txnFilterTo)),
-    [myRecords, txnFilterFrom, txnFilterTo]
+  const [healthFilterRecordIds, setHealthFilterRecordIds] = useState<string[] | null>(null);
+  const [healthFilterLabel, setHealthFilterLabel] = useState<string>("");
+  const [showDuplicateQueue, setShowDuplicateQueue] = useState(false);
+  const [showImportRecovery, setShowImportRecovery] = useState(false);
+  const [importFailureRefresh, setImportFailureRefresh] = useState(0);
+  const filteredRecords = useMemo(() => {
+    if (healthFilterRecordIds) {
+      const idSet = new Set(healthFilterRecordIds);
+      return myRecords.filter(r => idSet.has(r.id));
+    }
+    return myRecords.filter(r => (!txnFilterFrom || r.date >= txnFilterFrom) && (!txnFilterTo || r.date <= txnFilterTo));
+  }, [myRecords, txnFilterFrom, txnFilterTo, healthFilterRecordIds]);
+  const allChatSuggestions = useMemo(() => {
+    const seen = new Set<string>();
+    const list: ChatSuggestion[] = [];
+    chatMessages.forEach(m => (m.suggestions || []).forEach(s => {
+      if (!seen.has(s.id)) { seen.add(s.id); list.push(s); }
+    }));
+    return list;
+  }, [chatMessages]);
+  const importFailures = useMemo(
+    () => (activeWorkspace ? getImportFailures(activeWorkspace.id) : []),
+    [activeWorkspace, importFailureRefresh]
   );
+  const financialHealth = useMemo(() => computeFinancialHealth({
+    events: myRecords,
+    evidencePackages: financialEvidencePackages,
+    duplicateFlags,
+    chatSuggestions: allChatSuggestions,
+    chatSuggestionStatus,
+    importFailureCount: importFailures.reduce((s, r) => s + r.skippedCount, 0),
+    importFailureBatchCount: importFailures.length,
+  }), [myRecords, financialEvidencePackages, duplicateFlags, allChatSuggestions, chatSuggestionStatus, importFailures]);
+  const handleHealthBucketSelect = (key: HealthBucketKey) => {
+    if (key === "pendingConfirmation" || key === "reviewRecommended") {
+      setActiveTab("home");
+      return;
+    }
+    const bucket = financialHealth.buckets.find(b => b.key === key);
+    if (!bucket) return;
+    setHealthFilterRecordIds(bucket.recordIds);
+    setHealthFilterLabel(bucket.label);
+    setActiveTab("rekod");
+  };
 
   useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [chatMessages, chatLoading]);
 
@@ -1224,6 +1269,12 @@ export function StaffHomeScreen() {
         {activeTab === "rekod" && (
           <div className="flex-1 overflow-y-auto p-4 pb-24 max-w-lg mx-auto w-full space-y-3" id="staff_records_pane">
             <h2 className="text-lg font-bold text-slate-900">Rekod Saya</h2>
+            <FinancialHealthCenter
+              health={financialHealth}
+              onSelectBucket={handleHealthBucketSelect}
+              onOpenDuplicateQueue={() => setShowDuplicateQueue(true)}
+              onOpenImportRecovery={() => setShowImportRecovery(true)}
+            />
             {myRecords.length === 0 ? (
               <div className="bg-white border border-slate-200 rounded-2xl p-10 text-center shadow-sm space-y-3">
                 <ClipboardList className="w-10 h-10 text-slate-200 mx-auto" />
@@ -1236,8 +1287,11 @@ export function StaffHomeScreen() {
             ) : (
               <>
                 <div className="flex items-center justify-between">
-                  {(txnFilterFrom || txnFilterTo) && (
-                    <button onClick={() => { setTxnFilterFrom(""); setTxnFilterTo(""); }} className="text-[10px] text-indigo-500 font-semibold cursor-pointer hover:underline">
+                  {healthFilterRecordIds && (
+                    <span className="text-[10px] text-slate-500">Ditapis: {healthFilterLabel}</span>
+                  )}
+                  {(txnFilterFrom || txnFilterTo || healthFilterRecordIds) && (
+                    <button onClick={() => { setTxnFilterFrom(""); setTxnFilterTo(""); setHealthFilterRecordIds(null); setHealthFilterLabel(""); }} className="text-[10px] text-indigo-500 font-semibold cursor-pointer hover:underline">
                       Kosongkan tapisan
                     </button>
                   )}
@@ -1647,6 +1701,32 @@ export function StaffHomeScreen() {
           </div>
         )}
       </div>
+
+      {/* Phase 2D — Financial Health Command Center drill-downs. Same shared
+          components used by Owner — no Staff-only duplicate-review or
+          import-recovery logic. */}
+      {showDuplicateQueue && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div className="bg-white rounded-t-3xl sm:rounded-3xl w-full max-w-2xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col">
+            <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between shrink-0">
+              <h3 className="text-sm font-bold text-slate-900">Semakan Kemungkinan Pendua</h3>
+              <button onClick={() => setShowDuplicateQueue(false)} className="text-slate-300 hover:text-slate-600 cursor-pointer"><X className="w-5 h-5" /></button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-5"><DuplicateReviewQueue /></div>
+          </div>
+        </div>
+      )}
+      {showImportRecovery && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div className="bg-white rounded-t-3xl sm:rounded-3xl w-full max-w-2xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col">
+            <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between shrink-0">
+              <h3 className="text-sm font-bold text-slate-900">Pemulihan Import Penyata Bank</h3>
+              <button onClick={() => { setShowImportRecovery(false); setImportFailureRefresh(n => n + 1); }} className="text-slate-300 hover:text-slate-600 cursor-pointer"><X className="w-5 h-5" /></button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-5"><HistoricalRecoveryWorkspace /></div>
+          </div>
+        </div>
+      )}
 
       {/* â"€â"€ BOTTOM NAV â"€â"€ */}
       <nav className="bg-white border-t border-slate-200 flex items-center justify-around px-2 py-1.5 shrink-0 z-40" id="staff_bottom_nav">
