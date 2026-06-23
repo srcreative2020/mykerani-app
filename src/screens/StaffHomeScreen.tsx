@@ -9,6 +9,9 @@ import { supabase, isSupabaseConfigured } from "../lib/supabase";
 import { isDemoWorkspace } from "../lib/seeder";
 import { uploadDocument, getDocumentUrl } from "../lib/documentStorage";
 import { logEvent } from "../lib/eventLog";
+import { usePermission } from "../context/PermissionContext";
+import { useStorageQuota } from "../lib/storageQuota";
+import { DocumentsManager } from "../components/DocumentsManager";
 import {
   loadPersonalProfile, loadBusinessProfile, loadVehicles, loadDependents, loadBusinesses,
   EMPTY_PERSONAL_PROFILE, EMPTY_BUSINESS_PROFILE, type Vehicle, type Dependent, type Business,
@@ -154,6 +157,12 @@ export function StaffHomeScreen() {
   const { activeWorkspace, workspaces, selectWorkspace } = useWorkspace();
   const { financialEvents, addFinancialEvent, editFinancialEvent, addDebtRecord, addDebtRecordAwaited, editDebtRecord, addFinancialCommitment, addFinancialCommitmentAwaited, editFinancialCommitment, learnOcrPattern, addFinancialEvidencePackage, linkEvidenceToRecord, financialEvidencePackages, duplicateFlags, addBankAccount } = useFinancials();
   const { activeTenant } = useTenant();
+  const { userRoles } = usePermission();
+  const userNameById = useMemo(() => {
+    const map: Record<string, string> = {};
+    userRoles.forEach(r => { map[r.userId] = r.fullName; });
+    return map;
+  }, [userRoles]);
   const { confirmChatSuggestion } = useConfirmChatSuggestion();
   const { crossWorkspaceHints, checkCrossWorkspacePattern } = useCrossWorkspacePattern();
 
@@ -220,6 +229,8 @@ export function StaffHomeScreen() {
   const supportEndRef = useRef<HTMLDivElement>(null);
 
   const wsId = activeWorkspace?.id || "";
+  const tenantId = activeTenant?.id || user?.id || "guest";
+  const storageQuota = useStorageQuota(tenantId, wsId || undefined);
   const firstName = user?.fullName?.split(" ")[0] || "Anda";
   const startEditAccount = () => { setAccountDraft({ fullName: user?.fullName || "", email: user?.email || "" }); setAccountMsg(null); setEditingAccount(true); };
   const saveAccount = async () => {
@@ -1412,40 +1423,17 @@ export function StaffHomeScreen() {
 
         {/* â•â•â•â• MUAT NAIK â•â•â•â• */}
         {activeTab === "documents" && (
-          <div className="flex-1 overflow-y-auto p-4 pb-24 max-w-lg mx-auto w-full space-y-4" id="staff_upload_pane">
-            <h2 className="text-lg font-bold text-slate-900">Muat Naik Dokumen</h2>
-
-            <div className="bg-white border border-slate-200 rounded-2xl p-8 text-center space-y-4 shadow-sm">
-              <div className="w-16 h-16 rounded-2xl bg-slate-100 flex items-center justify-center mx-auto">
-                <Upload className="w-7 h-7 text-slate-500" />
-              </div>
-              <div>
-                <p className="font-semibold text-slate-800">Muat Naik Dokumen</p>
-                <p className="text-xs text-slate-400 mt-1">Foto atau fail PDF resit, invois & penyata</p>
-              </div>
-              <input ref={docUploadInputRef} type="file" accept="image/*,.pdf" className="hidden" onChange={handleDocUploadPicked} />
-              <button onClick={triggerDocUpload}
-                className="inline-block px-6 py-2.5 bg-slate-900 text-white rounded-xl text-xs font-bold hover:bg-slate-800 transition shadow cursor-pointer">
-                Pilih Fail
-              </button>
-              <p className="text-[10px] text-slate-300">JPG, PNG atau PDF · Maks 10MB</p>
-            </div>
-
-            <div className="grid grid-cols-3 gap-3">
-              {[
-                { label: "Resit", icon: Receipt, bg: "bg-amber-50 text-amber-500 border-amber-100" },
-                { label: "Invois", icon: FileSpreadsheet, bg: "bg-blue-50 text-blue-500 border-blue-100" },
-                { label: "Penyata", icon: Landmark, bg: "bg-violet-50 text-violet-500 border-violet-100" },
-              ].map(({ label, icon: Icon, bg }) => (
-                <button key={label} onClick={triggerDocUpload} className={`flex flex-col items-center space-y-2 p-4 bg-white border ${bg} rounded-2xl shadow-sm cursor-pointer hover:shadow-md transition`}>
-                  <div className={`w-9 h-9 rounded-lg flex items-center justify-center ${bg}`}>
-                    <Icon className="w-4.5 h-4.5" />
-                  </div>
-                  <span className="text-[11px] font-semibold text-slate-700">{label}</span>
-                </button>
-              ))}
-            </div>
-          </div>
+          <DocumentsManager
+            workspaceId={wsId}
+            workspaceName={activeWorkspace?.name || ""}
+            tenantId={activeTenant?.id}
+            currentUserId={user?.id}
+            currentUserFullName={user?.fullName}
+            userNameById={userNameById}
+            storageQuota={storageQuota}
+            financialEvents={financialEvents}
+            isDemoUser={!!user?.email?.endsWith(".demo") || isMockUser}
+          />
         )}
 
         {/* â•â•â•â• REKOD â•â•â•â• */}
