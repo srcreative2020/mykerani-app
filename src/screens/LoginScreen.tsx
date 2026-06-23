@@ -1,5 +1,6 @@
-import React, { useState } from "react";
+import React, { useState, useRef } from "react";
 import { useAuth } from "../context/AuthContext";
+import { supabase } from "../lib/supabase";
 import { type UserRole } from "../types";
 import {
   Mail,
@@ -9,6 +10,7 @@ import {
   UserPlus,
   AlertCircle,
   ChevronRight,
+  MailCheck,
 } from "lucide-react";
 
 // Akaun demo — diselaraskan dengan DEMO_ACCOUNTS dalam AuthContext
@@ -86,6 +88,43 @@ export default function LoginScreen({ initialMode = "login", onBack }: LoginScre
   const [customError, setCustomError] = useState<string | null>(null);
   const [forgotSuccess, setForgotSuccess] = useState<string | null>(null);
 
+  // Step 2 — Email Verification screen: shown when signUp() succeeds but
+  // Supabase requires email confirmation before a session is created.
+  const [pendingVerificationEmail, setPendingVerificationEmail] = useState<string | null>(null);
+  const [resendCooldown, setResendCooldown] = useState(0);
+  const [resendMsg, setResendMsg] = useState<string | null>(null);
+  const resendTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const startResendCooldown = () => {
+    setResendCooldown(30);
+    if (resendTimerRef.current) clearInterval(resendTimerRef.current);
+    resendTimerRef.current = setInterval(() => {
+      setResendCooldown(prev => {
+        if (prev <= 1) {
+          if (resendTimerRef.current) clearInterval(resendTimerRef.current);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+  };
+
+  const handleResendVerification = async () => {
+    if (!pendingVerificationEmail || resendCooldown > 0 || !supabase) return;
+    setResendMsg(null);
+    try {
+      const { error } = await supabase.auth.resend({ type: "signup", email: pendingVerificationEmail });
+      if (error) {
+        setResendMsg(error.message);
+      } else {
+        setResendMsg("E-mel pengesahan telah dihantar semula.");
+        startResendCooldown();
+      }
+    } catch {
+      setResendMsg("Ralat sambungan. Sila cuba lagi.");
+    }
+  };
+
   const handleAuthSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setCustomError(null);
@@ -107,7 +146,11 @@ export default function LoginScreen({ initialMode = "login", onBack }: LoginScre
     setFormLoading(true);
     try {
       if (isSignUpMode) {
-        await signUp(email, password, fullName, role);
+        const result = await signUp(email, password, fullName, role);
+        if (result?.pendingConfirmation) {
+          setPendingVerificationEmail(email.trim().toLowerCase());
+          startResendCooldown();
+        }
       } else {
         await signIn(email, password);
       }
@@ -206,8 +249,54 @@ export default function LoginScreen({ initialMode = "login", onBack }: LoginScre
           ))}
         </div>
 
-        {/* Borang Lupa Kata Laluan */}
-        {isForgotMode ? (
+        {/* Step 2 — Semak Email Anda (selepas signUp() berjaya tapi belum sah emel) */}
+        {pendingVerificationEmail ? (
+          <div className="space-y-4 text-center" id="email_verification_screen">
+            <div className="w-12 h-12 rounded-2xl bg-emerald-50 border border-emerald-100 flex items-center justify-center mx-auto">
+              <MailCheck className="w-6 h-6 text-emerald-600" />
+            </div>
+            <div className="space-y-1">
+              <h2 className="font-bold text-slate-800 text-sm">Semak Email Anda</h2>
+              <p className="text-[11px] text-slate-400">
+                Kami telah menghantar pautan pengesahan ke: <span className="font-semibold text-slate-600">{pendingVerificationEmail}</span>
+              </p>
+            </div>
+
+            {resendMsg && (
+              <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-700 text-center font-medium">
+                {resendMsg}
+              </div>
+            )}
+
+            <a
+              href="https://mail.google.com"
+              target="_blank"
+              rel="noreferrer"
+              className="w-full min-h-11 py-3 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-semibold shadow-sm transition flex items-center justify-center cursor-pointer"
+              id="open_gmail_btn"
+            >
+              Buka Gmail
+            </a>
+
+            <button
+              type="button"
+              onClick={handleResendVerification}
+              disabled={resendCooldown > 0}
+              className="w-full min-h-11 py-3 bg-slate-100 hover:bg-slate-200 disabled:opacity-50 text-slate-700 rounded-xl text-xs font-semibold transition flex items-center justify-center cursor-pointer"
+              id="resend_verification_btn"
+            >
+              {resendCooldown > 0 ? `Hantar Semula Email (${resendCooldown}s)` : "Hantar Semula Email"}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => { setPendingVerificationEmail(null); setResendMsg(null); setIsSignUpMode(false); }}
+              className="w-full text-center text-xs text-slate-400 hover:text-slate-700 transition cursor-pointer py-1"
+            >
+              ← Kembali ke Log Masuk
+            </button>
+          </div>
+        ) : isForgotMode ? (
           <form onSubmit={handleForgotPassword} className="space-y-4" id="forgot_password_form">
             <div className="text-center space-y-1">
               <h2 className="font-bold text-slate-800 text-sm">Tetapkan Semula Kata Laluan</h2>

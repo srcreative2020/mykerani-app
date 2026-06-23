@@ -15,7 +15,7 @@ const DEMO_ACCOUNTS: Record<string, { role: UserRole; fullName: string; tenantId
 
 interface AuthContextType extends AuthState {
   signIn: (email: string, password: string) => Promise<void>;
-  signUp: (email: string, password: string, fullName: string, initialRole?: UserRole) => Promise<void>;
+  signUp: (email: string, password: string, fullName: string, initialRole?: UserRole) => Promise<{ pendingConfirmation: boolean }>;
   signOut: () => Promise<void>;
   resetPassword: (email: string) => Promise<{ success: boolean; message: string }>;
   updateProfile: (fullName: string, email: string) => Promise<{ success: boolean; message: string }>;
@@ -109,6 +109,37 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
   }, []);
 
+  // Shared first-login provisioning — creates tenant + workspace + role
+  // assignment row for a brand-new user, and mirrors tenantId/role/fullName
+  // into auth user_metadata for subsequent sessions. Called from BOTH
+  // signIn()'s no-role-row branch and signUp()'s immediate-session branch,
+  // so a new user is identically provisioned regardless of which path
+  // created their account. `bizName` defaults to "Nama Peribadi" — NEVER the
+  // user's own full name — until Step 5 of onboarding lets them rename it.
+  const provisionNewTenant = async (
+    userId: string,
+    email: string,
+    fullName: string
+  ): Promise<{ tenantId: string; role: UserRole }> => {
+    if (!supabase) throw new Error("Supabase client is not instantiated");
+
+    const newTenantId = crypto.randomUUID();
+    const newWorkspaceId = crypto.randomUUID();
+    const bizName = "Nama Peribadi";
+
+    await supabase.from("tenants").insert({ id: newTenantId, name: bizName, category: "USER" });
+    await supabase.from("workspaces").insert({ id: newWorkspaceId, tenant_id: newTenantId, name: bizName, slug: newTenantId.slice(0, 8), is_active: true });
+    await supabase.from("user_role_assignments").insert({
+      user_id: userId, email, full_name: fullName,
+      role: "TENANT_OWNER", tenant_id: newTenantId,
+    });
+
+    // Save tenantId to user metadata for next login
+    await supabase.auth.updateUser({ data: { tenantId: newTenantId, role: "TENANT_OWNER", fullName } });
+
+    return { tenantId: newTenantId, role: "TENANT_OWNER" };
+  };
+
   const signIn = async (email: string, password: string) => {
     setState(prev => ({ ...prev, loading: true, error: null }));
 
@@ -181,21 +212,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           fullName = roleRows[0].full_name || fullName;
         } else {
           // First login — auto-provision tenant + workspace + role assignment
-          const newTenantId   = crypto.randomUUID();
-          const newWorkspaceId = crypto.randomUUID();
-          const bizName = fullName;
-
-          await supabase.from("tenants").insert({ id: newTenantId, name: bizName, category: "USER" });
-          await supabase.from("workspaces").insert({ id: newWorkspaceId, tenant_id: newTenantId, name: bizName, slug: newTenantId.slice(0, 8), is_active: true });
-          await supabase.from("user_role_assignments").insert({
-            user_id: data.user.id, email: cleanEmail, full_name: fullName,
-            role: "TENANT_OWNER", tenant_id: newTenantId,
-          });
-
-          // Save tenantId to user metadata for next login
-          await supabase.auth.updateUser({ data: { tenantId: newTenantId, role: "TENANT_OWNER", fullName } });
-          tenantId = newTenantId;
-          role     = "TENANT_OWNER";
+          const provisioned = await provisionNewTenant(data.user.id, cleanEmail, fullName);
+          tenantId = provisioned.tenantId;
+          role     = provisioned.role;
         }
 
         const profile: UserSessionProfile = {
@@ -226,7 +245,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     password: string,
     fullName: string,
     initialRole: UserRole = "TENANT_OWNER"
-  ) => {
+  ): Promise<{ pendingConfirmation: boolean }> => {
     setState(prev => ({ ...prev, loading: true, error: null }));
 
     if (!isSupabaseConfigured() || !supabase) {
@@ -235,7 +254,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         loading: false,
         error: "Sistem pengesahan tidak dikonfigurasi. Sila hubungi pentadbir.",
       }));
-      return;
+      return { pendingConfirmation: false };
     }
 
     try {
@@ -256,33 +275,44 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           loading: false,
           error: error.message,
         }));
-        return;
+        return { pendingConfirmation: false };
       }
 
-      if (data.user) {
+      if (data.session && data.user) {
+        // Email confirmation is OFF (or auto-confirmed) — session present
+        // immediately. Provision the same tenant/workspace/role-assignment
+        // that signIn() creates on a first login, so this brand-new user
+        // never reaches the dashboard unprovisioned.
+        const provisioned = await provisionNewTenant(data.user.id, data.user.email || email, fullName);
         const profile: UserSessionProfile = {
           id: data.user.id,
           email: data.user.email || "",
-          role: initialRole,
+          role: provisioned.role,
           fullName,
-          tenantId: data.user.user_metadata?.tenantId,
+          tenantId: provisioned.tenantId,
         };
         setState({ user: profile, loading: false, error: null, isMockUser: false });
-      } else {
-        // Supabase hantar email pengesahan — user perlu verify dulu
-        setState({
-          user: null,
-          loading: false,
-          error: null,
-          isMockUser: false,
-        });
+        return { pendingConfirmation: false };
       }
+
+      // No session yet — Supabase hantar email pengesahan, user perlu
+      // sahkan emel dahulu sebelum sesi sebenar dicipta. Provisioning
+      // berlaku kemudian, pada signIn() pertama selepas pengesahan emel
+      // (no-role-row branch), bukan di sini — sebab tiada sesi sah lagi.
+      setState({
+        user: null,
+        loading: false,
+        error: null,
+        isMockUser: false,
+      });
+      return { pendingConfirmation: true };
     } catch (err: any) {
       setState(prev => ({
         ...prev,
         loading: false,
         error: "Ralat pendaftaran. Sila cuba lagi.",
       }));
+      return { pendingConfirmation: false };
     }
   };
 

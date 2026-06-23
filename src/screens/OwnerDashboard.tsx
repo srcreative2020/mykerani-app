@@ -214,8 +214,43 @@ export function OwnerDashboard() {
   const onboardKey = `mykerani_onboarded_${user?.id ?? "guest"}`;
   const [onboardDone, setOnboardDone] = useState(() => !!localStorage.getItem(onboardKey));
   const [onboardStep, setOnboardStep] = useState(1);
-  const [obBizName, setObBizName] = useState(user?.fullName ? `${user.fullName} - Perniagaan` : "");
+  // Workspace type choice (Personal/Business) — drives the bizName default below.
+  // Per the onboarding-flow audit: the name field must NEVER silently default to
+  // the user's own full name (that was the original bug). "Peribadi" prefills
+  // an honest, editable placeholder; "Perniagaan" starts blank so the user is
+  // forced to type their actual business name.
+  const [obWorkspaceType, setObWorkspaceType] = useState<"PERSONAL" | "BUSINESS" | null>(null);
+  const [obBizName, setObBizName] = useState("");
   const [obBizType, setObBizType] = useState("");
+  const [obSavingName, setObSavingName] = useState(false);
+
+  const pickObWorkspaceType = (type: "PERSONAL" | "BUSINESS") => {
+    setObWorkspaceType(type);
+    setObBizName(type === "PERSONAL" ? "Nama Peribadi" : "");
+  };
+
+  // Persist the chosen workspace/tenant name for real — provisioning (signUp/signIn)
+  // already created the tenant+workspace row with a neutral placeholder name
+  // ("Nama Peribadi"); this is where the user's actual choice gets written back.
+  const saveObBizName = async (): Promise<boolean> => {
+    const name = obBizName.trim();
+    if (!name) return false;
+    if (!isSupabaseConfigured() || isMockUser || !supabase) return true; // sandbox/demo — nothing to persist
+    setObSavingName(true);
+    try {
+      if (activeTenant) {
+        await supabase.from("tenants").update({ name }).eq("id", activeTenant.id);
+      }
+      if (activeWorkspace) {
+        await supabase.from("workspaces").update({ name }).eq("id", activeWorkspace.id);
+      }
+      return true;
+    } catch {
+      return false; // best-effort — never block onboarding on a naming write failure
+    } finally {
+      setObSavingName(false);
+    }
+  };
 
   const finishOnboard = () => {
     localStorage.setItem(onboardKey, "1");
@@ -2746,6 +2781,20 @@ export function OwnerDashboard() {
               </div>
             </div>
 
+            {/* Empty State Rule: a workspace with zero financial records ever
+                (not just zero in the selected period) gets contextual guidance
+                instead of a wall of RM0.00 cards below — surfaced once, the
+                cards underneath still render normally (and correctly) once a
+                real record exists. */}
+            {myEvents.length === 0 && (
+              <button onClick={() => setActiveTab("home")}
+                className="w-full bg-white border border-dashed border-slate-200 rounded-2xl p-4 text-center space-y-1.5 cursor-pointer hover:border-indigo-300 transition">
+                <Wallet className="w-7 h-7 text-slate-200 mx-auto" />
+                <p className="text-xs font-semibold text-slate-500">Belum ada rekod. Upload resit pertama anda.</p>
+                <p className="text-[11px] text-indigo-500 font-semibold">Beritahu MYKERANI -&gt;</p>
+              </button>
+            )}
+
             <div className="grid grid-cols-2 gap-3">
               <div className="bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-2xl p-4 text-white shadow">
                 <p className="text-[11px] text-emerald-100">Pendapatan</p>
@@ -4807,17 +4856,39 @@ export function OwnerDashboard() {
                   </div>
                   <div>
                     <h2 className="text-xl font-black text-slate-900">Selamat datang ke MYKERANI</h2>
-                    <p className="text-sm text-slate-500 mt-1">Juru Kira AI untuk perniagaan anda. Mari sediakan akaun anda dalam 3 langkah mudah.</p>
+                    <p className="text-sm text-slate-500 mt-1">MYKERANI membantu anda mengurus kewangan tanpa memerlukan pengetahuan akaun.</p>
                   </div>
+
                   <div className="space-y-2">
-                    <label className="text-xs font-bold text-slate-600">Nama Perniagaan Anda</label>
-                    <input value={obBizName} onChange={e => setObBizName(e.target.value)}
-                      placeholder="Contoh: Kedai Makan Mak Su"
-                      className="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-emerald-400" />
+                    <label className="text-xs font-bold text-slate-600">Apa yang anda ingin uruskan?</label>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button type="button" onClick={() => pickObWorkspaceType("PERSONAL")}
+                        className={`min-h-11 p-3 rounded-xl border-2 text-xs font-bold transition cursor-pointer ${obWorkspaceType === "PERSONAL" ? "border-emerald-500 bg-emerald-50 text-emerald-800" : "border-slate-100 text-slate-600 hover:border-slate-200"}`}>
+                        Peribadi
+                      </button>
+                      <button type="button" onClick={() => pickObWorkspaceType("BUSINESS")}
+                        className={`min-h-11 p-3 rounded-xl border-2 text-xs font-bold transition cursor-pointer ${obWorkspaceType === "BUSINESS" ? "border-emerald-500 bg-emerald-50 text-emerald-800" : "border-slate-100 text-slate-600 hover:border-slate-200"}`}>
+                        Perniagaan
+                      </button>
+                    </div>
                   </div>
-                  <button onClick={() => obBizName.trim() && setOnboardStep(2)} disabled={!obBizName.trim()}
-                    className="w-full py-3 bg-emerald-500 hover:bg-emerald-600 text-white rounded-2xl text-sm font-bold transition cursor-pointer disabled:opacity-40">
-                    Seterusnya
+
+                  {obWorkspaceType && (
+                    <div className="space-y-2">
+                      <label className="text-xs font-bold text-slate-600">
+                        {obWorkspaceType === "PERSONAL" ? "Nama Peribadi" : "Nama Perniagaan"}
+                      </label>
+                      <input value={obBizName} onChange={e => setObBizName(e.target.value)}
+                        placeholder={obWorkspaceType === "PERSONAL" ? "Nama Peribadi" : "Contoh: Kedai Makan Mak Su"}
+                        className="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-emerald-400" />
+                    </div>
+                  )}
+
+                  <button
+                    onClick={async () => { if (obBizName.trim()) { await saveObBizName(); setOnboardStep(2); } }}
+                    disabled={!obBizName.trim() || obSavingName}
+                    className="w-full min-h-11 py-3 bg-emerald-500 hover:bg-emerald-600 text-white rounded-2xl text-sm font-bold transition cursor-pointer disabled:opacity-40">
+                    {obSavingName ? "Menyimpan..." : "Mula"}
                   </button>
                 </div>
               )}
