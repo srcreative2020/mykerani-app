@@ -15,6 +15,15 @@ export interface UploadedDoc {
   ocr_parsed_content?: Record<string, any>;
 }
 
+export interface UploadDocumentResult {
+  doc: UploadedDoc | null;
+  error: string | null;
+  // True when an identical file (same name + size) already existed in this
+  // workspace and `doc` is that pre-existing row — nothing new was uploaded,
+  // so the tenant owner/staff doesn't have to re-do the same upload work.
+  isDuplicate?: boolean;
+}
+
 export type DocReviewStatus = "PENDING" | "CONFIRMED" | "REJECTED";
 
 export interface StorageUsage {
@@ -37,7 +46,7 @@ export async function uploadDocument(
   workspaceId: string,
   _appUserId: string, // not used directly — we get real UUID from session
   docType: DocType = "SUPPORTING_DOC"
-): Promise<{ doc: UploadedDoc | null; error: string | null }> {
+): Promise<UploadDocumentResult> {
   if (!workspaceId) return { doc: null, error: "Workspace tidak ditemui." };
 
   // Must have real Supabase session
@@ -50,6 +59,23 @@ export async function uploadDocument(
   const uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
   if (!uuidRe.test(workspaceId)) {
     return { doc: null, error: "Workspace tidak sah. Pastikan anda log masuk dengan akaun sebenar." };
+  }
+
+  // Same file name + size already on file for this workspace means this exact
+  // document was already uploaded before — reuse that row instead of letting
+  // the tenant owner/staff do the same upload work twice.
+  const { data: existing } = await supabase
+    .from("evidence_documents")
+    .select("*")
+    .eq("workspace_id", workspaceId)
+    .eq("file_name", file.name)
+    .eq("file_size_bytes", file.size)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (existing) {
+    return { doc: existing as UploadedDoc, error: null, isDuplicate: true };
   }
 
   const ext = file.name.split(".").pop() ?? "bin";

@@ -508,12 +508,17 @@ export function OwnerDashboard() {
         setUploadError("Akaun demo tidak boleh melampirkan resit. Log masuk dengan akaun sebenar.");
         return;
       }
-      const { doc, error } = await uploadDocument(file, activeWorkspace.id, user!.id, "RECEIPT");
+      const { doc, error, isDuplicate } = await uploadDocument(file, activeWorkspace.id, user!.id, "RECEIPT");
       if (error || !doc) {
         setUploadError(error || "Gagal memuat naik resit.");
         return;
       }
-      setDocs(prev => [doc, ...prev]);
+      if (isDuplicate) {
+        setUploadError(`Fail "${doc.file_name}" sudah pernah dimuat naik sebelum ini — rekod sedia ada digunakan semula, tidak dimuat naik dua kali.`);
+        setDocs(prev => (prev.some(d => d.id === doc.id) ? prev : [doc, ...prev]));
+      } else {
+        setDocs(prev => [doc, ...prev]);
+      }
       addFinancialEvidencePackage({
         workspaceId: activeWorkspace.id,
         documentType: "RECEIPT",
@@ -1254,10 +1259,17 @@ export function OwnerDashboard() {
     if (!wsId || !user?.id) { setUploadError("Sesi tidak sah. Cuba log masuk semula."); return; }
     setUploadingDoc(pendingDocType);
     setUploadError(null);
-    const { doc, error } = await uploadDocument(file, wsId, user.id, pendingDocType);
+    const { doc, error, isDuplicate } = await uploadDocument(file, wsId, user.id, pendingDocType);
     setUploadingDoc(null);
     if (error) { setUploadError(error); return; }
     if (doc) {
+      if (isDuplicate) {
+        // Already uploaded before — reuse the existing record, no second
+        // upload and no re-running OCR analysis on the same file.
+        setUploadError(`Fail "${doc.file_name}" sudah pernah dimuat naik sebelum ini. Rekod sedia ada digunakan, tidak perlu muat naik semula.`);
+        setDocs(prev => (prev.some(d => d.id === doc.id) ? prev : [doc, ...prev]));
+        return;
+      }
       setDocs(prev => [doc, ...prev]);
       storageQuota.refresh();
       if (doc.document_type !== "CONTRACT") {
@@ -1581,7 +1593,7 @@ export function OwnerDashboard() {
     refreshProfileData();
   };
 
-  const sendChat = async (text?: string) => {
+  const sendChat = async (text?: string, attachment?: { documentType: "RECEIPT"; fileName: string; fileUrl: string }) => {
     const q = (text || chatInput).trim();
     if (!q || chatLoading) return;
     setChatInput("");
@@ -1618,11 +1630,22 @@ export function OwnerDashboard() {
       saveChatMessage(wsId, user?.id, isMockUser, { sender: "ai", text: reply, suggestions }, activeSessionId ?? undefined);
       suggestions.forEach(s => checkCrossWorkspacePattern(s));
       const activeBusinesses = businesses.filter(b => b.isActive);
+      // If this AI reply was triggered by an OCR/image/PDF attachment upload, that
+      // attachment is the evidence for whatever transaction the AI now suggests —
+      // pre-link it to every suggestion in this batch so confirming creates the
+      // financial_evidence_packages row automatically, with no extra owner action.
+      // Same shared Evidence Linking engine as StaffHomeScreen.tsx's sendChat.
+      if (attachment) {
+        suggestions.forEach(s => {
+          pendingChatEvidenceRef.current[s.id] = attachment;
+        });
+      }
       setChatSuggestionExtra(prev => {
         const next = { ...prev };
         suggestions.forEach(s => {
+          const evidenceStatus: ChatSuggestionExtra["evidenceStatus"] = attachment ? "ATTACHED" : "NONE";
           if (activeBusinesses.length === 0) {
-            next[s.id] = { businessId: null, businessName: "Personal", businessPicked: true, evidenceStatus: "NONE" };
+            next[s.id] = { businessId: null, businessName: "Personal", businessPicked: true, evidenceStatus };
             return;
           }
           // Reuse the same Business/Branch Mapping engine used by Bank Statement and
@@ -1634,7 +1657,7 @@ export function OwnerDashboard() {
               businessId: branchMatch.business.id,
               businessName: branchMatch.business.businessName,
               businessPicked: true,
-              evidenceStatus: "NONE",
+              evidenceStatus,
               branchId: branchMatch.branch?.id ?? null,
               branchName: branchMatch.branch?.branchName ?? "",
               branchPicked: true,
@@ -1645,7 +1668,7 @@ export function OwnerDashboard() {
               businessId: branchMatch.business.id,
               businessName: branchMatch.business.businessName,
               businessPicked: true,
-              evidenceStatus: "NONE",
+              evidenceStatus,
               branchId: null,
               branchName: "",
               branchPicked: false,
@@ -1653,7 +1676,7 @@ export function OwnerDashboard() {
               branchCandidates: branchMatch.candidateLabels,
             };
           } else {
-            next[s.id] = { businessId: null, businessName: "", businessPicked: false, evidenceStatus: "NONE" };
+            next[s.id] = { businessId: null, businessName: "", businessPicked: false, evidenceStatus };
           }
         });
         return next;
@@ -1674,18 +1697,29 @@ export function OwnerDashboard() {
     setChatAttaching(true);
     try {
       let fileUrl = "";
+      let evidenceFileUrl = "";
       const canPersistDoc = isSupabaseConfigured() && !isMockUser && supabase && !isDemoWorkspace(activeWorkspace.id) && user;
       if (canPersistDoc) {
-        const { doc, error } = await uploadDocument(file, activeWorkspace.id, user!.id, kind === "audio" ? "SUPPORTING_DOC" : "RECEIPT");
+        const { doc, error, isDuplicate } = await uploadDocument(file, activeWorkspace.id, user!.id, kind === "audio" ? "SUPPORTING_DOC" : "RECEIPT");
         if (doc && !error) {
-          setDocs(prev => [doc, ...prev]);
+          setDocs(prev => (isDuplicate && prev.some(d => d.id === doc.id) ? prev : [doc, ...prev]));
           fileUrl = (await getDocumentUrl(doc.file_path_supabase)) || "";
+          evidenceFileUrl = fileUrl || doc.file_path_supabase;
+          if (isDuplicate) {
+            setChatMessages(prev => [...prev, { id: `dup-${Date.now()}`, sender: "ai", text: `Fail "${file.name}" ini sudah pernah dimuat naik sebelum ini — saya guna rekod sedia ada, tidak muat naik dua kali.` }]);
+          }
         }
       }
       if (!fileUrl) {
         // Fallback: embed as a local object URL so the attachment still shows in-session.
         fileUrl = URL.createObjectURL(file);
       }
+      // Voice notes are transcribed, not filed as accounting evidence — only
+      // OCR/image/PDF attachment uploads become a linked financial_evidence_packages
+      // row. Same shared Evidence Linking engine as StaffHomeScreen.tsx.
+      const evidenceAttachment = kind !== "audio" && evidenceFileUrl
+        ? { documentType: "RECEIPT" as const, fileName: file.name, fileUrl: evidenceFileUrl }
+        : undefined;
       const label = kind === "audio" ? "Nota suara" : kind === "pdf" ? "Dokumen PDF" : "Resit";
       const msgId = `u-${Date.now()}`;
       const userMsg: ChatMsg = {
@@ -1739,7 +1773,8 @@ export function OwnerDashboard() {
       await sendChat(
         extractedContext
           ? `Saya telah lampirkan ${label.toLowerCase()} "${file.name}". ${extractedContext} Sila semak dan bantu saya rekodkan jika berkaitan transaksi.`
-          : `Saya telah lampirkan ${label.toLowerCase()} "${file.name}". Sila semak dan bantu saya rekodkan jika berkaitan transaksi.`
+          : `Saya telah lampirkan ${label.toLowerCase()} "${file.name}". Sila semak dan bantu saya rekodkan jika berkaitan transaksi.`,
+        evidenceAttachment
       );
     } finally {
       setChatAttaching(false);
@@ -1837,9 +1872,9 @@ export function OwnerDashboard() {
     let fileUrl = "";
     const canPersistDoc = activeWorkspace && isSupabaseConfigured() && !isMockUser && supabase && !isDemoWorkspace(activeWorkspace.id) && user;
     if (canPersistDoc) {
-      const { doc, error } = await uploadDocument(file, activeWorkspace!.id, user!.id, "RECEIPT");
+      const { doc, error, isDuplicate } = await uploadDocument(file, activeWorkspace!.id, user!.id, "RECEIPT");
       if (doc && !error) {
-        setDocs(prev => [doc, ...prev]);
+        setDocs(prev => (isDuplicate && prev.some(d => d.id === doc.id) ? prev : [doc, ...prev]));
         fileUrl = (await getDocumentUrl(doc.file_path_supabase)) || "";
       }
     }

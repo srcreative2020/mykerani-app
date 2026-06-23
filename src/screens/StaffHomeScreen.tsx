@@ -653,10 +653,13 @@ export function StaffHomeScreen() {
       let url = "";
       let evidenceFileUrl = "";
       if (canUploadChatAttachment && user) {
-        const { doc, error } = await uploadDocument(file, wsId, user.id, kind === "audio" ? "SUPPORTING_DOC" : "RECEIPT");
+        const { doc, error, isDuplicate } = await uploadDocument(file, wsId, user.id, kind === "audio" ? "SUPPORTING_DOC" : "RECEIPT");
         if (doc && !error) {
           url = (await getDocumentUrl(doc.file_path_supabase)) || "";
           evidenceFileUrl = url || doc.file_path_supabase;
+          if (isDuplicate) {
+            setChatMessages(prev => [...prev, { id: `dup-${Date.now()}`, sender: "ai", text: `Fail "${file.name}" ini sudah pernah dimuat naik sebelum ini — saya guna rekod sedia ada, tidak muat naik dua kali.` }]);
+          }
         }
       }
       if (!url) url = URL.createObjectURL(file);
