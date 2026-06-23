@@ -34,9 +34,10 @@ import {
   CheckCircle2, LogOut, ClipboardList, HelpCircle,
   MessageCircle, BookOpen, Ticket, Edit3,
   Paperclip, Mic, Square, File as FileIcon,
+  LayoutDashboard, FileText, BarChart3, MoreHorizontal,
 } from "lucide-react";
 
-type StaffTab = "home" | "tambah" | "muat_naik" | "rekod" | "notifikasi" | "profil";
+type StaffTab = "home" | "dashboard" | "documents" | "reports" | "more";
 
 function getGreeting() {
   const h = new Date().getHours();
@@ -158,6 +159,10 @@ export function StaffHomeScreen() {
 
   const [activeTab, setActiveTab] = useState<StaffTab>("home");
   const [addDefaultType, setAddDefaultType] = useState<"INCOME" | "EXPENSE">("EXPENSE");
+  // Issue #1 parity fix — "Tambah Rekod" is reachable as a modal from Home,
+  // same access pattern as Owner's QuickAddModal, instead of its own
+  // bottom-nav tab (Owner's bottom nav has no "Tambah" tab either).
+  const [showQuickAdd, setShowQuickAdd] = useState(false);
 
   // â"€â"€ AI Chat â"€â"€
   const [chatMessages, setChatMessages] = useState<{ id: string; sender: "user" | "ai"; text: string; suggestions?: ChatSuggestion[]; createdAt?: string; attachmentUrl?: string; attachmentName?: string; attachmentType?: "image" | "pdf" | "audio" }[]>([]);
@@ -400,7 +405,7 @@ export function StaffHomeScreen() {
     if (!bucket) return;
     setHealthFilterRecordIds(bucket.recordIds);
     setHealthFilterLabel(bucket.label);
-    setActiveTab("rekod");
+    setActiveTab("dashboard");
   };
 
   useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [chatMessages, chatLoading]);
@@ -977,9 +982,9 @@ export function StaffHomeScreen() {
 
   const QUICK_PROMPTS = [
     { label: "Rekod hari ini", q: "Apakah rekod yang telah dimasukkan hari ini?" },
-    { label: "Tambah perbelanjaan", action: () => { setAddDefaultType("EXPENSE"); setActiveTab("tambah"); } },
-    { label: "Tambah pendapatan", action: () => { setAddDefaultType("INCOME"); setActiveTab("tambah"); } },
-    { label: "Muat naik resit", action: () => setActiveTab("muat_naik") },
+    { label: "Tambah perbelanjaan", action: () => { setAddDefaultType("EXPENSE"); setShowQuickAdd(true); } },
+    { label: "Tambah pendapatan", action: () => { setAddDefaultType("INCOME"); setShowQuickAdd(true); } },
+    { label: "Muat naik resit", action: () => setActiveTab("documents") },
   ];
 
   return (
@@ -1367,11 +1372,11 @@ export function StaffHomeScreen() {
 
               {/* Quick actions below input */}
               <div className="mt-3 grid grid-cols-2 gap-2">
-                <button onClick={() => { setAddDefaultType("EXPENSE"); setActiveTab("tambah"); }}
+                <button onClick={() => { setAddDefaultType("EXPENSE"); setShowQuickAdd(true); }}
                   className="py-2 rounded-xl text-xs font-bold bg-rose-50 border border-rose-100 text-rose-600 transition cursor-pointer hover:bg-rose-100">
                   - Rekod Perbelanjaan
                 </button>
-                <button onClick={() => { setAddDefaultType("INCOME"); setActiveTab("tambah"); }}
+                <button onClick={() => { setAddDefaultType("INCOME"); setShowQuickAdd(true); }}
                   className="py-2 rounded-xl text-xs font-bold bg-emerald-50 border border-emerald-100 text-emerald-600 transition cursor-pointer hover:bg-emerald-100">
                   + Rekod Pendapatan
                 </button>
@@ -1381,25 +1386,32 @@ export function StaffHomeScreen() {
         )}
 
         {/* â•â•â•â• TAMBAH REKOD â•â•â•â• */}
-        {activeTab === "tambah" && (
-          <div className="flex-1 overflow-y-auto p-4 pb-24 max-w-lg mx-auto w-full" id="staff_add_pane">
-            <h2 className="text-lg font-bold text-slate-900 mb-4">Tambah Rekod</h2>
-            {!activeWorkspace ? (
-              <div className="bg-amber-50 border border-amber-200 rounded-2xl p-6 text-center">
-                <p className="text-sm font-semibold text-amber-800">Sila pilih syarikat dahulu</p>
+        {showQuickAdd && (
+          <div className="fixed inset-0 bg-black/40 z-50 flex items-end sm:items-center justify-center" onClick={() => setShowQuickAdd(false)}>
+            <div className="bg-white rounded-t-3xl sm:rounded-3xl w-full sm:max-w-lg max-h-[90vh] overflow-y-auto p-4" onClick={e => e.stopPropagation()} id="staff_add_pane">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-lg font-bold text-slate-900">Tambah Rekod</h2>
+                <button onClick={() => setShowQuickAdd(false)} className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center cursor-pointer">
+                  <X className="w-4 h-4 text-slate-500" />
+                </button>
               </div>
-            ) : (
-              <AddRecordForm
-                defaultType={addDefaultType}
-                onSave={handleSaveRecord}
-                onDone={() => setActiveTab("home")}
-              />
-            )}
+              {!activeWorkspace ? (
+                <div className="bg-amber-50 border border-amber-200 rounded-2xl p-6 text-center">
+                  <p className="text-sm font-semibold text-amber-800">Sila pilih syarikat dahulu</p>
+                </div>
+              ) : (
+                <AddRecordForm
+                  defaultType={addDefaultType}
+                  onSave={handleSaveRecord}
+                  onDone={() => setShowQuickAdd(false)}
+                />
+              )}
+            </div>
           </div>
         )}
 
         {/* â•â•â•â• MUAT NAIK â•â•â•â• */}
-        {activeTab === "muat_naik" && (
+        {activeTab === "documents" && (
           <div className="flex-1 overflow-y-auto p-4 pb-24 max-w-lg mx-auto w-full space-y-4" id="staff_upload_pane">
             <h2 className="text-lg font-bold text-slate-900">Muat Naik Dokumen</h2>
 
@@ -1437,7 +1449,7 @@ export function StaffHomeScreen() {
         )}
 
         {/* â•â•â•â• REKOD â•â•â•â• */}
-        {activeTab === "rekod" && (
+        {activeTab === "dashboard" && (
           <div className="flex-1 overflow-y-auto p-4 pb-24 max-w-lg mx-auto w-full space-y-3" id="staff_records_pane">
             <div className="flex items-center justify-between">
               <div>
@@ -1500,7 +1512,7 @@ export function StaffHomeScreen() {
               <div className="bg-white border border-slate-200 rounded-2xl p-10 text-center shadow-sm space-y-3">
                 <ClipboardList className="w-10 h-10 text-slate-200 mx-auto" />
                 <p className="text-sm text-slate-400">Tiada rekod lagi</p>
-                <button onClick={() => setActiveTab("tambah")}
+                <button onClick={() => setShowQuickAdd(true)}
                   className="px-5 py-2.5 bg-slate-900 text-white rounded-xl text-xs font-bold cursor-pointer hover:bg-slate-800">
                   Tambah Rekod Pertama
                 </button>
@@ -1630,23 +1642,23 @@ export function StaffHomeScreen() {
               </div>
             )}
 
-            {/* Phase 2 finalization sprint — Owner/Staff Report Center parity:
-                identical component, identical health source, identical
-                navigation wiring as OwnerDashboard.tsx's "reports" tab — just
-                routed to Staff's own "rekod" tab instead of Owner's
-                "dashboard" tab for the drilldown target. */}
-            <div className="pt-2" id="staff_report_center_section">
-              <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Laporan</h3>
-              <FinancialReportsAnalytics
-                health={financialHealth}
-                onNavigateToRecords={(recordIds, label) => {
-                  setHealthFilterRecordIds(recordIds);
-                  setHealthFilterLabel(label);
-                  setActiveTab("rekod");
-                }}
-                onAddBankAccount={() => setShowAddBankAccountModal(true)}
-              />
-            </div>
+          </div>
+        )}
+
+        {/* REPORTS — identical component, identical health source, identical
+            navigation wiring as OwnerDashboard.tsx's "reports" tab. */}
+        {activeTab === "reports" && (
+          <div className="flex-1 overflow-y-auto p-4 pb-24 max-w-lg mx-auto w-full space-y-3" id="staff_reports_pane">
+            <h2 className="text-lg font-bold text-slate-900">Laporan</h2>
+            <FinancialReportsAnalytics
+              health={financialHealth}
+              onNavigateToRecords={(recordIds, label) => {
+                setHealthFilterRecordIds(recordIds);
+                setHealthFilterLabel(label);
+                setActiveTab("dashboard");
+              }}
+              onAddBankAccount={() => setShowAddBankAccountModal(true)}
+            />
           </div>
         )}
 
@@ -1686,20 +1698,8 @@ export function StaffHomeScreen() {
             </div>
           </div>
         )}
-
-        {/* â•â•â•â• NOTIFIKASI â•â•â•â• */}
-        {activeTab === "notifikasi" && (
-          <div className="flex-1 overflow-y-auto p-4 pb-24 max-w-lg mx-auto w-full space-y-4" id="staff_notif_pane">
-            <h2 className="text-lg font-bold text-slate-900">Notifikasi</h2>
-            <div className="bg-white border border-slate-200 rounded-2xl p-10 text-center shadow-sm">
-              <Bell className="w-10 h-10 text-slate-200 mx-auto mb-3" />
-              <p className="text-sm text-slate-400">Tiada notifikasi baru</p>
-            </div>
-          </div>
-        )}
-
-        {/* â•â•â•â• PROFIL â•â•â•â• */}
-        {activeTab === "profil" && (
+        {/* MORE */}
+        {activeTab === "more" && (
           <div className="flex-1 overflow-y-auto p-4 pb-24 max-w-lg mx-auto w-full space-y-4" id="staff_profile_pane">
             <h2 className="text-lg font-bold text-slate-900">Profil Saya</h2>
             <div className="bg-white border border-slate-200 rounded-2xl p-6 space-y-5 shadow-sm">
@@ -2045,15 +2045,16 @@ export function StaffHomeScreen() {
         </div>
       )}
 
-      {/* â"€â"€ BOTTOM NAV â"€â"€ */}
+      {/* â"€â"€ BOTTOM NAV â"€â"€ (Issue #1 parity fix — identical 5-tab structure,
+          labels, icons and order to OwnerDashboard.tsx's bottom nav; only the
+          permissions/content behind each tab differ.) */}
       <nav className="bg-white border-t border-slate-200 flex items-center justify-around px-2 py-1.5 shrink-0 z-40" id="staff_bottom_nav">
         {([
-          { id: "home" as StaffTab,        label: "Home",     icon: Home },
-          { id: "tambah" as StaffTab,      label: "Tambah",   icon: Plus },
-          { id: "muat_naik" as StaffTab,   label: "Muat Naik",icon: Upload },
-          { id: "rekod" as StaffTab,       label: "Rekod",    icon: ClipboardList },
-          { id: "notifikasi" as StaffTab,  label: "Notif",    icon: Bell },
-          { id: "profil" as StaffTab,      label: "Profil",   icon: UserIcon },
+          { id: "home" as StaffTab,       label: "Home",      icon: Home },
+          { id: "dashboard" as StaffTab,  label: "Dashboard", icon: LayoutDashboard },
+          { id: "documents" as StaffTab,  label: "Dokumen",   icon: FileText },
+          { id: "reports" as StaffTab,    label: "Laporan",   icon: BarChart3 },
+          { id: "more" as StaffTab,       label: "Lagi",      icon: MoreHorizontal },
         ]).map(({ id, label, icon: Icon }) => {
           const active = activeTab === id;
           return (
