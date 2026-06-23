@@ -1603,6 +1603,8 @@ export function OwnerDashboard() {
   // user with an already-complete profile. profileLoading gates the nudge so
   // it is only ever decided once the real data has actually arrived.
   const [profileLoading, setProfileLoading] = useState(true);
+  const profileLoadingRef = useRef(profileLoading);
+  useEffect(() => { profileLoadingRef.current = profileLoading; }, [profileLoading]);
 
   const refreshProfileData = () => {
     if (!wsId) return;
@@ -1749,6 +1751,16 @@ export function OwnerDashboard() {
   const sendChat = async (text?: string, attachment?: { documentType: "RECEIPT"; fileName: string; fileUrl: string }) => {
     const q = (text || chatInput).trim();
     if (!q || chatLoading) return;
+    if (profileLoading) {
+      // Issue #5 fix: personalProfile/businesses/vehicles are still mid-fetch
+      // (e.g. right after login/workspace switch) — sending now would ship an
+      // empty financialContext to the AI, making it look like the workspace
+      // has no profile/vehicles at all. Wait for the in-flight load instead.
+      await new Promise<void>(resolve => {
+        const check = () => { if (!profileLoadingRef.current) resolve(); else setTimeout(check, 100); };
+        check();
+      });
+    }
     setChatInput("");
     const userMsg: ChatMsg = { id: `u-${Date.now()}`, sender: "user", text: q, createdAt: new Date().toISOString() };
     setChatMessages(prev => [...prev, userMsg]);

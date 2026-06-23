@@ -462,13 +462,19 @@ export function StaffHomeScreen() {
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [dependents, setDependents] = useState<Dependent[]>([]);
   const [businesses, setBusinesses] = useState<Business[]>([]);
+  const [profileLoading, setProfileLoading] = useState(true);
+  const profileLoadingRef = useRef(profileLoading);
+  useEffect(() => { profileLoadingRef.current = profileLoading; }, [profileLoading]);
   useEffect(() => {
     if (!wsId) return;
-    loadPersonalProfile(wsId, isMockUser).then(setPersonalProfile);
-    loadBusinessProfile(wsId, isMockUser).then(setBusinessProfile);
-    loadVehicles(wsId, isMockUser).then(setVehicles);
-    loadDependents(wsId, isMockUser).then(setDependents);
-    loadBusinesses(wsId, isMockUser).then(setBusinesses);
+    setProfileLoading(true);
+    Promise.all([
+      loadPersonalProfile(wsId, isMockUser).then(setPersonalProfile),
+      loadBusinessProfile(wsId, isMockUser).then(setBusinessProfile),
+      loadVehicles(wsId, isMockUser).then(setVehicles),
+      loadDependents(wsId, isMockUser).then(setDependents),
+      loadBusinesses(wsId, isMockUser).then(setBusinesses),
+    ]).finally(() => setProfileLoading(false));
   }, [wsId, isMockUser]);
 
   const [allBranchesLoaded, setAllBranchesLoaded] = useState(false);
@@ -516,6 +522,16 @@ export function StaffHomeScreen() {
   const sendChat = async (text?: string, attachment?: { documentType: "RECEIPT"; fileName: string; fileUrl: string }) => {
     const q = (text || chatInput).trim();
     if (!q || chatLoading) return;
+    if (profileLoading) {
+      // Issue #5 fix: personalProfile/businesses/vehicles are still mid-fetch
+      // (e.g. right after login/workspace switch) — sending now would ship an
+      // empty financialContext to the AI, making the workspace look like it
+      // has no profile/vehicles at all. Wait for the in-flight load instead.
+      await new Promise<void>(resolve => {
+        const check = () => { if (!profileLoadingRef.current) resolve(); else setTimeout(check, 100); };
+        check();
+      });
+    }
     setChatInput("");
     setChatMessages(prev => [...prev, { id: `u-${Date.now()}`, sender: "user", text: q, createdAt: new Date().toISOString() }]);
     saveChatMessage(wsId, user?.id, isMockUser, { sender: "user", text: q }, activeSessionId ?? undefined);
