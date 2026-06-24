@@ -1009,3 +1009,28 @@ export async function reviewPendingHqAction(actionId: string, approve: boolean, 
   });
   return error ? { ok: false, error: error.message } : { ok: true };
 }
+
+export interface HqStaffNotification {
+  id: string;
+  category: string;
+  title: string;
+  message: string;
+  status: "UNREAD" | "READ";
+  createdAt: string;
+}
+
+export async function getMyHqStaffNotifications(): Promise<HqStaffNotification[]> {
+  if (!isSupabaseConfigured() || !supabase) return [];
+  const { data, error } = await supabase.rpc("get_my_hq_staff_notifications");
+  if (error || !data) return [];
+  return data.map((row: any) => ({
+    id: row.id, category: row.category, title: row.title, message: row.message,
+    status: row.status, createdAt: row.created_at,
+  }));
+}
+
+export async function markHqStaffNotificationRead(id: string): Promise<boolean> {
+  if (!isSupabaseConfigured() || !supabase) return false;
+  const { error } = await supabase.rpc("mark_hq_staff_notification_read", { p_id: id });
+  return !error;
+}

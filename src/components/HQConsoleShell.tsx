@@ -484,9 +484,14 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
   const loadPendingHqActions = (status: hqService.PendingHqActionStatus = pendingHqActionsFilter) =>
     hqService.getPendingHqActions(status).then(setPendingHqActions);
   useEffect(() => {
-    if (!useRealData || isStaff) return;
+    if (!useRealData) return;
     loadPendingHqActions(pendingHqActionsFilter);
-  }, [useRealData, isStaff, pendingHqActionsFilter]);
+  }, [useRealData, pendingHqActionsFilter]);
+  const [myHqNotifications, setMyHqNotifications] = useState<hqService.HqStaffNotification[]>([]);
+  useEffect(() => {
+    if (!useRealData) return;
+    hqService.getMyHqStaffNotifications().then(setMyHqNotifications);
+  }, [useRealData]);
   const reviewHqAction = async (actionId: string, approve: boolean) => {
     setApprovalActionBusy(actionId);
     setApprovalActionError(null);
@@ -933,6 +938,7 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
     { id: "customers" as HQPage,     label: "Pelanggan",      icon: Users, section: "Utama" },
     { id: "subscriptions" as HQPage, label: "Langganan",      icon: Repeat, section: "Utama" },
     { id: "support" as HQPage,       label: "Sokongan",       icon: Headphones, badge: openCases, section: "Utama" },
+    { id: "approvalCenter" as HQPage, label: "Pusat Kelulusan", icon: ShieldAlert, section: "Utama" },
   ];
 
   const navItems = isStaff ? staffNav : ownerNav;
@@ -3551,10 +3557,30 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
               </div>
             )}
 
-            {activePage === "approvalCenter" && !isStaff && (
+            {activePage === "approvalCenter" && (
               <div className="space-y-4" id="hq_approval_center">
                 <h1 className="text-xl font-bold text-slate-900">Pusat Kelulusan HQ</h1>
                 <p className="text-xs text-slate-400">Tindakan sensitif (gantung/aktifkan kakitangan, dsb.) memerlukan kelulusan kakitangan HQ kedua sebelum dilaksanakan. Pemohon tidak boleh meluluskan permintaan sendiri.</p>
+
+                {myHqNotifications.filter(n => n.status === "UNREAD").length > 0 && (
+                  <div className="bg-amber-50 border border-amber-100 rounded-2xl p-4 space-y-2">
+                    <h3 className="text-xs font-bold text-amber-800">Notifikasi Akaun Anda</h3>
+                    {myHqNotifications.filter(n => n.status === "UNREAD").map((n) => (
+                      <div key={n.id} className="flex items-start justify-between gap-3 text-xs">
+                        <div>
+                          <p className="font-bold text-amber-900">{n.title}</p>
+                          <p className="text-amber-700">{n.message}</p>
+                        </div>
+                        <button
+                          onClick={() => hqService.markHqStaffNotificationRead(n.id).then(() => hqService.getMyHqStaffNotifications().then(setMyHqNotifications))}
+                          className="shrink-0 px-2 py-1 rounded-lg bg-amber-100 text-amber-800 font-bold hover:bg-amber-200 cursor-pointer"
+                        >
+                          Tandai Dibaca
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
 
                 <div className="flex items-center gap-2">
                   {(["pending", "approved", "rejected"] as hqService.PendingHqActionStatus[]).map((s) => (
