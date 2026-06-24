@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo, useEffect, useRef } from "react";
 import { useFinancials } from "../context/FinancialRecordsContext";
 import { useWorkspace } from "../context/WorkspaceContext";
 import { useAuth } from "../context/AuthContext";
@@ -671,6 +671,24 @@ export const FinancialReportsAnalytics: React.FC<FinancialReportsAnalyticsProps>
     handleNavigateToIssue(action.recordIds, action.problem, fallbackReport);
   };
 
+  // UAT FAIL fix — every card with a ">" chevron (Tax/Financing/Audit
+  // Readiness, Untung & Rugi, Analisis Pendapatan/Perbelanjaan, Aliran
+  // Tunai, Lihat Analisis) already navigates by setting selectedReport,
+  // which the "Active Report Detail Canvas" below renders. The route was
+  // never dead — but the canvas sits far below the fold with no scroll, so
+  // tapping a chevron produced no visible feedback and looked broken. This
+  // scrolls the canvas into view whenever selectedReport changes (skipped
+  // on first mount so the page doesn't jump on initial load).
+  const reportCanvasRef = useRef<HTMLDivElement>(null);
+  const isFirstReportRender = useRef(true);
+  useEffect(() => {
+    if (isFirstReportRender.current) {
+      isFirstReportRender.current = false;
+      return;
+    }
+    reportCanvasRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [selectedReport]);
+
   const exportFilenameBase = `MyKerani_${activeWorkspace.name}_${selectedReport}_${new Date().toISOString().slice(0, 10)}`.replace(/\s+/g, "_");
 
   const handleExport = (format: "csv" | "excel" | "pdf" | "json") => {
@@ -866,7 +884,7 @@ export const FinancialReportsAnalytics: React.FC<FinancialReportsAnalyticsProps>
       </div>
 
       {/* Active Report Detail Canvas */}
-      <div className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-6 shadow-xs space-y-6">
+      <div ref={reportCanvasRef} className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-6 shadow-xs space-y-6">
 
           {/* Active Canvas Header */}
           <div className="border-b border-slate-100 pb-4">
@@ -1642,6 +1660,15 @@ export const FinancialReportsAnalytics: React.FC<FinancialReportsAnalyticsProps>
           {selectedReport === "tax_readiness" && (
             <div className="space-y-6 animate-fade-in" id="report_tax_readiness_view">
 
+              {hasInsufficientData ? (
+                <div className="p-5 rounded-2xl border-2 border-slate-200 bg-slate-50 space-y-2" id="report_tax_readiness_empty">
+                  <p className="text-sm font-bold text-slate-700">Belum cukup data untuk analisis.</p>
+                  <p className="text-[11px] text-slate-500 leading-relaxed">
+                    Tambah rekod pertama (pendapatan, perbelanjaan atau dokumen sokongan) untuk menjana analisis Kesediaan Cukai LHDN.
+                  </p>
+                </div>
+              ) : (
+              <>
               <div className={`p-5 rounded-2xl border-2 space-y-2 ${taxReadiness.scoreColor}`}>
                 <div className="flex justify-between items-center border-b border-white/20 pb-2">
                   <span className="text-[10px] font-mono font-bold uppercase tracking-wide">
@@ -1683,6 +1710,8 @@ export const FinancialReportsAnalytics: React.FC<FinancialReportsAnalyticsProps>
                   Senarai semak ini adalah panduan kesediaan dalaman MYKERANI dan bukan nasihat percukaian rasmi. Sila rujuk akauntan bertauliah atau LHDN sebelum penyerahan cukai sebenar.
                 </p>
               </div>
+              </>
+              )}
 
             </div>
           )}
@@ -1691,6 +1720,15 @@ export const FinancialReportsAnalytics: React.FC<FinancialReportsAnalyticsProps>
           {selectedReport === "bank_readiness" && (
             <div className="space-y-6 animate-fade-in" id="report_bank_readiness_view">
 
+              {hasInsufficientData ? (
+                <div className="p-5 rounded-2xl border-2 border-slate-200 bg-slate-50 space-y-2" id="report_bank_readiness_empty">
+                  <p className="text-sm font-bold text-slate-700">Belum cukup data untuk analisis.</p>
+                  <p className="text-[11px] text-slate-500 leading-relaxed">
+                    Tambah rekod pertama (pendapatan, perbelanjaan atau hutang) untuk menjana analisis Kesediaan Pembiayaan/Pinjaman.
+                  </p>
+                </div>
+              ) : (
+              <>
               <div className={`p-5 rounded-2xl border-2 space-y-2 ${bankReadiness.scoreColor}`}>
                 <div className="flex justify-between items-center border-b border-white/20 pb-2">
                   <span className="text-[10px] font-mono font-bold uppercase tracking-wide">
@@ -1732,6 +1770,8 @@ export const FinancialReportsAnalytics: React.FC<FinancialReportsAnalyticsProps>
                   Senarai semak ini adalah panduan kesediaan dalaman MYKERANI berdasarkan signal kewangan umum dan bukan kelulusan atau nasihat pembiayaan rasmi. Setiap bank/institusi mempunyai kriteria sendiri — sila rujuk pegawai pembiayaan untuk penilaian sebenar.
                 </p>
               </div>
+              </>
+              )}
 
             </div>
           )}
