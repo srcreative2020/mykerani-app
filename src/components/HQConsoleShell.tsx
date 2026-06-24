@@ -193,6 +193,9 @@ interface Customer {
   joinedAt: string;
   notes?: string;
   totalPaidMyr: number;
+  healthScore?: number;
+  healthRiskLevel?: "low" | "medium" | "high";
+  healthReasons?: string[];
 }
 
 const BLANK_PLAN: Omit<Plan, "id"> = {
@@ -1355,6 +1358,15 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
                               <p className="text-xs font-semibold text-slate-800 truncate">{c.name}</p>
                               <p className="text-[10px] text-slate-400 truncate">{displayEmail(c.email)}</p>
                               {c.attention && <span className="text-[9px] text-amber-600 font-bold bg-amber-50 px-1.5 py-0.5 rounded-full">Perlu Perhatian</span>}
+                              {typeof c.healthScore === "number" && (
+                                <span className={`ml-1 text-[9px] font-bold px-1.5 py-0.5 rounded-full ${
+                                  c.healthRiskLevel === "high" ? "text-red-600 bg-red-50" :
+                                  c.healthRiskLevel === "medium" ? "text-amber-600 bg-amber-50" :
+                                  "text-emerald-600 bg-emerald-50"
+                                }`} title={c.healthReasons?.join(", ")}>
+                                  Kesihatan: {c.healthScore}
+                                </span>
+                              )}
                             </div>
                           </div>
                           <div className="col-span-2">

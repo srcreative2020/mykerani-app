@@ -31,6 +31,9 @@ export interface HqCustomer {
   joinedAt: string;
   notes?: string;
   totalPaidMyr: number;
+  healthScore: number;
+  healthRiskLevel: "low" | "medium" | "high";
+  healthReasons: string[];
 }
 
 function fmtDate(value: string | null | undefined): string {
@@ -109,7 +112,7 @@ export async function deletePlan(id: string): Promise<boolean> {
 export async function getCustomers(): Promise<HqCustomer[]> {
   if (!isSupabaseConfigured() || !supabase) return [];
 
-  const [{ data: tenants, error: tenantsErr }, { data: subs }, { data: plans }, { data: profiles }, { data: aiUsageRows }, { data: storageRows }, { data: paidRows }] = await Promise.all([
+  const [{ data: tenants, error: tenantsErr }, { data: subs }, { data: plans }, { data: profiles }, { data: aiUsageRows }, { data: storageRows }, { data: paidRows }, { data: healthRows }] = await Promise.all([
     supabase.from("tenants").select("*").eq("category", "USER"),
     supabase.from("tenant_subscriptions").select("*"),
     supabase.from("subscription_plans").select("*"),
@@ -117,6 +120,7 @@ export async function getCustomers(): Promise<HqCustomer[]> {
     supabase.rpc("get_hq_ai_usage_all"),
     supabase.rpc("get_all_workspaces_storage_usage"),
     supabase.rpc("get_payment_totals_by_tenant"),
+    supabase.rpc("get_hq_customer_health_scores"),
   ]);
   if (tenantsErr || !tenants) return [];
 
@@ -133,12 +137,16 @@ export async function getCustomers(): Promise<HqCustomer[]> {
     storageBytesByTenant.set(r.tenant_id, (storageBytesByTenant.get(r.tenant_id) || 0) + Number(r.total_bytes || 0));
   });
   const totalPaidByTenant = new Map<string, number>((paidRows || []).map((r: any) => [r.tenant_id, Number(r.total_paid_myr) || 0]));
+  const healthByTenant = new Map<string, { score: number; riskLevel: "low" | "medium" | "high"; reasons: string[] }>(
+    (healthRows || []).map((r: any) => [r.tenant_id, { score: Number(r.score) || 0, riskLevel: r.risk_level, reasons: r.reasons || [] }])
+  );
 
   return tenants.map((t: any) => {
     const sub = subByTenant.get(t.id);
     const plan = sub ? planById.get(sub.plan_id) : null;
     const owner = ownerByTenant.get(t.id);
     const status: HqCustomer["status"] = sub?.status === "active" ? "active" : sub?.status === "trialing" ? "pending" : sub?.status ? "suspended" : "pending";
+    const health = healthByTenant.get(t.id);
     return {
       id: t.id,
       name: t.name,
@@ -149,11 +157,14 @@ export async function getCustomers(): Promise<HqCustomer[]> {
       renewal: fmtDate(sub?.current_period_end),
       aiUsage: aiUsageByTenant.get(t.id) || 0,
       storageGB: (storageBytesByTenant.get(t.id) || 0) / (1024 * 1024 * 1024),
-      attention: false,
+      attention: health?.riskLevel === "high",
       mrr: status === "active" ? Number(plan?.monthly_price_myr) || 0 : 0,
       joinedAt: t.created_at ? t.created_at.split("T")[0] : "",
       notes: "",
       totalPaidMyr: totalPaidByTenant.get(t.id) || 0,
+      healthScore: health?.score ?? 100,
+      healthRiskLevel: health?.riskLevel ?? "low",
+      healthReasons: health?.reasons ?? [],
     };
   });
 }
