@@ -617,6 +617,25 @@ export async function getSupportTickets(): Promise<SupportTicket[]> {
   );
 }
 
+export async function getMyTenantSupportTickets(): Promise<SupportTicket[]> {
+  if (!isSupabaseConfigured() || !supabase) return [];
+  const { data: tickets, error } = await supabase
+    .from("support_tickets")
+    .select("*")
+    .order("created_at", { ascending: false });
+  if (error || !tickets) return [];
+  const ticketIds = tickets.map((t: any) => t.id);
+  if (ticketIds.length === 0) return [];
+  const { data: replies } = await supabase
+    .from("support_ticket_replies")
+    .select("*")
+    .in("ticket_id", ticketIds)
+    .order("created_at", { ascending: true });
+  return tickets.map((t: any) =>
+    mapTicketRow(t, (replies || []).filter((r: any) => r.ticket_id === t.id))
+  );
+}
+
 export async function createSupportTicket(ticket: {
   customer: string;
   email?: string;
@@ -656,10 +675,7 @@ export async function updateSupportTicketStatus(
   status: "open" | "pending" | "resolved"
 ): Promise<boolean> {
   if (!isSupabaseConfigured() || !supabase) return false;
-  const { error } = await supabase
-    .from("support_tickets")
-    .update({ status, updated_at: new Date().toISOString() })
-    .eq("id", ticketId);
+  const { error } = await supabase.rpc("hq_update_support_ticket_status", { p_ticket_id: ticketId, p_status: status });
   return !error;
 }
 
@@ -674,14 +690,8 @@ export async function assignSupportTicket(ticketId: string, assignedTo: string):
 
 export async function replySupportTicket(ticketId: string, author: string, text: string): Promise<boolean> {
   if (!isSupabaseConfigured() || !supabase) return false;
-  const { error } = await supabase.from("support_ticket_replies").insert({
-    ticket_id: ticketId,
-    author,
-    reply_text: text,
-  });
-  if (error) return false;
-  await updateSupportTicketStatus(ticketId, "pending");
-  return true;
+  const { error } = await supabase.rpc("hq_reply_support_ticket", { p_ticket_id: ticketId, p_author: author, p_reply_text: text });
+  return !error;
 }
 
 // --- Resource Wallet Dashboard (Module 11) ---

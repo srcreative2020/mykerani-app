@@ -9,7 +9,7 @@ import { supabase, isSupabaseConfigured } from "../lib/supabase";
 import { isDemoWorkspace } from "../lib/seeder";
 import { uploadDocument, getDocumentUrl, type UploadedDoc } from "../lib/documentStorage";
 import { logEvent } from "../lib/eventLog";
-import { createTenantSupportTicket } from "../lib/hqService";
+import { createTenantSupportTicket, getMyTenantSupportTickets, SupportTicket } from "../lib/hqService";
 import { usePermission } from "../context/PermissionContext";
 import { useStorageQuota } from "../lib/storageQuota";
 import { DocumentsManager } from "../components/DocumentsManager";
@@ -216,7 +216,7 @@ export function StaffHomeScreen() {
 
   // â"€â"€ Support Center â"€â"€
   const [showSupport, setShowSupport] = useState(false);
-  const [supportView, setSupportView] = useState<"chat" | "faq" | "ticket">("chat");
+  const [supportView, setSupportView] = useState<"chat" | "faq" | "ticket" | "ticket_status">("chat");
   const [supportMessages, setSupportMessages] = useState<{ id: string; sender: "user" | "ai"; text: string }[]>([]);
   const [supportInput, setSupportInput] = useState("");
   const [supportLoading, setSupportLoading] = useState(false);
@@ -225,6 +225,8 @@ export function StaffHomeScreen() {
   const [ticketSent, setTicketSent] = useState(false);
   const [ticketSending, setTicketSending] = useState(false);
   const [ticketError, setTicketError] = useState<string | null>(null);
+  const [myTickets, setMyTickets] = useState<SupportTicket[]>([]);
+  const [myTicketsLoading, setMyTicketsLoading] = useState(false);
   const supportEndRef = useRef<HTMLDivElement>(null);
 
   const wsId = activeWorkspace?.id || "";
@@ -414,6 +416,13 @@ export function StaffHomeScreen() {
     });
   };
   useEffect(() => { supportEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [supportMessages, supportLoading]);
+  useEffect(() => {
+    if (supportView !== "ticket_status" || isMockUser) return;
+    let active = true;
+    setMyTicketsLoading(true);
+    getMyTenantSupportTickets().then(tickets => { if (active) { setMyTickets(tickets); setMyTicketsLoading(false); } });
+    return () => { active = false; };
+  }, [supportView, isMockUser]);
 
   const [personalProfile, setPersonalProfile] = useState(EMPTY_PERSONAL_PROFILE);
   const [businessProfile, setBusinessProfile] = useState(EMPTY_BUSINESS_PROFILE);
@@ -1725,6 +1734,7 @@ export function StaffHomeScreen() {
                 { id: "chat" as const,   label: "Tanya AI",   icon: MessageCircle },
                 { id: "faq" as const,    label: "FAQ",         icon: BookOpen },
                 { id: "ticket" as const, label: "Buka Tiket",  icon: Ticket },
+                { id: "ticket_status" as const, label: "Status Tiket", icon: CheckCircle2 },
               ]).map(({ id, label, icon: Icon }) => (
                 <button key={id} onClick={() => setSupportView(id)}
                   className={`flex items-center space-x-1.5 px-3 py-2 rounded-xl text-xs font-bold transition cursor-pointer ${supportView === id ? "bg-indigo-600 text-white" : "bg-slate-100 text-slate-600"}`}>
@@ -1825,6 +1835,10 @@ export function StaffHomeScreen() {
                       <CheckCircle2 className="w-12 h-12 text-emerald-500 mx-auto" />
                       <p className="text-sm font-bold text-emerald-700">Tiket berjaya dihantar!</p>
                       <p className="text-xs text-slate-400">Pasukan HQ akan menjawab dalam 1-2 hari bekerja.</p>
+                      <button onClick={() => { setTicketSent(false); setTicketSubject(""); setTicketDesc(""); setSupportView("ticket_status"); }}
+                        className="px-4 py-2 bg-indigo-600 text-white rounded-xl text-xs font-bold cursor-pointer">
+                        Semak Status Tiket
+                      </button>
                     </div>
                   ) : (
                     <>
@@ -1852,6 +1866,55 @@ export function StaffHomeScreen() {
                         {ticketSending ? "Menghantar..." : "Hantar Tiket"}
                       </button>
                     </>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Ticket Status */}
+            {supportView === "ticket_status" && (
+              <div className="flex-1 overflow-y-auto p-4">
+                <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
+                  <div className="flex items-center space-x-2 mb-4">
+                    <Ticket className="w-4 h-4 text-indigo-500" />
+                    <h3 className="text-sm font-bold text-slate-900">Status Tiket Syarikat</h3>
+                  </div>
+                  {myTicketsLoading ? (
+                    <div className="text-center py-6">
+                      <RefreshCw className="w-5 h-5 text-slate-300 mx-auto animate-spin" />
+                    </div>
+                  ) : myTickets.length === 0 ? (
+                    <div className="text-center py-6">
+                      <CheckCircle2 className="w-8 h-8 text-slate-200 mx-auto mb-2" />
+                      <p className="text-xs text-slate-400">Tiada tiket aktif</p>
+                      <button onClick={() => setSupportView("ticket")} className="mt-3 px-4 py-2 bg-indigo-600 text-white rounded-xl text-xs font-bold cursor-pointer">
+                        Buka Tiket Baru
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {myTickets.map(t => (
+                        <div key={t.id} className={`p-3 rounded-xl border flex items-start space-x-3 ${t.status === "resolved" ? "bg-emerald-50 border-emerald-100" : t.status === "pending" ? "bg-amber-50 border-amber-100" : "bg-slate-50 border-slate-100"}`}>
+                          {t.status === "resolved" ? <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" /> : <Clock className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />}
+                          <div className="flex-1">
+                            <p className={`text-xs font-bold ${t.status === "resolved" ? "text-emerald-800" : "text-amber-800"}`}>#{t.id.slice(0, 8)} — {t.subject}</p>
+                            <p className={`text-[11px] mt-0.5 ${t.status === "resolved" ? "text-emerald-600" : "text-amber-600"}`}>
+                              Status: {t.status === "resolved" ? "Diselesaikan" : t.status === "pending" ? "Menunggu maklum balas" : "Sedang diproses oleh HQ Staff"}
+                            </p>
+                            <p className="text-[10px] text-slate-400 mt-1">Dihantar {new Date(t.createdAt).toLocaleDateString("ms-MY")}</p>
+                            {t.replies.length > 0 && (
+                              <div className="mt-2 space-y-1.5 border-t border-slate-200/70 pt-2">
+                                {t.replies.map(r => (
+                                  <div key={r.id} className="text-[11px] text-slate-600">
+                                    <span className="font-bold text-slate-700">{r.author}: </span>{r.text}
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
                   )}
                 </div>
               </div>
