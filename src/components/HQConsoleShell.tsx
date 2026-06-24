@@ -518,6 +518,18 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
     hqService.getMaskingGrants().then(setMaskingGrants);
     hqService.getHqStaffUsers().then(setHqStaffUsers);
   };
+  const changeHqStaffRole = async (u: hqService.HqStaffUser, newRole: string) => {
+    if (newRole === u.role || !user?.tenantId) return;
+    await hqService.hqAssignStaffRole(u.userId, u.email, u.fullName, newRole, user.tenantId);
+    hqService.getHqStaffUsers().then(setHqStaffUsers);
+  };
+  const revokeHqStaffByUserId = async (u: hqService.HqStaffUser) => {
+    if (!window.confirm(`Tarik balik semua akses ${u.fullName} (${u.email})?`)) return;
+    const roster = await hqService.getTenantStaffRoles(user?.tenantId || "");
+    const row = roster.find(r => r.userId === u.userId || r.email === u.email);
+    if (row) await hqService.hqRevokeStaffRole(row.id);
+    hqService.getHqStaffUsers().then(setHqStaffUsers);
+  };
 
   // Approval Center (Phase 2)
   const [pendingHqActions, setPendingHqActions] = useState<hqService.PendingHqAction[]>([]);
@@ -3818,6 +3830,16 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
                             <p className="text-[11px] text-slate-500 truncate">{u.email}</p>
                           </div>
                           <div className="shrink-0 flex items-center gap-1.5">
+                            <select
+                              value={u.role}
+                              onChange={(e) => changeHqStaffRole(u, e.target.value)}
+                              title="Tukar peranan HQ — direkodkan dalam role_change_audit_log"
+                              className="px-2 py-1.5 rounded-lg text-[11px] font-bold border border-slate-200 bg-white cursor-pointer focus:outline-none focus:border-emerald-400"
+                            >
+                              {["HQ_OWNER", "HQ_ADMIN", "HQ_SUPPORT", "HQ_AUDITOR", "HQ_STAFF"].map(r => (
+                                <option key={r} value={r}>{r}</option>
+                              ))}
+                            </select>
                             <button
                               onClick={() => toggleStaffUnmask(u.userId, u.unmaskGranted)}
                               className={`px-3 py-1.5 rounded-lg text-[11px] font-bold cursor-pointer transition ${
@@ -3834,6 +3856,13 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
                               title="Hantar permintaan gantung ke Pusat Kelulusan — perlu kelulusan kakitangan HQ lain"
                             >
                               Minta Gantung
+                            </button>
+                            <button
+                              onClick={() => revokeHqStaffByUserId(u)}
+                              className="px-3 py-1.5 rounded-lg text-[11px] font-bold cursor-pointer transition bg-slate-100 text-slate-700 hover:bg-slate-200"
+                              title="Buang sepenuhnya peranan HQ ini — direkodkan dalam role_change_audit_log"
+                            >
+                              Buang Peranan
                             </button>
                           </div>
                         </div>

@@ -518,10 +518,7 @@ export async function getWebhookEnforceFlag(): Promise<boolean> {
 
 export async function setWebhookEnforceFlag(enabled: boolean): Promise<boolean> {
   if (!isSupabaseConfigured() || !supabase) return false;
-  const { error } = await supabase
-    .from("hq_feature_flags")
-    .update({ enabled, updated_at: new Date().toISOString() })
-    .eq("key", "chip_asia_webhook_enforce");
+  const { error } = await supabase.rpc("set_webhook_enforce_flag", { p_enabled: enabled });
   return !error;
 }
 
@@ -542,8 +539,8 @@ export async function getAiCostRates(): Promise<AiCostRate[]> {
 
 export async function upsertAiCostRate(provider: string, model: string, costPerCallUsd: number): Promise<boolean> {
   if (!isSupabaseConfigured() || !supabase) return false;
-  const { error } = await supabase.from("ai_cost_rates").upsert({
-    provider, model, cost_per_call_usd: costPerCallUsd, updated_at: new Date().toISOString(),
+  const { error } = await supabase.rpc("upsert_ai_cost_rate", {
+    p_provider: provider, p_model: model, p_cost_per_call_usd: costPerCallUsd,
   });
   return !error;
 }
@@ -948,11 +945,7 @@ export async function refreshHqAlerts(): Promise<number> {
 
 export async function resolveHqAlert(alertId: string): Promise<boolean> {
   if (!isSupabaseConfigured() || !supabase) return false;
-  const { data: userData } = await supabase.auth.getUser();
-  const { error } = await supabase
-    .from("hq_alerts")
-    .update({ resolved_at: new Date().toISOString(), resolved_by: userData?.user?.id || null })
-    .eq("id", alertId);
+  const { error } = await supabase.rpc("resolve_hq_alert", { p_alert_id: alertId });
   return !error;
 }
 
@@ -1010,6 +1003,67 @@ export async function getHqStaffUsers(): Promise<HqStaffUser[]> {
     role: row.role,
     unmaskGranted: !!row.unmask_granted,
   }));
+}
+
+// --- Staff Role & Permission Governance (Module 2) ---
+
+export interface TenantStaffRole {
+  id: string;
+  userId: string;
+  email: string;
+  fullName: string;
+  role: string;
+  createdAt: string;
+}
+
+export async function hqAssignStaffRole(
+  userId: string, email: string, fullName: string, role: string, hqTenantId: string
+): Promise<boolean> {
+  if (!isSupabaseConfigured() || !supabase) return false;
+  const { error } = await supabase.rpc("hq_assign_staff_role", {
+    p_user_id: userId, p_email: email, p_full_name: fullName, p_role: role, p_hq_tenant_id: hqTenantId,
+  });
+  return !error;
+}
+
+export async function hqRevokeStaffRole(assignmentId: string): Promise<boolean> {
+  if (!isSupabaseConfigured() || !supabase) return false;
+  const { error } = await supabase.rpc("hq_revoke_staff_role", { p_assignment_id: assignmentId });
+  return !error;
+}
+
+export async function tenantAssignStaffRole(
+  userId: string, email: string, fullName: string, role: string
+): Promise<boolean> {
+  if (!isSupabaseConfigured() || !supabase) return false;
+  const { error } = await supabase.rpc("tenant_assign_staff_role", {
+    p_user_id: userId, p_email: email, p_full_name: fullName, p_role: role,
+  });
+  return !error;
+}
+
+export async function tenantRevokeStaffRole(assignmentId: string): Promise<boolean> {
+  if (!isSupabaseConfigured() || !supabase) return false;
+  const { error } = await supabase.rpc("tenant_revoke_staff_role", { p_assignment_id: assignmentId });
+  return !error;
+}
+
+export async function getTenantStaffRoles(tenantId: string): Promise<TenantStaffRole[]> {
+  if (!isSupabaseConfigured() || !supabase) return [];
+  const { data, error } = await supabase.rpc("get_tenant_staff_roles", { p_tenant_id: tenantId });
+  if (error || !data) return [];
+  return data.map((row: any) => ({
+    id: row.id, userId: row.user_id, email: row.email, fullName: row.full_name, role: row.role, createdAt: row.created_at,
+  }));
+}
+
+// --- Tenant appeal channel (routes into Module 6 Approval Center) ---
+
+export async function tenantSubmitAppeal(reason: string, context?: string): Promise<string | null> {
+  if (!isSupabaseConfigured() || !supabase) return null;
+  const { data, error } = await supabase.rpc("tenant_submit_appeal", { p_reason: reason, p_context: context ?? null });
+  if (error) return null;
+  return data as string;
 }
 
 export function maskEmail(email: string | undefined | null): string {

@@ -9,7 +9,7 @@ import { supabase, isSupabaseConfigured } from "../lib/supabase";
 import { isDemoWorkspace } from "../lib/seeder";
 import { uploadDocument, getDocumentUrl, type UploadedDoc } from "../lib/documentStorage";
 import { logEvent } from "../lib/eventLog";
-import { createTenantSupportTicket, getMyTenantSupportTickets, SupportTicket, SUPPORT_TICKET_TEMPLATES, uploadTicketAttachment, getTicketAttachmentUrl, ticketSlaState, TICKET_STATUS_LABEL_MS, TICKET_STATUS_STYLE } from "../lib/hqService";
+import { createTenantSupportTicket, getMyTenantSupportTickets, SupportTicket, SUPPORT_TICKET_TEMPLATES, uploadTicketAttachment, getTicketAttachmentUrl, ticketSlaState, TICKET_STATUS_LABEL_MS, TICKET_STATUS_STYLE, tenantSubmitAppeal } from "../lib/hqService";
 import { usePermission } from "../context/PermissionContext";
 import { useStorageQuota } from "../lib/storageQuota";
 import { DocumentsManager } from "../components/DocumentsManager";
@@ -33,7 +33,7 @@ import {
   CheckCircle2, LogOut, ClipboardList, HelpCircle,
   MessageCircle, BookOpen, Ticket, Edit3,
   Paperclip, Mic, Square, File as FileIcon,
-  LayoutDashboard, FileText, MoreHorizontal,
+  LayoutDashboard, FileText, MoreHorizontal, AlertCircle,
 } from "lucide-react";
 
 type StaffTab = "home" | "dashboard" | "documents" | "more";
@@ -230,7 +230,28 @@ export function StaffHomeScreen() {
   const [myTicketsLoading, setMyTicketsLoading] = useState(false);
   const [openTicketId, setOpenTicketId] = useState<string | null>(null);
   const [ticketAttachFile, setTicketAttachFile] = useState<File | null>(null);
+  const [showAppeal, setShowAppeal] = useState(false);
+  const [appealReason, setAppealReason] = useState("");
+  const [appealLoading, setAppealLoading] = useState(false);
+  const [appealResult, setAppealResult] = useState<{ success: boolean; message: string } | null>(null);
   const supportEndRef = useRef<HTMLDivElement>(null);
+
+  const handleSubmitAppeal = async () => {
+    if (!appealReason.trim()) return;
+    setAppealLoading(true);
+    setAppealResult(null);
+    try {
+      const id = await tenantSubmitAppeal(appealReason.trim());
+      if (id) {
+        setAppealResult({ success: true, message: "Rayuan anda telah dihantar kepada HQ untuk semakan." });
+        setAppealReason("");
+      } else {
+        setAppealResult({ success: false, message: "Gagal menghantar rayuan. Sila cuba lagi." });
+      }
+    } finally {
+      setAppealLoading(false);
+    }
+  };
 
   const wsId = activeWorkspace?.id || "";
   const tenantId = activeTenant?.id || user?.id || "guest";
@@ -1597,6 +1618,28 @@ export function StaffHomeScreen() {
                 className="w-full py-3 border border-indigo-200 text-indigo-600 rounded-xl text-sm font-semibold hover:bg-indigo-50 transition cursor-pointer flex items-center justify-center space-x-2">
                 <HelpCircle className="w-4 h-4" /><span>Pusat Sokongan</span>
               </button>
+
+              <button onClick={() => { setShowAppeal(v => !v); setAppealResult(null); }}
+                className="w-full py-3 border border-amber-200 text-amber-600 rounded-xl text-sm font-semibold hover:bg-amber-50 transition cursor-pointer flex items-center justify-center space-x-2">
+                <AlertCircle className="w-4 h-4" /><span>Hantar Rayuan ke HQ</span>
+              </button>
+              {showAppeal && (
+                <div className="space-y-2 border border-amber-100 bg-amber-50 rounded-xl p-3">
+                  <p className="text-xs text-slate-500">Jika akaun syarikat anda digantung atau dibekukan dan ini silap, hantar rayuan untuk semakan HQ.</p>
+                  <textarea value={appealReason} onChange={e => setAppealReason(e.target.value)}
+                    placeholder="Terangkan sebab rayuan anda..." rows={3}
+                    className="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-400 bg-white" />
+                  <button onClick={handleSubmitAppeal} disabled={appealLoading || !appealReason.trim()}
+                    className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 text-white rounded-xl text-xs font-bold cursor-pointer transition">
+                    {appealLoading ? "Menghantar..." : "Hantar Rayuan"}
+                  </button>
+                  {appealResult && (
+                    <div className={`rounded-xl p-3 text-xs ${appealResult.success ? "bg-emerald-50 border border-emerald-200" : "bg-rose-50 border border-rose-200"}`}>
+                      <p className={appealResult.success ? "text-emerald-600" : "text-rose-600"}>{appealResult.message}</p>
+                    </div>
+                  )}
+                </div>
+              )}
 
               <button onClick={() => setShowChatArchive(true)}
                 className="w-full py-3 border border-slate-200 text-slate-600 rounded-xl text-sm font-semibold hover:bg-slate-50 transition cursor-pointer flex items-center justify-center space-x-2">
