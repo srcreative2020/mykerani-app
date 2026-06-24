@@ -21,6 +21,7 @@ export interface HqCustomer {
   name: string;
   email: string;
   phone?: string;
+  alternatePhone?: string;
   plan: string;
   status: "active" | "suspended" | "pending";
   renewal: string;
@@ -34,6 +35,14 @@ export interface HqCustomer {
   healthScore: number;
   healthRiskLevel: "low" | "medium" | "high";
   healthReasons: string[];
+  registrationNo?: string;
+  taxNumber?: string;
+  industry?: string;
+  address?: string;
+  billingContactName?: string;
+  billingEmail?: string;
+  supportContactName?: string;
+  supportEmail?: string;
 }
 
 function fmtDate(value: string | null | undefined): string {
@@ -154,7 +163,8 @@ export async function getCustomers(): Promise<HqCustomer[]> {
       id: t.id,
       name: owner?.full_name || t.name,
       email: owner?.email || "",
-      phone: "",
+      phone: owner?.mobile_number || "",
+      alternatePhone: owner?.alternate_number || "",
       plan: plan?.name || "",
       status,
       renewal: fmtDate(sub?.current_period_end),
@@ -168,6 +178,14 @@ export async function getCustomers(): Promise<HqCustomer[]> {
       healthScore: health ? health.score : healthErr ? -1 : 100,
       healthRiskLevel: health ? health.riskLevel : healthErr ? "high" : "low",
       healthReasons: health ? health.reasons : healthErr ? ["Ralat memuatkan skor kesihatan"] : [],
+      registrationNo: t.registration_no || "",
+      taxNumber: t.tax_number || "",
+      industry: t.industry || "",
+      address: t.address || "",
+      billingContactName: t.billing_contact_name || "",
+      billingEmail: t.billing_email || "",
+      supportContactName: t.support_contact_name || "",
+      supportEmail: t.support_email || "",
     };
   });
 }
@@ -196,10 +214,37 @@ export async function upsertCustomerSubscription(tenantId: string, planName: str
   return !error && data === true;
 }
 
-export async function updateCustomerProfile(tenantId: string, fullName: string): Promise<boolean> {
+export interface TenantMasterProfileUpdate {
+  fullName?: string;
+  mobileNumber?: string;
+  alternateNumber?: string;
+  companyName?: string;
+  registrationNo?: string;
+  taxNumber?: string;
+  industry?: string;
+  address?: string;
+  billingContactName?: string;
+  billingEmail?: string;
+  supportContactName?: string;
+  supportEmail?: string;
+}
+
+export async function updateTenantMasterProfile(tenantId: string, fields: TenantMasterProfileUpdate): Promise<boolean> {
   if (!isSupabaseConfigured() || !supabase) return false;
-  const { data, error } = await supabase.rpc("hq_update_customer_profile", {
-    p_tenant_id: tenantId, p_full_name: fullName,
+  const { data, error } = await supabase.rpc("update_tenant_master_profile", {
+    p_tenant_id: tenantId,
+    p_full_name: fields.fullName ?? null,
+    p_mobile_number: fields.mobileNumber ?? null,
+    p_alternate_number: fields.alternateNumber ?? null,
+    p_company_name: fields.companyName ?? null,
+    p_registration_no: fields.registrationNo ?? null,
+    p_tax_number: fields.taxNumber ?? null,
+    p_industry: fields.industry ?? null,
+    p_address: fields.address ?? null,
+    p_billing_contact_name: fields.billingContactName ?? null,
+    p_billing_email: fields.billingEmail ?? null,
+    p_support_contact_name: fields.supportContactName ?? null,
+    p_support_email: fields.supportEmail ?? null,
   });
   return !error && data === true;
 }
