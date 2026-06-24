@@ -123,7 +123,7 @@ begin
 
   return query
   select
-    ura.user_id,
+    ura.user_id::text,
     ura.email,
     ura.full_name,
     ura.role,
@@ -238,12 +238,12 @@ begin
     sum(w.storage_limit_bytes)::bigint,
     coalesce((
       select sum(-tx.amount) from public.resource_wallet_transactions tx
-      where tx.wallet_id in (select id from public.resource_wallets where tenant_id = w.tenant_id)
+      where tx.wallet_id in (select rw.id from public.resource_wallets rw where rw.tenant_id = w.tenant_id)
         and tx.credit_type = 'AI' and tx.amount < 0 and tx.created_at >= now() - interval '30 days'
     ), 0)::bigint,
     coalesce((
       select sum(-tx.amount) from public.resource_wallet_transactions tx
-      where tx.wallet_id in (select id from public.resource_wallets where tenant_id = w.tenant_id)
+      where tx.wallet_id in (select rw.id from public.resource_wallets rw where rw.tenant_id = w.tenant_id)
         and tx.credit_type = 'OCR' and tx.amount < 0 and tx.created_at >= now() - interval '30 days'
     ), 0)::bigint,
     coalesce((
