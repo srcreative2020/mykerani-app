@@ -1041,3 +1041,189 @@ export async function markHqStaffNotificationRead(id: string): Promise<boolean> 
   const { error } = await supabase.rpc("mark_hq_staff_notification_read", { p_id: id });
   return !error;
 }
+
+// --- HQ Activity Center ---
+// HQ-wide aggregated feed over audit_logs + hq_governance_audit_log, with a
+// per-HQ-user "last seen" cursor. Distinct from HQ Alert Center (threshold-
+// triggered alerts) — this is a pure activity/visibility feed.
+
+export interface HqActivityEvent {
+  sourceTable: string;
+  eventId: string;
+  occurredAt: string;
+  actorEmail: string | null;
+  actorRole: string | null;
+  module: string;
+  action: string;
+  tenantId: string | null;
+  detail: Record<string, unknown>;
+}
+
+export async function getHqActivityFeed(limit = 50): Promise<HqActivityEvent[]> {
+  if (!isSupabaseConfigured() || !supabase) return [];
+  const { data, error } = await supabase.rpc("get_hq_activity_feed", { p_limit: limit });
+  if (error || !data) return [];
+  return data.map((row: any) => ({
+    sourceTable: row.source_table,
+    eventId: row.event_id,
+    occurredAt: row.occurred_at,
+    actorEmail: row.actor_email,
+    actorRole: row.actor_role,
+    module: row.module,
+    action: row.action,
+    tenantId: row.tenant_id,
+    detail: row.detail || {},
+  }));
+}
+
+export async function markHqActivitySeen(): Promise<boolean> {
+  if (!isSupabaseConfigured() || !supabase) return false;
+  const { error } = await supabase.rpc("mark_hq_activity_seen");
+  return !error;
+}
+
+export async function getHqActivityUnseenCount(): Promise<number> {
+  if (!isSupabaseConfigured() || !supabase) return 0;
+  const { data, error } = await supabase.rpc("get_hq_activity_unseen_count");
+  if (error) return 0;
+  return Number(data) || 0;
+}
+
+// --- HQ Cost Center ---
+// Platform-level revenue/AI-cost/operating-cost/margin summary. Distinct
+// from AI Cost Governance (per-call cost rates) and Resource Wallet
+// Dashboard (per-tenant credit balances) — this is the only module that
+// blends MRR against real operating costs.
+
+export interface HqOperatingCost {
+  id: string;
+  category: string;
+  description: string;
+  amountMyr: number;
+  incurredOn: string;
+  recordedBy: string;
+  createdAt: string;
+}
+
+export async function getHqOperatingCosts(limit = 100): Promise<HqOperatingCost[]> {
+  if (!isSupabaseConfigured() || !supabase) return [];
+  const { data, error } = await supabase.rpc("get_hq_operating_costs", { p_limit: limit });
+  if (error || !data) return [];
+  return data.map((row: any) => ({
+    id: row.id,
+    category: row.category,
+    description: row.description,
+    amountMyr: Number(row.amount_myr) || 0,
+    incurredOn: row.incurred_on,
+    recordedBy: row.recorded_by,
+    createdAt: row.created_at,
+  }));
+}
+
+export async function recordHqOperatingCost(
+  category: string, description: string, amountMyr: number, incurredOn: string
+): Promise<string | null> {
+  if (!isSupabaseConfigured() || !supabase) return null;
+  const { data, error } = await supabase.rpc("record_hq_operating_cost", {
+    p_category: category, p_description: description, p_amount_myr: amountMyr, p_incurred_on: incurredOn,
+  });
+  if (error) return null;
+  return data as string;
+}
+
+export async function deleteHqOperatingCost(id: string): Promise<boolean> {
+  if (!isSupabaseConfigured() || !supabase) return false;
+  const { error } = await supabase.rpc("delete_hq_operating_cost", { p_id: id });
+  return !error;
+}
+
+export interface HqCostCenterSummary {
+  mrrMyr: number;
+  aiCostUsd30d: number;
+  aiCostMyr30d: number;
+  operatingCostMyr30d: number;
+  usdMyrRate: number;
+  estimatedMarginMyr30d: number;
+  activeSubscriptions: number;
+}
+
+export async function getHqCostCenterSummary(): Promise<HqCostCenterSummary | null> {
+  if (!isSupabaseConfigured() || !supabase) return null;
+  const { data, error } = await supabase.rpc("get_hq_cost_center_summary");
+  if (error || !data || !data[0]) return null;
+  const row = data[0];
+  return {
+    mrrMyr: Number(row.mrr_myr) || 0,
+    aiCostUsd30d: Number(row.ai_cost_usd_30d) || 0,
+    aiCostMyr30d: Number(row.ai_cost_myr_30d) || 0,
+    operatingCostMyr30d: Number(row.operating_cost_myr_30d) || 0,
+    usdMyrRate: Number(row.usd_myr_rate) || 4.45,
+    estimatedMarginMyr30d: Number(row.estimated_margin_myr_30d) || 0,
+    activeSubscriptions: Number(row.active_subscriptions) || 0,
+  };
+}
+
+// --- HQ Knowledge Center ---
+// Internal-only HQ knowledge base (runbooks/support scripts/troubleshooting
+// notes) — never tenant/public-facing. Distinct from the public FAQ /
+// Website CMS. HQ_OWNER and HQ_STAFF share create/update rights; delete is
+// HQ_OWNER-only.
+
+export interface HqKnowledgeArticle {
+  id: string;
+  title: string;
+  body: string;
+  category: string;
+  createdBy: string;
+  updatedBy: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export async function getHqKnowledgeArticles(category: string | null = null): Promise<HqKnowledgeArticle[]> {
+  if (!isSupabaseConfigured() || !supabase) return [];
+  const { data, error } = await supabase.rpc("get_hq_knowledge_articles", { p_category: category });
+  if (error || !data) return [];
+  return data.map((row: any) => ({
+    id: row.id,
+    title: row.title,
+    body: row.body,
+    category: row.category,
+    createdBy: row.created_by,
+    updatedBy: row.updated_by,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  }));
+}
+
+export async function createHqKnowledgeArticle(title: string, body: string, category = "general"): Promise<string | null> {
+  if (!isSupabaseConfigured() || !supabase) return null;
+  const { data, error } = await supabase.rpc("create_hq_knowledge_article", {
+    p_title: title, p_body: body, p_category: category,
+  });
+  if (error) return null;
+  return data as string;
+}
+
+export async function updateHqKnowledgeArticle(
+  id: string, title: string, body: string, category: string
+): Promise<boolean> {
+  if (!isSupabaseConfigured() || !supabase) return false;
+  const { error } = await supabase.rpc("update_hq_knowledge_article", {
+    p_id: id, p_title: title, p_body: body, p_category: category,
+  });
+  return !error;
+}
+
+export async function deleteHqKnowledgeArticle(id: string): Promise<boolean> {
+  if (!isSupabaseConfigured() || !supabase) return false;
+  const { error } = await supabase.rpc("delete_hq_knowledge_article", { p_id: id });
+  return !error;
+}
+
+export async function getHqKnowledgeArticleForReply(id: string): Promise<{ title: string; body: string } | null> {
+  if (!isSupabaseConfigured() || !supabase) return null;
+  const { data, error } = await supabase.rpc("get_hq_knowledge_article_for_reply", { p_id: id });
+  if (error || !data || !data[0]) return null;
+  return { title: data[0].title, body: data[0].body };
+}
