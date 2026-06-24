@@ -550,6 +550,112 @@ export async function runStorageGovernanceEnforcement(): Promise<{ tenantId: str
   return data.map((row: any) => ({ tenantId: row.tenant_id, action: row.action }));
 }
 
+// --- Support Governance (Module 5) ---
+
+export interface SupportTicketReply {
+  id: string;
+  author: string;
+  text: string;
+  at: string;
+}
+
+export interface SupportTicket {
+  id: string;
+  customer: string;
+  email: string;
+  subject: string;
+  priority: "high" | "medium" | "low";
+  status: "open" | "pending" | "resolved";
+  summary: string;
+  assigned: string;
+  createdAt: string;
+  replies: SupportTicketReply[];
+}
+
+function mapTicketRow(row: any, replies: any[]): SupportTicket {
+  return {
+    id: row.id,
+    customer: row.customer_name,
+    email: row.customer_email || "",
+    subject: row.subject,
+    priority: row.priority,
+    status: row.status,
+    summary: row.summary || "",
+    assigned: row.assigned_to || "",
+    createdAt: row.created_at,
+    replies: replies.map((r) => ({ id: r.id, author: r.author, text: r.reply_text, at: r.created_at })),
+  };
+}
+
+export async function getSupportTickets(): Promise<SupportTicket[]> {
+  if (!isSupabaseConfigured() || !supabase) return [];
+  const { data: tickets, error } = await supabase
+    .from("support_tickets")
+    .select("*")
+    .order("created_at", { ascending: false });
+  if (error || !tickets) return [];
+  const { data: replies } = await supabase
+    .from("support_ticket_replies")
+    .select("*")
+    .order("created_at", { ascending: true });
+  return tickets.map((t: any) =>
+    mapTicketRow(t, (replies || []).filter((r: any) => r.ticket_id === t.id))
+  );
+}
+
+export async function createSupportTicket(ticket: {
+  customer: string;
+  email?: string;
+  subject: string;
+  priority: "high" | "medium" | "low";
+  summary?: string;
+}): Promise<boolean> {
+  if (!isSupabaseConfigured() || !supabase) return false;
+  const { data: userData } = await supabase.auth.getUser();
+  const { error } = await supabase.from("support_tickets").insert({
+    customer_name: ticket.customer,
+    customer_email: ticket.email || null,
+    subject: ticket.subject,
+    priority: ticket.priority,
+    summary: ticket.summary || null,
+    created_by: userData?.user?.id || null,
+  });
+  return !error;
+}
+
+export async function updateSupportTicketStatus(
+  ticketId: string,
+  status: "open" | "pending" | "resolved"
+): Promise<boolean> {
+  if (!isSupabaseConfigured() || !supabase) return false;
+  const { error } = await supabase
+    .from("support_tickets")
+    .update({ status, updated_at: new Date().toISOString() })
+    .eq("id", ticketId);
+  return !error;
+}
+
+export async function assignSupportTicket(ticketId: string, assignedTo: string): Promise<boolean> {
+  if (!isSupabaseConfigured() || !supabase) return false;
+  const { error } = await supabase
+    .from("support_tickets")
+    .update({ assigned_to: assignedTo, updated_at: new Date().toISOString() })
+    .eq("id", ticketId);
+  return !error;
+}
+
+export async function replySupportTicket(ticketId: string, author: string, text: string): Promise<boolean> {
+  if (!isSupabaseConfigured() || !supabase) return false;
+  const { error } = await supabase.from("support_ticket_replies").insert({
+    ticket_id: ticketId,
+    author,
+    reply_text: text,
+  });
+  if (error) return false;
+  await updateSupportTicketStatus(ticketId, "pending");
+  return true;
+}
+
 // --- Public marketing site CMS (HQ-editable, publicly readable) ---
 
 export interface SiteSettings {

@@ -722,7 +722,13 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
     setTimeout(() => setSettingsSaved(false), 2000);
   };
 
-  useEffect(() => { localStorage.setItem(ticketsKey, JSON.stringify(allTickets)); }, [allTickets, ticketsKey]);
+  useEffect(() => { if (!useRealData) localStorage.setItem(ticketsKey, JSON.stringify(allTickets)); }, [allTickets, ticketsKey, useRealData]);
+
+  const [ticketsRefreshTick, setTicketsRefreshTick] = useState(0);
+  useEffect(() => {
+    if (!useRealData) return;
+    hqService.getSupportTickets().then(rows => setAllTickets(rows as Ticket[]));
+  }, [useRealData, ticketsRefreshTick]);
 
   const [ticketFilter, setTicketFilter] = useState<"all" | "open" | "pending" | "resolved">("all");
   const [showTicketModal, setShowTicketModal] = useState(false);
@@ -730,8 +736,15 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
   const [expandedTicket, setExpandedTicket] = useState<string | null>(null);
   const [replyText, setReplyText] = useState("");
 
-  const saveTicket = () => {
+  const saveTicket = async () => {
     if (!ticketForm.customer.trim() || !ticketForm.subject.trim()) return;
+    if (useRealData) {
+      await hqService.createSupportTicket(ticketForm);
+      setTicketsRefreshTick(t => t + 1);
+      setTicketForm({ customer: "", email: "", subject: "", priority: "medium", summary: "" });
+      setShowTicketModal(false);
+      return;
+    }
     const t: Ticket = {
       id: `T-${String(allTickets.length + 1).padStart(3, "0")}`,
       customer: ticketForm.customer, email: ticketForm.email,
@@ -743,15 +756,30 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
     setTicketForm({ customer: "", email: "", subject: "", priority: "medium", summary: "" });
     setShowTicketModal(false);
   };
-  const resolveTicket = (id: string) => setAllTickets(prev => prev.map(t => t.id === id ? { ...t, status: "resolved" } : t));
-  const reopenTicket = (id: string) => setAllTickets(prev => prev.map(t => t.id === id ? { ...t, status: "open" } : t));
-  const sendReply = (id: string) => {
+  const resolveTicket = async (id: string) => {
+    if (useRealData) { await hqService.updateSupportTicketStatus(id, "resolved"); setTicketsRefreshTick(t => t + 1); return; }
+    setAllTickets(prev => prev.map(t => t.id === id ? { ...t, status: "resolved" } : t));
+  };
+  const reopenTicket = async (id: string) => {
+    if (useRealData) { await hqService.updateSupportTicketStatus(id, "open"); setTicketsRefreshTick(t => t + 1); return; }
+    setAllTickets(prev => prev.map(t => t.id === id ? { ...t, status: "open" } : t));
+  };
+  const sendReply = async (id: string) => {
     if (!replyText.trim()) return;
+    if (useRealData) {
+      await hqService.replySupportTicket(id, user?.fullName || "HQ", replyText.trim());
+      setReplyText("");
+      setTicketsRefreshTick(t => t + 1);
+      return;
+    }
     const reply = { id: `r-${Date.now()}`, author: user?.fullName || "HQ", text: replyText.trim(), at: new Date().toLocaleString("ms-MY") };
     setAllTickets(prev => prev.map(t => t.id === id ? { ...t, status: "pending" as const, replies: [...t.replies, reply] } : t));
     setReplyText("");
   };
-  const assignTicket = (id: string, name: string) => setAllTickets(prev => prev.map(t => t.id === id ? { ...t, assigned: name } : t));
+  const assignTicket = async (id: string, name: string) => {
+    if (useRealData) { await hqService.assignSupportTicket(id, name); setTicketsRefreshTick(t => t + 1); return; }
+    setAllTickets(prev => prev.map(t => t.id === id ? { ...t, assigned: name } : t));
+  };
 
   const filteredTickets = allTickets.filter(t => ticketFilter === "all" || t.status === ticketFilter);
 
