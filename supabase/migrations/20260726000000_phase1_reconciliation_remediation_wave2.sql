@@ -526,18 +526,18 @@ begin
     jsonb_build_object('target_user_id', p_user_id, 'target_email', v_target_email, 'unmask_granted', false)
   );
 
-  insert into public.hq_staff_notifications (recipient_id, category, title, message, metadata)
-  values (
-    p_user_id, 'SECURITY', 'Akses unmask PII anda dilucutkan',
-    'Kebenaran melihat data PII pelanggan tanpa topeng (unmask) anda telah dilucutkan oleh HQ_OWNER.',
-    jsonb_build_object('revoked_by', auth.uid())
-  )
-  on conflict do nothing;
-exception when invalid_text_representation or foreign_key_violation then
-  -- p_user_id may be a mock-sandbox identity with no auth.users row to
-  -- satisfy hq_staff_notifications' FK — the audit row above already
-  -- recorded the revoke; skip the notification insert.
-  null;
+  if exists (select 1 from auth.users u where u.id = p_user_id) then
+    insert into public.hq_staff_notifications (recipient_id, category, title, message, metadata)
+    values (
+      p_user_id, 'SECURITY', 'Akses unmask PII anda dilucutkan',
+      'Kebenaran melihat data PII pelanggan tanpa topeng (unmask) anda telah dilucutkan oleh HQ_OWNER.',
+      jsonb_build_object('revoked_by', auth.uid())
+    );
+  end if;
+  -- hq_staff_notifications.recipient_id has no FK to auth.users, so the
+  -- existence check above (not a caught exception) is what actually skips
+  -- the notification for a mock-sandbox identity with no real auth row —
+  -- the audit row above already recorded the revoke either way.
 end;
 $function$;
 
