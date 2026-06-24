@@ -798,16 +798,13 @@ export async function getMaskingGrants(): Promise<MaskingGrant[]> {
 
 export async function grantUnmaskAccess(userId: string): Promise<boolean> {
   if (!isSupabaseConfigured() || !supabase) return false;
-  const { data: userData } = await supabase.auth.getUser();
-  const { error } = await supabase
-    .from("hq_data_masking_grants")
-    .upsert({ user_id: userId, granted_by: userData?.user?.id || null, granted_at: new Date().toISOString() });
+  const { error } = await supabase.rpc("grant_unmask_access", { p_user_id: userId });
   return !error;
 }
 
 export async function revokeUnmaskAccess(userId: string): Promise<boolean> {
   if (!isSupabaseConfigured() || !supabase) return false;
-  const { error } = await supabase.from("hq_data_masking_grants").delete().eq("user_id", userId);
+  const { error } = await supabase.rpc("revoke_unmask_access", { p_user_id: userId });
   return !error;
 }
 
