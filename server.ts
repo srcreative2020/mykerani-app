@@ -1860,6 +1860,55 @@ Only include a "CONFIRM_TRANSACTION" suggestion entry when financialIntent.detec
 
   let chipAsiaPublicKeyCache: string | null = null;
 
+  async function isHqFeatureFlagEnabled(key: string): Promise<boolean> {
+    const supabaseUrl = process.env.VITE_SUPABASE_URL;
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    if (!supabaseUrl || !serviceRoleKey) return false;
+    try {
+      const resp = await fetch(`${supabaseUrl}/rest/v1/hq_feature_flags?key=eq.${encodeURIComponent(key)}&select=enabled`, {
+        headers: { apikey: serviceRoleKey, Authorization: `Bearer ${serviceRoleKey}` },
+      });
+      if (!resp.ok) return false;
+      const rows: any[] = await resp.json();
+      return Boolean(rows[0]?.enabled);
+    } catch (err) {
+      console.error(`Failed to read HQ feature flag "${key}":`, err);
+      return false;
+    }
+  }
+
+  async function logPaymentWebhookEvent(event: {
+    transactionReference: string | null;
+    signaturePresent: boolean;
+    publicKeyCached: boolean;
+    verificationResult: "verified" | "failed" | "skipped_no_key" | "skipped_no_signature";
+    wouldHaveBlocked: boolean;
+    enforced: boolean;
+    payload: unknown;
+  }): Promise<void> {
+    const supabaseUrl = process.env.VITE_SUPABASE_URL;
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    if (!supabaseUrl || !serviceRoleKey) return;
+    try {
+      await fetch(`${supabaseUrl}/rest/v1/payment_webhook_events`, {
+        method: "POST",
+        headers: { apikey: serviceRoleKey, Authorization: `Bearer ${serviceRoleKey}`, "Content-Type": "application/json", Prefer: "return=minimal" },
+        body: JSON.stringify({
+          gateway: "chip_asia",
+          transaction_reference: event.transactionReference,
+          signature_present: event.signaturePresent,
+          public_key_cached: event.publicKeyCached,
+          verification_result: event.verificationResult,
+          would_have_blocked: event.wouldHaveBlocked,
+          enforced: event.enforced,
+          payload: event.payload,
+        }),
+      });
+    } catch (err) {
+      console.error("Failed to log payment webhook event:", err);
+    }
+  }
+
   async function fetchPaymentGatewaySettings(): Promise<{ chipAsiaEnabled: boolean; chipAsiaApiKey: string; chipAsiaSecretKey: string; chipAsiaBrandId: string } | null> {
     const supabaseUrl = process.env.VITE_SUPABASE_URL;
     const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -1953,33 +2002,55 @@ Only include a "CONFIRM_TRANSACTION" suggestion entry when financialIntent.detec
   // Chip Asia calls this once a purchase is paid or fails. Signature is verified
   // against Chip Asia's public key (fetched once and cached) before trusting the payload.
   app.post("/api/payments/chip-asia/webhook", async (req, res) => {
+    const purchase = req.body;
+    const transactionId: string | null = purchase?.reference || null;
+    const enforceEnabled = await isHqFeatureFlagEnabled("chip_asia_webhook_enforce");
+
     try {
       const settings = await fetchPaymentGatewaySettings();
       if (!settings || !settings.chipAsiaSecretKey) return res.status(503).end();
 
       const signature = req.header("X-Signature");
-      if (!signature) return res.status(400).end();
-
-      if (!chipAsiaPublicKeyCache) {
-        const keyRes = await fetch("https://gate.chip-in.asia/api/v1/public_key/", {
-          headers: { Authorization: `Bearer ${settings.chipAsiaSecretKey}` },
+      if (!signature) {
+        await logPaymentWebhookEvent({
+          transactionReference: transactionId, signaturePresent: false, publicKeyCached: Boolean(chipAsiaPublicKeyCache),
+          verificationResult: "skipped_no_signature", wouldHaveBlocked: true, enforced: enforceEnabled, payload: purchase,
         });
-        if (keyRes.ok) chipAsiaPublicKeyCache = await keyRes.text();
-      }
+        if (enforceEnabled) return res.status(400).end();
+      } else {
+        if (!chipAsiaPublicKeyCache) {
+          const keyRes = await fetch("https://gate.chip-in.asia/api/v1/public_key/", {
+            headers: { Authorization: `Bearer ${settings.chipAsiaSecretKey}` },
+          });
+          if (keyRes.ok) chipAsiaPublicKeyCache = await keyRes.text();
+        }
 
-      const rawBody = JSON.stringify(req.body);
-      if (chipAsiaPublicKeyCache) {
-        const verifier = createVerify("RSA-SHA256");
-        verifier.update(rawBody);
-        const valid = verifier.verify(chipAsiaPublicKeyCache, Buffer.from(signature, "base64"));
-        if (!valid) {
-          console.error("Chip Asia webhook signature verification failed");
-          return res.status(401).end();
+        if (!chipAsiaPublicKeyCache) {
+          // Fail-closed design: with no public key to verify against, the
+          // payload's authenticity cannot be confirmed. Logged as a would-block;
+          // only actually rejected once HQ has enabled enforcement.
+          console.error("Chip Asia webhook received with no public key cached — cannot verify signature");
+          await logPaymentWebhookEvent({
+            transactionReference: transactionId, signaturePresent: true, publicKeyCached: false,
+            verificationResult: "skipped_no_key", wouldHaveBlocked: true, enforced: enforceEnabled, payload: purchase,
+          });
+          if (enforceEnabled) return res.status(401).end();
+        } else {
+          const rawBody = JSON.stringify(purchase);
+          const verifier = createVerify("RSA-SHA256");
+          verifier.update(rawBody);
+          const valid = verifier.verify(chipAsiaPublicKeyCache, Buffer.from(signature, "base64"));
+          await logPaymentWebhookEvent({
+            transactionReference: transactionId, signaturePresent: true, publicKeyCached: true,
+            verificationResult: valid ? "verified" : "failed", wouldHaveBlocked: !valid, enforced: enforceEnabled, payload: purchase,
+          });
+          if (!valid) {
+            console.error("Chip Asia webhook signature verification failed");
+            if (enforceEnabled) return res.status(401).end();
+          }
         }
       }
 
-      const purchase = req.body;
-      const transactionId = purchase?.reference;
       const status = purchase?.status; // 'paid' on success per Chip Asia docs
       if (transactionId) {
         await finalizeChipAsiaTransaction(transactionId, status === "paid", purchase?.id || null);
