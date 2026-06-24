@@ -580,6 +580,16 @@ export const FinancialReportsAnalytics: React.FC<FinancialReportsAnalyticsProps>
   // as the Audit Readiness proxy — see ReportCenterReadiness.tsx header
   // comment for the full rationale. Top issue per card = the single failing
   // check with the highest affectedCount (a plain sort, not a new score).
+  // UAT FIX #02 — a workspace with no financial activity and no evidence
+  // yet (e.g. brand-new tenant, or right after a workspace reset) has
+  // nothing for the readiness engines to score. The engines correctly
+  // compute 0% coverage in that state (0 of N expected months/records),
+  // but presenting 0%/Critical/Warning for an empty workspace is
+  // misleading — "no data" is not "failed data". This flag gates only the
+  // presentation layer below; computeLhdnReadiness/computeLoanReadiness and
+  // their scorePct/checks are untouched.
+  const hasInsufficientData = financialEvents.length === 0 && financialEvidencePackages.length === 0;
+
   const businessReadinessItems = useMemo((): ReadinessCardItem[] => {
     const topFailingCheck = (checks: { detail: string; pass: boolean; affectedCount: number; affectedRecordIds: string[] }[]) => {
       const failing = checks.filter((c) => !c.pass).sort((a, b) => b.affectedCount - a.affectedCount);
@@ -603,11 +613,11 @@ export const FinancialReportsAnalytics: React.FC<FinancialReportsAnalyticsProps>
     const auditPct = health.readiness.find((r) => r.key === "documentationReadiness")?.score ?? 100;
 
     return [
-      { key: "tax_readiness", emoji: "🧾", label: "Tax Readiness", pct: taxReadiness.scorePct, topIssue: tax.topIssue, moreIssueCount: tax.moreIssueCount },
-      { key: "bank_readiness", emoji: "🏦", label: "Financing Readiness", pct: bankReadiness.scorePct, topIssue: bank.topIssue, moreIssueCount: bank.moreIssueCount },
-      { key: "health", emoji: "📂", label: "Audit Readiness", pct: auditPct, topIssue: auditTopIssue, moreIssueCount: 0 },
+      { key: "tax_readiness", emoji: "🧾", label: "Tax Readiness", pct: taxReadiness.scorePct, topIssue: tax.topIssue, moreIssueCount: tax.moreIssueCount, insufficientData: hasInsufficientData },
+      { key: "bank_readiness", emoji: "🏦", label: "Financing Readiness", pct: bankReadiness.scorePct, topIssue: bank.topIssue, moreIssueCount: bank.moreIssueCount, insufficientData: hasInsufficientData },
+      { key: "health", emoji: "📂", label: "Audit Readiness", pct: auditPct, topIssue: auditTopIssue, moreIssueCount: 0, insufficientData: hasInsufficientData },
     ];
-  }, [taxReadiness, bankReadiness, health, missingEvidenceRecordIds]);
+  }, [taxReadiness, bankReadiness, health, missingEvidenceRecordIds, hasInsufficientData]);
 
   // Section "Top 3 Actions Required" — ranking rule: pool every failing
   // check across Tax/Financing readiness plus the Audit evidence gap (all
@@ -615,6 +625,7 @@ export const FinancialReportsAnalytics: React.FC<FinancialReportsAnalyticsProps>
   // affectedCount descending, take the top 3. This is a plain sort over
   // existing counts — no new weighted scoring engine.
   const topActions = useMemo((): TopActionItem[] => {
+    if (hasInsufficientData) return [];
     const candidates: TopActionItem[] = [];
     taxReadiness.checks.filter((c) => !c.pass && c.affectedCount > 0).forEach((c) => {
       candidates.push({ id: `tax_${c.id}`, problem: `[Cukai] ${c.label}`, affectedCount: c.affectedCount, recordIds: c.affectedRecordIds, band: "yellow" });
@@ -635,7 +646,7 @@ export const FinancialReportsAnalytics: React.FC<FinancialReportsAnalyticsProps>
       .sort((a, b) => b.affectedCount - a.affectedCount)
       .slice(0, 3)
       .map((c) => (c.affectedCount >= 10 ? { ...c, band: "red" as const } : c));
-  }, [taxReadiness, bankReadiness, missingEvidenceRecordIds, evidenceBuckets]);
+  }, [taxReadiness, bankReadiness, missingEvidenceRecordIds, evidenceBuckets, hasInsufficientData]);
 
   // Phase 2D.3 — shared navigation handler for both the readiness grid's
   // top-issue line and the Top 3 Actions cards. Prefers the host's
@@ -716,7 +727,7 @@ export const FinancialReportsAnalytics: React.FC<FinancialReportsAnalyticsProps>
         netProfit={netProfit}
         currentCash={currentCash}
         onSelectPopularReport={handleSelectPopularReport}
-        topActionsSlot={<ReportCenterTopActions actions={topActions} onNavigate={handleTopActionNavigate} />}
+        topActionsSlot={<ReportCenterTopActions actions={topActions} onNavigate={handleTopActionNavigate} insufficientData={hasInsufficientData} />}
         // Problem 1 — Untung Bersih taps into the same Profit & Loss report
         // the "Untung & Rugi" Popular Report tile already opens.
         onOpenNetProfit={() => { setSelectedReport("profit_loss"); setSearchTerm(""); }}

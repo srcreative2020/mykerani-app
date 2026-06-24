@@ -106,6 +106,14 @@ export interface ReadinessCardItem {
   // proxy for Audit Readiness. Undefined when every check passes.
   topIssue?: { detail: string; affectedCount: number; recordIds: string[] };
   moreIssueCount?: number;
+  // UAT FIX #02 — when the workspace has no transactions/documents/evidence
+  // yet, the underlying engines mathematically score this as "failed" (0
+  // records covered out of N expected). That is correct math, but it reads
+  // as "Critical"/"Warning" for a brand-new or freshly-reset workspace that
+  // has not failed anything — it simply has no data yet. When true, the
+  // card renders a neutral "not enough data" state instead of pct/band/
+  // topIssue. No change to the underlying scoring formulas.
+  insufficientData?: boolean;
 }
 
 export interface ReportCenterReadinessGridProps {
@@ -127,6 +135,23 @@ export const ReportCenterReadinessGrid: React.FC<ReportCenterReadinessGridProps>
       </p>
       <div className="grid grid-cols-1 gap-2">
         {items.map((item) => {
+          if (item.insufficientData) {
+            return (
+              <div
+                key={item.key}
+                className="w-full rounded-2xl border border-slate-200 bg-slate-50 p-3.5 space-y-1"
+                id={`readiness_card_${item.key}`}
+              >
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <span className="text-lg leading-none shrink-0">{item.emoji}</span>
+                  <span className="text-[11px] font-semibold text-slate-800">{item.label}</span>
+                </div>
+                <p className="text-[10px] text-slate-400" id={`readiness_card_${item.key}_empty`}>
+                  Belum cukup data untuk analisis. Tambah rekod pertama untuk menjana analisis.
+                </p>
+              </div>
+            );
+          }
           const band = bandFromPct(item.pct);
           const meta = BAND_META[band];
           return (

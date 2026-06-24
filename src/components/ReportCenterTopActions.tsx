@@ -24,6 +24,11 @@ export interface TopActionItem {
 export interface ReportCenterTopActionsProps {
   actions: TopActionItem[];
   onNavigate: (action: TopActionItem) => void;
+  // UAT FIX #02 — a workspace with zero transactions/documents/evidence has
+  // nothing to score yet; that is not the same as "no critical issues
+  // found" (which implies checks ran and passed). When true, shows a
+  // neutral "not enough data" message instead of the "all clear" one.
+  insufficientData?: boolean;
 }
 
 const BAND_STYLE: Record<TopActionItem["band"], { border: string; bg: string; text: string; chip: string }> = {
@@ -31,7 +36,20 @@ const BAND_STYLE: Record<TopActionItem["band"], { border: string; bg: string; te
   yellow: { border: "border-amber-200", bg: "bg-amber-50", text: "text-amber-700", chip: "bg-amber-600" },
 };
 
-export const ReportCenterTopActions: React.FC<ReportCenterTopActionsProps> = ({ actions, onNavigate }) => {
+export const ReportCenterTopActions: React.FC<ReportCenterTopActionsProps> = ({ actions, onNavigate, insufficientData }) => {
+  if (insufficientData) {
+    return (
+      <div className="space-y-2" id="report_center_top_actions">
+        <p className="text-[10px] font-mono text-slate-400 uppercase font-bold tracking-wider px-0.5">
+          3 Tindakan Paling Penting
+        </p>
+        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3.5 text-[11px] text-slate-500 font-semibold" id="report_center_top_actions_empty">
+          Belum cukup data untuk analisis. Tambah rekod pertama untuk menjana analisis.
+        </div>
+      </div>
+    );
+  }
+
   if (actions.length === 0) {
     return (
       <div className="space-y-2" id="report_center_top_actions">
