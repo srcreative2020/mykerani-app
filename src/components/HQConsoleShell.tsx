@@ -881,68 +881,78 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
     }
   };
 
-  // â"€â"€ Nav items â"€â"€
+  // â"€â"€ Nav items (grouped for the simplified, section-based sidebar) â"€â"€
   const ownerNav = [
-    { id: "dashboard" as HQPage,   label: "Dashboard",      icon: LayoutDashboard },
-    { id: "customers" as HQPage,   label: "Pelanggan",      icon: Users },
-    { id: "billing" as HQPage,     label: "Pengebilan",     icon: CreditCard },
-    { id: "usage" as HQPage,       label: "Penggunaan",     icon: Activity },
-    { id: "support" as HQPage,     label: "Sokongan",       icon: Headphones, badge: openCases },
-    { id: "revenue" as HQPage,     label: "Hasil",          icon: DollarSign },
-    { id: "website" as HQPage,     label: "Tapak Web",      icon: Globe },
-    { id: "settings" as HQPage,    label: "Tetapan",        icon: Settings },
-    { id: "system" as HQPage,      label: "Pusat Sistem",   icon: Server },
-    { id: "customer360" as HQPage,       label: "Customer 360",         icon: UserCheck },
-    { id: "healthScores" as HQPage,      label: "Skor Kesihatan",       icon: Activity },
-    { id: "alertCenter" as HQPage,       label: "Pusat Amaran",         icon: Bell, badge: hqAlerts.filter(a => !a.resolvedAt).length },
-    { id: "walletDashboard" as HQPage,   label: "Dompet Sumber",        icon: Package },
-    { id: "governance" as HQPage,        label: "Tadbir Urus",          icon: ShieldAlert },
-    { id: "paymentGovernance" as HQPage, label: "Tadbir Bayaran",       icon: CreditCard },
-    { id: "storageGovernance" as HQPage, label: "Tadbir Storan",        icon: HardDrive },
-    { id: "aiCostGovernance" as HQPage,      label: "Tadbir Kos AI",        icon: DollarSign },
-    { id: "dataMaskingGovernance" as HQPage, label: "Tadbir Topeng Data",   icon: Shield },
+    { id: "dashboard" as HQPage,   label: "Dashboard",      icon: LayoutDashboard, section: "Utama" },
+    { id: "customers" as HQPage,   label: "Pelanggan",      icon: Users, section: "Utama" },
+    { id: "customer360" as HQPage,       label: "Customer 360",         icon: UserCheck, section: "Utama" },
+    { id: "healthScores" as HQPage,      label: "Skor Kesihatan",       icon: Activity, section: "Utama" },
+    { id: "billing" as HQPage,     label: "Pengebilan",     icon: CreditCard, section: "Operasi" },
+    { id: "usage" as HQPage,       label: "Penggunaan",     icon: Activity, section: "Operasi" },
+    { id: "support" as HQPage,     label: "Sokongan",       icon: Headphones, badge: openCases, section: "Operasi" },
+    { id: "revenue" as HQPage,     label: "Hasil",          icon: DollarSign, section: "Operasi" },
+    { id: "alertCenter" as HQPage,       label: "Pusat Amaran",         icon: Bell, badge: hqAlerts.filter(a => !a.resolvedAt).length, section: "Tadbir Urus" },
+    { id: "walletDashboard" as HQPage,   label: "Dompet Sumber",        icon: Package, section: "Tadbir Urus" },
+    { id: "governance" as HQPage,        label: "Tadbir Urus",          icon: ShieldAlert, section: "Tadbir Urus" },
+    { id: "paymentGovernance" as HQPage, label: "Tadbir Bayaran",       icon: CreditCard, section: "Tadbir Urus" },
+    { id: "storageGovernance" as HQPage, label: "Tadbir Storan",        icon: HardDrive, section: "Tadbir Urus" },
+    { id: "aiCostGovernance" as HQPage,      label: "Tadbir Kos AI",        icon: DollarSign, section: "Tadbir Urus" },
+    { id: "dataMaskingGovernance" as HQPage, label: "Tadbir Topeng Data",   icon: Shield, section: "Tadbir Urus" },
+    { id: "website" as HQPage,     label: "Tapak Web",      icon: Globe, section: "Sistem" },
+    { id: "system" as HQPage,      label: "Pusat Sistem",   icon: Server, section: "Sistem" },
+    { id: "settings" as HQPage,    label: "Tetapan",        icon: Settings, section: "Sistem" },
   ];
 
   const staffNav = [
-    { id: "dashboard" as HQPage,     label: "Dashboard",      icon: LayoutDashboard },
-    { id: "customers" as HQPage,     label: "Pelanggan",      icon: Users },
-    { id: "subscriptions" as HQPage, label: "Langganan",      icon: Repeat },
-    { id: "support" as HQPage,       label: "Sokongan",       icon: Headphones, badge: openCases },
+    { id: "dashboard" as HQPage,     label: "Dashboard",      icon: LayoutDashboard, section: "Utama" },
+    { id: "customers" as HQPage,     label: "Pelanggan",      icon: Users, section: "Utama" },
+    { id: "subscriptions" as HQPage, label: "Langganan",      icon: Repeat, section: "Utama" },
+    { id: "support" as HQPage,       label: "Sokongan",       icon: Headphones, badge: openCases, section: "Utama" },
   ];
 
   const navItems = isStaff ? staffNav : ownerNav;
   const firstName = user?.fullName?.split(" ")[0] || "HQ";
+  const navSections = Array.from(new Set(navItems.map((n: any) => n.section)));
+  const hour = new Date().getHours();
+  const greeting = hour < 12 ? "Selamat pagi" : hour < 18 ? "Selamat tengahari" : "Selamat petang";
 
-  // â"€â"€ Sidebar â"€â"€
+  // â"€â"€ Sidebar (grouped sections, KERI-branded header) â"€â"€
   const Sidebar = ({ mobile }: { mobile?: boolean }) => (
-    <aside className={`${mobile ? "w-full" : "w-56"} flex flex-col h-full bg-white border-r border-slate-200`}>
-      {/* Logo */}
-      <div className="px-5 py-5 border-b border-slate-100">
+    <aside className={`${mobile ? "w-full" : "w-60"} flex flex-col h-full bg-white border-r border-slate-200`}>
+      {/* KERI brand mark */}
+      <div className="px-5 py-5 border-b border-slate-100" style={{background:"linear-gradient(135deg,#0F2A22 0%,#16382C 100%)"}}>
         <div className="flex items-center space-x-2.5">
-          <div className="w-8 h-8 rounded-xl bg-emerald-700 flex items-center justify-center text-white font-bold text-sm shadow-sm">MK</div>
-          <div>
-            <p className="font-bold text-slate-900 text-sm leading-tight">MYKERANI</p>
-            <p className="text-[10px] text-slate-400">{isStaff ? "HQ Operasi" : "HQ Pentadbiran"}</p>
+          <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 shadow-sm" style={{background:"#5A9E7A"}}>
+            <Zap className="w-5 h-5 text-white" />
+          </div>
+          <div className="min-w-0">
+            <p className="font-bold text-white text-sm leading-tight">MYKERANI HQ</p>
+            <p className="text-[10px] text-emerald-200/80 truncate">Dikuasakan oleh KERI &middot; {isStaff ? "Operasi" : "Pentadbiran"}</p>
           </div>
         </div>
       </div>
 
-      {/* Nav */}
-      <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
-        {navItems.map(({ id, label, icon: Icon, badge }: any) => {
-          const active = activePage === id;
-          return (
-            <button key={id} onClick={() => { setActivePage(id); setSidebarOpen(false); }}
-              className={`w-full flex items-center space-x-3 px-3 py-2.5 rounded-xl text-sm font-medium transition cursor-pointer ${active ? "bg-emerald-50 text-emerald-800 font-semibold" : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"}`}>
-              <Icon className={`w-4 h-4 shrink-0 ${active ? "text-emerald-700" : "text-slate-400"}`} />
-              <span className="flex-1 text-left">{label}</span>
-              {badge > 0 && (
-                <span className="bg-red-500 text-white text-[9px] font-bold rounded-full w-4 h-4 flex items-center justify-center shrink-0">{badge}</span>
-              )}
-              {active && <div className="w-1.5 h-1.5 rounded-full bg-emerald-600 shrink-0" />}
-            </button>
-          );
-        })}
+      {/* Nav, grouped */}
+      <nav className="flex-1 px-3 py-4 space-y-4 overflow-y-auto">
+        {navSections.map(section => (
+          <div key={section} className="space-y-0.5">
+            <p className="px-3 mb-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">{section}</p>
+            {navItems.filter((n: any) => n.section === section).map(({ id, label, icon: Icon, badge }: any) => {
+              const active = activePage === id;
+              return (
+                <button key={id} onClick={() => { setActivePage(id); setSidebarOpen(false); }}
+                  className={`w-full flex items-center space-x-3 px-3 py-2.5 rounded-xl text-sm font-medium transition cursor-pointer relative ${active ? "bg-emerald-50 text-emerald-800 font-semibold" : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"}`}>
+                  {active && <div className="absolute left-0 top-1.5 bottom-1.5 w-1 rounded-full bg-emerald-600" />}
+                  <Icon className={`w-4 h-4 shrink-0 ${active ? "text-emerald-700" : "text-slate-400"}`} />
+                  <span className="flex-1 text-left">{label}</span>
+                  {badge > 0 && (
+                    <span className="bg-red-500 text-white text-[9px] font-bold rounded-full w-4 h-4 flex items-center justify-center shrink-0">{badge}</span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        ))}
       </nav>
 
       {/* User footer */}
@@ -987,16 +997,22 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
       `}</style>
 
       {/* Mobile top header */}
-      <header className="md:hidden bg-white border-b px-4 py-3 flex items-center justify-between shrink-0" style={{borderColor:"#CCE8D9"}}>
-        <div className="flex items-center space-x-2.5">
-          <div className="w-7 h-7 rounded-xl flex items-center justify-center text-white font-bold text-xs shadow-sm" style={{background:"#5A9E7A"}}>MK</div>
+      <header className="md:hidden bg-white border-b px-3 py-3 flex items-center justify-between shrink-0" style={{borderColor:"#CCE8D9"}}>
+        <div className="flex items-center space-x-2">
+          <button onClick={() => setSidebarOpen(true)} aria-label="Buka menu"
+            className="p-1.5 rounded-xl text-slate-500 hover:bg-slate-50 cursor-pointer">
+            <Menu className="w-[18px] h-[18px]" />
+          </button>
+          <div className="w-7 h-7 rounded-xl flex items-center justify-center shrink-0 shadow-sm" style={{background:"#5A9E7A"}}>
+            <Zap className="w-3.5 h-3.5 text-white" />
+          </div>
           <div>
             <p className="font-bold text-slate-900 text-sm leading-tight">MYKERANI HQ</p>
             <p className="text-[10px]" style={{color:"#5A9E7A"}}>{isStaff ? "Kakitangan HQ" : "Pemilik HQ"}</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <span className="text-xs font-semibold" style={{color:"#2C5040"}}>{navItems.find(n => n.id === activePage)?.label}</span>
+          <span className="text-xs font-semibold" style={{color:"#2C5040"}}>{navItems.find((n: any) => n.id === activePage)?.label}</span>
           {/* Bell */}
           <div className="relative">
             <button onClick={() => setShowNotifPanel(p => !p)}
@@ -1067,6 +1083,16 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
         </div>
       )}
 
+      {/* Mobile nav drawer — gives mobile access to every page, not just the 5-item bottom bar */}
+      {sidebarOpen && (
+        <div className="md:hidden fixed inset-0 z-50 flex" onClick={() => setSidebarOpen(false)}>
+          <div className="absolute inset-0 bg-black/40" />
+          <div className="relative w-72 max-w-[85vw] h-full shadow-2xl" onClick={e => e.stopPropagation()}>
+            <Sidebar mobile />
+          </div>
+        </div>
+      )}
+
       <div className="flex flex-1 overflow-hidden">
         {/* Desktop sidebar */}
         <div className="hidden md:flex">
@@ -1131,55 +1157,202 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
                     }))
                     .sort((a, b) => (b.riskLevel === "high" ? 1 : 0) - (a.riskLevel === "high" ? 1 : 0));
 
-              // Today's briefing items
+              // Today's briefing items — categorized so KERI can speak action-first:
+              // Tindakan (do now) > Risiko > Peluang > Sokongan > Hasil. Same source data
+              // as before (hq_alerts / churn / upsell), just reframed as KERI's voice.
+              type BriefingCategory = "tindakan" | "risiko" | "peluang" | "sokongan" | "hasil";
+              const categoryRank: Record<BriefingCategory, number> = { tindakan: 0, risiko: 1, peluang: 2, sokongan: 3, hasil: 4 };
+              const categoryLabel: Record<BriefingCategory, string> = { tindakan: "Tindakan", risiko: "Risiko", peluang: "Peluang", sokongan: "Sokongan", hasil: "Hasil" };
               const unresolvedAlerts = useRealData ? hqAlerts.filter(a => !a.resolvedAt) : [];
-              const briefing: { icon: string; text: string; action: () => void; urgent: boolean }[] = [];
-              if (openCases > 0) briefing.push({ icon: "S", text: `${openCases} tiket sokongan menunggu respons`, action: () => setActivePage("support"), urgent: true });
-              if (churnRisks.filter(r => r.riskLevel === "high").length > 0) briefing.push({ icon: "!", text: `${churnRisks.filter(r=>r.riskLevel==="high").length} pelanggan digantung - RM ${mrrAtRisk} MRR terancam`, action: () => setActivePage("customers"), urgent: true });
-              if (upsellTargets.length > 0) briefing.push({ icon: "U", text: `${upsellTargets.length} peluang upsell - potensi RM ${upsellTargets.reduce((s,c)=>s+(c.nextPlan?.price||0)-(c.mrr),0)}/bln tambahan`, action: () => {}, urgent: false });
               const webhookAlerts = unresolvedAlerts.filter(a => a.alertType === "webhook_failed");
-              if (webhookAlerts.length > 0) briefing.push({ icon: "!", text: webhookAlerts[0].message, action: () => setActivePage("billing"), urgent: true });
-              if (briefing.length === 0) briefing.push({ icon: "OK", text: "Semua baik! Tiada tindakan segera diperlukan.", action: () => {}, urgent: false });
+              const upsellPotential = upsellTargets.reduce((s,c)=>s+(c.nextPlan?.price||0)-(c.mrr),0);
+              const briefing: { icon: string; text: string; action: () => void; urgent: boolean; category: BriefingCategory }[] = [];
+              if (webhookAlerts.length > 0) briefing.push({ icon: "!", text: `Saya kesan kegagalan webhook: ${webhookAlerts[0].message}`, action: () => setActivePage("billing"), urgent: true, category: "tindakan" });
+              if (churnRisks.filter(r => r.riskLevel === "high").length > 0) briefing.push({ icon: "!", text: `${churnRisks.filter(r=>r.riskLevel==="high").length} pelanggan digantung — RM ${mrrAtRisk} MRR terancam. Saya cadangkan aktifkan semula segera.`, action: () => setActivePage("customers"), urgent: true, category: "tindakan" });
+              if (churnRisks.filter(r => r.riskLevel === "medium").length > 0) briefing.push({ icon: "R", text: `${churnRisks.filter(r=>r.riskLevel==="medium").length} pelanggan menunjukkan tanda risiko churn sederhana — ${churnRisks.find(r=>r.riskLevel==="medium")?.name} antaranya.`, action: () => setActivePage("customers"), urgent: false, category: "risiko" });
+              if (upsellTargets.length > 0) briefing.push({ icon: "U", text: `${upsellTargets.length} pelanggan hampir had plan mereka — peluang upsell bernilai +RM ${upsellPotential}/bln jika dinaiktaraf.`, action: () => {}, urgent: false, category: "peluang" });
+              if (openCases > 0) briefing.push({ icon: "S", text: `${openCases} tiket sokongan sedang menunggu respons anda.`, action: () => setActivePage("support"), urgent: openCases >= 3, category: "sokongan" });
+              briefing.push({ icon: "H", text: `Hasil bulanan stabil di RM ${totalMRR.toLocaleString()}, dijangka RM ${forecast[2]?.toLocaleString() ?? totalMRR.toLocaleString()} dalam 3 bulan.`, action: () => setActivePage("revenue"), urgent: false, category: "hasil" });
+              if (briefing.length === 1) briefing.unshift({ icon: "OK", text: "Semua baik hari ini — tiada tindakan segera diperlukan.", action: () => {}, urgent: false, category: "tindakan" });
+              briefing.sort((a, b) => categoryRank[a.category] - categoryRank[b.category]);
+
+              const topUrgent = briefing.find(b => b.urgent) || briefing[0];
 
               return (
               <div className="space-y-5" id="hq_dashboard">
 
-                {/* Header */}
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h1 className="text-xl font-bold text-slate-900">{isStaff ? `Selamat datang, ${firstName}` : "Command Center"}</h1>
-                    <p className="text-xs text-slate-400 mt-0.5">{new Date().toLocaleDateString("ms-MY",{weekday:"long",day:"numeric",month:"long",year:"numeric"})}</p>
-                  </div>
-                  {!isStaff && (
-                    <button onClick={() => { setActivePage("customers"); openAddCustomer(); }}
-                      className="flex items-center gap-1.5 px-3 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs font-bold transition cursor-pointer shadow-sm">
-                      <Plus className="w-3.5 h-3.5" /> Tambah Pelanggan
-                    </button>
-                  )}
-                </div>
-
-                {/* Morning Briefing */}
-                <div className="bg-slate-900 rounded-2xl p-4 space-y-3">
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Briefing Hari Ini</p>
-                  {briefing.map((b, i) => (
-                    <button key={i} onClick={b.action}
-                      className={`w-full flex items-center gap-3 text-left cursor-pointer group ${b.action.toString().includes("setActivePage") ? "hover:opacity-80" : ""}`}>
-                      <div className={`w-6 h-6 rounded-lg flex items-center justify-center text-[9px] font-black shrink-0 ${b.urgent ? "bg-red-500 text-white" : "bg-emerald-600 text-white"}`}>
-                        {b.icon}
+                {/* KERI Command Center hero — KERI speaks first, in natural language, action-first */}
+                <div className="rounded-2xl p-5 space-y-4 relative overflow-hidden" style={{background:"linear-gradient(135deg,#0A1F18 0%,#0F2A22 45%,#16382C 75%,#1E4A38 100%)"}}>
+                  <div className="pointer-events-none absolute -top-10 -right-10 w-44 h-44 rounded-full" style={{background:"radial-gradient(circle,rgba(90,158,122,0.35) 0%,transparent 70%)"}} />
+                  <div className="flex items-start justify-between gap-3 relative">
+                    <div className="flex items-start gap-3 min-w-0">
+                      <div className="relative shrink-0">
+                        <div className="w-14 h-14 rounded-2xl flex items-center justify-center shadow-lg" style={{background:"#5A9E7A", boxShadow:"0 0 0 6px rgba(90,158,122,0.18), 0 8px 20px rgba(0,0,0,0.25)"}}>
+                          <Zap className="w-7 h-7 text-white" />
+                        </div>
+                        <span className="absolute -bottom-1 -right-1 w-3.5 h-3.5 rounded-full bg-emerald-400 border-2" style={{borderColor:"#0F2A22"}} />
                       </div>
-                      <p className={`text-xs ${b.urgent ? "text-white font-semibold" : "text-slate-300"}`}>{b.text}</p>
-                      {b.action.toString().includes("setActivePage") && <ChevronRight className="w-3 h-3 text-slate-500 shrink-0 ml-auto group-hover:text-slate-300" />}
-                    </button>
-                  ))}
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <p className="text-xs font-black uppercase tracking-wider text-white">KERI</p>
+                          <span className="text-[9px] font-bold text-emerald-300/90 bg-emerald-900/40 border border-emerald-700/40 px-1.5 py-0.5 rounded-full">AI Financial Clerk</span>
+                        </div>
+                        <h1 className="text-base font-bold text-emerald-100/90 leading-tight mt-0.5">KERI Command Center &middot; {greeting}, {firstName}</h1>
+                        <p className="text-[11px] text-emerald-100/50 mt-0.5">{new Date().toLocaleDateString("ms-MY",{weekday:"long",day:"numeric",month:"long",year:"numeric"})}</p>
+                      </div>
+                    </div>
+                    {!isStaff && (
+                      <button onClick={() => { setActivePage("customers"); openAddCustomer(); }}
+                        className="shrink-0 flex items-center gap-1.5 px-3 py-2 bg-white text-emerald-800 hover:bg-emerald-50 rounded-xl text-xs font-bold transition cursor-pointer shadow-sm">
+                        <Plus className="w-3.5 h-3.5" /> <span className="hidden sm:inline">Tambah Pelanggan</span>
+                      </button>
+                    )}
+                  </div>
+
+                  {/* KERI's spoken synthesis — one natural-language sentence over everything it sees */}
+                  <div className="rounded-xl px-3.5 py-3 bg-black/20 border border-white/10 relative">
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-emerald-300/70 mb-1">KERI berkata</p>
+                    <p className="text-sm text-white leading-relaxed">
+                      "{churnRisks.length > 0 ? `Saya kesan ${churnRisks.length} pelanggan berisiko (RM ${mrrAtRisk.toLocaleString()} MRR terancam)` : "Portfolio anda sihat hari ini"}{upsellTargets.length > 0 ? `, dan ${upsellTargets.length} peluang upsell bernilai +RM ${upsellPotential.toLocaleString()}/bln` : ""}{openCases > 0 ? `. ${openCases} tiket sokongan menunggu respons anda` : ""}."
+                    </p>
+                  </div>
+
+                  {/* Action-first list — Tindakan > Risiko > Peluang > Sokongan > Hasil */}
+                  <div className="space-y-1.5">
+                    {briefing.map((b, i) => (
+                      <button key={i} onClick={b.action}
+                        className={`w-full flex items-center gap-3 text-left rounded-xl px-3 py-2.5 cursor-pointer transition group ${b.urgent ? "bg-red-500/15 hover:bg-red-500/25" : i === 0 ? "bg-white/10 hover:bg-white/15" : "hover:bg-white/5"}`}>
+                        <div className={`w-5 h-5 rounded-md flex items-center justify-center text-[9px] font-black shrink-0 ${b.urgent ? "bg-red-500 text-white" : "bg-emerald-600/80 text-white"}`}>
+                          {b.icon}
+                        </div>
+                        <span className="text-[9px] font-bold uppercase tracking-wider text-emerald-300/60 shrink-0 w-12">{categoryLabel[b.category]}</span>
+                        <p className={`text-[11px] flex-1 ${b.urgent ? "text-white font-semibold" : "text-emerald-50/90"}`}>{b.text}</p>
+                        <ChevronRight className="w-3 h-3 text-white/30 shrink-0" />
+                      </button>
+                    ))}
+                  </div>
                 </div>
 
-                {/* Revenue Health */}
+                {/* Risks — Churn Risk */}
+                {!isStaff && churnRisks.length > 0 && (
+                  <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+                    <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className="text-[9px] font-black uppercase tracking-wider text-red-600 bg-red-50 border border-red-100 px-1.5 py-0.5 rounded-full">Risiko</span>
+                        <div>
+                          <h3 className="text-sm font-bold text-slate-900">Risiko Churn</h3>
+                          <p className="text-[11px] text-slate-400 mt-0.5">Pelanggan berisiko berhenti - ambil tindakan sekarang</p>
+                        </div>
+                      </div>
+                      <span className="text-[10px] font-bold text-red-600 bg-red-50 border border-red-200 px-2 py-0.5 rounded-full">
+                        RM {mrrAtRisk.toLocaleString()} terancam
+                      </span>
+                    </div>
+                    <div className="divide-y divide-slate-50">
+                      {churnRisks.slice(0, 4).map(c => (
+                        <div key={c.id} className={`px-5 py-3.5 flex items-center gap-4 ${c.riskLevel === "high" ? "bg-red-50/30" : ""}`}>
+                          <div className={`w-8 h-8 rounded-xl flex items-center justify-center font-bold text-sm shrink-0 ${c.riskLevel === "high" ? "bg-red-100 text-red-600" : "bg-amber-50 text-amber-600"}`}>
+                            {c.name.charAt(0)}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs font-bold text-slate-800 truncate">{c.name}</p>
+                            <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                              <span className="text-[10px] text-slate-400">{c.plan} &middot; RM {c.mrr}/bln</span>
+                              <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${c.riskLevel === "high" ? "text-red-600 bg-red-50" : "text-amber-600 bg-amber-50"}`}>{c.riskReason}</span>
+                            </div>
+                          </div>
+                          <button onClick={() => setActivePage("customers")}
+                            className={`shrink-0 px-3 py-1.5 text-[10px] font-bold rounded-lg cursor-pointer transition border ${c.riskLevel === "high" ? "bg-red-500 text-white hover:bg-red-600 border-red-500" : "bg-white text-slate-600 hover:bg-slate-50 border-slate-200"}`}>
+                            {c.riskLevel === "high" ? "Aktifkan" : "Semak"}
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Opportunities — Upsell Radar */}
+                {!isStaff && upsellTargets.length > 0 && (
+                  <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+                    <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className="text-[9px] font-black uppercase tracking-wider text-emerald-700 bg-emerald-50 border border-emerald-100 px-1.5 py-0.5 rounded-full">Peluang</span>
+                        <div>
+                          <h3 className="text-sm font-bold text-slate-900">Radar Upsell</h3>
+                          <p className="text-[11px] text-slate-400 mt-0.5">Pelanggan hampir had - peluang naik taraf plan</p>
+                        </div>
+                      </div>
+                      <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">{upsellTargets.length} peluang</span>
+                    </div>
+                    <div className="divide-y divide-slate-50">
+                      {upsellTargets.slice(0, 5).map(c => (
+                        <div key={c.id} className="px-5 py-3.5 flex items-center gap-4">
+                          <div className="w-8 h-8 rounded-xl bg-amber-50 flex items-center justify-center text-amber-700 font-bold text-sm shrink-0">
+                            {c.name.charAt(0)}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs font-bold text-slate-800 truncate">{c.name}</p>
+                            <div className="flex items-center gap-2 mt-0.5">
+                              <span className="text-[10px] text-slate-400">{c.plan}</span>
+                              <span className="text-[10px] font-semibold text-amber-600">{c.reason}</span>
+                            </div>
+                            <div className="h-1 bg-slate-100 rounded-full mt-1.5 overflow-hidden">
+                              <div className={`h-full rounded-full ${c.score >= 0.95 ? "bg-red-500" : "bg-amber-400"}`} style={{width:`${Math.min(c.score*100,100)}%`}} />
+                            </div>
+                          </div>
+                          {c.nextPlan && (
+                            <div className="text-right shrink-0">
+                              <p className="text-[10px] text-slate-400">Naik ke</p>
+                              <p className="text-xs font-bold text-emerald-700">{c.nextPlan.name}</p>
+                              <p className="text-[10px] text-slate-500">+RM {c.nextPlan.price - c.mrr}/bln</p>
+                            </div>
+                          )}
+                          <button onClick={() => setActivePage("customers")}
+                            className="shrink-0 px-3 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white text-[10px] font-bold rounded-lg cursor-pointer transition">
+                            Hubungi
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Support — Open tickets */}
+                {allTickets.filter(t => t.status !== "resolved").length > 0 && (
+                  <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+                    <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className="text-[9px] font-black uppercase tracking-wider text-amber-700 bg-amber-50 border border-amber-100 px-1.5 py-0.5 rounded-full">Sokongan</span>
+                        <h3 className="text-sm font-bold text-slate-900">Tiket Sokongan Terbuka</h3>
+                      </div>
+                      <button onClick={() => setActivePage("support")} className="text-xs text-emerald-700 font-semibold cursor-pointer hover:text-emerald-900">Urus -&gt;</button>
+                    </div>
+                    <div className="divide-y divide-slate-50">
+                      {allTickets.filter(t => t.status !== "resolved").slice(0, 3).map(t => (
+                        <div key={t.id} className="px-5 py-3 flex items-start gap-3">
+                          <StatusBadge status={t.priority} />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs font-bold text-slate-800">{t.subject}</p>
+                            <p className="text-[11px] text-slate-400">{t.customer}</p>
+                          </div>
+                          <button onClick={() => setActivePage("support")} className="text-slate-300 hover:text-emerald-600 cursor-pointer shrink-0">
+                            <ChevronRight className="w-4 h-4" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Revenue — Kesihatan Hasil, comes after actions/risks/opportunities/support */}
                 {!isStaff && (
                   <div className="grid grid-cols-2 gap-3">
-                    {/* MRR card */}
                     <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 col-span-2 space-y-3">
                       <div className="flex items-center justify-between">
-                        <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Kesihatan Hasil</p>
+                        <div className="flex items-center gap-2">
+                          <span className="text-[9px] font-black uppercase tracking-wider text-slate-500 bg-slate-100 border border-slate-200 px-1.5 py-0.5 rounded-full">Hasil</span>
+                          <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Kesihatan Hasil</p>
+                        </div>
                         <div className="flex items-center gap-1.5">
                           <div className={`w-2 h-2 rounded-full ${revenueScore >= 80 ? "bg-emerald-500" : revenueScore >= 50 ? "bg-amber-500" : "bg-red-500"}`} />
                           <span className={`text-xs font-bold ${revenueScore >= 80 ? "text-emerald-600" : revenueScore >= 50 ? "text-amber-600" : "text-red-600"}`}>
@@ -1234,108 +1407,6 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
                     <MetricCard label="Kes Terbuka"       value={openCases}    sub="perlu tindakan segera" icon={Headphones} color="amber" />
                     <MetricCard label="Perlu Aktifkan"    value={customers.filter(c=>c.status==="suspended").length} sub="akaun digantung" icon={UserCheck} color="red" />
                     <MetricCard label="Perlu Perhatian"   value={customers.filter(c=>c.attention).length}  sub="semak butiran" icon={AlertTriangle} color="violet" />
-                  </div>
-                )}
-
-                {/* Upsell Radar */}
-                {!isStaff && upsellTargets.length > 0 && (
-                  <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-                    <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
-                      <div>
-                        <h3 className="text-sm font-bold text-slate-900">Radar Upsell</h3>
-                        <p className="text-[11px] text-slate-400 mt-0.5">Pelanggan hampir had - peluang naik taraf plan</p>
-                      </div>
-                      <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">{upsellTargets.length} peluang</span>
-                    </div>
-                    <div className="divide-y divide-slate-50">
-                      {upsellTargets.slice(0, 5).map(c => (
-                        <div key={c.id} className="px-5 py-3.5 flex items-center gap-4">
-                          <div className="w-8 h-8 rounded-xl bg-amber-50 flex items-center justify-center text-amber-700 font-bold text-sm shrink-0">
-                            {c.name.charAt(0)}
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <p className="text-xs font-bold text-slate-800 truncate">{c.name}</p>
-                            <div className="flex items-center gap-2 mt-0.5">
-                              <span className="text-[10px] text-slate-400">{c.plan}</span>
-                              <span className="text-[10px] font-semibold text-amber-600">{c.reason}</span>
-                            </div>
-                            <div className="h-1 bg-slate-100 rounded-full mt-1.5 overflow-hidden">
-                              <div className={`h-full rounded-full ${c.score >= 0.95 ? "bg-red-500" : "bg-amber-400"}`} style={{width:`${Math.min(c.score*100,100)}%`}} />
-                            </div>
-                          </div>
-                          {c.nextPlan && (
-                            <div className="text-right shrink-0">
-                              <p className="text-[10px] text-slate-400">Naik ke</p>
-                              <p className="text-xs font-bold text-emerald-700">{c.nextPlan.name}</p>
-                              <p className="text-[10px] text-slate-500">+RM {c.nextPlan.price - c.mrr}/bln</p>
-                            </div>
-                          )}
-                          <button onClick={() => setActivePage("customers")}
-                            className="shrink-0 px-3 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white text-[10px] font-bold rounded-lg cursor-pointer transition">
-                            Hubungi
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Churn Risk */}
-                {!isStaff && churnRisks.length > 0 && (
-                  <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-                    <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
-                      <div>
-                        <h3 className="text-sm font-bold text-slate-900">Risiko Churn</h3>
-                        <p className="text-[11px] text-slate-400 mt-0.5">Pelanggan berisiko berhenti - ambil tindakan sekarang</p>
-                      </div>
-                      <span className="text-[10px] font-bold text-red-600 bg-red-50 border border-red-200 px-2 py-0.5 rounded-full">
-                        RM {mrrAtRisk.toLocaleString()} terancam
-                      </span>
-                    </div>
-                    <div className="divide-y divide-slate-50">
-                      {churnRisks.slice(0, 4).map(c => (
-                        <div key={c.id} className={`px-5 py-3.5 flex items-center gap-4 ${c.riskLevel === "high" ? "bg-red-50/30" : ""}`}>
-                          <div className={`w-8 h-8 rounded-xl flex items-center justify-center font-bold text-sm shrink-0 ${c.riskLevel === "high" ? "bg-red-100 text-red-600" : "bg-amber-50 text-amber-600"}`}>
-                            {c.name.charAt(0)}
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <p className="text-xs font-bold text-slate-800 truncate">{c.name}</p>
-                            <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-                              <span className="text-[10px] text-slate-400">{c.plan} &middot; RM {c.mrr}/bln</span>
-                              <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${c.riskLevel === "high" ? "text-red-600 bg-red-50" : "text-amber-600 bg-amber-50"}`}>{c.riskReason}</span>
-                            </div>
-                          </div>
-                          <button onClick={() => setActivePage("customers")}
-                            className={`shrink-0 px-3 py-1.5 text-[10px] font-bold rounded-lg cursor-pointer transition border ${c.riskLevel === "high" ? "bg-red-500 text-white hover:bg-red-600 border-red-500" : "bg-white text-slate-600 hover:bg-slate-50 border-slate-200"}`}>
-                            {c.riskLevel === "high" ? "Aktifkan" : "Semak"}
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Open tickets */}
-                {allTickets.filter(t => t.status !== "resolved").length > 0 && (
-                  <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-                    <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
-                      <h3 className="text-sm font-bold text-slate-900">Tiket Sokongan Terbuka</h3>
-                      <button onClick={() => setActivePage("support")} className="text-xs text-emerald-700 font-semibold cursor-pointer hover:text-emerald-900">Urus -&gt;</button>
-                    </div>
-                    <div className="divide-y divide-slate-50">
-                      {allTickets.filter(t => t.status !== "resolved").slice(0, 3).map(t => (
-                        <div key={t.id} className="px-5 py-3 flex items-start gap-3">
-                          <StatusBadge status={t.priority} />
-                          <div className="flex-1 min-w-0">
-                            <p className="text-xs font-bold text-slate-800">{t.subject}</p>
-                            <p className="text-[11px] text-slate-400">{t.customer}</p>
-                          </div>
-                          <button onClick={() => setActivePage("support")} className="text-slate-300 hover:text-emerald-600 cursor-pointer shrink-0">
-                            <ChevronRight className="w-4 h-4" />
-                          </button>
-                        </div>
-                      ))}
-                    </div>
                   </div>
                 )}
 
@@ -2805,17 +2876,46 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
                       const al = c360Alerts(detail.id);
                       return (
                       <div className="space-y-4">
-                        <div className="flex items-center justify-between">
+                        <div className="rounded-2xl p-4 flex items-center justify-between" style={{background:"linear-gradient(135deg,#0F2A22 0%,#16382C 100%)"}}>
                           <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-2xl bg-emerald-50 text-emerald-700 font-bold text-base flex items-center justify-center">
+                            <div className="w-11 h-11 rounded-2xl text-white font-bold text-base flex items-center justify-center shadow-sm" style={{background:"#5A9E7A"}}>
                               {detail.name.charAt(0).toUpperCase()}
                             </div>
                             <div>
-                              <p className="text-sm font-bold text-slate-900">{detail.name}</p>
-                              <p className="text-[11px] text-slate-400">{displayEmail(detail.email)}</p>
+                              <p className="text-sm font-bold text-white">{detail.name}</p>
+                              <p className="text-[11px] text-emerald-100/70">{displayEmail(detail.email)}</p>
                             </div>
                           </div>
                           <StatusBadge status={detail.status} />
+                        </div>
+
+                        {/* Visual hierarchy: Health / Revenue / Support / Usage / Risk — at a glance */}
+                        <div className="grid grid-cols-5 gap-1.5">
+                          {(() => {
+                            const customerTickets = allTickets.filter(t => t.customer === detail.name && t.status !== "resolved");
+                            const riskLevel = detail.status === "suspended" ? "high" : detail.healthRiskLevel === "high" ? "high" : detail.healthRiskLevel === "medium" ? "medium" : "low";
+                            const tiles = [
+                              { label: "Kesihatan", icon: Activity, value: typeof detail.healthScore === "number" ? `${detail.healthScore}` : "—", tone: detail.healthRiskLevel === "high" ? "red" : detail.healthRiskLevel === "medium" ? "amber" : "emerald" },
+                              { label: "Hasil", icon: DollarSign, value: `RM ${detail.mrr.toLocaleString()}`, tone: "emerald" },
+                              { label: "Sokongan", icon: Headphones, value: `${customerTickets.length}`, tone: customerTickets.length > 0 ? "amber" : "slate" },
+                              { label: "Penggunaan", icon: Zap, value: w ? `${Math.round((w.aiConsumed30d / Math.max(w.aiCreditsBalance + w.aiConsumed30d, 1)) * 100)}%` : "—", tone: "teal" },
+                              { label: "Risiko", icon: ShieldAlert, value: riskLevel === "high" ? "Tinggi" : riskLevel === "medium" ? "Sederhana" : "Rendah", tone: riskLevel === "high" ? "red" : riskLevel === "medium" ? "amber" : "emerald" },
+                            ] as const;
+                            const toneClasses: Record<string, string> = {
+                              red: "bg-red-50 border-red-100 text-red-700",
+                              amber: "bg-amber-50 border-amber-100 text-amber-700",
+                              emerald: "bg-emerald-50 border-emerald-100 text-emerald-700",
+                              teal: "bg-teal-50 border-teal-100 text-teal-700",
+                              slate: "bg-slate-50 border-slate-100 text-slate-500",
+                            };
+                            return tiles.map(t => (
+                              <div key={t.label} className={`rounded-xl px-1 py-2 border text-center overflow-hidden ${toneClasses[t.tone]}`}>
+                                <t.icon className="w-3.5 h-3.5 mx-auto mb-1 opacity-70" />
+                                <p className="text-[9px] font-bold leading-tight whitespace-nowrap">{t.value}</p>
+                                <p className="text-[7px] font-bold uppercase tracking-wide mt-1 opacity-70 leading-tight">{t.label}</p>
+                              </div>
+                            ));
+                          })()}
                         </div>
 
                         <div className="grid grid-cols-3 gap-3">
@@ -3799,8 +3899,8 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
           { id: "dashboard" as HQPage,  label: "Dashboard",  icon: LayoutDashboard },
           { id: "customers" as HQPage,  label: "Pelanggan",  icon: Users },
           { id: "support" as HQPage,    label: "Sokongan",   icon: Headphones, badge: openCases },
-          { id: "revenue" as HQPage,    label: "Hasil",      icon: DollarSign },
-          { id: "settings" as HQPage,   label: "Tetapan",    icon: Settings },
+          { id: "alertCenter" as HQPage, label: "Amaran",    icon: Bell, badge: hqAlerts.filter(a => !a.resolvedAt).length },
+          { id: "__more__" as any,      label: "Lagi",       icon: Menu },
         ];
         const staffBottomNav = [
           { id: "dashboard" as HQPage,     label: "Dashboard",  icon: LayoutDashboard },
@@ -3814,7 +3914,7 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
             {mobileNav.map(({ id, label, icon: Icon, badge }: any) => {
               const active = activePage === id;
               return (
-                <button key={id} onClick={() => setActivePage(id)}
+                <button key={id} onClick={() => id === "__more__" ? setSidebarOpen(true) : setActivePage(id)}
                   className="flex-1 flex flex-col items-center justify-center py-2.5 gap-0.5 relative cursor-pointer transition-all"
                   style={{color: active ? "#5A9E7A" : "#94a3b8"}}>
                   <div className="relative">
