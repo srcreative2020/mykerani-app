@@ -2024,6 +2024,24 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
                                 </div>
                               )}
                               <div className="space-y-2">
+                                {hqKnowledgeArticles.length > 0 && (
+                                  <select
+                                    defaultValue=""
+                                    onChange={async (e) => {
+                                      const articleId = e.target.value;
+                                      if (!articleId) return;
+                                      const article = await hqService.getHqKnowledgeArticleForReply(articleId);
+                                      if (article) setReplyText(prev => (prev ? `${prev}\n\n${article.body}` : article.body));
+                                      e.target.value = "";
+                                    }}
+                                    className="text-[11px] border border-slate-200 rounded-lg px-2 py-1.5 bg-white text-slate-600 w-full"
+                                  >
+                                    <option value="">Sisip dari Pusat Pengetahuan...</option>
+                                    {hqKnowledgeArticles.map((a) => (
+                                      <option key={a.id} value={a.id}>{a.title}</option>
+                                    ))}
+                                  </select>
+                                )}
                                 <textarea value={replyText} onChange={e => setReplyText(e.target.value)}
                                   placeholder="Taip jawapan kepada pelanggan..."
                                   rows={3}
