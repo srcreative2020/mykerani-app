@@ -2690,10 +2690,31 @@ export function OwnerDashboard() {
                       <span className="text-[10px] bg-indigo-100 text-indigo-700 font-bold px-2 py-0.5 rounded-full">Pemilik</span>
                     </div>
                   </div>
-                  <div className="text-center py-4">
-                    <Users className="w-7 h-7 text-slate-200 mx-auto mb-1" />
-                    <p className="text-xs text-slate-400">Belum ada kakitangan lagi</p>
-                  </div>
+                  {(() => {
+                    const otherMembers = userRoles.filter(r => r.email !== user?.email);
+                    if (otherMembers.length === 0) {
+                      return (
+                        <div className="text-center py-4">
+                          <Users className="w-7 h-7 text-slate-200 mx-auto mb-1" />
+                          <p className="text-xs text-slate-400">Belum ada kakitangan lagi</p>
+                        </div>
+                      );
+                    }
+                    return otherMembers.map(member => (
+                      <div key={member.id} className="flex items-center space-x-3 p-3 bg-slate-50 rounded-xl" id={`team_member_${member.id}`}>
+                        <div className="w-10 h-10 rounded-xl bg-slate-400 text-white flex items-center justify-center font-bold">
+                          {(member.fullName || member.email).charAt(0).toUpperCase()}
+                        </div>
+                        <div>
+                          <p className="font-bold text-slate-900 text-sm">{member.fullName}</p>
+                          <p className="text-xs text-slate-500">{member.email}</p>
+                          <span className="text-[10px] bg-slate-200 text-slate-700 font-bold px-2 py-0.5 rounded-full">
+                            {member.role === "TENANT_OWNER" ? "Pemilik" : "Kakitangan"}
+                          </span>
+                        </div>
+                      </div>
+                    ));
+                  })()}
                 </div>
               </div>
             )}

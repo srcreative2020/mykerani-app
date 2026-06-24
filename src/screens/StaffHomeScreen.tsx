@@ -19,11 +19,6 @@ import {
 import { addAssetPurchase, addOwnerTransaction } from "../lib/assetOwnerData";
 import { matchOwnBusiness, matchOwnBusinessAndBranch } from "../lib/businessMatching";
 import { loadBusinessBranches, type BusinessBranch } from "../lib/profileData";
-import { computeFinancialHealth, type HealthBucketKey } from "../lib/financialHealthCenter";
-import { FinancialHealthCenter } from "../components/FinancialHealthCenter";
-import { FinancialHealthSummary } from "../components/FinancialHealthSummary";
-import { FinancialReportsAnalytics } from "../components/FinancialReportsAnalytics";
-import { QuickActionsRow } from "../components/QuickActionsRow";
 import { DuplicateReviewQueue } from "../components/DuplicateReviewQueue";
 import { HistoricalRecoveryWorkspace } from "../components/HistoricalRecoveryWorkspace";
 import { getImportFailures } from "../lib/importFailureLog";
@@ -37,10 +32,10 @@ import {
   CheckCircle2, LogOut, ClipboardList, HelpCircle,
   MessageCircle, BookOpen, Ticket, Edit3,
   Paperclip, Mic, Square, File as FileIcon,
-  LayoutDashboard, FileText, BarChart3, MoreHorizontal,
+  LayoutDashboard, FileText, MoreHorizontal,
 } from "lucide-react";
 
-type StaffTab = "home" | "dashboard" | "documents" | "reports" | "more";
+type StaffTab = "home" | "dashboard" | "documents" | "more";
 
 function getGreeting() {
   const h = new Date().getHours();
@@ -316,34 +311,6 @@ export function StaffHomeScreen() {
   const [showDuplicateQueue, setShowDuplicateQueue] = useState(false);
   const [showImportRecovery, setShowImportRecovery] = useState(false);
   const [importFailureRefresh, setImportFailureRefresh] = useState(0);
-  // Phase 2D.1 — Mobile Dashboard UX Redesign: the full 6-bucket/4-score
-  // FinancialHealthCenter detail is now hidden behind this toggle; the
-  // compact FinancialHealthSummary card is shown by default instead.
-  const [showHealthDetail, setShowHealthDetail] = useState(false);
-  // Phase 2 finalization — Report Center parity: identical "Tambah Akaun
-  // Bank" modal to OwnerDashboard.tsx's (same addBankAccount() context
-  // action, no new permission boundary — Staff already has create access
-  // to financial records and there is no bank-account-specific role gate
-  // in PermissionContext.tsx's DEFAULT_PERMISSION_MATRIX).
-  const [showAddBankAccountModal, setShowAddBankAccountModal] = useState(false);
-  const [newBankName, setNewBankName] = useState("");
-  const [newBankNumber, setNewBankNumber] = useState("");
-  const [newBankHolder, setNewBankHolder] = useState("");
-  const [newBankBalance, setNewBankBalance] = useState("");
-  const handleAddBankAccountSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!activeWorkspace || !newBankName || !newBankNumber || !newBankHolder || !newBankBalance) return;
-    addBankAccount({
-      workspaceId: activeWorkspace.id,
-      bankName: newBankName,
-      accountNumber: newBankNumber,
-      accountName: newBankHolder,
-      branchName: "",
-      currentBalanceMyr: parseFloat(newBankBalance) || 0,
-    });
-    setNewBankName(""); setNewBankNumber(""); setNewBankHolder(""); setNewBankBalance("");
-    setShowAddBankAccountModal(false);
-  };
   // Phase 2D.1 — Financial Overview (Section 1): mirrors OwnerDashboard.tsx's
   // day/week/month/year period toggle so both screens show totals scoped to
   // the same window — previously Staff summed all-time while Owner summed
@@ -372,14 +339,6 @@ export function StaffHomeScreen() {
     const lastDay = new Date(today.getFullYear(), today.getMonth() + 1, 0);
     return { from: toIso(new Date(today.getFullYear(), today.getMonth(), 1)), to: toIso(lastDay), label: today.toLocaleDateString("ms-MY", { month: "long", year: "numeric" }) };
   }, [dashboardPeriod, now]);
-  const periodRecords = useMemo(
-    () => myRecords.filter(r => r.date >= periodRange.from && r.date <= periodRange.to),
-    [myRecords, periodRange]
-  );
-  const myIncomeTotal = useMemo(() => periodRecords.filter(r => r.type === "INCOME").reduce((s, r) => s + r.amountMyr, 0), [periodRecords]);
-  const myExpenseTotal = useMemo(() => periodRecords.filter(r => r.type === "EXPENSE").reduce((s, r) => s + r.amountMyr, 0), [periodRecords]);
-  const myReceivableTotal = useMemo(() => myRecords.filter(r => r.type === "RECEIVABLE" && !r.isCompleted).reduce((s, r) => s + r.amountMyr, 0), [myRecords]);
-  const myPayableTotal = useMemo(() => myRecords.filter(r => r.type === "PAYABLE" && !r.isCompleted).reduce((s, r) => s + r.amountMyr, 0), [myRecords]);
   const filteredRecords = useMemo(() => {
     if (healthFilterRecordIds) {
       const idSet = new Set(healthFilterRecordIds);
@@ -399,27 +358,6 @@ export function StaffHomeScreen() {
     () => (activeWorkspace ? getImportFailures(activeWorkspace.id) : []),
     [activeWorkspace, importFailureRefresh]
   );
-  const financialHealth = useMemo(() => computeFinancialHealth({
-    events: myRecords,
-    evidencePackages: financialEvidencePackages,
-    duplicateFlags,
-    chatSuggestions: allChatSuggestions,
-    chatSuggestionStatus,
-    importFailureCount: importFailures.reduce((s, r) => s + r.skippedCount, 0),
-    importFailureBatchCount: importFailures.length,
-  }), [myRecords, financialEvidencePackages, duplicateFlags, allChatSuggestions, chatSuggestionStatus, importFailures]);
-  const handleHealthBucketSelect = (key: HealthBucketKey) => {
-    if (key === "pendingConfirmation" || key === "reviewRecommended") {
-      setActiveTab("home");
-      return;
-    }
-    const bucket = financialHealth.buckets.find(b => b.key === key);
-    if (!bucket) return;
-    setHealthFilterRecordIds(bucket.recordIds);
-    setHealthFilterLabel(bucket.label);
-    setActiveTab("dashboard");
-  };
-
   useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [chatMessages, chatLoading]);
 
   useEffect(() => {
@@ -1473,43 +1411,11 @@ export function StaffHomeScreen() {
               </div>
             </div>
 
-            {/* Section 1 — Financial Overview: visible without scrolling */}
-            <div className="grid grid-cols-2 gap-3">
-              <div className="bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-2xl p-4 text-white shadow">
-                <p className="text-[11px] text-emerald-100">Pendapatan</p>
-                <p className="text-xl font-bold mt-1">RM {myIncomeTotal.toLocaleString("ms-MY", { minimumFractionDigits: 2 })}</p>
-                <TrendingUp className="w-4 h-4 text-emerald-200 mt-1" />
-              </div>
-              <div className="bg-gradient-to-br from-rose-500 to-pink-600 rounded-2xl p-4 text-white shadow">
-                <p className="text-[11px] text-rose-100">Perbelanjaan</p>
-                <p className="text-xl font-bold mt-1">RM {myExpenseTotal.toLocaleString("ms-MY", { minimumFractionDigits: 2 })}</p>
-                <TrendingDown className="w-4 h-4 text-rose-200 mt-1" />
-              </div>
-            </div>
-
-            <div className={`rounded-2xl p-4 shadow-sm border bg-white ${(myIncomeTotal - myExpenseTotal) >= 0 ? "border-emerald-100" : "border-rose-100"}`}>
-              <p className="text-xs text-slate-500">Untung / Rugi ({periodRange.label})</p>
-              <p className={`text-2xl font-bold mt-1 ${(myIncomeTotal - myExpenseTotal) >= 0 ? "text-emerald-600" : "text-rose-500"}`}>
-                {(myIncomeTotal - myExpenseTotal) >= 0 ? "+" : "-"}RM {Math.abs(myIncomeTotal - myExpenseTotal).toLocaleString("ms-MY", { minimumFractionDigits: 2 })}
-              </p>
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
-                <p className="text-[11px] text-slate-500 mb-1">Perlu Dikutip</p>
-                <p className="text-lg font-bold text-amber-600">RM {myReceivableTotal.toLocaleString("ms-MY", { minimumFractionDigits: 2 })}</p>
-              </div>
-              <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
-                <p className="text-[11px] text-slate-500 mb-1">Perlu Dibayar</p>
-                <p className="text-lg font-bold text-indigo-600">RM {myPayableTotal.toLocaleString("ms-MY", { minimumFractionDigits: 2 })}</p>
-              </div>
-            </div>
-
-            {/* Section 2 — Financial Health Summary (compact card; full detail
-                and quick actions only render below when expanded) */}
-            <FinancialHealthSummary health={financialHealth} onExpand={() => setShowHealthDetail(v => !v)} />
-
-            {/* Section 4 — Recent Transactions (moved higher; minimal scrolling) */}
+            {/* Section 4 — Recent Transactions (Staff operational scope: their
+                own recorded transactions only — no income/expense totals,
+                profit/loss, receivable/payable, or health score, which are
+                owner-level financial intelligence per MYKERANI role
+                separation). */}
             {myRecords.length === 0 ? (
               <div className="bg-white border border-slate-200 rounded-2xl p-10 text-center shadow-sm space-y-3">
                 <ClipboardList className="w-10 h-10 text-slate-200 mx-auto" />
@@ -1616,90 +1522,9 @@ export function StaffHomeScreen() {
               </>
             )}
 
-            {/* Section 5 -- Financial Health Detail: full 6-bucket / 4-score
-                command center, only rendered when expanded from the summary
-                card above. Reuses the existing engine/handlers/filters as-is. */}
-            {showHealthDetail && (
-              <div className="bg-white border border-slate-200 rounded-2xl p-3.5 shadow-sm" id="financial_health_detail_section">
-                <div className="flex items-center justify-between mb-2">
-                  <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Butiran Kesihatan Kewangan</h3>
-                  <button onClick={() => setShowHealthDetail(false)} className="text-[10px] text-indigo-500 font-semibold cursor-pointer hover:underline">
-                    Tutup
-                  </button>
-                </div>
-                <QuickActionsRow
-                  onReview={() => handleHealthBucketSelect("pendingConfirmation")}
-                  onDuplicate={() => setShowDuplicateQueue(true)}
-                  onEvidence={() => handleHealthBucketSelect("missingEvidence")}
-                  onImport={() => setShowImportRecovery(true)}
-                />
-                <div className="mt-3">
-                  <FinancialHealthCenter
-                    health={financialHealth}
-                    onSelectBucket={handleHealthBucketSelect}
-                    onOpenDuplicateQueue={() => setShowDuplicateQueue(true)}
-                    onOpenImportRecovery={() => setShowImportRecovery(true)}
-                  />
-                </div>
-              </div>
-            )}
-
           </div>
         )}
 
-        {/* REPORTS — identical component, identical health source, identical
-            navigation wiring as OwnerDashboard.tsx's "reports" tab. */}
-        {activeTab === "reports" && (
-          <div className="flex-1 overflow-y-auto p-4 pb-24 max-w-lg mx-auto w-full space-y-3" id="staff_reports_pane">
-            <h2 className="text-lg font-bold text-slate-900">Laporan</h2>
-            <FinancialReportsAnalytics
-              health={financialHealth}
-              onNavigateToRecords={(recordIds, label) => {
-                setHealthFilterRecordIds(recordIds);
-                setHealthFilterLabel(label);
-                setActiveTab("dashboard");
-              }}
-              onAddBankAccount={() => setShowAddBankAccountModal(true)}
-            />
-          </div>
-        )}
-
-        {/* Phase 2 finalization sprint — Tambah Akaun Bank modal, identical to
-            OwnerDashboard.tsx's, reachable from Staff's Report Center "Tunai
-            Semasa" empty state. */}
-        {showAddBankAccountModal && (
-          <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" id="staff_add_bank_account_modal_overlay">
-            <div className="bg-white rounded-2xl p-5 w-full max-w-sm space-y-3" id="staff_add_bank_account_modal">
-              <h3 className="text-sm font-bold text-slate-900">Tambah Akaun Bank</h3>
-              <form onSubmit={handleAddBankAccountSubmit} className="space-y-2.5">
-                <input
-                  type="text" required placeholder="Nama Bank (cth: Maybank)"
-                  value={newBankName} onChange={(e) => setNewBankName(e.target.value)}
-                  className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-lg outline-none"
-                />
-                <input
-                  type="text" required placeholder="No. Akaun"
-                  value={newBankNumber} onChange={(e) => setNewBankNumber(e.target.value)}
-                  className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-lg outline-none"
-                />
-                <input
-                  type="text" required placeholder="Nama Pemilik Akaun"
-                  value={newBankHolder} onChange={(e) => setNewBankHolder(e.target.value)}
-                  className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-lg outline-none"
-                />
-                <input
-                  type="number" step="0.01" required placeholder="Baki Semasa (RM)"
-                  value={newBankBalance} onChange={(e) => setNewBankBalance(e.target.value)}
-                  className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-lg outline-none"
-                />
-                <div className="flex justify-end gap-2 pt-1">
-                  <button type="button" onClick={() => setShowAddBankAccountModal(false)} className="px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-lg">Batal</button>
-                  <button type="submit" className="px-3.5 py-1.5 text-xs font-semibold text-white bg-slate-900 hover:bg-slate-800 rounded-lg">Simpan</button>
-                </div>
-              </form>
-            </div>
-          </div>
-        )}
         {/* MORE */}
         {activeTab === "more" && (
           <div className="flex-1 overflow-y-auto p-4 pb-24 max-w-lg mx-auto w-full space-y-4" id="staff_profile_pane">
@@ -2047,15 +1872,18 @@ export function StaffHomeScreen() {
         </div>
       )}
 
-      {/* â"€â"€ BOTTOM NAV â"€â"€ (Issue #1 parity fix — identical 5-tab structure,
-          labels, icons and order to OwnerDashboard.tsx's bottom nav; only the
-          permissions/content behind each tab differ.) */}
+      {/* UAT FIX #01 (Issue 1) — Staff bottom nav intentionally diverges from
+          Owner's here: TENANT_STAFF is operational-only (record transactions,
+          upload documents, OCR/AI review, chat) and must not see Owner-level
+          financial intelligence (dashboard analytics, reports, tax/financing/
+          audit readiness, export report) per MYKERANI role separation. The
+          "Laporan" tab has been removed and "dashboard" now renders only the
+          staff member's own record list (no totals/health score/readiness). */}
       <nav className="bg-white border-t border-slate-200 flex items-center justify-around px-2 py-1.5 shrink-0 z-40" id="staff_bottom_nav">
         {([
           { id: "home" as StaffTab,       label: "Home",      icon: Home },
-          { id: "dashboard" as StaffTab,  label: "Dashboard", icon: LayoutDashboard },
+          { id: "dashboard" as StaffTab,  label: "Rekod Saya", icon: LayoutDashboard },
           { id: "documents" as StaffTab,  label: "Dokumen",   icon: FileText },
-          { id: "reports" as StaffTab,    label: "Laporan",   icon: BarChart3 },
           { id: "more" as StaffTab,       label: "Lagi",      icon: MoreHorizontal },
         ]).map(({ id, label, icon: Icon }) => {
           const active = activeTab === id;
