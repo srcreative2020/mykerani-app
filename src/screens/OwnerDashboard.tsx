@@ -1,4 +1,4 @@
-﻿import React, { useState, useRef, useEffect, useMemo } from "react";
+﻿import React, { useState, useRef, useEffect, useMemo, useCallback } from "react";
 import { useAuth } from "../context/AuthContext";
 import { useWorkspace } from "../context/WorkspaceContext";
 import { useFinancials } from "../context/FinancialRecordsContext";
@@ -18,7 +18,7 @@ import {
   Paperclip, Mic, Square, File as FileIcon, Plus, Building2,
 } from "lucide-react";
 import { FinancialEvidencePackageManager } from "../components/FinancialEvidencePackage";
-import { createTenantSupportTicket, getMyTenantSupportTickets, SupportTicket, updateTenantMasterProfile } from "../lib/hqService";
+import { createTenantSupportTicket, getMyTenantSupportTickets, SupportTicket, updateTenantMasterProfile, SUPPORT_TICKET_TEMPLATES, uploadTicketAttachment, getTicketAttachmentUrl, ticketSlaState, TICKET_STATUS_LABEL_MS, TICKET_STATUS_STYLE } from "../lib/hqService";
 import { FinancialReportsAnalytics } from "../components/FinancialReportsAnalytics";
 import { StorageBar } from "../components/StorageBar";
 import { DocumentsManager } from "../components/DocumentsManager";
@@ -309,11 +309,15 @@ export function OwnerDashboard() {
   const [supportView, setSupportView] = useState<"chat" | "faq" | "ticket" | "ticket_status">("chat");
   const [ticketSubject, setTicketSubject] = useState("");
   const [ticketDesc, setTicketDesc] = useState("");
+  const [ticketCategory, setTicketCategory] = useState("");
   const [ticketSent, setTicketSent] = useState(false);
   const [ticketSending, setTicketSending] = useState(false);
   const [ticketError, setTicketError] = useState<string | null>(null);
   const [myTickets, setMyTickets] = useState<SupportTicket[]>([]);
   const [myTicketsLoading, setMyTicketsLoading] = useState(false);
+  const [openTicketId, setOpenTicketId] = useState<string | null>(null);
+  const [ticketAttachFile, setTicketAttachFile] = useState<File | null>(null);
+  const [ticketAttachUploading, setTicketAttachUploading] = useState(false);
   const supportEndRef = useRef<HTMLDivElement>(null);
 
   // â"€â"€ Reminder Settings â"€â"€
@@ -870,6 +874,10 @@ export function OwnerDashboard() {
 
   useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [chatMessages, chatLoading]);
   useEffect(() => { supportEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [supportMessages, supportLoading]);
+  const refreshMyTickets = useCallback(() => {
+    if (isMockUser) return;
+    getMyTenantSupportTickets().then(tickets => setMyTickets(tickets));
+  }, [isMockUser]);
   useEffect(() => {
     if (morePage !== "support" || supportView !== "ticket_status" || isMockUser) return;
     let active = true;
@@ -3517,6 +3525,19 @@ export function OwnerDashboard() {
                       <>
                         <div className="space-y-3">
                           <div>
+                            <label className="text-[11px] font-bold text-slate-400 uppercase">Jenis Isu</label>
+                            <select value={ticketCategory} onChange={e => {
+                              const key = e.target.value;
+                              setTicketCategory(key);
+                              const tmpl = SUPPORT_TICKET_TEMPLATES.find(t => t.key === key);
+                              if (tmpl && tmpl.subject && !ticketSubject.trim()) setTicketSubject(tmpl.subject);
+                            }}
+                              className="w-full mt-1 border border-slate-200 rounded-xl px-3 py-2.5 text-sm outline-none focus:border-indigo-400 bg-white">
+                              <option value="">Pilih jenis isu...</option>
+                              {SUPPORT_TICKET_TEMPLATES.map(t => <option key={t.key} value={t.key}>{t.label}</option>)}
+                            </select>
+                          </div>
+                          <div>
                             <label className="text-[11px] font-bold text-slate-400 uppercase">Tajuk Masalah</label>
                             <input type="text" value={ticketSubject} onChange={e => setTicketSubject(e.target.value)}
                               placeholder="Cth: Tidak boleh muat naik resit"
@@ -3528,6 +3549,11 @@ export function OwnerDashboard() {
                               placeholder="Terangkan masalah anda dengan terperinci..."
                               rows={4}
                               className="w-full mt-1 border border-slate-200 rounded-xl px-3 py-2.5 text-sm outline-none focus:border-indigo-400 bg-white resize-none" />
+                          </div>
+                          <div>
+                            <label className="text-[11px] font-bold text-slate-400 uppercase">Lampiran (pilihan)</label>
+                            <input type="file" accept="image/*,.pdf,.doc,.docx" onChange={e => setTicketAttachFile(e.target.files?.[0] || null)}
+                              className="w-full mt-1 text-xs text-slate-500" />
                           </div>
                           <div className="p-3 bg-indigo-50 border border-indigo-100 rounded-xl">
                             <p className="text-[11px] text-indigo-700 font-semibold">AI akan ringkaskan isu anda sebelum hantar ke pasukan HQ.</p>
@@ -3541,9 +3567,12 @@ export function OwnerDashboard() {
                             if (!ticketSubject.trim() || !ticketDesc.trim()) return;
                             setTicketSending(true);
                             setTicketError(null);
-                            const ok = await createTenantSupportTicket(ticketSubject.trim(), ticketDesc.trim(), "medium");
+                            const ticketId = await createTenantSupportTicket(ticketSubject.trim(), ticketDesc.trim(), "medium", ticketCategory || undefined);
+                            if (ticketId && ticketAttachFile && user?.tenantId) {
+                              await uploadTicketAttachment(ticketId, user.tenantId, ticketAttachFile, user?.fullName || "Tenant");
+                            }
                             setTicketSending(false);
-                            if (ok) setTicketSent(true);
+                            if (ticketId) { setTicketSent(true); setTicketAttachFile(null); }
                             else setTicketError("Gagal menghantar tiket. Sila cuba lagi.");
                           }}
                           disabled={!ticketSubject.trim() || !ticketDesc.trim() || ticketSending}
@@ -3577,27 +3606,66 @@ export function OwnerDashboard() {
                         </div>
                       ) : (
                         <div className="space-y-3">
-                          {myTickets.map(t => (
-                            <div key={t.id} className={`p-3 rounded-xl border flex items-start space-x-3 ${t.status === "resolved" ? "bg-emerald-50 border-emerald-100" : t.status === "pending" ? "bg-amber-50 border-amber-100" : "bg-slate-50 border-slate-100"}`}>
-                              {t.status === "resolved" ? <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" /> : <Clock className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />}
-                              <div className="flex-1">
-                                <p className={`text-xs font-bold ${t.status === "resolved" ? "text-emerald-800" : "text-amber-800"}`}>#{t.id.slice(0, 8)} — {t.subject}</p>
-                                <p className={`text-[11px] mt-0.5 ${t.status === "resolved" ? "text-emerald-600" : "text-amber-600"}`}>
-                                  Status: {t.status === "resolved" ? "Diselesaikan" : t.status === "pending" ? "Menunggu maklum balas anda" : "Sedang diproses oleh HQ Staff"}
-                                </p>
-                                <p className="text-[10px] text-slate-400 mt-1">Dihantar {new Date(t.createdAt).toLocaleDateString("ms-MY")}</p>
-                                {t.replies.length > 0 && (
-                                  <div className="mt-2 space-y-1.5 border-t border-slate-200/70 pt-2">
-                                    {t.replies.map(r => (
-                                      <div key={r.id} className="text-[11px] text-slate-600">
-                                        <span className="font-bold text-slate-700">{r.author}: </span>{r.text}
+                          {myTickets.map(t => {
+                            const style = TICKET_STATUS_STYLE[t.status];
+                            const sla = ticketSlaState(t);
+                            const isOpen = openTicketId === t.id;
+                            return (
+                              <div key={t.id} className={`p-3 rounded-xl border ${style.bg}`}>
+                                <button onClick={() => setOpenTicketId(isOpen ? null : t.id)} className="w-full flex items-start space-x-3 text-left cursor-pointer">
+                                  {style.icon === "check" ? <CheckCircle2 className={`w-4 h-4 shrink-0 mt-0.5 ${style.text}`} /> : <Clock className={`w-4 h-4 shrink-0 mt-0.5 ${style.text}`} />}
+                                  <div className="flex-1">
+                                    <p className={`text-xs font-bold ${style.text}`}>#{t.id.slice(0, 8)} — {t.subject}</p>
+                                    <p className={`text-[11px] mt-0.5 ${style.text}`}>Status: {TICKET_STATUS_LABEL_MS[t.status]}</p>
+                                    <div className="flex items-center gap-2 mt-1 flex-wrap">
+                                      <span className="text-[10px] text-slate-400">Dihantar {new Date(t.createdAt).toLocaleDateString("ms-MY")}</span>
+                                      {t.assigned && <span className="text-[10px] text-slate-400">• Staf HQ: {t.assigned}</span>}
+                                      {sla === "breached" && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-red-100 text-red-700">SLA Lewat</span>}
+                                      {sla === "near" && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700">SLA Hampir Tamat</span>}
+                                      {t.replies.length > 0 && <span className="text-[10px] text-slate-400">• {t.replies.length} balasan</span>}
+                                      {t.attachments.length > 0 && <span className="text-[10px] text-slate-400">• {t.attachments.length} lampiran</span>}
+                                    </div>
+                                  </div>
+                                  <ChevronRight className={`w-3.5 h-3.5 text-slate-300 shrink-0 mt-1 transition-transform ${isOpen ? "rotate-90" : ""}`} />
+                                </button>
+                                {isOpen && (
+                                  <div className="mt-3 pt-3 border-t border-slate-200/70 space-y-3">
+                                    <div className="grid grid-cols-2 gap-2 text-[11px]">
+                                      <div><p className="text-slate-400">Keutamaan</p><p className="font-semibold text-slate-700 capitalize">{t.priority}</p></div>
+                                      <div><p className="text-slate-400">Balasan Pertama</p><p className="font-semibold text-slate-700">{t.firstResponseAt ? new Date(t.firstResponseAt).toLocaleString("ms-MY") : "—"}</p></div>
+                                    </div>
+                                    {t.replies.length > 0 && (
+                                      <div className="space-y-1.5">
+                                        {t.replies.map(r => (
+                                          <div key={r.id} className="text-[11px] text-slate-600 bg-white/60 rounded-lg px-2.5 py-1.5">
+                                            <span className="font-bold text-slate-700">{r.author}: </span>{r.text}
+                                          </div>
+                                        ))}
                                       </div>
-                                    ))}
+                                    )}
+                                    {t.attachments.length > 0 && (
+                                      <div className="space-y-1">
+                                        {t.attachments.map(a => (
+                                          <button key={a.id} onClick={async () => {
+                                            const url = await getTicketAttachmentUrl(a.filePath);
+                                            if (url) window.open(url, "_blank");
+                                          }} className="flex items-center gap-1.5 text-[11px] text-indigo-600 hover:underline cursor-pointer">
+                                            <FileText className="w-3 h-3" />{a.fileName}
+                                          </button>
+                                        ))}
+                                      </div>
+                                    )}
+                                    {t.resolutionNotes && (
+                                      <div className="p-2 bg-emerald-50 border border-emerald-100 rounded-lg">
+                                        <p className="text-[10px] font-bold text-emerald-700 uppercase">Nota Penyelesaian</p>
+                                        <p className="text-[11px] text-emerald-700 mt-0.5">{t.resolutionNotes}</p>
+                                      </div>
+                                    )}
                                   </div>
                                 )}
                               </div>
-                            </div>
-                          ))}
+                            );
+                          })}
                         </div>
                       )}
                     </div>

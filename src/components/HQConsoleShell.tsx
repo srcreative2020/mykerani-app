@@ -8,6 +8,7 @@ import {
   ArrowUpRight, Menu, X, Activity, Package, Receipt, ToggleLeft,
   ToggleRight, AlertTriangle, Circle, FileText, MessageSquare,
   User, Send, Star, Repeat, Archive, Globe, HelpCircle, Trash2, ShieldAlert,
+  Paperclip, MessageCircle,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { useNotifications, buildHQNotifs, fmtNotifTime } from "../lib/notifications";
@@ -40,9 +41,9 @@ const MOCK_CUSTOMERS = [
 ];
 
 const MOCK_TICKETS = [
-  { id: "T-001", customer: "Butik Raudah Enterprise",  subject: "Tidak boleh log masuk",     priority: "high",   status: "open",     summary: "Pengguna tidak dapat masuk sejak 2 hari lalu. AI mengesan isu kata laluan.",     assigned: "-" },
-  { id: "T-002", customer: "Syarikat Binaan Teguh MY", subject: "Resit tidak dapat dimuat naik", priority: "medium", status: "pending",  summary: "Saiz fail melebihi had. AI cadangkan kurangkan saiz atau naik taraf storan.", assigned: "Amir" },
-  { id: "T-003", customer: "Ladang Hijau Organik",     subject: "Soalan tentang laporan P&L", priority: "low",    status: "resolved", summary: "AI telah menjawab soalan. Pengguna berpuas hati.",                                assigned: "Siti" },
+  { id: "T-001", customer: "Butik Raudah Enterprise",  subject: "Tidak boleh log masuk",     priority: "high" as const,   status: "open" as const,     category: "login_issue",  summary: "Pengguna tidak dapat masuk sejak 2 hari lalu. AI mengesan isu kata laluan.",     assigned: "-" },
+  { id: "T-002", customer: "Syarikat Binaan Teguh MY", subject: "Resit tidak dapat dimuat naik", priority: "medium" as const, status: "in_progress" as const, category: "upload_failure", summary: "Saiz fail melebihi had. AI cadangkan kurangkan saiz atau naik taraf storan.", assigned: "Amir" },
+  { id: "T-003", customer: "Ladang Hijau Organik",     subject: "Soalan tentang laporan P&L", priority: "low" as const,    status: "resolved" as const, category: "other", summary: "AI telah menjawab soalan. Pengguna berpuas hati.",                                assigned: "Siti" },
 ];
 
 const MOCK_PLANS = [
@@ -113,14 +114,25 @@ const StatusBadge = ({ status }: { status: string }) => {
     suspended: "bg-red-50 text-red-600 border-red-200",
     open: "bg-amber-50 text-amber-700 border-amber-200",
     pending: "bg-blue-50 text-blue-700 border-blue-200",
-    resolved: "bg-slate-100 text-slate-500 border-slate-200",
+    in_progress: "bg-blue-50 text-blue-700 border-blue-200",
+    awaiting_customer: "bg-violet-50 text-violet-700 border-violet-200",
+    awaiting_hq: "bg-amber-50 text-amber-700 border-amber-200",
+    resolved: "bg-emerald-50 text-emerald-600 border-emerald-200",
+    closed: "bg-slate-100 text-slate-500 border-slate-200",
+    critical: "bg-red-100 text-red-700 border-red-300",
     high: "bg-red-50 text-red-600 border-red-200",
     medium: "bg-amber-50 text-amber-700 border-amber-200",
     low: "bg-slate-100 text-slate-500 border-slate-200",
+    breached: "bg-red-100 text-red-700 border-red-300",
+    near: "bg-amber-50 text-amber-700 border-amber-200",
+    on_time: "bg-emerald-50 text-emerald-600 border-emerald-200",
   };
   const labels: Record<string, string> = {
     active: "Aktif", suspended: "Digantung", open: "Terbuka", pending: "Dalam Proses",
-    resolved: "Selesai", high: "Tinggi", medium: "Sederhana", low: "Rendah",
+    in_progress: "Dalam Proses", awaiting_customer: "Menunggu Pelanggan", awaiting_hq: "Menunggu HQ",
+    resolved: "Selesai", closed: "Ditutup",
+    critical: "Kritikal", high: "Tinggi", medium: "Sederhana", low: "Rendah",
+    breached: "SLA Lupus", near: "SLA Hampir", on_time: "SLA OK",
   };
   return (
     <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold border ${map[status] || "bg-slate-100 text-slate-500 border-slate-200"}`}>
@@ -713,12 +725,20 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
     customer: string;
     email?: string;
     subject: string;
-    priority: "high" | "medium" | "low";
-    status: "open" | "pending" | "resolved";
+    priority: hqService.SupportTicketPriority;
+    status: hqService.SupportTicketStatus;
     summary: string;
+    category?: string;
     assigned: string;
     createdAt: string;
+    slaDueAt?: string | null;
+    firstResponseAt?: string | null;
+    resolvedAt?: string | null;
+    closedAt?: string | null;
+    resolutionNotes?: string;
     replies: { id: string; author: string; text: string; at: string }[];
+    internalNotes?: { id: string; author: string; note: string; at: string }[];
+    attachments?: { id: string; fileName: string; filePath: string; fileType: string; uploadedByName: string; at: string }[];
   }
   const ticketsKey = `mykerani_tickets_${user?.id ?? "guest"}`;
   const [allTickets, setAllTickets] = useState<Ticket[]>(() => {
@@ -728,7 +748,9 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
     } catch {}
     return isMockUser ? MOCK_TICKETS.map(t => ({
       ...t, email: "", createdAt: "2026-06-01",
-      replies: [] as { id: string; author: string; text: string; at: string }[]
+      replies: [] as { id: string; author: string; text: string; at: string }[],
+      internalNotes: [] as { id: string; author: string; note: string; at: string }[],
+      attachments: [] as { id: string; fileName: string; filePath: string; fileType: string; uploadedByName: string; at: string }[],
     })) : [];
   });
 
@@ -741,7 +763,7 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
     const frozenTenants   = customers.filter(c => { try { const r = localStorage.getItem(`mykerani_storage_quota_${c.id}`); return r && JSON.parse(r).isFrozen; } catch { return false; } }).map(c => c.name);
     const inactiveTenants = customers.filter(c => { try { const r = localStorage.getItem(`mykerani_storage_quota_${c.id}`); if (!r) return false; const s = JSON.parse(r); return Math.floor((Date.now() - new Date(s.lastActiveAt || 0).getTime()) / 86400000) >= (s.inactiveDaysLimit || 30); } catch { return false; } }).map(c => c.name);
     const highStorage     = customers.map(c => { try { const r = localStorage.getItem(`mykerani_storage_quota_${c.id}`); if (!r) return null; const s = JSON.parse(r); return { name: c.name, pct: s.usedBytes / s.quotaBytes }; } catch { return null; } }).filter((t): t is { name: string; pct: number } => !!t && t.pct >= 0.90);
-    const openTickets = allTickets.filter(t => t.status === "open" || t.status === "pending").length;
+    const openTickets = allTickets.filter(t => t.status !== "resolved" && t.status !== "closed").length;
     buildHQNotifs({ frozenTenants, inactiveTenants, highStorageTenants: highStorage, openTickets, supabasePct: totalUsed / supabasePlan, newCustomers: [] }).forEach(n => notif.push(n));
   }, [customers.length, allTickets.length, useRealData]);
 
@@ -958,18 +980,21 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
     hqService.getSupportTickets().then(rows => setAllTickets(rows as Ticket[]));
   }, [useRealData, ticketsRefreshTick]);
 
-  const [ticketFilter, setTicketFilter] = useState<"all" | "open" | "pending" | "resolved">("all");
+  const [ticketFilter, setTicketFilter] = useState<"all" | "unassigned" | hqService.SupportTicketStatus>("all");
   const [showTicketModal, setShowTicketModal] = useState(false);
-  const [ticketForm, setTicketForm] = useState({ customer: "", email: "", subject: "", priority: "medium" as "high"|"medium"|"low", summary: "" });
+  const [ticketForm, setTicketForm] = useState({ customer: "", email: "", subject: "", priority: "medium" as hqService.SupportTicketPriority, summary: "", category: "" });
   const [expandedTicket, setExpandedTicket] = useState<string | null>(null);
   const [replyText, setReplyText] = useState("");
+  const [internalNoteText, setInternalNoteText] = useState("");
+  const [resolutionNoteText, setResolutionNoteText] = useState("");
+  const [assignDraft, setAssignDraft] = useState("");
 
   const saveTicket = async () => {
     if (!ticketForm.customer.trim() || !ticketForm.subject.trim()) return;
     if (useRealData) {
       await hqService.createSupportTicket(ticketForm);
       setTicketsRefreshTick(t => t + 1);
-      setTicketForm({ customer: "", email: "", subject: "", priority: "medium", summary: "" });
+      setTicketForm({ customer: "", email: "", subject: "", priority: "medium", summary: "", category: "" });
       setShowTicketModal(false);
       return;
     }
@@ -977,21 +1002,19 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
       id: `T-${String(allTickets.length + 1).padStart(3, "0")}`,
       customer: ticketForm.customer, email: ticketForm.email,
       subject: ticketForm.subject, priority: ticketForm.priority,
-      status: "open", summary: ticketForm.summary || "Tiada ringkasan.",
-      assigned: "-", createdAt: new Date().toISOString().split("T")[0], replies: []
+      status: "open", summary: ticketForm.summary || "Tiada ringkasan.", category: ticketForm.category,
+      assigned: "-", createdAt: new Date().toISOString().split("T")[0], replies: [], internalNotes: [], attachments: []
     };
     setAllTickets(prev => [t, ...prev]);
-    setTicketForm({ customer: "", email: "", subject: "", priority: "medium", summary: "" });
+    setTicketForm({ customer: "", email: "", subject: "", priority: "medium", summary: "", category: "" });
     setShowTicketModal(false);
   };
-  const resolveTicket = async (id: string) => {
-    if (useRealData) { await hqService.updateSupportTicketStatus(id, "resolved"); setTicketsRefreshTick(t => t + 1); return; }
-    setAllTickets(prev => prev.map(t => t.id === id ? { ...t, status: "resolved" } : t));
+  const updateTicketStatus = async (id: string, status: hqService.SupportTicketStatus, resolutionNotes?: string) => {
+    if (useRealData) { await hqService.updateSupportTicketStatus(id, status, resolutionNotes); setTicketsRefreshTick(t => t + 1); return; }
+    setAllTickets(prev => prev.map(t => t.id === id ? { ...t, status, resolutionNotes: resolutionNotes ?? t.resolutionNotes } : t));
   };
-  const reopenTicket = async (id: string) => {
-    if (useRealData) { await hqService.updateSupportTicketStatus(id, "open"); setTicketsRefreshTick(t => t + 1); return; }
-    setAllTickets(prev => prev.map(t => t.id === id ? { ...t, status: "open" } : t));
-  };
+  const resolveTicket = (id: string) => updateTicketStatus(id, "resolved", resolutionNoteText.trim() || undefined);
+  const reopenTicket = (id: string) => updateTicketStatus(id, "open");
   const sendReply = async (id: string) => {
     if (!replyText.trim()) return;
     if (useRealData) {
@@ -1001,19 +1024,49 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
       return;
     }
     const reply = { id: `r-${Date.now()}`, author: user?.fullName || "HQ", text: replyText.trim(), at: new Date().toLocaleString("ms-MY") };
-    setAllTickets(prev => prev.map(t => t.id === id ? { ...t, status: "pending" as const, replies: [...t.replies, reply] } : t));
+    setAllTickets(prev => prev.map(t => t.id === id ? { ...t, status: "awaiting_customer" as const, replies: [...t.replies, reply] } : t));
     setReplyText("");
   };
   const assignTicket = async (id: string, name: string) => {
+    if (!name.trim()) return;
     if (useRealData) { await hqService.assignSupportTicket(id, name); setTicketsRefreshTick(t => t + 1); return; }
-    setAllTickets(prev => prev.map(t => t.id === id ? { ...t, assigned: name } : t));
+    setAllTickets(prev => prev.map(t => t.id === id ? { ...t, assigned: name, status: t.status === "open" ? "in_progress" : t.status } : t));
+  };
+  const addInternalNote = async (id: string) => {
+    if (!internalNoteText.trim()) return;
+    if (useRealData) {
+      await hqService.addTicketInternalNote(id, user?.fullName || "HQ", internalNoteText.trim());
+      setInternalNoteText("");
+      setTicketsRefreshTick(t => t + 1);
+      return;
+    }
+    const note = { id: `n-${Date.now()}`, author: user?.fullName || "HQ", note: internalNoteText.trim(), at: new Date().toLocaleString("ms-MY") };
+    setAllTickets(prev => prev.map(t => t.id === id ? { ...t, internalNotes: [...(t.internalNotes || []), note] } : t));
+    setInternalNoteText("");
   };
 
-  const filteredTickets = allTickets.filter(t => ticketFilter === "all" || t.status === ticketFilter);
+  const filteredTickets = allTickets.filter(t =>
+    ticketFilter === "all" ? true : ticketFilter === "unassigned" ? !t.assigned || t.assigned === "-" : t.status === ticketFilter
+  );
 
   const totalMRR    = customers.reduce((s, c) => s + (c.status === "active" ? c.mrr : 0), 0);
   const activeCount = customers.filter(c => c.status === "active").length;
-  const openCases   = allTickets.filter(t => t.status === "open" || t.status === "pending").length;
+  const openCases   = allTickets.filter(t => t.status !== "resolved" && t.status !== "closed").length;
+  const slaBreachedCount = allTickets.filter(t => hqService.ticketSlaState(t as hqService.SupportTicket) === "breached").length;
+  const slaNearCount     = allTickets.filter(t => hqService.ticketSlaState(t as hqService.SupportTicket) === "near").length;
+  const unassignedCount  = allTickets.filter(t => (!t.assigned || t.assigned === "-") && t.status !== "resolved" && t.status !== "closed").length;
+  const avgResponseMins = (() => {
+    const withResponse = allTickets.filter(t => t.firstResponseAt && t.createdAt);
+    if (!withResponse.length) return null;
+    const total = withResponse.reduce((s, t) => s + (new Date(t.firstResponseAt!).getTime() - new Date(t.createdAt).getTime()), 0);
+    return Math.round(total / withResponse.length / 60000);
+  })();
+  const avgResolutionHours = (() => {
+    const withResolution = allTickets.filter(t => t.resolvedAt && t.createdAt);
+    if (!withResolution.length) return null;
+    const total = withResolution.reduce((s, t) => s + (new Date(t.resolvedAt!).getTime() - new Date(t.createdAt).getTime()), 0);
+    return Math.round(total / withResolution.length / 3600000);
+  })();
   const totalAI     = customers.reduce((s, c) => s + c.aiUsage, 0);
 
   const handleCreateHQStaff = async () => {
@@ -1950,64 +2003,79 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
               </div>
             )}
 
-            {/* â•â•â•â• SUPPORT â•â•â•â• */}
+            {/* ════ SUPPORT ════ */}
             {activePage === "support" && (
               <div className="space-y-4" id="hq_support">
                 <div className="flex items-center justify-between">
                   <h1 className="text-xl font-bold text-slate-900">Sokongan Pelanggan</h1>
                   <button onClick={() => setShowTicketModal(true)}
-                    className="flex items-center gap-1.5 px-3 py-2 bg-emerald-700 text-white rounded-xl text-xs font-bold cursor-pointer hover:bg-emerald-800 transition">
-                    <Plus className="w-3.5 h-3.5" /><span>Tiket Baru</span>
+                    className="text-[11px] text-slate-400 hover:text-slate-600 underline cursor-pointer">
+                    + Tiket HQ (jarang digunakan)
                   </button>
                 </div>
 
-                {/* Stats */}
-                <div className="grid grid-cols-3 gap-3">
+                {/* Operational health row */}
+                <div className="grid grid-cols-3 md:grid-cols-6 gap-2.5">
                   <MetricCard label="Terbuka" value={allTickets.filter(t=>t.status==="open").length} icon={AlertCircle} color="red" />
-                  <MetricCard label="Dalam Proses" value={allTickets.filter(t=>t.status==="pending").length} icon={Clock} color="amber" />
+                  <MetricCard label="Dalam Proses" value={allTickets.filter(t=>t.status==="in_progress").length} icon={Clock} color="amber" />
+                  <MetricCard label="Tunggu Pelanggan" value={allTickets.filter(t=>t.status==="awaiting_customer").length} icon={MessageCircle} color="violet" />
+                  <MetricCard label="Tunggu HQ" value={allTickets.filter(t=>t.status==="awaiting_hq").length} icon={Headphones} color="amber" />
                   <MetricCard label="Selesai" value={allTickets.filter(t=>t.status==="resolved").length} icon={CheckCircle2} color="emerald" />
+                  <MetricCard label="Ditutup" value={allTickets.filter(t=>t.status==="closed").length} icon={X} color="slate" />
+                </div>
+                <div className="grid grid-cols-3 md:grid-cols-6 gap-2.5">
+                  <MetricCard label="Kritikal" value={allTickets.filter(t=>t.priority==="critical").length} icon={AlertCircle} color="red" />
+                  <MetricCard label="Tinggi" value={allTickets.filter(t=>t.priority==="high").length} icon={AlertCircle} color="red" />
+                  <MetricCard label="SLA Lupus" value={slaBreachedCount} icon={AlertCircle} color="red" />
+                  <MetricCard label="SLA Hampir" value={slaNearCount} icon={Clock} color="amber" />
+                  <MetricCard label="Belum Ditugaskan" value={unassignedCount} icon={UserX} color="amber" />
+                  <MetricCard label="Masa Respons (min)" value={avgResponseMins ?? "-"} icon={Clock} color="teal" />
                 </div>
 
                 {/* Filter tabs */}
                 <div className="flex gap-2 flex-wrap">
-                  {([["all","Semua"],["open","Terbuka"],["pending","Dalam Proses"],["resolved","Selesai"]] as const).map(([val, label]) => (
+                  {([["all","Semua"],["open","Terbuka"],["in_progress","Dalam Proses"],["awaiting_customer","Tunggu Pelanggan"],["awaiting_hq","Tunggu HQ"],["resolved","Selesai"],["closed","Ditutup"],["unassigned","Belum Ditugaskan"]] as const).map(([val, label]) => (
                     <button key={val} onClick={() => setTicketFilter(val)}
                       className={`px-3 py-1.5 rounded-xl text-xs font-bold cursor-pointer transition ${ticketFilter === val ? "bg-emerald-700 text-white" : "bg-white border border-slate-200 text-slate-600 hover:border-emerald-300"}`}>
-                      {label} {val !== "all" && `(${allTickets.filter(t=>t.status===val).length})`}
+                      {label}
                     </button>
                   ))}
                 </div>
+
+                {avgResolutionHours !== null && (
+                  <p className="text-[11px] text-slate-400">Purata masa penyelesaian: {avgResolutionHours} jam</p>
+                )}
 
                 {filteredTickets.length === 0 ? (
                   <div className="bg-white border border-slate-200 rounded-2xl p-16 text-center shadow-sm">
                     <Headphones className="w-10 h-10 text-slate-200 mx-auto mb-3" />
                     <p className="text-sm font-semibold text-slate-500">Tiada tiket dalam kategori ini</p>
-                    <button onClick={() => setShowTicketModal(true)} className="mt-4 px-4 py-2 bg-emerald-700 text-white rounded-xl text-xs font-bold cursor-pointer hover:bg-emerald-800 transition">
-                      Buka Tiket Pertama
-                    </button>
                   </div>
                 ) : (
                   <div className="space-y-3">
                     {filteredTickets.map(t => {
                       const isExpanded = expandedTicket === t.id;
+                      const sla = hqService.ticketSlaState(t as hqService.SupportTicket);
                       return (
-                        <div key={t.id} className={`bg-white border rounded-2xl shadow-sm overflow-hidden ${t.status === "open" ? "border-red-100" : t.status === "pending" ? "border-amber-100" : "border-slate-200"}`}>
+                        <div key={t.id} className={`bg-white border rounded-2xl shadow-sm overflow-hidden ${t.status === "open" ? "border-red-100" : sla === "breached" ? "border-red-200" : "border-slate-200"}`}>
                           {/* Header */}
                           <div className="p-5 space-y-2">
                             <div className="flex items-start justify-between gap-3">
                               <div className="flex-1 min-w-0">
                                 <div className="flex items-center gap-2 flex-wrap">
-                                  <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full">{t.id}</span>
+                                  <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full">#{t.id.slice(0,8)}</span>
                                   <StatusBadge status={t.status} />
                                   <StatusBadge status={t.priority} />
+                                  {sla !== "none" && <StatusBadge status={sla} />}
                                   {t.replies.length > 0 && <span className="text-[9px] text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">{t.replies.length} balasan</span>}
+                                  {(t.attachments?.length || 0) > 0 && <span className="text-[9px] text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full flex items-center gap-1"><Paperclip className="w-2.5 h-2.5" />{t.attachments!.length}</span>}
                                 </div>
                                 <p className="text-sm font-bold text-slate-900 mt-1.5">{t.subject}</p>
                                 <p className="text-xs text-slate-500">{t.customer}{t.email ? ` - ${t.email}` : ""}</p>
                               </div>
                               <div className="text-right shrink-0 space-y-1">
                                 <p className="text-[10px] text-slate-400">{t.createdAt}</p>
-                                <p className="text-[10px] text-slate-400">Staf: {t.assigned}</p>
+                                <p className="text-[10px] text-slate-400">Staf: {t.assigned || "Belum ditugaskan"}</p>
                               </div>
                             </div>
 
@@ -2019,11 +2087,11 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
 
                             {/* Actions */}
                             <div className="flex items-center gap-2 flex-wrap">
-                              <button onClick={() => { setExpandedTicket(isExpanded ? null : t.id); setReplyText(""); }}
+                              <button onClick={() => { setExpandedTicket(isExpanded ? null : t.id); setReplyText(""); setAssignDraft(t.assigned || ""); setResolutionNoteText(t.resolutionNotes || ""); }}
                                 className="px-3 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs font-bold cursor-pointer transition">
-                                {isExpanded ? "Tutup" : "Balas"}
+                                {isExpanded ? "Tutup Ruang Kerja" : "Buka Ruang Kerja"}
                               </button>
-                              {t.status !== "resolved" ? (
+                              {t.status !== "resolved" && t.status !== "closed" ? (
                                 <button onClick={() => resolveTicket(t.id)}
                                   className="px-3 py-1.5 bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-xl text-xs font-bold cursor-pointer hover:bg-emerald-100 transition">
                                   Tandakan Selesai
@@ -2034,14 +2102,61 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
                                   Buka Semula
                                 </button>
                               )}
+                              {t.status === "resolved" && (
+                                <button onClick={() => updateTicketStatus(t.id, "closed")}
+                                  className="px-3 py-1.5 bg-slate-50 border border-slate-200 text-slate-600 rounded-xl text-xs font-bold cursor-pointer hover:bg-slate-100 transition">
+                                  Tutup Tiket
+                                </button>
+                              )}
                             </div>
                           </div>
 
-                          {/* Expanded replies */}
+                          {/* Ticket workspace */}
                           {isExpanded && (
-                            <div className="border-t border-slate-100 bg-slate-50 p-4 space-y-3">
+                            <div className="border-t border-slate-100 bg-slate-50 p-4 space-y-4">
+                              {/* Full ticket data */}
+                              <div className="grid grid-cols-2 gap-2 text-[11px] bg-white border border-slate-200 rounded-xl p-3">
+                                <div><span className="text-slate-400">ID Tiket:</span> <span className="font-bold text-slate-700">{t.id}</span></div>
+                                <div><span className="text-slate-400">Kategori:</span> <span className="font-bold text-slate-700">{t.category || "-"}</span></div>
+                                <div><span className="text-slate-400">Dihantar:</span> <span className="font-bold text-slate-700">{t.createdAt}</span></div>
+                                <div><span className="text-slate-400">SLA Tamat:</span> <span className="font-bold text-slate-700">{t.slaDueAt ? new Date(t.slaDueAt).toLocaleString("ms-MY") : "-"}</span></div>
+                                <div><span className="text-slate-400">Respons Pertama:</span> <span className="font-bold text-slate-700">{t.firstResponseAt ? new Date(t.firstResponseAt).toLocaleString("ms-MY") : "-"}</span></div>
+                                <div><span className="text-slate-400">Diselesaikan:</span> <span className="font-bold text-slate-700">{t.resolvedAt ? new Date(t.resolvedAt).toLocaleString("ms-MY") : "-"}</span></div>
+                              </div>
+
+                              {/* Assignment */}
+                              <div className="flex items-center gap-2">
+                                <input value={assignDraft} onChange={e => setAssignDraft(e.target.value)} placeholder="Tugaskan kepada staf..."
+                                  className="flex-1 border border-slate-200 rounded-xl px-3 py-2 text-xs outline-none focus:border-emerald-400 bg-white" />
+                                <button onClick={() => assignTicket(t.id, assignDraft)} disabled={!assignDraft.trim()}
+                                  className="px-3 py-2 bg-slate-700 text-white rounded-xl text-xs font-bold cursor-pointer hover:bg-slate-800 transition disabled:opacity-40">
+                                  Tugaskan
+                                </button>
+                              </div>
+
+                              {/* Attachments */}
+                              {(t.attachments?.length || 0) > 0 && (
+                                <div className="space-y-1.5">
+                                  <p className="text-[10px] font-bold text-slate-400 uppercase">Lampiran</p>
+                                  {t.attachments!.map(a => (
+                                    <div key={a.id} className="flex items-center justify-between bg-white border border-slate-200 rounded-xl px-3 py-2 text-[11px]">
+                                      <div className="flex items-center gap-2 min-w-0">
+                                        <Paperclip className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                                        <span className="font-semibold text-slate-700 truncate">{a.fileName}</span>
+                                        <span className="text-slate-400 shrink-0">{a.uploadedByName} · {new Date(a.at).toLocaleDateString("ms-MY")}</span>
+                                      </div>
+                                      <button
+                                        onClick={async () => { const url = await hqService.getTicketAttachmentUrl(a.filePath); if (url) window.open(url, "_blank"); }}
+                                        className="text-emerald-700 font-bold cursor-pointer shrink-0">Muat Turun</button>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+
+                              {/* Conversation timeline */}
                               {t.replies.length > 0 && (
                                 <div className="space-y-2">
+                                  <p className="text-[10px] font-bold text-slate-400 uppercase">Garis Masa Perbualan</p>
                                   {t.replies.map(r => (
                                     <div key={r.id} className="bg-white border border-slate-200 rounded-xl px-4 py-3">
                                       <div className="flex items-center justify-between mb-1">
@@ -2053,6 +2168,43 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
                                   ))}
                                 </div>
                               )}
+
+                              {/* Internal notes (HQ only, never shown to tenant) */}
+                              <div className="space-y-2">
+                                <p className="text-[10px] font-bold text-slate-400 uppercase">Nota Dalaman HQ (tidak dilihat pelanggan)</p>
+                                {(t.internalNotes?.length || 0) > 0 && (
+                                  <div className="space-y-1.5">
+                                    {t.internalNotes!.map(n => (
+                                      <div key={n.id} className="bg-amber-50 border border-amber-100 rounded-xl px-3 py-2">
+                                        <div className="flex items-center justify-between mb-0.5">
+                                          <span className="text-[10px] font-bold text-amber-700">{n.author}</span>
+                                          <span className="text-[10px] text-amber-500">{n.at}</span>
+                                        </div>
+                                        <p className="text-xs text-amber-800">{n.note}</p>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                                <div className="flex gap-2">
+                                  <input value={internalNoteText} onChange={e => setInternalNoteText(e.target.value)} placeholder="Tambah nota dalaman..."
+                                    className="flex-1 border border-slate-200 rounded-xl px-3 py-2 text-xs outline-none focus:border-amber-400 bg-white" />
+                                  <button onClick={() => addInternalNote(t.id)} disabled={!internalNoteText.trim()}
+                                    className="px-3 py-2 bg-amber-600 text-white rounded-xl text-xs font-bold cursor-pointer hover:bg-amber-700 transition disabled:opacity-40">
+                                    Tambah
+                                  </button>
+                                </div>
+                              </div>
+
+                              {/* Resolution notes */}
+                              <div className="space-y-1.5">
+                                <p className="text-[10px] font-bold text-slate-400 uppercase">Nota Penyelesaian</p>
+                                <textarea value={resolutionNoteText} onChange={e => setResolutionNoteText(e.target.value)}
+                                  placeholder="Catatan penyelesaian (akan disimpan apabila tiket ditandakan selesai)..."
+                                  rows={2}
+                                  className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-xs outline-none focus:border-emerald-400 bg-white resize-none" />
+                              </div>
+
+                              {/* Reply box */}
                               <div className="space-y-2">
                                 {hqKnowledgeArticles.length > 0 && (
                                   <select
@@ -4072,6 +4224,19 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
                   <option value="low">Rendah</option>
                   <option value="medium">Sederhana</option>
                   <option value="high">Tinggi</option>
+                  <option value="critical">Kritikal</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-slate-500 mb-1 block">Jenis Isu</label>
+                <select value={ticketForm.category} onChange={e => {
+                  const key = e.target.value;
+                  const tmpl = hqService.SUPPORT_TICKET_TEMPLATES.find(t => t.key === key);
+                  setTicketForm(f => ({...f, category: key, subject: f.subject.trim() || (tmpl?.subject ?? f.subject)}));
+                }}
+                  className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-emerald-400 bg-white">
+                  <option value="">Pilih jenis isu...</option>
+                  {hqService.SUPPORT_TICKET_TEMPLATES.map(t => <option key={t.key} value={t.key}>{t.label}</option>)}
                 </select>
               </div>
               <div>

@@ -626,20 +626,87 @@ export interface SupportTicketReply {
   at: string;
 }
 
+export interface SupportTicketInternalNote {
+  id: string;
+  author: string;
+  note: string;
+  at: string;
+}
+
+export interface SupportTicketAttachment {
+  id: string;
+  fileName: string;
+  filePath: string;
+  fileType: string;
+  uploadedByName: string;
+  at: string;
+}
+
+export type SupportTicketStatus = "open" | "in_progress" | "awaiting_customer" | "awaiting_hq" | "resolved" | "closed";
+export type SupportTicketPriority = "critical" | "high" | "medium" | "low";
+
 export interface SupportTicket {
   id: string;
   customer: string;
   email: string;
   subject: string;
-  priority: "high" | "medium" | "low";
-  status: "open" | "pending" | "resolved";
+  priority: SupportTicketPriority;
+  status: SupportTicketStatus;
   summary: string;
+  category: string;
   assigned: string;
   createdAt: string;
+  slaDueAt: string | null;
+  firstResponseAt: string | null;
+  resolvedAt: string | null;
+  closedAt: string | null;
+  resolutionNotes: string;
   replies: SupportTicketReply[];
+  internalNotes: SupportTicketInternalNote[];
+  attachments: SupportTicketAttachment[];
 }
 
-function mapTicketRow(row: any, replies: any[]): SupportTicket {
+export const SUPPORT_TICKET_TEMPLATES: { key: string; label: string; subject: string }[] = [
+  { key: "upload_failure", label: "Tidak Boleh Muat Naik Resit", subject: "Tidak boleh muat naik resit" },
+  { key: "login_issue", label: "Tidak Boleh Log Masuk", subject: "Tidak boleh log masuk" },
+  { key: "ocr_error", label: "Ralat OCR", subject: "Ralat semasa imbasan OCR" },
+  { key: "ai_error", label: "Ralat AI", subject: "Ralat semasa analisis AI" },
+  { key: "subscription_issue", label: "Isu Subskripsi", subject: "Isu pelan subskripsi" },
+  { key: "billing_issue", label: "Isu Bil", subject: "Isu pengebilan" },
+  { key: "storage_issue", label: "Isu Storan", subject: "Isu storan fail" },
+  { key: "document_issue", label: "Isu Dokumen", subject: "Isu dokumen" },
+  { key: "bank_statement_issue", label: "Isu Penyata Bank", subject: "Isu penyata bank" },
+  { key: "other", label: "Lain-lain", subject: "" },
+];
+
+export function ticketSlaState(t: SupportTicket): "breached" | "near" | "on_time" | "none" {
+  if (!t.slaDueAt || t.status === "resolved" || t.status === "closed") return "none";
+  const due = new Date(t.slaDueAt).getTime();
+  const now = Date.now();
+  if (now >= due) return "breached";
+  if (due - now <= 2 * 60 * 60 * 1000) return "near";
+  return "on_time";
+}
+
+export const TICKET_STATUS_LABEL_MS: Record<SupportTicketStatus, string> = {
+  open: "Dibuka",
+  in_progress: "Sedang diproses oleh HQ Staff",
+  awaiting_customer: "Menunggu maklum balas anda",
+  awaiting_hq: "Menunggu tindakan pasukan HQ",
+  resolved: "Diselesaikan",
+  closed: "Ditutup",
+};
+
+export const TICKET_STATUS_STYLE: Record<SupportTicketStatus, { bg: string; text: string; icon: "check" | "clock" }> = {
+  open: { bg: "bg-slate-50 border-slate-100", text: "text-slate-700", icon: "clock" },
+  in_progress: { bg: "bg-indigo-50 border-indigo-100", text: "text-indigo-700", icon: "clock" },
+  awaiting_customer: { bg: "bg-amber-50 border-amber-100", text: "text-amber-700", icon: "clock" },
+  awaiting_hq: { bg: "bg-violet-50 border-violet-100", text: "text-violet-700", icon: "clock" },
+  resolved: { bg: "bg-emerald-50 border-emerald-100", text: "text-emerald-700", icon: "check" },
+  closed: { bg: "bg-slate-50 border-slate-200", text: "text-slate-500", icon: "check" },
+};
+
+function mapTicketRow(row: any, replies: any[], notes: any[] = [], attachments: any[] = []): SupportTicket {
   return {
     id: row.id,
     customer: row.customer_name,
@@ -648,9 +715,24 @@ function mapTicketRow(row: any, replies: any[]): SupportTicket {
     priority: row.priority,
     status: row.status,
     summary: row.summary || "",
+    category: row.category || "",
     assigned: row.assigned_to || "",
     createdAt: row.created_at,
+    slaDueAt: row.sla_due_at || null,
+    firstResponseAt: row.first_response_at || null,
+    resolvedAt: row.resolved_at || null,
+    closedAt: row.closed_at || null,
+    resolutionNotes: row.resolution_notes || "",
     replies: replies.map((r) => ({ id: r.id, author: r.author, text: r.reply_text, at: r.created_at })),
+    internalNotes: notes.map((n) => ({ id: n.id, author: n.author, note: n.note, at: n.created_at })),
+    attachments: attachments.map((a) => ({
+      id: a.id,
+      fileName: a.file_name,
+      filePath: a.file_path,
+      fileType: a.file_type || "",
+      uploadedByName: a.uploaded_by_name || "",
+      at: a.created_at,
+    })),
   };
 }
 
@@ -661,12 +743,19 @@ export async function getSupportTickets(): Promise<SupportTicket[]> {
     .select("*")
     .order("created_at", { ascending: false });
   if (error || !tickets) return [];
-  const { data: replies } = await supabase
-    .from("support_ticket_replies")
-    .select("*")
-    .order("created_at", { ascending: true });
+  const ticketIds = tickets.map((t: any) => t.id);
+  const [{ data: replies }, { data: notes }, { data: attachments }] = await Promise.all([
+    supabase.from("support_ticket_replies").select("*").in("ticket_id", ticketIds).order("created_at", { ascending: true }),
+    supabase.from("support_ticket_internal_notes").select("*").in("ticket_id", ticketIds).order("created_at", { ascending: true }),
+    supabase.from("support_ticket_attachments").select("*").in("ticket_id", ticketIds).order("created_at", { ascending: true }),
+  ]);
   return tickets.map((t: any) =>
-    mapTicketRow(t, (replies || []).filter((r: any) => r.ticket_id === t.id))
+    mapTicketRow(
+      t,
+      (replies || []).filter((r: any) => r.ticket_id === t.id),
+      (notes || []).filter((n: any) => n.ticket_id === t.id),
+      (attachments || []).filter((a: any) => a.ticket_id === t.id)
+    )
   );
 }
 
@@ -679,13 +768,17 @@ export async function getMyTenantSupportTickets(): Promise<SupportTicket[]> {
   if (error || !tickets) return [];
   const ticketIds = tickets.map((t: any) => t.id);
   if (ticketIds.length === 0) return [];
-  const { data: replies } = await supabase
-    .from("support_ticket_replies")
-    .select("*")
-    .in("ticket_id", ticketIds)
-    .order("created_at", { ascending: true });
+  const [{ data: replies }, { data: attachments }] = await Promise.all([
+    supabase.from("support_ticket_replies").select("*").in("ticket_id", ticketIds).order("created_at", { ascending: true }),
+    supabase.from("support_ticket_attachments").select("*").in("ticket_id", ticketIds).order("created_at", { ascending: true }),
+  ]);
   return tickets.map((t: any) =>
-    mapTicketRow(t, (replies || []).filter((r: any) => r.ticket_id === t.id))
+    mapTicketRow(
+      t,
+      (replies || []).filter((r: any) => r.ticket_id === t.id),
+      [],
+      (attachments || []).filter((a: any) => a.ticket_id === t.id)
+    )
   );
 }
 
@@ -693,7 +786,7 @@ export async function createSupportTicket(ticket: {
   customer: string;
   email?: string;
   subject: string;
-  priority: "high" | "medium" | "low";
+  priority: SupportTicketPriority;
   summary?: string;
 }): Promise<boolean> {
   if (!isSupabaseConfigured() || !supabase) return false;
@@ -712,32 +805,36 @@ export async function createSupportTicket(ticket: {
 export async function createTenantSupportTicket(
   subject: string,
   summary: string,
-  priority: "high" | "medium" | "low" = "medium"
-): Promise<boolean> {
-  if (!isSupabaseConfigured() || !supabase) return false;
-  const { error } = await supabase.rpc("create_tenant_support_ticket", {
+  priority: SupportTicketPriority = "medium",
+  category?: string
+): Promise<string | null> {
+  if (!isSupabaseConfigured() || !supabase) return null;
+  const { data, error } = await supabase.rpc("create_tenant_support_ticket", {
     p_subject: subject,
     p_summary: summary,
     p_priority: priority,
+    p_category: category || null,
   });
-  return !error;
+  return error ? null : (data as string);
 }
 
 export async function updateSupportTicketStatus(
   ticketId: string,
-  status: "open" | "pending" | "resolved"
+  status: SupportTicketStatus,
+  resolutionNotes?: string
 ): Promise<boolean> {
   if (!isSupabaseConfigured() || !supabase) return false;
-  const { error } = await supabase.rpc("hq_update_support_ticket_status", { p_ticket_id: ticketId, p_status: status });
+  const { error } = await supabase.rpc("hq_update_support_ticket_status", {
+    p_ticket_id: ticketId,
+    p_status: status,
+    p_resolution_notes: resolutionNotes || null,
+  });
   return !error;
 }
 
 export async function assignSupportTicket(ticketId: string, assignedTo: string): Promise<boolean> {
   if (!isSupabaseConfigured() || !supabase) return false;
-  const { error } = await supabase
-    .from("support_tickets")
-    .update({ assigned_to: assignedTo, updated_at: new Date().toISOString() })
-    .eq("id", ticketId);
+  const { error } = await supabase.rpc("hq_assign_support_ticket", { p_ticket_id: ticketId, p_assigned_to: assignedTo });
   return !error;
 }
 
@@ -745,6 +842,39 @@ export async function replySupportTicket(ticketId: string, author: string, text:
   if (!isSupabaseConfigured() || !supabase) return false;
   const { error } = await supabase.rpc("hq_reply_support_ticket", { p_ticket_id: ticketId, p_author: author, p_reply_text: text });
   return !error;
+}
+
+export async function addTicketInternalNote(ticketId: string, author: string, note: string): Promise<boolean> {
+  if (!isSupabaseConfigured() || !supabase) return false;
+  const { error } = await supabase.rpc("hq_add_ticket_internal_note", { p_ticket_id: ticketId, p_author: author, p_note: note });
+  return !error;
+}
+
+export async function uploadTicketAttachment(
+  ticketId: string,
+  tenantId: string,
+  file: File,
+  uploadedByName: string
+): Promise<boolean> {
+  if (!isSupabaseConfigured() || !supabase) return false;
+  const path = `${tenantId}/${ticketId}/${Date.now()}_${file.name}`;
+  const { error: uploadError } = await supabase.storage.from("support-attachments").upload(path, file);
+  if (uploadError) return false;
+  const { error } = await supabase.rpc("add_ticket_attachment", {
+    p_ticket_id: ticketId,
+    p_file_name: file.name,
+    p_file_path: path,
+    p_file_type: file.type || null,
+    p_uploaded_by_name: uploadedByName,
+  });
+  return !error;
+}
+
+export async function getTicketAttachmentUrl(filePath: string): Promise<string | null> {
+  if (!isSupabaseConfigured() || !supabase) return null;
+  const { data, error } = await supabase.storage.from("support-attachments").createSignedUrl(filePath, 3600);
+  if (error || !data) return null;
+  return data.signedUrl;
 }
 
 // --- Resource Wallet Dashboard (Module 11) ---
