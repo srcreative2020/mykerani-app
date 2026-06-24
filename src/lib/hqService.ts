@@ -409,6 +409,55 @@ export async function getPaymentSlipUrl(path: string): Promise<string | null> {
   return error ? null : data.signedUrl;
 }
 
+// --- Security Foundation: webhook shadow-mode log + enforcement flag ---
+
+export interface PaymentWebhookEvent {
+  id: string;
+  transactionReference: string | null;
+  verificationResult: "verified" | "failed" | "skipped_no_key" | "skipped_no_signature";
+  wouldHaveBlocked: boolean;
+  enforced: boolean;
+  createdAt: string;
+}
+
+export async function getRecentPaymentWebhookEvents(limit = 20): Promise<PaymentWebhookEvent[]> {
+  if (!isSupabaseConfigured() || !supabase) return [];
+  const { data, error } = await supabase
+    .from("payment_webhook_events")
+    .select("*")
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  if (error || !data) return [];
+  return data.map((row: any) => ({
+    id: row.id,
+    transactionReference: row.transaction_reference,
+    verificationResult: row.verification_result,
+    wouldHaveBlocked: Boolean(row.would_have_blocked),
+    enforced: Boolean(row.enforced),
+    createdAt: row.created_at,
+  }));
+}
+
+export async function getWebhookEnforceFlag(): Promise<boolean> {
+  if (!isSupabaseConfigured() || !supabase) return false;
+  const { data, error } = await supabase
+    .from("hq_feature_flags")
+    .select("enabled")
+    .eq("key", "chip_asia_webhook_enforce")
+    .maybeSingle();
+  if (error || !data) return false;
+  return Boolean(data.enabled);
+}
+
+export async function setWebhookEnforceFlag(enabled: boolean): Promise<boolean> {
+  if (!isSupabaseConfigured() || !supabase) return false;
+  const { error } = await supabase
+    .from("hq_feature_flags")
+    .update({ enabled, updated_at: new Date().toISOString() })
+    .eq("key", "chip_asia_webhook_enforce");
+  return !error;
+}
+
 // --- Public marketing site CMS (HQ-editable, publicly readable) ---
 
 export interface SiteSettings {

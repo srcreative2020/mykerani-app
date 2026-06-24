@@ -7,7 +7,7 @@ import {
   Brain, Building2, UserCheck, UserX, Edit3, Bell, Shield, LogOut,
   ArrowUpRight, Menu, X, Activity, Package, Receipt, ToggleLeft,
   ToggleRight, AlertTriangle, Circle, FileText, MessageSquare,
-  User, Send, Star, Repeat, Archive, Globe, HelpCircle, Trash2,
+  User, Send, Star, Repeat, Archive, Globe, HelpCircle, Trash2, ShieldAlert,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { useNotifications, buildHQNotifs, fmtNotifTime } from "../lib/notifications";
@@ -499,6 +499,20 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
     if (!path) return;
     const url = await hqService.getPaymentSlipUrl(path);
     if (url) setSlipPreviewUrl(url);
+  };
+
+  // Security Foundation: Chip Asia webhook shadow-mode log + enforcement flag
+  const [webhookEvents, setWebhookEvents] = useState<hqService.PaymentWebhookEvent[]>([]);
+  const [webhookEnforce, setWebhookEnforceState] = useState(false);
+  const [webhookRefreshTick, setWebhookRefreshTick] = useState(0);
+  useEffect(() => {
+    if (!useRealData) return;
+    hqService.getRecentPaymentWebhookEvents().then(setWebhookEvents);
+    hqService.getWebhookEnforceFlag().then(setWebhookEnforceState);
+  }, [useRealData, webhookRefreshTick]);
+  const toggleWebhookEnforce = async () => {
+    const ok = await hqService.setWebhookEnforceFlag(!webhookEnforce);
+    if (ok) setWebhookRefreshTick(t => t + 1);
   };
 
   // Notifications (HQ)
@@ -2044,6 +2058,42 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
                       Simpan Tetapan Pembayaran
                     </button>
                     {paymentSettingsSaved && <span className="text-xs text-emerald-600 font-bold">Tersimpan</span>}
+                  </div>
+                </div>
+
+                {/* Security Foundation: Chip Asia webhook shadow-mode log + enforcement */}
+                <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-4">
+                  <div className="flex items-center gap-2">
+                    <ShieldAlert className="w-4 h-4 text-rose-500" />
+                    <h3 className="text-sm font-bold text-slate-900">Keselamatan Webhook Chip Asia</h3>
+                  </div>
+                  <div className="flex items-center justify-between p-3 border border-slate-100 rounded-xl">
+                    <div>
+                      <p className="text-xs font-bold text-slate-800">Penguatkuasaan tandatangan (enforce)</p>
+                      <p className="text-[10px] text-slate-400">
+                        {webhookEnforce
+                          ? "AKTIF — webhook yang gagal pengesahan tandatangan akan ditolak (401)."
+                          : "Mod bayang (shadow) — pengesahan direkod tetapi tidak menyekat. Semak log di bawah sebelum mengaktifkan."}
+                      </p>
+                    </div>
+                    <button onClick={toggleWebhookEnforce}
+                      className={`w-11 h-6 rounded-full relative transition cursor-pointer ${webhookEnforce ? "bg-rose-600" : "bg-slate-200"}`}>
+                      <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full transition ${webhookEnforce ? "translate-x-5" : ""}`} />
+                    </button>
+                  </div>
+                  <div className="space-y-1.5 max-h-56 overflow-y-auto">
+                    {webhookEvents.length === 0 ? (
+                      <p className="text-xs text-slate-400 text-center py-4">Tiada log webhook lagi.</p>
+                    ) : webhookEvents.map(ev => (
+                      <div key={ev.id} className="flex items-center justify-between text-[11px] p-2 bg-slate-50 rounded-lg">
+                        <span className="text-slate-600">{ev.transactionReference || "-"}</span>
+                        <span className={`font-bold ${ev.verificationResult === "verified" ? "text-emerald-600" : "text-rose-600"}`}>
+                          {ev.verificationResult}
+                        </span>
+                        {ev.wouldHaveBlocked && <span className="text-amber-600 font-semibold">akan disekat</span>}
+                        <span className="text-slate-400">{new Date(ev.createdAt).toLocaleString("ms-MY")}</span>
+                      </div>
+                    ))}
                   </div>
                 </div>
 
