@@ -7,7 +7,7 @@ import { loadChatHistory, loadActiveSessionMessages, saveChatMessage } from "../
 import { getOrCreateActiveSession } from "../lib/chatSession";
 import { supabase, isSupabaseConfigured } from "../lib/supabase";
 import { isDemoWorkspace } from "../lib/seeder";
-import { uploadDocument, getDocumentUrl } from "../lib/documentStorage";
+import { uploadDocument, getDocumentUrl, type UploadedDoc } from "../lib/documentStorage";
 import { logEvent } from "../lib/eventLog";
 import { usePermission } from "../context/PermissionContext";
 import { useStorageQuota } from "../lib/storageQuota";
@@ -155,7 +155,7 @@ function AddRecordForm({
 export function StaffHomeScreen() {
   const { user, signOut, isMockUser, updateProfile } = useAuth();
   const { activeWorkspace, workspaces, selectWorkspace } = useWorkspace();
-  const { financialEvents, addFinancialEvent, editFinancialEvent, addDebtRecord, addDebtRecordAwaited, editDebtRecord, addFinancialCommitment, addFinancialCommitmentAwaited, editFinancialCommitment, learnOcrPattern, addFinancialEvidencePackage, linkEvidenceToRecord, financialEvidencePackages, duplicateFlags, addBankAccount } = useFinancials();
+  const { financialEvents, addFinancialEvent, addFinancialEventAwaited, addFinancialEventsBatch, editFinancialEvent, addDebtRecord, addDebtRecordAwaited, editDebtRecord, addFinancialCommitment, addFinancialCommitmentAwaited, editFinancialCommitment, learnOcrPattern, learnOcrPatternsBatch, ocrLearnedPatterns, addFinancialEvidencePackage, linkEvidenceToRecord, financialEvidencePackages, duplicateFlags, addBankAccount } = useFinancials();
   const { activeTenant } = useTenant();
   const { userRoles } = usePermission();
   const userNameById = useMemo(() => {
@@ -166,6 +166,7 @@ export function StaffHomeScreen() {
   const { confirmChatSuggestion } = useConfirmChatSuggestion();
   const { crossWorkspaceHints, checkCrossWorkspacePattern } = useCrossWorkspacePattern();
 
+  const [docs, setDocs] = useState<UploadedDoc[]>([]);
   const [activeTab, setActiveTab] = useState<StaffTab>("home");
   const [addDefaultType, setAddDefaultType] = useState<"INCOME" | "EXPENSE">("EXPENSE");
   // Issue #1 parity fix — "Tambah Rekod" is reachable as a modal from Home,
@@ -1428,11 +1429,24 @@ export function StaffHomeScreen() {
             workspaceName={activeWorkspace?.name || ""}
             tenantId={activeTenant?.id}
             currentUserId={user?.id}
+            currentUserEmail={user?.email}
+            currentUserRole="TENANT_STAFF"
             currentUserFullName={user?.fullName}
+            isMockUser={isMockUser}
+            activeSessionId={activeSessionId}
             userNameById={userNameById}
             storageQuota={storageQuota}
             financialEvents={financialEvents}
-            isDemoUser={!!user?.email?.endsWith(".demo") || isMockUser}
+            businesses={businesses}
+            businessBranches={businessBranches}
+            ocrLearnedPatterns={ocrLearnedPatterns}
+            addFinancialEventAwaited={addFinancialEventAwaited}
+            addFinancialEventsBatch={addFinancialEventsBatch}
+            addFinancialEvidencePackage={addFinancialEvidencePackage}
+            learnOcrPattern={learnOcrPattern}
+            learnOcrPatternsBatch={learnOcrPatternsBatch}
+            docs={docs}
+            onDocsChange={setDocs}
           />
         )}
 
