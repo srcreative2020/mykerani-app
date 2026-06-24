@@ -502,6 +502,54 @@ export async function getAiCostSummary(): Promise<AiCostSummaryRow[]> {
   }));
 }
 
+export interface StorageGovernanceSettings {
+  storageModeTrial: string;
+  storageModePaid: string;
+  trialDays: number;
+  freezeDays: number;
+  deleteDays: number;
+}
+
+export async function getStorageGovernanceSettings(): Promise<StorageGovernanceSettings | null> {
+  if (!isSupabaseConfigured() || !supabase) return null;
+  const { data, error } = await supabase
+    .from("storage_governance_settings")
+    .select("*")
+    .eq("id", "global")
+    .maybeSingle();
+  if (error || !data) return null;
+  return {
+    storageModeTrial: data.storage_mode_trial,
+    storageModePaid: data.storage_mode_paid,
+    trialDays: Number(data.trial_days) || 0,
+    freezeDays: Number(data.freeze_days) || 0,
+    deleteDays: Number(data.delete_days) || 0,
+  };
+}
+
+export async function saveStorageGovernanceSettings(settings: StorageGovernanceSettings): Promise<boolean> {
+  if (!isSupabaseConfigured() || !supabase) return false;
+  const { error } = await supabase
+    .from("storage_governance_settings")
+    .update({
+      storage_mode_trial: settings.storageModeTrial,
+      storage_mode_paid: settings.storageModePaid,
+      trial_days: settings.trialDays,
+      freeze_days: settings.freezeDays,
+      delete_days: settings.deleteDays,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", "global");
+  return !error;
+}
+
+export async function runStorageGovernanceEnforcement(): Promise<{ tenantId: string; action: string }[]> {
+  if (!isSupabaseConfigured() || !supabase) return [];
+  const { data, error } = await supabase.rpc("enforce_storage_governance");
+  if (error || !data) return [];
+  return data.map((row: any) => ({ tenantId: row.tenant_id, action: row.action }));
+}
+
 // --- Public marketing site CMS (HQ-editable, publicly readable) ---
 
 export interface SiteSettings {

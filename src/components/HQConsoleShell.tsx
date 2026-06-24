@@ -446,12 +446,36 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
   }[]>([]);
   const [storageRefreshTick, setStorageRefreshTick] = useState(0);
   const [freezeStates, setFreezeStates] = useState<hqService.TenantStorageState[]>([]);
+  const [storageGovernance, setStorageGovernance] = useState<hqService.StorageGovernanceSettings | null>(null);
+  const [enforcementRunning, setEnforcementRunning] = useState(false);
+  const [enforcementResult, setEnforcementResult] = useState<string | null>(null);
 
   // Fetch real storage usage + freeze/inactivity state from Supabase
   useEffect(() => {
     getAllWorkspacesStorageUsage().then(data => { if (data.length > 0) setRealStorageData(data); });
     if (useRealData) hqService.getStorageFreezeStates().then(setFreezeStates);
+    if (useRealData) hqService.getStorageGovernanceSettings().then(s => { if (s) { setStorageGovernance(s); setInactiveDays(s.freezeDays); } });
   }, [storageRefreshTick, useRealData]);
+
+  const saveInactiveDays = async (days: number) => {
+    setInactiveDays(days);
+    if (!storageGovernance) return;
+    const updated = { ...storageGovernance, freezeDays: days };
+    setStorageGovernance(updated);
+    await hqService.saveStorageGovernanceSettings(updated);
+  };
+
+  const runEnforcementNow = async () => {
+    setEnforcementRunning(true);
+    setEnforcementResult(null);
+    try {
+      const frozen = await hqService.runStorageGovernanceEnforcement();
+      setEnforcementResult(frozen.length > 0 ? `${frozen.length} tenant dibekukan` : "Tiada tenant tidak aktif melebihi tempoh");
+      setStorageRefreshTick(t => t + 1);
+    } finally {
+      setEnforcementRunning(false);
+    }
+  };
 
   // Per-user AI usage + suspension state — real, server-enforced (HQ owner/staff/tenant owner/staff)
   const [userUsage, setUserUsage] = useState<hqService.HqUserUsage[]>([]);
@@ -2651,15 +2675,32 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
                     {/* Auto-cleanup settings */}
                     <div className="flex items-center justify-between py-2 border-t border-slate-50">
                       <div>
-                        <p className="text-xs font-semibold text-slate-700">Auto-Cleanup Tidak Aktif</p>
-                        <p className="text-[10px] text-slate-400">Padam fail tenant yang tidak aktif melebihi tempoh</p>
+                        <p className="text-xs font-semibold text-slate-700">Tempoh Beku Tidak Aktif</p>
+                        <p className="text-[10px] text-slate-400">Bekukan storan tenant yang tidak aktif melebihi tempoh ini</p>
                       </div>
                       <div className="flex items-center gap-1.5">
                         <input type="number" min="7" max="365" value={inactiveDays}
-                          onChange={e => setInactiveDays(parseInt(e.target.value) || 30)}
+                          onChange={e => saveInactiveDays(parseInt(e.target.value) || 30)}
                           className="w-14 border border-slate-200 rounded-lg px-2 py-1 text-xs text-center focus:outline-none focus:border-emerald-400" />
                         <span className="text-[10px] text-slate-400">hari</span>
                       </div>
+                    </div>
+
+                    {/* HQ-triggered enforcement (never autonomous) */}
+                    <div className="flex items-center justify-between py-2 border-t border-slate-50">
+                      <div>
+                        <p className="text-xs font-semibold text-slate-700">Jalankan Penguatkuasaan Sekarang</p>
+                        <p className="text-[10px] text-slate-400">
+                          {enforcementResult ?? "Bekukan storan semua tenant tidak aktif mengikut tempoh di atas (manual, bukan automatik)"}
+                        </p>
+                      </div>
+                      <button
+                        onClick={runEnforcementNow}
+                        disabled={enforcementRunning}
+                        className="text-[11px] font-semibold px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white cursor-pointer"
+                      >
+                        {enforcementRunning ? "Memproses..." : "Run Enforcement Now"}
+                      </button>
                     </div>
 
                     {/* Per-tenant table */}
