@@ -667,6 +667,52 @@ export async function replySupportTicket(ticketId: string, author: string, text:
   return true;
 }
 
+// --- HQ Alert Center (Module 9) ---
+
+export interface HqAlert {
+  id: string;
+  alertType: string;
+  severity: "high" | "medium" | "low";
+  tenantId: string | null;
+  message: string;
+  createdAt: string;
+  resolvedAt: string | null;
+}
+
+export async function getHqAlerts(includeResolved = false): Promise<HqAlert[]> {
+  if (!isSupabaseConfigured() || !supabase) return [];
+  let query = supabase.from("hq_alerts").select("*").order("created_at", { ascending: false });
+  if (!includeResolved) query = query.is("resolved_at", null);
+  const { data, error } = await query;
+  if (error || !data) return [];
+  return data.map((row: any) => ({
+    id: row.id,
+    alertType: row.alert_type,
+    severity: row.severity,
+    tenantId: row.tenant_id,
+    message: row.message,
+    createdAt: row.created_at,
+    resolvedAt: row.resolved_at,
+  }));
+}
+
+export async function refreshHqAlerts(): Promise<number> {
+  if (!isSupabaseConfigured() || !supabase) return 0;
+  const { data, error } = await supabase.rpc("refresh_hq_alerts");
+  if (error) return 0;
+  return Number(data) || 0;
+}
+
+export async function resolveHqAlert(alertId: string): Promise<boolean> {
+  if (!isSupabaseConfigured() || !supabase) return false;
+  const { data: userData } = await supabase.auth.getUser();
+  const { error } = await supabase
+    .from("hq_alerts")
+    .update({ resolved_at: new Date().toISOString(), resolved_by: userData?.user?.id || null })
+    .eq("id", alertId);
+  return !error;
+}
+
 // --- Data Masking Governance (Module 7) ---
 // HQ_OWNER always sees unmasked data (override authority). HQ_STAFF sees
 // masked PII unless explicitly granted via hq_data_masking_grants.

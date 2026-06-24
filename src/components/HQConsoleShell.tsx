@@ -588,6 +588,7 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
   });
 
   useEffect(() => {
+    if (useRealData) return;
     const totalUsed = customers.reduce((s, c) => {
       try { const raw = localStorage.getItem(`mykerani_storage_quota_${c.id}`); return s + (raw ? JSON.parse(raw).usedBytes || 0 : 0); } catch { return s; }
     }, 0);
@@ -597,7 +598,27 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
     const highStorage     = customers.map(c => { try { const r = localStorage.getItem(`mykerani_storage_quota_${c.id}`); if (!r) return null; const s = JSON.parse(r); return { name: c.name, pct: s.usedBytes / s.quotaBytes }; } catch { return null; } }).filter((t): t is { name: string; pct: number } => !!t && t.pct >= 0.90);
     const openTickets = allTickets.filter(t => t.status === "open" || t.status === "pending").length;
     buildHQNotifs({ frozenTenants, inactiveTenants, highStorageTenants: highStorage, openTickets, supabasePct: totalUsed / supabasePlan, newCustomers: [] }).forEach(n => notif.push(n));
-  }, [customers.length, allTickets.length]);
+  }, [customers.length, allTickets.length, useRealData]);
+
+  // HQ Alert Center (Module 9) — real persistent alerts, shared across all HQ staff
+  useEffect(() => {
+    if (!useRealData) return;
+    hqService.refreshHqAlerts().finally(() => {
+      hqService.getHqAlerts().then(alerts => {
+        alerts.forEach(a => {
+          const tenantName = customers.find(c => c.id === a.tenantId)?.name;
+          notif.push({
+            type: a.alertType,
+            severity: a.severity === "high" ? "critical" : a.severity === "medium" ? "warn" : "info",
+            title: a.alertType === "churn_risk" ? "Risiko Churn" : a.alertType === "storage_frozen" ? "Storan Dibekukan" : "Amaran HQ",
+            body: a.message,
+            action: a.alertType === "churn_risk" ? "customers" : a.alertType === "storage_frozen" ? "storage" : "system",
+            tenantName,
+          });
+        });
+      });
+    });
+  }, [useRealData, customers.length]);
 
   // AI Router state
   const aiRouterKey = `mykerani_airouter_${user?.id ?? "guest"}`;
