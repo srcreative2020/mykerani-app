@@ -471,6 +471,7 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
 
   // Resource Wallet Dashboard (Module 11)
   const [resourceWallets, setResourceWallets] = useState<hqService.ResourceWalletSummary[]>([]);
+  const [hqAlerts, setHqAlerts] = useState<hqService.HqAlert[]>([]);
   const [resourceWalletRefreshTick, setResourceWalletRefreshTick] = useState(0);
   useEffect(() => {
     if (!useRealData) return;
@@ -613,6 +614,7 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
     if (!useRealData) return;
     hqService.refreshHqAlerts().finally(() => {
       hqService.getHqAlerts().then(alerts => {
+        setHqAlerts(alerts);
         alerts.forEach(a => {
           const tenantName = customers.find(c => c.id === a.tenantId)?.name;
           notif.push({
@@ -1065,7 +1067,7 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
                 .map(c => {
                   const plan   = plans.find(p => p.name === c.plan);
                   const aiPct  = plan && plan.aiCredits > 0 ? c.aiUsage / plan.aiCredits : 0;
-                  const stPct  = (() => { try { const r = localStorage.getItem(`mykerani_storage_quota_${c.id}`); if (!r) return 0; const s = JSON.parse(r); return s.usedBytes / s.quotaBytes; } catch { return 0; } })();
+                  const stPct  = plan && plan.storageGB > 0 ? c.storageGB / plan.storageGB : 0;
                   const score  = Math.max(aiPct, stPct);
                   const reason = aiPct >= stPct ? `AI ${Math.round(aiPct*100)}% digunakan` : `Storan ${Math.round(stPct*100)}% digunakan`;
                   const nextPlan = plans.find(p => p.price > (plan?.price || 0));
@@ -1076,20 +1078,23 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
 
               // Churn risks
               const churnRisks = customers
-                .filter(c => c.status === "suspended" || c.attention || allTickets.some(t => t.customer === c.name && t.status !== "resolved"))
+                .filter(c => c.status === "suspended" || c.attention || c.healthRiskLevel === "high" || allTickets.some(t => t.customer === c.name && t.status !== "resolved"))
                 .map(c => ({
                   ...c,
-                  riskLevel: c.status === "suspended" ? "high" : "medium" as "high"|"medium",
-                  riskReason: c.status === "suspended" ? "Digantung - tiada bayaran" : c.attention ? "Perlu perhatian" : "Tiket sokongan terbuka",
+                  riskLevel: (c.status === "suspended" || c.healthRiskLevel === "high") ? "high" : "medium" as "high"|"medium",
+                  riskReason: c.status === "suspended" ? "Digantung - tiada bayaran" : (c.healthReasons && c.healthReasons.length > 0) ? c.healthReasons[0] : c.attention ? "Perlu perhatian" : "Tiket sokongan terbuka",
                   potentialLoss: c.mrr,
                 }))
                 .sort((a, b) => (b.riskLevel === "high" ? 1 : 0) - (a.riskLevel === "high" ? 1 : 0));
 
               // Today's briefing items
+              const unresolvedAlerts = useRealData ? hqAlerts.filter(a => !a.resolvedAt) : [];
               const briefing: { icon: string; text: string; action: () => void; urgent: boolean }[] = [];
               if (openCases > 0) briefing.push({ icon: "S", text: `${openCases} tiket sokongan menunggu respons`, action: () => setActivePage("support"), urgent: true });
               if (churnRisks.filter(r => r.riskLevel === "high").length > 0) briefing.push({ icon: "!", text: `${churnRisks.filter(r=>r.riskLevel==="high").length} pelanggan digantung - RM ${mrrAtRisk} MRR terancam`, action: () => setActivePage("customers"), urgent: true });
               if (upsellTargets.length > 0) briefing.push({ icon: "U", text: `${upsellTargets.length} peluang upsell - potensi RM ${upsellTargets.reduce((s,c)=>s+(c.nextPlan?.price||0)-(c.mrr),0)}/bln tambahan`, action: () => {}, urgent: false });
+              const webhookAlerts = unresolvedAlerts.filter(a => a.alertType === "webhook_failed");
+              if (webhookAlerts.length > 0) briefing.push({ icon: "!", text: webhookAlerts[0].message, action: () => setActivePage("billing"), urgent: true });
               if (briefing.length === 0) briefing.push({ icon: "OK", text: "Semua baik! Tiada tindakan segera diperlukan.", action: () => {}, urgent: false });
 
               return (
