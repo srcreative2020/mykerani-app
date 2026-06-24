@@ -667,6 +667,37 @@ export async function replySupportTicket(ticketId: string, author: string, text:
   return true;
 }
 
+// --- Resource Wallet Dashboard (Module 11) ---
+
+export interface ResourceWalletSummary {
+  tenantId: string;
+  tenantName: string;
+  aiCreditsBalance: number;
+  ocrCreditsBalance: number;
+  notificationCreditsBalance: number;
+  storageUsedBytes: number;
+  storageLimitBytes: number;
+  aiConsumed30d: number;
+  ocrConsumed30d: number;
+}
+
+export async function getResourceWalletSummary(): Promise<ResourceWalletSummary[]> {
+  if (!isSupabaseConfigured() || !supabase) return [];
+  const { data, error } = await supabase.rpc("get_hq_resource_wallet_summary");
+  if (error || !data) return [];
+  return data.map((row: any) => ({
+    tenantId: row.tenant_id,
+    tenantName: row.tenant_name,
+    aiCreditsBalance: Number(row.ai_credits_balance) || 0,
+    ocrCreditsBalance: Number(row.ocr_credits_balance) || 0,
+    notificationCreditsBalance: Number(row.notification_credits_balance) || 0,
+    storageUsedBytes: Number(row.storage_used_bytes) || 0,
+    storageLimitBytes: Number(row.storage_limit_bytes) || 0,
+    aiConsumed30d: Number(row.ai_consumed_30d) || 0,
+    ocrConsumed30d: Number(row.ocr_consumed_30d) || 0,
+  }));
+}
+
 // --- HQ Alert Center (Module 9) ---
 
 export interface HqAlert {

@@ -469,6 +469,14 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
     hqService.getMaskingGrants().then(setMaskingGrants);
   };
 
+  // Resource Wallet Dashboard (Module 11)
+  const [resourceWallets, setResourceWallets] = useState<hqService.ResourceWalletSummary[]>([]);
+  const [resourceWalletRefreshTick, setResourceWalletRefreshTick] = useState(0);
+  useEffect(() => {
+    if (!useRealData) return;
+    hqService.getResourceWalletSummary().then(setResourceWallets);
+  }, [useRealData, resourceWalletRefreshTick]);
+
   // Fetch real storage usage + freeze/inactivity state from Supabase
   useEffect(() => {
     getAllWorkspacesStorageUsage().then(data => { if (data.length > 0) setRealStorageData(data); });
@@ -1572,6 +1580,42 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
                   <MetricCard label="Jumlah Storan"     value={`${customers.reduce((s,c)=>s+c.storageGB,0).toFixed(1)} GB`} sub="digunakan" icon={HardDrive} color="slate" />
                   <MetricCard label="OCR Digunakan"     value={(usageByFeature.find(f => f.feature === "ocr")?.usageCount ?? 0).toLocaleString()} sub="imbasan bulan ini" icon={Brain} color="violet" />
                 </div>
+
+                {/* Resource Wallet Dashboard (Module 11) — real per-tenant wallet balances + consumption */}
+                {useRealData && (
+                  <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+                    <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
+                      <div>
+                        <h3 className="text-sm font-bold text-slate-900">Dompet Sumber Tenant</h3>
+                        <p className="text-[11px] text-slate-400 mt-0.5">Baki kredit & penggunaan 30 hari mengikut tenant</p>
+                      </div>
+                      <button onClick={() => setResourceWalletRefreshTick(t => t + 1)} className="text-slate-300 hover:text-emerald-600 cursor-pointer" title="Refresh">
+                        <RefreshCw className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                    {resourceWallets.length === 0 ? (
+                      <div className="p-8 text-center"><p className="text-xs text-slate-400">Tiada dompet sumber direkodkan</p></div>
+                    ) : (
+                      <div className="divide-y divide-slate-50">
+                        {resourceWallets.map(w => (
+                          <div key={w.tenantId} className="px-5 py-3.5 flex items-center gap-4">
+                            <div className="w-7 h-7 rounded-lg bg-emerald-50 text-emerald-700 font-bold text-xs flex items-center justify-center shrink-0">
+                              {w.tenantName.charAt(0).toUpperCase()}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-xs font-semibold text-slate-800 truncate">{w.tenantName}</p>
+                              <p className="text-[10px] text-slate-400">AI: {w.aiCreditsBalance.toLocaleString()} baki - digunakan {w.aiConsumed30d.toLocaleString()}/30hr &middot; OCR: {w.ocrCreditsBalance.toLocaleString()} baki - digunakan {w.ocrConsumed30d.toLocaleString()}/30hr</p>
+                            </div>
+                            <div className="text-right shrink-0">
+                              <p className="text-xs font-bold text-slate-700">{fmtDocBytes(w.storageUsedBytes)}</p>
+                              <p className="text-[10px] text-slate-400">/ {fmtDocBytes(w.storageLimitBytes)}</p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
 
                 {/* Top usage customers */}
                 <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
