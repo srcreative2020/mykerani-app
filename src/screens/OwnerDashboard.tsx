@@ -18,7 +18,7 @@ import {
   Paperclip, Mic, Square, File as FileIcon, Plus, Building2,
 } from "lucide-react";
 import { FinancialEvidencePackageManager } from "../components/FinancialEvidencePackage";
-import { createTenantSupportTicket, getMyTenantSupportTickets, SupportTicket } from "../lib/hqService";
+import { createTenantSupportTicket, getMyTenantSupportTickets, SupportTicket, updateTenantMasterProfile } from "../lib/hqService";
 import { FinancialReportsAnalytics } from "../components/FinancialReportsAnalytics";
 import { StorageBar } from "../components/StorageBar";
 import { DocumentsManager } from "../components/DocumentsManager";
@@ -957,13 +957,19 @@ export function OwnerDashboard() {
   const [profileSaving, setProfileSaving] = useState(false);
   const [profileSavedAt, setProfileSavedAt] = useState<number | null>(null);
   const [editingAccount, setEditingAccount] = useState(false);
-  const [accountDraft, setAccountDraft] = useState({ fullName: "", email: "" });
+  const [accountDraft, setAccountDraft] = useState({ fullName: "", email: "", mobileNumber: "", alternateNumber: "" });
   const [accountSaving, setAccountSaving] = useState(false);
   const [accountMsg, setAccountMsg] = useState<string | null>(null);
-  const startEditAccount = () => { setAccountDraft({ fullName: user?.fullName || "", email: user?.email || "" }); setAccountMsg(null); setEditingAccount(true); };
+  const startEditAccount = () => { setAccountDraft({ fullName: user?.fullName || "", email: user?.email || "", mobileNumber: (user as any)?.mobileNumber || "", alternateNumber: (user as any)?.alternateNumber || "" }); setAccountMsg(null); setEditingAccount(true); };
   const saveAccount = async () => {
     setAccountSaving(true);
     const res = await updateProfile(accountDraft.fullName, accountDraft.email);
+    if (res.success && user?.tenantId) {
+      await updateTenantMasterProfile(user.tenantId, {
+        mobileNumber: accountDraft.mobileNumber.trim(),
+        alternateNumber: accountDraft.alternateNumber.trim(),
+      });
+    }
     setAccountSaving(false);
     setAccountMsg(res.message);
     if (res.success) setEditingAccount(false);
@@ -977,6 +983,33 @@ export function OwnerDashboard() {
   const EMPTY_BUSINESS_FORM = { businessName: "", industry: "", businessType: "", registrationNo: "", notes: "" };
   const [newBusiness, setNewBusiness] = useState(EMPTY_BUSINESS_FORM);
   const [addingBusiness, setAddingBusiness] = useState(false);
+  const [companyMasterForm, setCompanyMasterForm] = useState({
+    registrationNo: "", taxNumber: "", industry: "", address: "",
+    billingContactName: "", billingEmail: "", supportContactName: "", supportEmail: "",
+  });
+  const [companyMasterSaving, setCompanyMasterSaving] = useState(false);
+  const [companyMasterMsg, setCompanyMasterMsg] = useState<string | null>(null);
+  useEffect(() => {
+    if (!user?.tenantId || !isSupabaseConfigured() || !supabase) return;
+    supabase.from("tenants").select("registration_no, tax_number, industry, address, billing_contact_name, billing_email, support_contact_name, support_email")
+      .eq("id", user.tenantId).single().then(({ data }) => {
+        if (data) {
+          setCompanyMasterForm({
+            registrationNo: data.registration_no || "", taxNumber: data.tax_number || "",
+            industry: data.industry || "", address: data.address || "",
+            billingContactName: data.billing_contact_name || "", billingEmail: data.billing_email || "",
+            supportContactName: data.support_contact_name || "", supportEmail: data.support_email || "",
+          });
+        }
+      });
+  }, [user?.tenantId]);
+  const saveCompanyMaster = async () => {
+    if (!user?.tenantId) return;
+    setCompanyMasterSaving(true);
+    const ok = await updateTenantMasterProfile(user.tenantId, companyMasterForm);
+    setCompanyMasterSaving(false);
+    setCompanyMasterMsg(ok ? "Maklumat syarikat disimpan ✓" : "Gagal menyimpan. Sila cuba lagi.");
+  };
   const [editingBusinessId, setEditingBusinessId] = useState<string | null>(null);
   const [editBusinessForm, setEditBusinessForm] = useState(EMPTY_BUSINESS_FORM);
   const [confirmDeleteBusinessId, setConfirmDeleteBusinessId] = useState<string | null>(null);
@@ -2908,6 +2941,8 @@ export function OwnerDashboard() {
                       <div className="min-w-0 flex-1 space-y-1.5">
                         <input value={accountDraft.fullName} onChange={e => setAccountDraft(d => ({ ...d, fullName: e.target.value }))} placeholder="Nama penuh" className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg text-sm" />
                         <input value={accountDraft.email} onChange={e => setAccountDraft(d => ({ ...d, email: e.target.value }))} placeholder="Email" type="email" className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg text-sm" />
+                        <input value={accountDraft.mobileNumber} onChange={e => setAccountDraft(d => ({ ...d, mobileNumber: e.target.value }))} placeholder="No. Telefon" className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg text-sm" />
+                        <input value={accountDraft.alternateNumber} onChange={e => setAccountDraft(d => ({ ...d, alternateNumber: e.target.value }))} placeholder="No. Telefon Alternatif" className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg text-sm" />
                       </div>
                     )}
                   </div>
@@ -3060,6 +3095,27 @@ export function OwnerDashboard() {
                       </div>
                     </div>
                   )}
+                </div>
+
+                <div className="bg-white border border-slate-200 rounded-2xl p-5 space-y-3 shadow-sm">
+                  <h3 className="text-sm font-bold text-slate-800">Maklumat Syarikat (Akaun)</h3>
+                  <p className="text-xs text-slate-500">Maklumat ini dipaparkan kepada HQ MyKerani untuk pengurusan bil &amp; sokongan akaun anda.</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    <input value={companyMasterForm.registrationNo} onChange={e => setCompanyMasterForm(f => ({ ...f, registrationNo: e.target.value }))} placeholder="No. Pendaftaran (SSM)" className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm" />
+                    <input value={companyMasterForm.taxNumber} onChange={e => setCompanyMasterForm(f => ({ ...f, taxNumber: e.target.value }))} placeholder="No. Cukai" className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm" />
+                  </div>
+                  <input value={companyMasterForm.industry} onChange={e => setCompanyMasterForm(f => ({ ...f, industry: e.target.value }))} placeholder="Industri Utama" className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm" />
+                  <textarea value={companyMasterForm.address} onChange={e => setCompanyMasterForm(f => ({ ...f, address: e.target.value }))} placeholder="Alamat Syarikat" rows={2} className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm" />
+                  <div className="grid grid-cols-2 gap-2">
+                    <input value={companyMasterForm.billingContactName} onChange={e => setCompanyMasterForm(f => ({ ...f, billingContactName: e.target.value }))} placeholder="Nama Kontak Bil" className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm" />
+                    <input type="email" value={companyMasterForm.billingEmail} onChange={e => setCompanyMasterForm(f => ({ ...f, billingEmail: e.target.value }))} placeholder="E-mel Bil" className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm" />
+                    <input value={companyMasterForm.supportContactName} onChange={e => setCompanyMasterForm(f => ({ ...f, supportContactName: e.target.value }))} placeholder="Nama Kontak Sokongan" className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm" />
+                    <input type="email" value={companyMasterForm.supportEmail} onChange={e => setCompanyMasterForm(f => ({ ...f, supportEmail: e.target.value }))} placeholder="E-mel Sokongan" className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm" />
+                  </div>
+                  <button onClick={saveCompanyMaster} disabled={companyMasterSaving} className="w-full py-2.5 bg-slate-900 text-white rounded-xl text-sm font-semibold disabled:opacity-50 cursor-pointer">
+                    {companyMasterSaving ? "Menyimpan..." : "Simpan Maklumat Syarikat"}
+                  </button>
+                  {companyMasterMsg && <p className="text-xs text-emerald-600">{companyMasterMsg}</p>}
                 </div>
 
                 <button onClick={saveProfiles} disabled={profileSaving} className="w-full py-3 bg-indigo-600 text-white rounded-xl text-sm font-semibold disabled:opacity-50 cursor-pointer">

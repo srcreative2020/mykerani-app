@@ -186,6 +186,7 @@ interface Customer {
   name: string;
   email: string;
   phone?: string;
+  alternatePhone?: string;
   plan: string;
   status: "active" | "suspended" | "pending";
   renewal: string;
@@ -199,6 +200,14 @@ interface Customer {
   healthScore?: number;
   healthRiskLevel?: "low" | "medium" | "high";
   healthReasons?: string[];
+  registrationNo?: string;
+  taxNumber?: string;
+  industry?: string;
+  address?: string;
+  billingContactName?: string;
+  billingEmail?: string;
+  supportContactName?: string;
+  supportEmail?: string;
 }
 
 const BLANK_PLAN: Omit<Plan, "id"> = {
@@ -206,7 +215,9 @@ const BLANK_PLAN: Omit<Plan, "id"> = {
   features: [], limitations: [], isTrial: false, trialDays: 0, isCustomPricing: false,
 };
 const BLANK_CUSTOMER: Omit<Customer, "id" | "aiUsage" | "storageGB" | "attention" | "mrr" | "joinedAt" | "totalPaidMyr"> = {
-  name: "", email: "", phone: "", plan: "", status: "active", renewal: "", notes: ""
+  name: "", email: "", phone: "", alternatePhone: "", plan: "", status: "active", renewal: "", notes: "",
+  registrationNo: "", taxNumber: "", industry: "", address: "",
+  billingContactName: "", billingEmail: "", supportContactName: "", supportEmail: "",
 };
 
 // â"€â"€â"€ Main Component â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
@@ -377,7 +388,13 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
     setShowCustomerModal(true);
   };
   const openEditCustomer = (c: Customer) => {
-    setCustomerForm({ name: c.name, email: c.email, phone: c.phone ?? "", plan: c.plan, status: c.status, renewal: c.renewal, notes: c.notes ?? "" });
+    setCustomerForm({
+      name: c.name, email: c.email, phone: c.phone ?? "", alternatePhone: c.alternatePhone ?? "",
+      plan: c.plan, status: c.status, renewal: c.renewal, notes: c.notes ?? "",
+      registrationNo: c.registrationNo ?? "", taxNumber: c.taxNumber ?? "", industry: c.industry ?? "", address: c.address ?? "",
+      billingContactName: c.billingContactName ?? "", billingEmail: c.billingEmail ?? "",
+      supportContactName: c.supportContactName ?? "", supportEmail: c.supportEmail ?? "",
+    });
     setEditingCustomer(c);
     setSelectedCustomer(null);
     setShowCustomerModal(true);
@@ -390,6 +407,19 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
     if (useRealData) {
       if (editingCustomer) {
         await hqService.upsertCustomerSubscription(editingCustomer.id, customerForm.plan, customerForm.status, plans);
+        await hqService.updateTenantMasterProfile(editingCustomer.id, {
+          fullName: customerForm.name.trim(),
+          mobileNumber: customerForm.phone?.trim(),
+          alternateNumber: customerForm.alternatePhone?.trim(),
+          registrationNo: customerForm.registrationNo?.trim(),
+          taxNumber: customerForm.taxNumber?.trim(),
+          industry: customerForm.industry?.trim(),
+          address: customerForm.address?.trim(),
+          billingContactName: customerForm.billingContactName?.trim(),
+          billingEmail: customerForm.billingEmail?.trim(),
+          supportContactName: customerForm.supportContactName?.trim(),
+          supportEmail: customerForm.supportEmail?.trim(),
+        });
       } else {
         const tenant = await hqService.createCustomerTenant(customerForm.name);
         if (tenant) await hqService.upsertCustomerSubscription(tenant.id, customerForm.plan, customerForm.status, plans);
@@ -4103,6 +4133,31 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
                   <span className="font-semibold">Tel:</span><span>{displayPhone(selectedCustomer.phone)}</span>
                 </div>
               )}
+              {selectedCustomer.alternatePhone && (
+                <div className="flex items-center gap-2 text-xs text-slate-500">
+                  <span className="font-semibold">Tel Alt:</span><span>{displayPhone(selectedCustomer.alternatePhone)}</span>
+                </div>
+              )}
+              {selectedCustomer.registrationNo && (
+                <div className="flex items-center gap-2 text-xs text-slate-500">
+                  <span className="font-semibold">SSM:</span><span>{selectedCustomer.registrationNo}</span>
+                </div>
+              )}
+              {selectedCustomer.industry && (
+                <div className="flex items-center gap-2 text-xs text-slate-500">
+                  <span className="font-semibold">Industri:</span><span>{selectedCustomer.industry}</span>
+                </div>
+              )}
+              {selectedCustomer.billingEmail && (
+                <div className="flex items-center gap-2 text-xs text-slate-500">
+                  <span className="font-semibold">E-mel Bil:</span><span>{selectedCustomer.billingEmail}</span>
+                </div>
+              )}
+              {selectedCustomer.supportEmail && (
+                <div className="flex items-center gap-2 text-xs text-slate-500">
+                  <span className="font-semibold">E-mel Sokongan:</span><span>{selectedCustomer.supportEmail}</span>
+                </div>
+              )}
               {selectedCustomer.notes && (
                 <div className="bg-amber-50 border border-amber-100 rounded-xl px-3 py-2">
                   <p className="text-[11px] text-amber-700">{selectedCustomer.notes}</p>
@@ -4183,7 +4238,7 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
       {/* ── Add/Edit Customer Modal ── */}
       {showCustomerModal && (
         <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-black/40 backdrop-blur-sm" onClick={() => setShowCustomerModal(false)}>
-          <div className="w-full max-w-md bg-white rounded-t-3xl md:rounded-3xl shadow-2xl p-6 space-y-4" onClick={e => e.stopPropagation()}>
+          <div className="w-full max-w-md bg-white rounded-t-3xl md:rounded-3xl shadow-2xl p-6 space-y-4 max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between">
               <h2 className="text-base font-bold text-slate-900">{editingCustomer ? "Edit Pelanggan" : "Tambah Pelanggan"}</h2>
               <button onClick={() => setShowCustomerModal(false)} className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-slate-100 cursor-pointer"><X className="w-4 h-4 text-slate-500" /></button>
@@ -4210,14 +4265,74 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
                     className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100" />
                 </div>
                 <div>
-                  <label className="text-xs font-semibold text-slate-500 mb-1 block">Plan</label>
-                  <select value={customerForm.plan} onChange={e => setCustomerForm(f => ({...f, plan: e.target.value}))}
-                    className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-emerald-400 bg-white">
-                    <option value="">— Pilih Plan —</option>
-                    {plans.map(p => <option key={p.id} value={p.name}>{p.name} (RM {p.price}/bln)</option>)}
-                  </select>
+                  <label className="text-xs font-semibold text-slate-500 mb-1 block">No. Telefon Alternatif</label>
+                  <input value={customerForm.alternatePhone ?? ""} onChange={e => setCustomerForm(f => ({...f, alternatePhone: e.target.value}))}
+                    placeholder="0123456789"
+                    className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100" />
                 </div>
               </div>
+              <div>
+                <label className="text-xs font-semibold text-slate-500 mb-1 block">Plan</label>
+                <select value={customerForm.plan} onChange={e => setCustomerForm(f => ({...f, plan: e.target.value}))}
+                  className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-emerald-400 bg-white">
+                  <option value="">— Pilih Plan —</option>
+                  {plans.map(p => <option key={p.id} value={p.name}>{p.name} (RM {p.price}/bln)</option>)}
+                </select>
+              </div>
+
+              <div className="pt-2 border-t border-slate-100">
+                <p className="text-xs font-bold text-slate-700 mb-2">Maklumat Syarikat</p>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-xs font-semibold text-slate-500 mb-1 block">No. Pendaftaran (SSM)</label>
+                    <input value={customerForm.registrationNo ?? ""} onChange={e => setCustomerForm(f => ({...f, registrationNo: e.target.value}))}
+                      className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100" />
+                  </div>
+                  <div>
+                    <label className="text-xs font-semibold text-slate-500 mb-1 block">No. Cukai</label>
+                    <input value={customerForm.taxNumber ?? ""} onChange={e => setCustomerForm(f => ({...f, taxNumber: e.target.value}))}
+                      className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100" />
+                  </div>
+                </div>
+                <div className="mt-3">
+                  <label className="text-xs font-semibold text-slate-500 mb-1 block">Industri</label>
+                  <input value={customerForm.industry ?? ""} onChange={e => setCustomerForm(f => ({...f, industry: e.target.value}))}
+                    className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100" />
+                </div>
+                <div className="mt-3">
+                  <label className="text-xs font-semibold text-slate-500 mb-1 block">Alamat</label>
+                  <textarea value={customerForm.address ?? ""} onChange={e => setCustomerForm(f => ({...f, address: e.target.value}))}
+                    rows={2}
+                    className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100 resize-none" />
+                </div>
+              </div>
+
+              <div className="pt-2 border-t border-slate-100">
+                <p className="text-xs font-bold text-slate-700 mb-2">Hubungan Bil &amp; Sokongan</p>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-xs font-semibold text-slate-500 mb-1 block">Nama Kontak Bil</label>
+                    <input value={customerForm.billingContactName ?? ""} onChange={e => setCustomerForm(f => ({...f, billingContactName: e.target.value}))}
+                      className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100" />
+                  </div>
+                  <div>
+                    <label className="text-xs font-semibold text-slate-500 mb-1 block">E-mel Bil</label>
+                    <input type="email" value={customerForm.billingEmail ?? ""} onChange={e => setCustomerForm(f => ({...f, billingEmail: e.target.value}))}
+                      className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100" />
+                  </div>
+                  <div>
+                    <label className="text-xs font-semibold text-slate-500 mb-1 block">Nama Kontak Sokongan</label>
+                    <input value={customerForm.supportContactName ?? ""} onChange={e => setCustomerForm(f => ({...f, supportContactName: e.target.value}))}
+                      className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100" />
+                  </div>
+                  <div>
+                    <label className="text-xs font-semibold text-slate-500 mb-1 block">E-mel Sokongan</label>
+                    <input type="email" value={customerForm.supportEmail ?? ""} onChange={e => setCustomerForm(f => ({...f, supportEmail: e.target.value}))}
+                      className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100" />
+                  </div>
+                </div>
+              </div>
+
               <div>
                 <label className="text-xs font-semibold text-slate-500 mb-1 block">Nota (pilihan)</label>
                 <textarea value={customerForm.notes ?? ""} onChange={e => setCustomerForm(f => ({...f, notes: e.target.value}))}
