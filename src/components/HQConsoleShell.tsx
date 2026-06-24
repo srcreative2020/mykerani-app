@@ -697,6 +697,8 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
     try { const s = JSON.parse(localStorage.getItem(aiRouterKey) || "{}"); return s.usdMyr || 4.45; } catch { return 4.45; }
   });
   const [testingProv, setTestingProv] = useState<string | null>(null);
+  const [systemHealth, setSystemHealth] = useState<{ label: string; ok: boolean; latencyMs: number }[]>([]);
+  const [systemHealthLoading, setSystemHealthLoading] = useState(false);
   const [aiRouterLoaded, setAiRouterLoaded] = useState(!useRealData);
 
   // AI Cost Governance: real per-call cost rates + aggregated spend by tenant/provider
@@ -765,13 +767,53 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
     }
   };
 
+  useEffect(() => {
+    if (activePage !== "system" || !useRealData) return;
+    let active = true;
+    const load = async () => {
+      setSystemHealthLoading(true);
+      try {
+        const { supabase } = await import("../lib/supabase");
+        const { data: sessionData } = await supabase!.auth.getSession();
+        const jwt = sessionData?.session?.access_token || "";
+        const res = await fetch("/api/admin/system-health", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${jwt}` },
+        });
+        const json = await res.json();
+        if (active) setSystemHealth(json.checks || []);
+      } catch {
+        if (active) setSystemHealth([]);
+      }
+      if (active) setSystemHealthLoading(false);
+    };
+    load();
+    return () => { active = false; };
+  }, [activePage, useRealData]);
+
   const testConnection = async (providerId: string) => {
     setTestingProv(providerId);
     updateProviderCfg(providerId, { testStatus: "idle" });
-    await new Promise(r => setTimeout(r, 1600));
     const cfg = providerCfgs[providerId];
-    const ok = Boolean(cfg?.apiKey ? cfg.apiKey.length >= 10 : cfg?.hasKey);
-    updateProviderCfg(providerId, { testStatus: ok ? "ok" : "fail" });
+    if (!cfg?.apiKey) {
+      updateProviderCfg(providerId, { testStatus: "fail" });
+      setTestingProv(null);
+      return;
+    }
+    try {
+      const { supabase } = await import("../lib/supabase");
+      const { data: sessionData } = await supabase!.auth.getSession();
+      const jwt = sessionData?.session?.access_token || "";
+      const res = await fetch("/api/admin/test-ai-provider", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${jwt}` },
+        body: JSON.stringify({ providerId, apiKey: cfg.apiKey }),
+      });
+      const json = await res.json();
+      updateProviderCfg(providerId, { testStatus: json.ok ? "ok" : "fail" });
+    } catch {
+      updateProviderCfg(providerId, { testStatus: "fail" });
+    }
     setTestingProv(null);
   };
 
@@ -2824,22 +2866,27 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
                   <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
                     <Activity className="w-4 h-4 text-emerald-600" /> Kesihatan Sistem
                   </h3>
-                  <div className="grid grid-cols-2 gap-3">
-                    {[
-                      { label: "AI Router",       latency: "120ms" },
-                      { label: "Storan",          latency: "45ms"  },
-                      { label: "Pengesahan",      latency: "89ms"  },
-                      { label: "Pangkalan Data",  latency: "67ms"  },
-                    ].map(({ label, latency }) => (
-                      <div key={label} className="flex items-center gap-3 p-3.5 border border-slate-100 rounded-xl bg-emerald-50/40">
-                        <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0" />
-                        <div>
-                          <p className="text-xs font-semibold text-slate-700">{label}</p>
-                          <p className="text-[10px] text-slate-400">{latency} &middot; Operasi normal</p>
+                  {!useRealData ? (
+                    <p className="text-xs text-slate-400">Mod demo — tidak tersambung ke sistem sebenar.</p>
+                  ) : systemHealthLoading ? (
+                    <div className="grid grid-cols-2 gap-3">
+                      {Array.from({ length: 4 }).map((_, i) => (
+                        <div key={i} className="h-14 rounded-xl bg-slate-100 animate-pulse" />
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-2 gap-3">
+                      {systemHealth.map(({ label, ok, latencyMs }) => (
+                        <div key={label} className={`flex items-center gap-3 p-3.5 border rounded-xl ${ok ? "border-slate-100 bg-emerald-50/40" : "border-red-100 bg-red-50/60"}`}>
+                          <div className={`w-2 h-2 rounded-full shrink-0 ${ok ? "bg-emerald-500 animate-pulse" : "bg-red-500"}`} />
+                          <div>
+                            <p className="text-xs font-semibold text-slate-700">{label}</p>
+                            <p className="text-[10px] text-slate-400">{latencyMs}ms &middot; {ok ? "Operasi normal" : "Tidak responsif"}</p>
+                          </div>
                         </div>
-                      </div>
-                    ))}
-                  </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
 
               </div>

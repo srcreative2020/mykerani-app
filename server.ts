@@ -681,6 +681,50 @@ async function startServer() {
         });
       }
 
+      // Audit + notification — fire-and-forget, never blocks the response,
+      // since the account is already fully provisioned at this point.
+      fetch(`${supabaseUrl}/rest/v1/audit_logs`, {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${serviceRoleKey}`,
+          "apikey": serviceRoleKey,
+          "Content-Type": "application/json",
+          "Prefer": "return=minimal",
+        },
+        body: JSON.stringify({
+          user_id: caller.userId,
+          user_email: caller.email || "unknown",
+          user_role: caller.role,
+          tenant_id: newStaffTenantId,
+          module: role === "HQ_STAFF" ? "HQ Staff Management" : "Team Management",
+          action: "CREATE",
+          old_value: null,
+          new_value: { email: createData.email, full_name: fullName, role },
+        }),
+      }).catch((err) => console.error("create-staff: audit_logs insert failed:", err));
+
+      if (role === "HQ_STAFF") {
+        fetch(`${supabaseUrl}/rest/v1/rpc/notify_hq_staff_of_new_account`, {
+          method: "POST",
+          headers: {
+            "Authorization": `Bearer ${serviceRoleKey}`,
+            "apikey": serviceRoleKey,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ p_new_email: createData.email, p_new_full_name: fullName, p_created_by: caller.email || "HQ" }),
+        }).catch((err) => console.error("create-staff: hq staff notify failed:", err));
+      } else {
+        fetch(`${supabaseUrl}/rest/v1/rpc/notify_tenant_team_of_new_staff`, {
+          method: "POST",
+          headers: {
+            "Authorization": `Bearer ${serviceRoleKey}`,
+            "apikey": serviceRoleKey,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ p_tenant_id: newStaffTenantId, p_new_email: createData.email, p_new_full_name: fullName }),
+        }).catch((err) => console.error("create-staff: tenant team notify failed:", err));
+      }
+
       return res.json({
         success: true,
         userId: createData.id,
@@ -695,6 +739,79 @@ async function startServer() {
     } catch (err: any) {
       console.error("create-staff error:", err);
       return res.status(500).json({ success: false, error: err?.message || "Ralat sistem." });
+    }
+  });
+
+  // Real system health checks for the HQ "Kesihatan Sistem" panel — was
+  // previously hardcoded fake latencies ("120ms", "45ms", ...) with an
+  // always-green pulsing dot, regardless of actual system state.
+  app.post("/api/admin/system-health", async (req, res) => {
+    const hqAuth = await requireHqRole(req, ["HQ_OWNER", "HQ_STAFF"]);
+    if (!hqAuth.ok) {
+      return res.status(403).json({ errorMessage: "Akses ditolak." });
+    }
+
+    const supabaseUrl = process.env.VITE_SUPABASE_URL;
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    if (!supabaseUrl || !serviceRoleKey) {
+      return res.json({ checks: [] });
+    }
+
+    const timeCall = async (label: string, url: string, headers: Record<string, string>) => {
+      const start = Date.now();
+      try {
+        const r = await fetch(url, { headers });
+        return { label, ok: r.ok, latencyMs: Date.now() - start };
+      } catch {
+        return { label, ok: false, latencyMs: Date.now() - start };
+      }
+    };
+
+    const svcHeaders = { apikey: serviceRoleKey, Authorization: `Bearer ${serviceRoleKey}` };
+    const checks = await Promise.all([
+      timeCall("Pangkalan Data", `${supabaseUrl}/rest/v1/tenants?select=id&limit=1`, svcHeaders),
+      timeCall("Storan", `${supabaseUrl}/storage/v1/bucket`, svcHeaders),
+      timeCall("Pengesahan", `${supabaseUrl}/auth/v1/settings`, { apikey: serviceRoleKey }),
+      timeCall("AI Router", `${supabaseUrl}/rest/v1/ai_router_settings?select=id&limit=1`, svcHeaders),
+    ]);
+
+    res.json({ checks });
+  });
+
+  // Real provider key validation for the HQ AI Router "Test" button — was
+  // previously cosmetic (only checked apiKey.length >= 10, never called the
+  // provider). Makes one cheap, side-effect-free request per provider type.
+  app.post("/api/admin/test-ai-provider", async (req, res) => {
+    try {
+      const caller = await resolveCallerIdentity(req);
+      if (!caller.ok || (caller.role !== "HQ_OWNER" && caller.role !== "HQ_STAFF")) {
+        return res.status(403).json({ ok: false, error: "Permission denied: HQ access required" });
+      }
+
+      const { providerId, apiKey } = req.body || {};
+      if (!providerId || !apiKey || typeof apiKey !== "string") {
+        return res.status(400).json({ ok: false, error: "providerId dan apiKey diperlukan." });
+      }
+
+      let testRes: Response;
+      if (providerId === "gemini") {
+        testRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(apiKey)}`);
+      } else if (providerId === "anthropic") {
+        testRes = await fetch("https://api.anthropic.com/v1/models", {
+          headers: { "x-api-key": apiKey, "anthropic-version": "2023-06-01" },
+        });
+      } else {
+        const base = OPENAI_COMPATIBLE_BASE_URLS[providerId];
+        if (!base) return res.status(400).json({ ok: false, error: "Provider tidak dikenali." });
+        testRes = await fetch(`${base}/models`, { headers: { Authorization: `Bearer ${apiKey}` } });
+      }
+
+      if (testRes.ok) return res.json({ ok: true });
+      const body = await testRes.text().catch(() => "");
+      return res.json({ ok: false, error: `Provider menolak kunci API (HTTP ${testRes.status}).`, detail: body.slice(0, 300) });
+    } catch (err: any) {
+      console.error("test-ai-provider error:", err);
+      return res.status(500).json({ ok: false, error: err?.message || "Ralat sistem." });
     }
   });
 
@@ -1760,7 +1877,7 @@ Only include a "CONFIRM_TRANSACTION" suggestion entry when financialIntent.detec
   // single source of truth for "who is calling" used by every endpoint
   // below (Constitution: Multi Tenant Rule — "tenant identity must come
   // from the authenticated session, not the request body").
-  async function resolveCallerIdentity(req: any): Promise<{ ok: boolean; userId?: string; tenantId?: string; role?: string }> {
+  async function resolveCallerIdentity(req: any): Promise<{ ok: boolean; userId?: string; tenantId?: string; role?: string; email?: string }> {
     const supabaseUrl = process.env.VITE_SUPABASE_URL;
     const anonKey = process.env.VITE_SUPABASE_ANON_KEY;
     const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -1780,7 +1897,7 @@ Only include a "CONFIRM_TRANSACTION" suggestion entry when financialIntent.detec
       if (!userId) return { ok: false };
 
       const roleResp = await fetch(
-        `${supabaseUrl}/rest/v1/user_role_assignments?user_id=eq.${userId}&select=tenant_id,role`,
+        `${supabaseUrl}/rest/v1/user_role_assignments?user_id=eq.${userId}&select=tenant_id,role,email`,
         { headers: { apikey: serviceRoleKey, Authorization: `Bearer ${serviceRoleKey}` } }
       );
       if (!roleResp.ok) return { ok: false };
@@ -1789,7 +1906,7 @@ Only include a "CONFIRM_TRANSACTION" suggestion entry when financialIntent.detec
       const role = roleRows[0]?.role;
       if (!tenantId || !role) return { ok: false };
 
-      return { ok: true, userId, tenantId, role };
+      return { ok: true, userId, tenantId, role, email: roleRows[0]?.email || userData?.email };
     } catch (err) {
       console.error("Failed to resolve caller identity:", err);
       return { ok: false };
