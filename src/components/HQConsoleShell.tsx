@@ -390,6 +390,9 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
     if (useRealData) {
       if (editingCustomer) {
         await hqService.upsertCustomerSubscription(editingCustomer.id, customerForm.plan, customerForm.status, plans);
+        if (customerForm.name.trim() !== editingCustomer.name) {
+          await hqService.updateCustomerProfile(editingCustomer.id, customerForm.name.trim());
+        }
       } else {
         const tenant = await hqService.createCustomerTenant(customerForm.name);
         if (tenant) await hqService.upsertCustomerSubscription(tenant.id, customerForm.plan, customerForm.status, plans);
