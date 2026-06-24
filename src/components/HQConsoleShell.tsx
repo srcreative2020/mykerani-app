@@ -409,8 +409,8 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
     const target = customers.find(c => c.id === id);
     const nextStatus = target?.status === "active" ? "suspended" : "active";
     if (useRealData) {
-      await hqService.setCustomerStatus(id, nextStatus);
-      reloadCustomers();
+      await hqService.submitPendingHqAction(nextStatus === "suspended" ? "tenant_suspend" : "tenant_reactivate", "tenant_subscriptions", id, {});
+      if (pendingHqActionsFilter === "pending") await loadPendingHqActions("pending");
       return;
     }
     setCustomers(prev => prev.map(c => c.id === id ? { ...c, status: c.status === "active" ? "suspended" : "active" } : c));
@@ -3612,7 +3612,11 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
                         <div key={a.id} className="flex items-center justify-between gap-3 p-3 bg-slate-50 rounded-xl">
                           <div className="min-w-0">
                             <p className="text-xs font-bold text-slate-900">
-                              {a.actionType === "staff_suspend" ? "Gantung Kakitangan" : a.actionType === "staff_reactivate" ? "Aktifkan Semula Kakitangan" : a.actionType}
+                              {a.actionType === "staff_suspend" ? "Gantung Kakitangan"
+                                : a.actionType === "staff_reactivate" ? "Aktifkan Semula Kakitangan"
+                                : a.actionType === "tenant_suspend" ? "Gantung Pelanggan"
+                                : a.actionType === "tenant_reactivate" ? "Aktifkan Semula Pelanggan"
+                                : a.actionType}
                             </p>
                             <p className="text-[11px] text-slate-500 truncate">
                               Dipohon oleh {a.requestedByEmail || a.requestedBy} &middot; {new Date(a.requestedAt).toLocaleString("ms-MY")}
