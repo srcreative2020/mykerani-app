@@ -112,7 +112,7 @@ export async function deletePlan(id: string): Promise<boolean> {
 export async function getCustomers(): Promise<HqCustomer[]> {
   if (!isSupabaseConfigured() || !supabase) return [];
 
-  const [{ data: tenants, error: tenantsErr }, { data: subs }, { data: plans }, { data: profiles }, { data: aiUsageRows }, { data: storageRows }, { data: paidRows }, { data: healthRows }] = await Promise.all([
+  const [{ data: tenants, error: tenantsErr }, { data: subs }, { data: plans }, { data: profiles }, { data: aiUsageRows }, { data: storageRows }, { data: paidRows }, { data: healthRows, error: healthErr }] = await Promise.all([
     supabase.from("tenants").select("*").eq("category", "USER"),
     supabase.from("tenant_subscriptions").select("*"),
     supabase.from("subscription_plans").select("*"),
@@ -123,6 +123,9 @@ export async function getCustomers(): Promise<HqCustomer[]> {
     supabase.rpc("get_hq_customer_health_scores"),
   ]);
   if (tenantsErr || !tenants) return [];
+  if (healthErr) {
+    console.error("get_hq_customer_health_scores failed:", healthErr.message);
+  }
 
   const planById = new Map((plans || []).map((p: any) => [p.id, p]));
   const subByTenant = new Map((subs || []).map((s: any) => [s.tenant_id, s]));
@@ -162,9 +165,9 @@ export async function getCustomers(): Promise<HqCustomer[]> {
       joinedAt: t.created_at ? t.created_at.split("T")[0] : "",
       notes: "",
       totalPaidMyr: totalPaidByTenant.get(t.id) || 0,
-      healthScore: health?.score ?? 100,
-      healthRiskLevel: health?.riskLevel ?? "low",
-      healthReasons: health?.reasons ?? [],
+      healthScore: health ? health.score : healthErr ? -1 : 100,
+      healthRiskLevel: health ? health.riskLevel : healthErr ? "high" : "low",
+      healthReasons: health ? health.reasons : healthErr ? ["Ralat memuatkan skor kesihatan"] : [],
     };
   });
 }
@@ -634,6 +637,20 @@ export async function createSupportTicket(ticket: {
   return !error;
 }
 
+export async function createTenantSupportTicket(
+  subject: string,
+  summary: string,
+  priority: "high" | "medium" | "low" = "medium"
+): Promise<boolean> {
+  if (!isSupabaseConfigured() || !supabase) return false;
+  const { error } = await supabase.rpc("create_tenant_support_ticket", {
+    p_subject: subject,
+    p_summary: summary,
+    p_priority: priority,
+  });
+  return !error;
+}
+
 export async function updateSupportTicketStatus(
   ticketId: string,
   status: "open" | "pending" | "resolved"
@@ -679,6 +696,7 @@ export interface ResourceWalletSummary {
   storageLimitBytes: number;
   aiConsumed30d: number;
   ocrConsumed30d: number;
+  aiCostUsd30d: number;
 }
 
 export async function getResourceWalletSummary(): Promise<ResourceWalletSummary[]> {
@@ -695,6 +713,7 @@ export async function getResourceWalletSummary(): Promise<ResourceWalletSummary[
     storageLimitBytes: Number(row.storage_limit_bytes) || 0,
     aiConsumed30d: Number(row.ai_consumed_30d) || 0,
     ocrConsumed30d: Number(row.ocr_consumed_30d) || 0,
+    aiCostUsd30d: Number(row.ai_cost_usd_30d) || 0,
   }));
 }
 
@@ -780,6 +799,27 @@ export async function revokeUnmaskAccess(userId: string): Promise<boolean> {
   if (!isSupabaseConfigured() || !supabase) return false;
   const { error } = await supabase.from("hq_data_masking_grants").delete().eq("user_id", userId);
   return !error;
+}
+
+export interface HqStaffUser {
+  userId: string;
+  email: string;
+  fullName: string;
+  role: string;
+  unmaskGranted: boolean;
+}
+
+export async function getHqStaffUsers(): Promise<HqStaffUser[]> {
+  if (!isSupabaseConfigured() || !supabase) return [];
+  const { data, error } = await supabase.rpc("get_hq_staff_users");
+  if (error || !data) return [];
+  return data.map((row: any) => ({
+    userId: row.user_id,
+    email: row.email,
+    fullName: row.full_name,
+    role: row.role,
+    unmaskGranted: !!row.unmask_granted,
+  }));
 }
 
 export function maskEmail(email: string | undefined | null): string {

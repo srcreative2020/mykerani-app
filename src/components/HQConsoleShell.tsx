@@ -456,10 +456,14 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
   // Data Masking Governance (Module 7)
   const [unmaskAllowed, setUnmaskAllowed] = useState(true);
   const [maskingGrants, setMaskingGrants] = useState<hqService.MaskingGrant[]>([]);
+  const [hqStaffUsers, setHqStaffUsers] = useState<hqService.HqStaffUser[]>([]);
   useEffect(() => {
     if (!useRealData) return;
     hqService.isUnmaskAllowed().then(setUnmaskAllowed);
-    if (!isStaff) hqService.getMaskingGrants().then(setMaskingGrants);
+    if (!isStaff) {
+      hqService.getMaskingGrants().then(setMaskingGrants);
+      hqService.getHqStaffUsers().then(setHqStaffUsers);
+    }
   }, [useRealData, isStaff]);
   const displayEmail = (email: string | undefined | null) => (unmaskAllowed ? (email || "") : hqService.maskEmail(email));
   const displayPhone = (phone: string | undefined | null) => (unmaskAllowed ? (phone || "") : hqService.maskPhone(phone));
@@ -467,6 +471,7 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
     if (currentlyGranted) await hqService.revokeUnmaskAccess(userId);
     else await hqService.grantUnmaskAccess(userId);
     hqService.getMaskingGrants().then(setMaskingGrants);
+    hqService.getHqStaffUsers().then(setHqStaffUsers);
   };
 
   // Resource Wallet Dashboard (Module 11)
@@ -620,9 +625,9 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
           notif.push({
             type: a.alertType,
             severity: a.severity === "high" ? "critical" : a.severity === "medium" ? "warn" : "info",
-            title: a.alertType === "churn_risk" ? "Risiko Churn" : a.alertType === "storage_frozen" ? "Storan Dibekukan" : "Amaran HQ",
+            title: a.alertType === "churn_risk" ? "Risiko Churn" : a.alertType === "storage_frozen" ? "Storan Dibekukan" : a.alertType === "storage_warning" ? "Amaran Storan" : "Amaran HQ",
             body: a.message,
-            action: a.alertType === "churn_risk" ? "customers" : a.alertType === "storage_frozen" ? "storage" : "system",
+            action: a.alertType === "churn_risk" ? "customers" : a.alertType === "storage_frozen" ? "storage" : a.alertType === "storage_warning" ? "storage" : "system",
             tenantName,
           });
         });
@@ -1612,6 +1617,10 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
                               <p className="text-[10px] text-slate-400">AI: {w.aiCreditsBalance.toLocaleString()} baki - digunakan {w.aiConsumed30d.toLocaleString()}/30hr &middot; OCR: {w.ocrCreditsBalance.toLocaleString()} baki - digunakan {w.ocrConsumed30d.toLocaleString()}/30hr</p>
                             </div>
                             <div className="text-right shrink-0">
+                              <p className="text-xs font-bold text-emerald-700">${w.aiCostUsd30d.toFixed(2)}</p>
+                              <p className="text-[10px] text-slate-400">kos AI/30hr</p>
+                            </div>
+                            <div className="text-right shrink-0">
                               <p className="text-xs font-bold text-slate-700">{fmtDocBytes(w.storageUsedBytes)}</p>
                               <p className="text-[10px] text-slate-400">/ {fmtDocBytes(w.storageLimitBytes)}</p>
                             </div>
@@ -2328,10 +2337,33 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
                       )}
                     </div>
                   )}
-                  <div className="text-center py-4 bg-slate-50 rounded-xl">
-                    <Users className="w-6 h-6 text-slate-200 mx-auto mb-1" />
-                    <p className="text-xs text-slate-400">Hanya anda sebagai pentadbir HQ</p>
-                  </div>
+                  {hqStaffUsers.length === 0 ? (
+                    <div className="text-center py-4 bg-slate-50 rounded-xl">
+                      <Users className="w-6 h-6 text-slate-200 mx-auto mb-1" />
+                      <p className="text-xs text-slate-400">Hanya anda sebagai pentadbir HQ</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      {hqStaffUsers.map((u) => (
+                        <div key={u.userId} className="flex items-center justify-between gap-3 p-3 bg-slate-50 rounded-xl">
+                          <div className="min-w-0">
+                            <p className="text-xs font-bold text-slate-900 truncate">{u.fullName} <span className="text-slate-400 font-normal">({u.role})</span></p>
+                            <p className="text-[11px] text-slate-500 truncate">{u.email}</p>
+                          </div>
+                          <button
+                            onClick={() => toggleStaffUnmask(u.userId, u.unmaskGranted)}
+                            className={`shrink-0 px-3 py-1.5 rounded-lg text-[11px] font-bold cursor-pointer transition ${
+                              u.unmaskGranted
+                                ? "bg-amber-100 text-amber-800 hover:bg-amber-200"
+                                : "bg-emerald-100 text-emerald-800 hover:bg-emerald-200"
+                            }`}
+                          >
+                            {u.unmaskGranted ? "Tarik Balik Unmask" : "Beri Akses Unmask"}
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
 
                 {/* Notifications */}

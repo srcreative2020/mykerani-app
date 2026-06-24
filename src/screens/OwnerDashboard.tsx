@@ -18,6 +18,7 @@ import {
   Paperclip, Mic, Square, File as FileIcon, Plus, Building2,
 } from "lucide-react";
 import { FinancialEvidencePackageManager } from "../components/FinancialEvidencePackage";
+import { createTenantSupportTicket } from "../lib/hqService";
 import { FinancialReportsAnalytics } from "../components/FinancialReportsAnalytics";
 import { StorageBar } from "../components/StorageBar";
 import { DocumentsManager } from "../components/DocumentsManager";
@@ -309,6 +310,8 @@ export function OwnerDashboard() {
   const [ticketSubject, setTicketSubject] = useState("");
   const [ticketDesc, setTicketDesc] = useState("");
   const [ticketSent, setTicketSent] = useState(false);
+  const [ticketSending, setTicketSending] = useState(false);
+  const [ticketError, setTicketError] = useState<string | null>(null);
   const supportEndRef = useRef<HTMLDivElement>(null);
 
   // â"€â"€ Reminder Settings â"€â"€
@@ -3464,12 +3467,23 @@ export function OwnerDashboard() {
                           <div className="p-3 bg-indigo-50 border border-indigo-100 rounded-xl">
                             <p className="text-[11px] text-indigo-700 font-semibold">AI akan ringkaskan isu anda sebelum hantar ke pasukan HQ.</p>
                           </div>
+                          {ticketError && (
+                            <p className="text-xs font-bold text-red-600">{ticketError}</p>
+                          )}
                         </div>
                         <button
-                          onClick={() => { if (ticketSubject.trim() && ticketDesc.trim()) setTicketSent(true); }}
-                          disabled={!ticketSubject.trim() || !ticketDesc.trim()}
+                          onClick={async () => {
+                            if (!ticketSubject.trim() || !ticketDesc.trim()) return;
+                            setTicketSending(true);
+                            setTicketError(null);
+                            const ok = await createTenantSupportTicket(ticketSubject.trim(), ticketDesc.trim(), "medium");
+                            setTicketSending(false);
+                            if (ok) setTicketSent(true);
+                            else setTicketError("Gagal menghantar tiket. Sila cuba lagi.");
+                          }}
+                          disabled={!ticketSubject.trim() || !ticketDesc.trim() || ticketSending}
                           className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-200 text-white rounded-xl text-sm font-bold transition cursor-pointer">
-                          Hantar Tiket
+                          {ticketSending ? "Menghantar..." : "Hantar Tiket"}
                         </button>
                       </>
                     )}

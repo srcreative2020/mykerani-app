@@ -9,6 +9,7 @@ import { supabase, isSupabaseConfigured } from "../lib/supabase";
 import { isDemoWorkspace } from "../lib/seeder";
 import { uploadDocument, getDocumentUrl, type UploadedDoc } from "../lib/documentStorage";
 import { logEvent } from "../lib/eventLog";
+import { createTenantSupportTicket } from "../lib/hqService";
 import { usePermission } from "../context/PermissionContext";
 import { useStorageQuota } from "../lib/storageQuota";
 import { DocumentsManager } from "../components/DocumentsManager";
@@ -222,6 +223,8 @@ export function StaffHomeScreen() {
   const [ticketSubject, setTicketSubject] = useState("");
   const [ticketDesc, setTicketDesc] = useState("");
   const [ticketSent, setTicketSent] = useState(false);
+  const [ticketSending, setTicketSending] = useState(false);
+  const [ticketError, setTicketError] = useState<string | null>(null);
   const supportEndRef = useRef<HTMLDivElement>(null);
 
   const wsId = activeWorkspace?.id || "";
@@ -1831,11 +1834,22 @@ export function StaffHomeScreen() {
                       <textarea value={ticketDesc} onChange={e => setTicketDesc(e.target.value)}
                         placeholder="Terangkan masalah anda..." rows={4}
                         className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm outline-none focus:border-indigo-400 bg-white resize-none" />
+                      {ticketError && (
+                        <p className="text-xs font-bold text-red-600">{ticketError}</p>
+                      )}
                       <button
-                        onClick={() => { if (ticketSubject.trim() && ticketDesc.trim()) setTicketSent(true); }}
-                        disabled={!ticketSubject.trim() || !ticketDesc.trim()}
+                        onClick={async () => {
+                          if (!ticketSubject.trim() || !ticketDesc.trim()) return;
+                          setTicketSending(true);
+                          setTicketError(null);
+                          const ok = await createTenantSupportTicket(ticketSubject.trim(), ticketDesc.trim(), "medium");
+                          setTicketSending(false);
+                          if (ok) setTicketSent(true);
+                          else setTicketError("Gagal menghantar tiket. Sila cuba lagi.");
+                        }}
+                        disabled={!ticketSubject.trim() || !ticketDesc.trim() || ticketSending}
                         className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-200 text-white rounded-xl text-sm font-bold transition cursor-pointer">
-                        Hantar Tiket
+                        {ticketSending ? "Menghantar..." : "Hantar Tiket"}
                       </button>
                     </>
                   )}
