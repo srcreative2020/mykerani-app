@@ -944,3 +944,68 @@ export async function deleteFaqItem(id: string): Promise<boolean> {
   const { error } = await supabase.from("faq_items").delete().eq("id", id);
   return !error;
 }
+
+// --- HQ Approval Center ---
+// Generic dual-approval inbox built on pending_hq_actions. Any HQ action
+// that should require a second approver (never auto-applied) is submitted
+// here; review_pending_hq_action() executes the real effect on approval,
+// and the row itself (requester/reviewer/timestamps/note) is the audit
+// record for the decision.
+
+export type PendingHqActionStatus = "pending" | "approved" | "rejected";
+
+export interface PendingHqAction {
+  id: string;
+  actionType: string;
+  targetTable: string | null;
+  targetId: string | null;
+  payload: Record<string, unknown>;
+  requestedBy: string;
+  requestedByEmail: string;
+  requestedAt: string;
+  status: PendingHqActionStatus;
+  reviewedBy: string | null;
+  reviewedByEmail: string | null;
+  reviewedAt: string | null;
+  reviewNote: string | null;
+}
+
+export async function getPendingHqActions(status: PendingHqActionStatus | null = "pending"): Promise<PendingHqAction[]> {
+  if (!isSupabaseConfigured() || !supabase) return [];
+  const { data, error } = await supabase.rpc("get_pending_hq_actions", { p_status: status });
+  if (error || !data) return [];
+  return data.map((row: any) => ({
+    id: row.id,
+    actionType: row.action_type,
+    targetTable: row.target_table,
+    targetId: row.target_id,
+    payload: row.payload || {},
+    requestedBy: row.requested_by,
+    requestedByEmail: row.requested_by_email || "",
+    requestedAt: row.requested_at,
+    status: row.status,
+    reviewedBy: row.reviewed_by,
+    reviewedByEmail: row.reviewed_by_email || null,
+    reviewedAt: row.reviewed_at,
+    reviewNote: row.review_note,
+  }));
+}
+
+export async function submitPendingHqAction(
+  actionType: string, targetTable: string | null, targetId: string | null, payload: Record<string, unknown> = {}
+): Promise<string | null> {
+  if (!isSupabaseConfigured() || !supabase) return null;
+  const { data, error } = await supabase.rpc("submit_pending_hq_action", {
+    p_action_type: actionType, p_target_table: targetTable, p_target_id: targetId, p_payload: payload,
+  });
+  if (error) return null;
+  return data as string;
+}
+
+export async function reviewPendingHqAction(actionId: string, approve: boolean, note = ""): Promise<{ ok: boolean; error?: string }> {
+  if (!isSupabaseConfigured() || !supabase) return { ok: false, error: "Supabase not configured" };
+  const { error } = await supabase.rpc("review_pending_hq_action", {
+    p_action_id: actionId, p_approve: approve, p_note: note,
+  });
+  return error ? { ok: false, error: error.message } : { ok: true };
+}

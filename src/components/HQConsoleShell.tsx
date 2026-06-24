@@ -27,7 +27,7 @@ interface HQConsoleShellProps {
 // HQ_STAFF pages: dashboard, customers, subscriptions, support
 type HQPage = "dashboard" | "customers" | "billing" | "usage" | "support" | "revenue" | "settings" | "system" | "subscriptions" | "website"
   | "customer360" | "alertCenter" | "walletDashboard" | "healthScores" | "governance" | "paymentGovernance" | "storageGovernance"
-  | "aiCostGovernance" | "dataMaskingGovernance";
+  | "aiCostGovernance" | "dataMaskingGovernance" | "approvalCenter";
 
 // â"€â"€ Mock data (demo accounts only) â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 const MOCK_CUSTOMERS = [
@@ -476,6 +476,30 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
     hqService.getHqStaffUsers().then(setHqStaffUsers);
   };
 
+  // Approval Center (Phase 2)
+  const [pendingHqActions, setPendingHqActions] = useState<hqService.PendingHqAction[]>([]);
+  const [pendingHqActionsFilter, setPendingHqActionsFilter] = useState<hqService.PendingHqActionStatus>("pending");
+  const [approvalActionBusy, setApprovalActionBusy] = useState<string | null>(null);
+  const [approvalActionError, setApprovalActionError] = useState<string | null>(null);
+  const loadPendingHqActions = (status: hqService.PendingHqActionStatus = pendingHqActionsFilter) =>
+    hqService.getPendingHqActions(status).then(setPendingHqActions);
+  useEffect(() => {
+    if (!useRealData || isStaff) return;
+    loadPendingHqActions(pendingHqActionsFilter);
+  }, [useRealData, isStaff, pendingHqActionsFilter]);
+  const reviewHqAction = async (actionId: string, approve: boolean) => {
+    setApprovalActionBusy(actionId);
+    setApprovalActionError(null);
+    const result = await hqService.reviewPendingHqAction(actionId, approve);
+    if (!result.ok) setApprovalActionError(result.error || "Tindakan gagal");
+    await loadPendingHqActions(pendingHqActionsFilter);
+    setApprovalActionBusy(null);
+  };
+  const requestStaffSuspension = async (userId: string, suspend: boolean) => {
+    await hqService.submitPendingHqAction(suspend ? "staff_suspend" : "staff_reactivate", "profiles", userId, {});
+    if (pendingHqActionsFilter === "pending") await loadPendingHqActions("pending");
+  };
+
   // Resource Wallet Dashboard (Module 11)
   const [resourceWallets, setResourceWallets] = useState<hqService.ResourceWalletSummary[]>([]);
   const [hqAlerts, setHqAlerts] = useState<hqService.HqAlert[]>([]);
@@ -898,6 +922,7 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
     { id: "storageGovernance" as HQPage, label: "Tadbir Storan",        icon: HardDrive, section: "Tadbir Urus" },
     { id: "aiCostGovernance" as HQPage,      label: "Tadbir Kos AI",        icon: DollarSign, section: "Tadbir Urus" },
     { id: "dataMaskingGovernance" as HQPage, label: "Tadbir Topeng Data",   icon: Shield, section: "Tadbir Urus" },
+    { id: "approvalCenter" as HQPage, label: "Pusat Kelulusan",   icon: ShieldAlert, section: "Tadbir Urus" },
     { id: "website" as HQPage,     label: "Tapak Web",      icon: Globe, section: "Sistem" },
     { id: "system" as HQPage,      label: "Pusat Sistem",   icon: Server, section: "Sistem" },
     { id: "settings" as HQPage,    label: "Tetapan",        icon: Settings, section: "Sistem" },
@@ -3473,16 +3498,25 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
                             <p className="text-xs font-bold text-slate-900 truncate">{u.fullName} <span className="text-slate-400 font-normal">({u.role})</span></p>
                             <p className="text-[11px] text-slate-500 truncate">{u.email}</p>
                           </div>
-                          <button
-                            onClick={() => toggleStaffUnmask(u.userId, u.unmaskGranted)}
-                            className={`shrink-0 px-3 py-1.5 rounded-lg text-[11px] font-bold cursor-pointer transition ${
-                              u.unmaskGranted
-                                ? "bg-amber-100 text-amber-800 hover:bg-amber-200"
-                                : "bg-emerald-100 text-emerald-800 hover:bg-emerald-200"
-                            }`}
-                          >
-                            {u.unmaskGranted ? "Tarik Balik Unmask" : "Beri Akses Unmask"}
-                          </button>
+                          <div className="shrink-0 flex items-center gap-1.5">
+                            <button
+                              onClick={() => toggleStaffUnmask(u.userId, u.unmaskGranted)}
+                              className={`px-3 py-1.5 rounded-lg text-[11px] font-bold cursor-pointer transition ${
+                                u.unmaskGranted
+                                  ? "bg-amber-100 text-amber-800 hover:bg-amber-200"
+                                  : "bg-emerald-100 text-emerald-800 hover:bg-emerald-200"
+                              }`}
+                            >
+                              {u.unmaskGranted ? "Tarik Balik Unmask" : "Beri Akses Unmask"}
+                            </button>
+                            <button
+                              onClick={() => requestStaffSuspension(u.userId, true)}
+                              className="px-3 py-1.5 rounded-lg text-[11px] font-bold cursor-pointer transition bg-red-100 text-red-800 hover:bg-red-200"
+                              title="Hantar permintaan gantung ke Pusat Kelulusan — perlu kelulusan kakitangan HQ lain"
+                            >
+                              Minta Gantung
+                            </button>
+                          </div>
                         </div>
                       ))}
                     </div>
@@ -3511,6 +3545,78 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
                           </div>
                         );
                       })}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {activePage === "approvalCenter" && !isStaff && (
+              <div className="space-y-4" id="hq_approval_center">
+                <h1 className="text-xl font-bold text-slate-900">Pusat Kelulusan HQ</h1>
+                <p className="text-xs text-slate-400">Tindakan sensitif (gantung/aktifkan kakitangan, dsb.) memerlukan kelulusan kakitangan HQ kedua sebelum dilaksanakan. Pemohon tidak boleh meluluskan permintaan sendiri.</p>
+
+                <div className="flex items-center gap-2">
+                  {(["pending", "approved", "rejected"] as hqService.PendingHqActionStatus[]).map((s) => (
+                    <button
+                      key={s}
+                      onClick={() => setPendingHqActionsFilter(s)}
+                      className={`px-3 py-1.5 rounded-lg text-[11px] font-bold cursor-pointer transition ${
+                        pendingHqActionsFilter === s ? "bg-emerald-600 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                      }`}
+                    >
+                      {s === "pending" ? "Belum Selesai" : s === "approved" ? "Diluluskan" : "Ditolak"}
+                    </button>
+                  ))}
+                </div>
+
+                {approvalActionError && (
+                  <div className="bg-red-50 border border-red-100 rounded-xl p-3 text-xs text-red-700 font-semibold">{approvalActionError}</div>
+                )}
+
+                <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-3">
+                  {pendingHqActions.length === 0 ? (
+                    <div className="text-center py-6 bg-slate-50 rounded-xl">
+                      <ShieldAlert className="w-6 h-6 text-slate-200 mx-auto mb-1" />
+                      <p className="text-xs text-slate-400">Tiada permintaan dalam kategori ini.</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      {pendingHqActions.map((a) => (
+                        <div key={a.id} className="flex items-center justify-between gap-3 p-3 bg-slate-50 rounded-xl">
+                          <div className="min-w-0">
+                            <p className="text-xs font-bold text-slate-900">
+                              {a.actionType === "staff_suspend" ? "Gantung Kakitangan" : a.actionType === "staff_reactivate" ? "Aktifkan Semula Kakitangan" : a.actionType}
+                            </p>
+                            <p className="text-[11px] text-slate-500 truncate">
+                              Dipohon oleh {a.requestedByEmail || a.requestedBy} &middot; {new Date(a.requestedAt).toLocaleString("ms-MY")}
+                            </p>
+                            {a.status !== "pending" && (
+                              <p className="text-[11px] text-slate-400 truncate">
+                                {a.status === "approved" ? "Diluluskan" : "Ditolak"} oleh {a.reviewedByEmail || a.reviewedBy} &middot; {a.reviewedAt ? new Date(a.reviewedAt).toLocaleString("ms-MY") : ""}
+                              </p>
+                            )}
+                          </div>
+                          {a.status === "pending" && (
+                            <div className="shrink-0 flex items-center gap-1.5">
+                              <button
+                                disabled={approvalActionBusy === a.id}
+                                onClick={() => reviewHqAction(a.id, true)}
+                                className="px-3 py-1.5 rounded-lg text-[11px] font-bold cursor-pointer transition bg-emerald-100 text-emerald-800 hover:bg-emerald-200 disabled:opacity-50"
+                              >
+                                Luluskan
+                              </button>
+                              <button
+                                disabled={approvalActionBusy === a.id}
+                                onClick={() => reviewHqAction(a.id, false)}
+                                className="px-3 py-1.5 rounded-lg text-[11px] font-bold cursor-pointer transition bg-slate-200 text-slate-700 hover:bg-slate-300 disabled:opacity-50"
+                              >
+                                Tolak
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      ))}
                     </div>
                   )}
                 </div>
