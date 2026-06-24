@@ -580,6 +580,20 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
   const [testingProv, setTestingProv] = useState<string | null>(null);
   const [aiRouterLoaded, setAiRouterLoaded] = useState(!useRealData);
 
+  // AI Cost Governance: real per-call cost rates + aggregated spend by tenant/provider
+  const [aiCostRates, setAiCostRates] = useState<hqService.AiCostRate[]>([]);
+  const [aiCostSummary, setAiCostSummary] = useState<hqService.AiCostSummaryRow[]>([]);
+  const [aiCostRefreshTick, setAiCostRefreshTick] = useState(0);
+  useEffect(() => {
+    if (!useRealData) return;
+    hqService.getAiCostRates().then(setAiCostRates);
+    hqService.getAiCostSummary().then(setAiCostSummary);
+  }, [useRealData, aiCostRefreshTick]);
+  const saveAiCostRate = async (provider: string, model: string, cost: number) => {
+    const ok = await hqService.upsertAiCostRate(provider, model, cost);
+    if (ok) setAiCostRefreshTick(t => t + 1);
+  };
+
   // Load real AI Router config from Supabase (source of truth for the whole app's AI behavior)
   useEffect(() => {
     if (!useRealData) return;
@@ -2304,6 +2318,40 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
                         className="w-20 border border-slate-200 rounded-lg px-2 py-1.5 text-sm font-bold text-center focus:outline-none focus:border-emerald-400" />
                       <span className="text-xs text-slate-500">MYR</span>
                     </div>
+                  </div>
+                </div>
+
+                {/* AI Cost Governance: real cost rates + spend by tenant */}
+                <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-4">
+                  <div className="flex items-center gap-2">
+                    <DollarSign className="w-4 h-4 text-amber-500" />
+                    <h3 className="text-sm font-bold text-slate-900">Tadbir Urus Kos AI</h3>
+                  </div>
+                  <div className="space-y-2">
+                    <p className="text-[11px] font-bold text-slate-500">Kadar kos per panggilan (USD)</p>
+                    {AI_PROVIDERS.flatMap(prov => prov.models.map(m => {
+                      const existing = aiCostRates.find(r => r.provider === prov.id && r.model === m.id);
+                      return (
+                        <div key={`${prov.id}:${m.id}`} className="flex items-center justify-between text-xs p-2 bg-slate-50 rounded-lg">
+                          <span className="text-slate-600">{prov.name} / {m.id}</span>
+                          <input type="number" step="0.0001" min="0" defaultValue={existing?.costPerCallUsd ?? 0}
+                            onBlur={e => saveAiCostRate(prov.id, m.id, parseFloat(e.target.value) || 0)}
+                            className="w-24 border border-slate-200 rounded-lg px-2 py-1 text-right focus:outline-none focus:border-emerald-400" />
+                        </div>
+                      );
+                    }))}
+                  </div>
+                  <div className="space-y-2">
+                    <p className="text-[11px] font-bold text-slate-500">Perbelanjaan sebenar mengikut syarikat</p>
+                    {aiCostSummary.length === 0 ? (
+                      <p className="text-xs text-slate-400 text-center py-3">Tiada data perbelanjaan lagi.</p>
+                    ) : aiCostSummary.map((r, i) => (
+                      <div key={`${r.tenantId}-${r.provider}-${i}`} className="flex items-center justify-between text-xs p-2 bg-amber-50 rounded-lg">
+                        <span className="text-slate-700 font-semibold">{r.tenantName}</span>
+                        <span className="text-slate-500">{r.provider} · {r.totalCalls} panggilan</span>
+                        <span className="font-bold text-amber-700">${r.totalCostUsd.toFixed(4)} (RM{(r.totalCostUsd * usdMyr).toFixed(2)})</span>
+                      </div>
+                    ))}
                   </div>
                 </div>
 

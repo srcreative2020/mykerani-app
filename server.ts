@@ -1598,11 +1598,36 @@ Only include a "CONFIRM_TRANSACTION" suggestion entry when financialIntent.detec
   // Records one AI usage credit against a tenant (service-role write — no client
   // role can insert directly, see ai_usage_log RLS). Best-effort: a logging failure
   // must never block the actual AI response from reaching the user.
+  let aiCostRateCache: Map<string, number> | null = null;
+  let aiCostRateCacheAt = 0;
+
+  async function getAiCostPerCall(provider: string, model: string): Promise<number> {
+    const supabaseUrl = process.env.VITE_SUPABASE_URL;
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    if (!supabaseUrl || !serviceRoleKey) return 0;
+    if (!aiCostRateCache || Date.now() - aiCostRateCacheAt > 5 * 60 * 1000) {
+      try {
+        const resp = await fetch(`${supabaseUrl}/rest/v1/ai_cost_rates?select=provider,model,cost_per_call_usd`, {
+          headers: { apikey: serviceRoleKey, Authorization: `Bearer ${serviceRoleKey}` },
+        });
+        if (resp.ok) {
+          const rows: any[] = await resp.json();
+          aiCostRateCache = new Map(rows.map(r => [`${r.provider}:${r.model}`, Number(r.cost_per_call_usd) || 0]));
+          aiCostRateCacheAt = Date.now();
+        }
+      } catch (err) {
+        console.error("Failed to fetch AI cost rates:", err);
+      }
+    }
+    return aiCostRateCache?.get(`${provider}:${model}`) ?? 0;
+  }
+
   async function logAiUsage(tenantId: string | undefined | null, workspaceId: string | undefined | null, userId: string | undefined | null, feature: "assistant" | "ocr", provider: string, model: string): Promise<void> {
     if (!tenantId) return;
     const supabaseUrl = process.env.VITE_SUPABASE_URL;
     const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
     if (!supabaseUrl || !serviceRoleKey) return;
+    const costUsd = await getAiCostPerCall(provider, model);
     try {
       await fetch(`${supabaseUrl}/rest/v1/ai_usage_log`, {
         method: "POST",
@@ -1612,7 +1637,7 @@ Only include a "CONFIRM_TRANSACTION" suggestion entry when financialIntent.detec
           "Content-Type": "application/json",
           Prefer: "return=minimal",
         },
-        body: JSON.stringify({ tenant_id: tenantId, workspace_id: workspaceId || null, user_id: userId || null, feature, provider, model }),
+        body: JSON.stringify({ tenant_id: tenantId, workspace_id: workspaceId || null, user_id: userId || null, feature, provider, model, cost_usd: costUsd }),
       });
     } catch (err) {
       console.error("Failed to log AI usage:", err);

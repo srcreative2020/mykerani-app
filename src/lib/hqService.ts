@@ -458,6 +458,50 @@ export async function setWebhookEnforceFlag(enabled: boolean): Promise<boolean> 
   return !error;
 }
 
+// --- AI Cost Governance ---
+
+export interface AiCostRate {
+  provider: string;
+  model: string;
+  costPerCallUsd: number;
+}
+
+export async function getAiCostRates(): Promise<AiCostRate[]> {
+  if (!isSupabaseConfigured() || !supabase) return [];
+  const { data, error } = await supabase.from("ai_cost_rates").select("*");
+  if (error || !data) return [];
+  return data.map((row: any) => ({ provider: row.provider, model: row.model, costPerCallUsd: Number(row.cost_per_call_usd) || 0 }));
+}
+
+export async function upsertAiCostRate(provider: string, model: string, costPerCallUsd: number): Promise<boolean> {
+  if (!isSupabaseConfigured() || !supabase) return false;
+  const { error } = await supabase.from("ai_cost_rates").upsert({
+    provider, model, cost_per_call_usd: costPerCallUsd, updated_at: new Date().toISOString(),
+  });
+  return !error;
+}
+
+export interface AiCostSummaryRow {
+  tenantId: string;
+  tenantName: string;
+  provider: string;
+  totalCalls: number;
+  totalCostUsd: number;
+}
+
+export async function getAiCostSummary(): Promise<AiCostSummaryRow[]> {
+  if (!isSupabaseConfigured() || !supabase) return [];
+  const { data, error } = await supabase.rpc("get_hq_ai_cost_summary");
+  if (error || !data) return [];
+  return data.map((row: any) => ({
+    tenantId: row.tenant_id,
+    tenantName: row.tenant_name,
+    provider: row.provider,
+    totalCalls: Number(row.total_calls) || 0,
+    totalCostUsd: Number(row.total_cost_usd) || 0,
+  }));
+}
+
 // --- Public marketing site CMS (HQ-editable, publicly readable) ---
 
 export interface SiteSettings {
