@@ -2971,6 +2971,57 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
                   <p className="text-[11px] text-amber-700">{selectedCustomer.notes}</p>
                 </div>
               )}
+
+              {/* Customer 360 — consolidated cross-module view (Module 10) */}
+              <div className="border-t border-slate-100 pt-3 space-y-2">
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Profil 360</p>
+                <div className="grid grid-cols-3 gap-2">
+                  <div className="bg-slate-50 rounded-xl p-2.5 text-center">
+                    <p className="text-[9px] text-slate-400">Penggunaan AI</p>
+                    <p className="text-xs font-bold text-slate-800">{selectedCustomer.aiUsage}</p>
+                  </div>
+                  <div className="bg-slate-50 rounded-xl p-2.5 text-center">
+                    <p className="text-[9px] text-slate-400">Storan</p>
+                    <p className="text-xs font-bold text-slate-800">{selectedCustomer.storageGB.toFixed(2)} GB</p>
+                  </div>
+                  <div className="bg-slate-50 rounded-xl p-2.5 text-center">
+                    <p className="text-[9px] text-slate-400">Jumlah Dibayar</p>
+                    <p className="text-xs font-bold text-emerald-700">RM {selectedCustomer.totalPaidMyr.toLocaleString()}</p>
+                  </div>
+                </div>
+                {typeof selectedCustomer.healthScore === "number" && (
+                  <div className={`rounded-xl p-3 ${
+                    selectedCustomer.healthRiskLevel === "high" ? "bg-red-50 border border-red-100" :
+                    selectedCustomer.healthRiskLevel === "medium" ? "bg-amber-50 border border-amber-100" :
+                    "bg-emerald-50 border border-emerald-100"
+                  }`}>
+                    <p className="text-[10px] font-bold text-slate-500">Skor Kesihatan: {selectedCustomer.healthScore}/100</p>
+                    {!!selectedCustomer.healthReasons?.length && (
+                      <ul className="mt-1 space-y-0.5">
+                        {selectedCustomer.healthReasons.map((r, i) => (
+                          <li key={i} className="text-[10px] text-slate-500">- {r}</li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                )}
+                {(() => {
+                  const custTickets = allTickets.filter(t => t.customer === selectedCustomer.name);
+                  if (custTickets.length === 0) return null;
+                  return (
+                    <div className="space-y-1">
+                      <p className="text-[10px] text-slate-400">Tiket Sokongan ({custTickets.length})</p>
+                      {custTickets.slice(0, 3).map(t => (
+                        <div key={t.id} className="flex items-center justify-between bg-slate-50 rounded-lg px-2.5 py-1.5">
+                          <span className="text-[11px] text-slate-700 truncate">{t.subject}</span>
+                          <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${t.status === "resolved" ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}>{t.status}</span>
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })()}
+              </div>
+
               <div className="text-[10px] text-slate-400">Sejak: {selectedCustomer.joinedAt}</div>
             </div>
 
