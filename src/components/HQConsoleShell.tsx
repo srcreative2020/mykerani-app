@@ -27,7 +27,8 @@ interface HQConsoleShellProps {
 // HQ_STAFF pages: dashboard, customers, subscriptions, support
 type HQPage = "dashboard" | "customers" | "billing" | "usage" | "support" | "revenue" | "settings" | "system" | "subscriptions" | "website"
   | "customer360" | "alertCenter" | "walletDashboard" | "healthScores" | "governance" | "paymentGovernance" | "storageGovernance"
-  | "aiCostGovernance" | "dataMaskingGovernance";
+  | "aiCostGovernance" | "dataMaskingGovernance" | "approvalCenter"
+  | "activityCenter" | "costCenter" | "knowledgeCenter";
 
 // â"€â"€ Mock data (demo accounts only) â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 const MOCK_CUSTOMERS = [
@@ -409,8 +410,8 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
     const target = customers.find(c => c.id === id);
     const nextStatus = target?.status === "active" ? "suspended" : "active";
     if (useRealData) {
-      await hqService.setCustomerStatus(id, nextStatus);
-      reloadCustomers();
+      await hqService.submitPendingHqAction(nextStatus === "suspended" ? "tenant_suspend" : "tenant_reactivate", "tenant_subscriptions", id, {});
+      if (pendingHqActionsFilter === "pending") await loadPendingHqActions("pending");
       return;
     }
     setCustomers(prev => prev.map(c => c.id === id ? { ...c, status: c.status === "active" ? "suspended" : "active" } : c));
@@ -474,6 +475,95 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
     else await hqService.grantUnmaskAccess(userId);
     hqService.getMaskingGrants().then(setMaskingGrants);
     hqService.getHqStaffUsers().then(setHqStaffUsers);
+  };
+
+  // Approval Center (Phase 2)
+  const [pendingHqActions, setPendingHqActions] = useState<hqService.PendingHqAction[]>([]);
+  const [pendingHqActionsFilter, setPendingHqActionsFilter] = useState<hqService.PendingHqActionStatus>("pending");
+  const [approvalActionBusy, setApprovalActionBusy] = useState<string | null>(null);
+  const [approvalActionError, setApprovalActionError] = useState<string | null>(null);
+  const loadPendingHqActions = (status: hqService.PendingHqActionStatus = pendingHqActionsFilter) =>
+    hqService.getPendingHqActions(status).then(setPendingHqActions);
+  useEffect(() => {
+    if (!useRealData) return;
+    loadPendingHqActions(pendingHqActionsFilter);
+  }, [useRealData, pendingHqActionsFilter]);
+  const [myHqNotifications, setMyHqNotifications] = useState<hqService.HqStaffNotification[]>([]);
+  useEffect(() => {
+    if (!useRealData) return;
+    hqService.getMyHqStaffNotifications().then(setMyHqNotifications);
+  }, [useRealData]);
+  const reviewHqAction = async (actionId: string, approve: boolean) => {
+    setApprovalActionBusy(actionId);
+    setApprovalActionError(null);
+    const result = await hqService.reviewPendingHqAction(actionId, approve);
+    if (!result.ok) setApprovalActionError(result.error || "Tindakan gagal");
+    await loadPendingHqActions(pendingHqActionsFilter);
+    setApprovalActionBusy(null);
+  };
+  const requestStaffSuspension = async (userId: string, suspend: boolean) => {
+    await hqService.submitPendingHqAction(suspend ? "staff_suspend" : "staff_reactivate", "profiles", userId, {});
+    if (pendingHqActionsFilter === "pending") await loadPendingHqActions("pending");
+  };
+
+  // HQ Activity Center (Phase 2)
+  const [hqActivityFeed, setHqActivityFeed] = useState<hqService.HqActivityEvent[]>([]);
+  const [hqActivityUnseenCount, setHqActivityUnseenCount] = useState(0);
+  const loadHqActivityFeed = () => hqService.getHqActivityFeed(50).then(setHqActivityFeed);
+  useEffect(() => {
+    if (!useRealData) return;
+    loadHqActivityFeed();
+    hqService.getHqActivityUnseenCount().then(setHqActivityUnseenCount);
+  }, [useRealData]);
+  const markHqActivitySeenNow = async () => {
+    await hqService.markHqActivitySeen();
+    setHqActivityUnseenCount(0);
+  };
+
+  // HQ Cost Center (Phase 2)
+  const [hqCostSummary, setHqCostSummary] = useState<hqService.HqCostCenterSummary | null>(null);
+  const [hqOperatingCosts, setHqOperatingCosts] = useState<hqService.HqOperatingCost[]>([]);
+  const [newCostForm, setNewCostForm] = useState({ category: "infrastructure", description: "", amountMyr: "", incurredOn: new Date().toISOString().slice(0, 10) });
+  const loadHqCostCenter = () => {
+    hqService.getHqCostCenterSummary().then(setHqCostSummary);
+    hqService.getHqOperatingCosts(50).then(setHqOperatingCosts);
+  };
+  useEffect(() => {
+    if (!useRealData) return;
+    loadHqCostCenter();
+  }, [useRealData]);
+  const submitOperatingCost = async () => {
+    if (!newCostForm.description.trim() || !newCostForm.amountMyr) return;
+    await hqService.recordHqOperatingCost(newCostForm.category, newCostForm.description.trim(), Number(newCostForm.amountMyr), newCostForm.incurredOn);
+    setNewCostForm(f => ({ ...f, description: "", amountMyr: "" }));
+    loadHqCostCenter();
+  };
+  const removeOperatingCost = async (id: string) => {
+    await hqService.deleteHqOperatingCost(id);
+    loadHqCostCenter();
+  };
+
+  // HQ Knowledge Center (Phase 2)
+  const [hqKnowledgeArticles, setHqKnowledgeArticles] = useState<hqService.HqKnowledgeArticle[]>([]);
+  const [knowledgeForm, setKnowledgeForm] = useState({ id: "", title: "", body: "", category: "general" });
+  const loadHqKnowledgeArticles = () => hqService.getHqKnowledgeArticles().then(setHqKnowledgeArticles);
+  useEffect(() => {
+    if (!useRealData) return;
+    loadHqKnowledgeArticles();
+  }, [useRealData]);
+  const saveKnowledgeArticle = async () => {
+    if (!knowledgeForm.title.trim() || !knowledgeForm.body.trim()) return;
+    if (knowledgeForm.id) {
+      await hqService.updateHqKnowledgeArticle(knowledgeForm.id, knowledgeForm.title.trim(), knowledgeForm.body.trim(), knowledgeForm.category);
+    } else {
+      await hqService.createHqKnowledgeArticle(knowledgeForm.title.trim(), knowledgeForm.body.trim(), knowledgeForm.category);
+    }
+    setKnowledgeForm({ id: "", title: "", body: "", category: "general" });
+    loadHqKnowledgeArticles();
+  };
+  const removeKnowledgeArticle = async (id: string) => {
+    await hqService.deleteHqKnowledgeArticle(id);
+    loadHqKnowledgeArticles();
   };
 
   // Resource Wallet Dashboard (Module 11)
@@ -668,6 +758,8 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
     try { const s = JSON.parse(localStorage.getItem(aiRouterKey) || "{}"); return s.usdMyr || 4.45; } catch { return 4.45; }
   });
   const [testingProv, setTestingProv] = useState<string | null>(null);
+  const [systemHealth, setSystemHealth] = useState<{ label: string; ok: boolean; latencyMs: number }[]>([]);
+  const [systemHealthLoading, setSystemHealthLoading] = useState(false);
   const [aiRouterLoaded, setAiRouterLoaded] = useState(!useRealData);
 
   // AI Cost Governance: real per-call cost rates + aggregated spend by tenant/provider
@@ -736,13 +828,53 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
     }
   };
 
+  useEffect(() => {
+    if (activePage !== "system" || !useRealData) return;
+    let active = true;
+    const load = async () => {
+      setSystemHealthLoading(true);
+      try {
+        const { supabase } = await import("../lib/supabase");
+        const { data: sessionData } = await supabase!.auth.getSession();
+        const jwt = sessionData?.session?.access_token || "";
+        const res = await fetch("/api/admin/system-health", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${jwt}` },
+        });
+        const json = await res.json();
+        if (active) setSystemHealth(json.checks || []);
+      } catch {
+        if (active) setSystemHealth([]);
+      }
+      if (active) setSystemHealthLoading(false);
+    };
+    load();
+    return () => { active = false; };
+  }, [activePage, useRealData]);
+
   const testConnection = async (providerId: string) => {
     setTestingProv(providerId);
     updateProviderCfg(providerId, { testStatus: "idle" });
-    await new Promise(r => setTimeout(r, 1600));
     const cfg = providerCfgs[providerId];
-    const ok = Boolean(cfg?.apiKey ? cfg.apiKey.length >= 10 : cfg?.hasKey);
-    updateProviderCfg(providerId, { testStatus: ok ? "ok" : "fail" });
+    if (!cfg?.apiKey) {
+      updateProviderCfg(providerId, { testStatus: "fail" });
+      setTestingProv(null);
+      return;
+    }
+    try {
+      const { supabase } = await import("../lib/supabase");
+      const { data: sessionData } = await supabase!.auth.getSession();
+      const jwt = sessionData?.session?.access_token || "";
+      const res = await fetch("/api/admin/test-ai-provider", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${jwt}` },
+        body: JSON.stringify({ providerId, apiKey: cfg.apiKey }),
+      });
+      const json = await res.json();
+      updateProviderCfg(providerId, { testStatus: json.ok ? "ok" : "fail" });
+    } catch {
+      updateProviderCfg(providerId, { testStatus: "fail" });
+    }
     setTestingProv(null);
   };
 
@@ -898,6 +1030,10 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
     { id: "storageGovernance" as HQPage, label: "Tadbir Storan",        icon: HardDrive, section: "Tadbir Urus" },
     { id: "aiCostGovernance" as HQPage,      label: "Tadbir Kos AI",        icon: DollarSign, section: "Tadbir Urus" },
     { id: "dataMaskingGovernance" as HQPage, label: "Tadbir Topeng Data",   icon: Shield, section: "Tadbir Urus" },
+    { id: "approvalCenter" as HQPage, label: "Pusat Kelulusan",   icon: ShieldAlert, section: "Tadbir Urus" },
+    { id: "activityCenter" as HQPage, label: "Pusat Aktiviti",    icon: Clock, badge: hqActivityUnseenCount, section: "Tadbir Urus" },
+    { id: "costCenter" as HQPage,     label: "Pusat Kos",         icon: TrendingUp, section: "Tadbir Urus" },
+    { id: "knowledgeCenter" as HQPage, label: "Pusat Pengetahuan", icon: FileText, section: "Tadbir Urus" },
     { id: "website" as HQPage,     label: "Tapak Web",      icon: Globe, section: "Sistem" },
     { id: "system" as HQPage,      label: "Pusat Sistem",   icon: Server, section: "Sistem" },
     { id: "settings" as HQPage,    label: "Tetapan",        icon: Settings, section: "Sistem" },
@@ -908,6 +1044,9 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
     { id: "customers" as HQPage,     label: "Pelanggan",      icon: Users, section: "Utama" },
     { id: "subscriptions" as HQPage, label: "Langganan",      icon: Repeat, section: "Utama" },
     { id: "support" as HQPage,       label: "Sokongan",       icon: Headphones, badge: openCases, section: "Utama" },
+    { id: "approvalCenter" as HQPage, label: "Pusat Kelulusan", icon: ShieldAlert, section: "Utama" },
+    { id: "activityCenter" as HQPage, label: "Pusat Aktiviti",  icon: Clock, badge: hqActivityUnseenCount, section: "Utama" },
+    { id: "knowledgeCenter" as HQPage, label: "Pusat Pengetahuan", icon: FileText, section: "Utama" },
   ];
 
   const navItems = isStaff ? staffNav : ownerNav;
@@ -1885,6 +2024,24 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
                                 </div>
                               )}
                               <div className="space-y-2">
+                                {hqKnowledgeArticles.length > 0 && (
+                                  <select
+                                    defaultValue=""
+                                    onChange={async (e) => {
+                                      const articleId = e.target.value;
+                                      if (!articleId) return;
+                                      const article = await hqService.getHqKnowledgeArticleForReply(articleId);
+                                      if (article) setReplyText(prev => (prev ? `${prev}\n\n${article.body}` : article.body));
+                                      e.target.value = "";
+                                    }}
+                                    className="text-[11px] border border-slate-200 rounded-lg px-2 py-1.5 bg-white text-slate-600 w-full"
+                                  >
+                                    <option value="">Sisip dari Pusat Pengetahuan...</option>
+                                    {hqKnowledgeArticles.map((a) => (
+                                      <option key={a.id} value={a.id}>{a.title}</option>
+                                    ))}
+                                  </select>
+                                )}
                                 <textarea value={replyText} onChange={e => setReplyText(e.target.value)}
                                   placeholder="Taip jawapan kepada pelanggan..."
                                   rows={3}
@@ -2793,22 +2950,27 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
                   <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
                     <Activity className="w-4 h-4 text-emerald-600" /> Kesihatan Sistem
                   </h3>
-                  <div className="grid grid-cols-2 gap-3">
-                    {[
-                      { label: "AI Router",       latency: "120ms" },
-                      { label: "Storan",          latency: "45ms"  },
-                      { label: "Pengesahan",      latency: "89ms"  },
-                      { label: "Pangkalan Data",  latency: "67ms"  },
-                    ].map(({ label, latency }) => (
-                      <div key={label} className="flex items-center gap-3 p-3.5 border border-slate-100 rounded-xl bg-emerald-50/40">
-                        <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0" />
-                        <div>
-                          <p className="text-xs font-semibold text-slate-700">{label}</p>
-                          <p className="text-[10px] text-slate-400">{latency} &middot; Operasi normal</p>
+                  {!useRealData ? (
+                    <p className="text-xs text-slate-400">Mod demo — tidak tersambung ke sistem sebenar.</p>
+                  ) : systemHealthLoading ? (
+                    <div className="grid grid-cols-2 gap-3">
+                      {Array.from({ length: 4 }).map((_, i) => (
+                        <div key={i} className="h-14 rounded-xl bg-slate-100 animate-pulse" />
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-2 gap-3">
+                      {systemHealth.map(({ label, ok, latencyMs }) => (
+                        <div key={label} className={`flex items-center gap-3 p-3.5 border rounded-xl ${ok ? "border-slate-100 bg-emerald-50/40" : "border-red-100 bg-red-50/60"}`}>
+                          <div className={`w-2 h-2 rounded-full shrink-0 ${ok ? "bg-emerald-500 animate-pulse" : "bg-red-500"}`} />
+                          <div>
+                            <p className="text-xs font-semibold text-slate-700">{label}</p>
+                            <p className="text-[10px] text-slate-400">{latencyMs}ms &middot; {ok ? "Operasi normal" : "Tidak responsif"}</p>
+                          </div>
                         </div>
-                      </div>
-                    ))}
-                  </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
 
               </div>
@@ -3473,16 +3635,25 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
                             <p className="text-xs font-bold text-slate-900 truncate">{u.fullName} <span className="text-slate-400 font-normal">({u.role})</span></p>
                             <p className="text-[11px] text-slate-500 truncate">{u.email}</p>
                           </div>
-                          <button
-                            onClick={() => toggleStaffUnmask(u.userId, u.unmaskGranted)}
-                            className={`shrink-0 px-3 py-1.5 rounded-lg text-[11px] font-bold cursor-pointer transition ${
-                              u.unmaskGranted
-                                ? "bg-amber-100 text-amber-800 hover:bg-amber-200"
-                                : "bg-emerald-100 text-emerald-800 hover:bg-emerald-200"
-                            }`}
-                          >
-                            {u.unmaskGranted ? "Tarik Balik Unmask" : "Beri Akses Unmask"}
-                          </button>
+                          <div className="shrink-0 flex items-center gap-1.5">
+                            <button
+                              onClick={() => toggleStaffUnmask(u.userId, u.unmaskGranted)}
+                              className={`px-3 py-1.5 rounded-lg text-[11px] font-bold cursor-pointer transition ${
+                                u.unmaskGranted
+                                  ? "bg-amber-100 text-amber-800 hover:bg-amber-200"
+                                  : "bg-emerald-100 text-emerald-800 hover:bg-emerald-200"
+                              }`}
+                            >
+                              {u.unmaskGranted ? "Tarik Balik Unmask" : "Beri Akses Unmask"}
+                            </button>
+                            <button
+                              onClick={() => requestStaffSuspension(u.userId, true)}
+                              className="px-3 py-1.5 rounded-lg text-[11px] font-bold cursor-pointer transition bg-red-100 text-red-800 hover:bg-red-200"
+                              title="Hantar permintaan gantung ke Pusat Kelulusan — perlu kelulusan kakitangan HQ lain"
+                            >
+                              Minta Gantung
+                            </button>
+                          </div>
                         </div>
                       ))}
                     </div>
@@ -3512,6 +3683,317 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
                         );
                       })}
                     </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {activePage === "approvalCenter" && (
+              <div className="space-y-4" id="hq_approval_center">
+                <h1 className="text-xl font-bold text-slate-900">Pusat Kelulusan HQ</h1>
+                <p className="text-xs text-slate-400">Tindakan sensitif (gantung/aktifkan kakitangan, dsb.) memerlukan kelulusan kakitangan HQ kedua sebelum dilaksanakan. Pemohon tidak boleh meluluskan permintaan sendiri.</p>
+
+                {myHqNotifications.filter(n => n.status === "UNREAD").length > 0 && (
+                  <div className="bg-amber-50 border border-amber-100 rounded-2xl p-4 space-y-2">
+                    <h3 className="text-xs font-bold text-amber-800">Notifikasi Akaun Anda</h3>
+                    {myHqNotifications.filter(n => n.status === "UNREAD").map((n) => (
+                      <div key={n.id} className="flex items-start justify-between gap-3 text-xs">
+                        <div>
+                          <p className="font-bold text-amber-900">{n.title}</p>
+                          <p className="text-amber-700">{n.message}</p>
+                        </div>
+                        <button
+                          onClick={() => hqService.markHqStaffNotificationRead(n.id).then(() => hqService.getMyHqStaffNotifications().then(setMyHqNotifications))}
+                          className="shrink-0 px-2 py-1 rounded-lg bg-amber-100 text-amber-800 font-bold hover:bg-amber-200 cursor-pointer"
+                        >
+                          Tandai Dibaca
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <div className="flex items-center gap-2">
+                  {(["pending", "approved", "rejected"] as hqService.PendingHqActionStatus[]).map((s) => (
+                    <button
+                      key={s}
+                      onClick={() => setPendingHqActionsFilter(s)}
+                      className={`px-3 py-1.5 rounded-lg text-[11px] font-bold cursor-pointer transition ${
+                        pendingHqActionsFilter === s ? "bg-emerald-600 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                      }`}
+                    >
+                      {s === "pending" ? "Belum Selesai" : s === "approved" ? "Diluluskan" : "Ditolak"}
+                    </button>
+                  ))}
+                </div>
+
+                {approvalActionError && (
+                  <div className="bg-red-50 border border-red-100 rounded-xl p-3 text-xs text-red-700 font-semibold">{approvalActionError}</div>
+                )}
+
+                <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-3">
+                  {pendingHqActions.length === 0 ? (
+                    <div className="text-center py-6 bg-slate-50 rounded-xl">
+                      <ShieldAlert className="w-6 h-6 text-slate-200 mx-auto mb-1" />
+                      <p className="text-xs text-slate-400">Tiada permintaan dalam kategori ini.</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      {pendingHqActions.map((a) => (
+                        <div key={a.id} className="flex items-center justify-between gap-3 p-3 bg-slate-50 rounded-xl">
+                          <div className="min-w-0">
+                            <p className="text-xs font-bold text-slate-900">
+                              {a.actionType === "staff_suspend" ? "Gantung Kakitangan"
+                                : a.actionType === "staff_reactivate" ? "Aktifkan Semula Kakitangan"
+                                : a.actionType === "tenant_suspend" ? "Gantung Pelanggan"
+                                : a.actionType === "tenant_reactivate" ? "Aktifkan Semula Pelanggan"
+                                : a.actionType}
+                            </p>
+                            <p className="text-[11px] text-slate-500 truncate">
+                              Dipohon oleh {a.requestedByEmail || a.requestedBy} &middot; {new Date(a.requestedAt).toLocaleString("ms-MY")}
+                            </p>
+                            {a.status !== "pending" && (
+                              <p className="text-[11px] text-slate-400 truncate">
+                                {a.status === "approved" ? "Diluluskan" : "Ditolak"} oleh {a.reviewedByEmail || a.reviewedBy} &middot; {a.reviewedAt ? new Date(a.reviewedAt).toLocaleString("ms-MY") : ""}
+                              </p>
+                            )}
+                          </div>
+                          {a.status === "pending" && (
+                            <div className="shrink-0 flex items-center gap-1.5">
+                              <button
+                                disabled={approvalActionBusy === a.id}
+                                onClick={() => reviewHqAction(a.id, true)}
+                                className="px-3 py-1.5 rounded-lg text-[11px] font-bold cursor-pointer transition bg-emerald-100 text-emerald-800 hover:bg-emerald-200 disabled:opacity-50"
+                              >
+                                Luluskan
+                              </button>
+                              <button
+                                disabled={approvalActionBusy === a.id}
+                                onClick={() => reviewHqAction(a.id, false)}
+                                className="px-3 py-1.5 rounded-lg text-[11px] font-bold cursor-pointer transition bg-slate-200 text-slate-700 hover:bg-slate-300 disabled:opacity-50"
+                              >
+                                Tolak
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* ═════ ACTIVITY CENTER (Phase 2) ═════ */}
+            {activePage === "activityCenter" && (
+              <div className="space-y-4" id="hq_activity_center">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h1 className="text-xl font-bold text-slate-900">Pusat Aktiviti HQ</h1>
+                    <p className="text-xs text-slate-400">Aliran tindakan tadbir urus seluruh ekosistem — log audit pelanggan &amp; keputusan kelulusan HQ dalam satu paparan.</p>
+                  </div>
+                  <button
+                    onClick={markHqActivitySeenNow}
+                    className="px-3 py-1.5 rounded-lg text-[11px] font-bold cursor-pointer transition bg-slate-100 text-slate-600 hover:bg-slate-200"
+                  >
+                    Tandai Semua Dibaca {hqActivityUnseenCount > 0 ? `(${hqActivityUnseenCount})` : ""}
+                  </button>
+                </div>
+
+                <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-2">
+                  {hqActivityFeed.length === 0 ? (
+                    <div className="text-center py-6 bg-slate-50 rounded-xl">
+                      <Clock className="w-6 h-6 text-slate-200 mx-auto mb-1" />
+                      <p className="text-xs text-slate-400">Tiada aktiviti direkodkan.</p>
+                    </div>
+                  ) : (
+                    hqActivityFeed.map((e) => (
+                      <div key={`${e.sourceTable}-${e.eventId}`} className="flex items-start justify-between gap-3 p-3 bg-slate-50 rounded-xl">
+                        <div className="min-w-0">
+                          <p className="text-xs font-bold text-slate-900">{e.module} &middot; {e.action}</p>
+                          <p className="text-[11px] text-slate-500 truncate">{e.actorEmail || "—"} ({e.actorRole}) &middot; {new Date(e.occurredAt).toLocaleString("ms-MY")}</p>
+                        </div>
+                        <span className="shrink-0 text-[10px] font-bold text-slate-400 bg-white border border-slate-200 px-2 py-0.5 rounded-full">{e.sourceTable === "audit_logs" ? "Audit" : "Kelulusan"}</span>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* ═════ COST CENTER (Phase 2, HQ_OWNER only) ═════ */}
+            {activePage === "costCenter" && !isStaff && (
+              <div className="space-y-4" id="hq_cost_center">
+                <h1 className="text-xl font-bold text-slate-900">Pusat Kos HQ</h1>
+                <p className="text-xs text-slate-400">Ringkasan margin platform — MRR sebenar, kos AI sebenar (30 hari), dan kos operasi yang direkodkan.</p>
+
+                {hqCostSummary && (
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4">
+                      <p className="text-[11px] text-slate-400">MRR (semasa)</p>
+                      <p className="text-lg font-bold text-slate-900">RM{hqCostSummary.mrrMyr.toFixed(2)}</p>
+                    </div>
+                    <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4">
+                      <p className="text-[11px] text-slate-400">Kos AI (30 hari)</p>
+                      <p className="text-lg font-bold text-slate-900">RM{hqCostSummary.aiCostMyr30d.toFixed(2)}</p>
+                    </div>
+                    <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4">
+                      <p className="text-[11px] text-slate-400">Kos Operasi (30 hari)</p>
+                      <p className="text-lg font-bold text-slate-900">RM{hqCostSummary.operatingCostMyr30d.toFixed(2)}</p>
+                    </div>
+                    <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4">
+                      <p className="text-[11px] text-slate-400">Anggaran Margin (30 hari)</p>
+                      <p className={`text-lg font-bold ${hqCostSummary.estimatedMarginMyr30d >= 0 ? "text-emerald-700" : "text-red-700"}`}>RM{hqCostSummary.estimatedMarginMyr30d.toFixed(2)}</p>
+                    </div>
+                  </div>
+                )}
+
+                <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-3">
+                  <h3 className="text-xs font-bold text-slate-700">Rekod Kos Operasi Baharu</h3>
+                  <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
+                    <select
+                      value={newCostForm.category}
+                      onChange={(e) => setNewCostForm(f => ({ ...f, category: e.target.value }))}
+                      className="text-xs border border-slate-200 rounded-lg px-2 py-1.5"
+                    >
+                      {["infrastructure", "vendor", "staffing", "marketing", "other"].map((c) => (
+                        <option key={c} value={c}>{c}</option>
+                      ))}
+                    </select>
+                    <input
+                      type="text"
+                      placeholder="Keterangan"
+                      value={newCostForm.description}
+                      onChange={(e) => setNewCostForm(f => ({ ...f, description: e.target.value }))}
+                      className="text-xs border border-slate-200 rounded-lg px-2 py-1.5 col-span-2"
+                    />
+                    <input
+                      type="number"
+                      placeholder="RM"
+                      value={newCostForm.amountMyr}
+                      onChange={(e) => setNewCostForm(f => ({ ...f, amountMyr: e.target.value }))}
+                      className="text-xs border border-slate-200 rounded-lg px-2 py-1.5"
+                    />
+                    <input
+                      type="date"
+                      value={newCostForm.incurredOn}
+                      onChange={(e) => setNewCostForm(f => ({ ...f, incurredOn: e.target.value }))}
+                      className="text-xs border border-slate-200 rounded-lg px-2 py-1.5"
+                    />
+                  </div>
+                  <button
+                    onClick={submitOperatingCost}
+                    className="px-3 py-1.5 rounded-lg text-[11px] font-bold cursor-pointer transition bg-emerald-600 text-white hover:bg-emerald-700"
+                  >
+                    Tambah Kos
+                  </button>
+                </div>
+
+                <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-2">
+                  {hqOperatingCosts.length === 0 ? (
+                    <div className="text-center py-6 bg-slate-50 rounded-xl">
+                      <TrendingUp className="w-6 h-6 text-slate-200 mx-auto mb-1" />
+                      <p className="text-xs text-slate-400">Tiada kos operasi direkodkan.</p>
+                    </div>
+                  ) : (
+                    hqOperatingCosts.map((c) => (
+                      <div key={c.id} className="flex items-center justify-between gap-3 p-3 bg-slate-50 rounded-xl">
+                        <div className="min-w-0">
+                          <p className="text-xs font-bold text-slate-900">{c.description}</p>
+                          <p className="text-[11px] text-slate-500">{c.category} &middot; RM{c.amountMyr.toFixed(2)} &middot; {c.incurredOn}</p>
+                        </div>
+                        <button
+                          onClick={() => removeOperatingCost(c.id)}
+                          className="shrink-0 px-2 py-1 rounded-lg bg-red-50 text-red-700 font-bold hover:bg-red-100 cursor-pointer text-[11px]"
+                        >
+                          Padam
+                        </button>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* ═════ KNOWLEDGE CENTER (Phase 2) ═════ */}
+            {activePage === "knowledgeCenter" && (
+              <div className="space-y-4" id="hq_knowledge_center">
+                <h1 className="text-xl font-bold text-slate-900">Pusat Pengetahuan HQ</h1>
+                <p className="text-xs text-slate-400">Pangkalan pengetahuan dalaman HQ — panduan operasi, skrip sokongan, nota penyelesaian masalah.</p>
+
+                <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-2">
+                  <h3 className="text-xs font-bold text-slate-700">{knowledgeForm.id ? "Sunting Artikel" : "Artikel Baharu"}</h3>
+                  <input
+                    type="text"
+                    placeholder="Tajuk"
+                    value={knowledgeForm.title}
+                    onChange={(e) => setKnowledgeForm(f => ({ ...f, title: e.target.value }))}
+                    className="text-xs border border-slate-200 rounded-lg px-2 py-1.5 w-full"
+                  />
+                  <input
+                    type="text"
+                    placeholder="Kategori"
+                    value={knowledgeForm.category}
+                    onChange={(e) => setKnowledgeForm(f => ({ ...f, category: e.target.value }))}
+                    className="text-xs border border-slate-200 rounded-lg px-2 py-1.5 w-full"
+                  />
+                  <textarea
+                    placeholder="Kandungan"
+                    value={knowledgeForm.body}
+                    onChange={(e) => setKnowledgeForm(f => ({ ...f, body: e.target.value }))}
+                    rows={4}
+                    className="text-xs border border-slate-200 rounded-lg px-2 py-1.5 w-full"
+                  />
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={saveKnowledgeArticle}
+                      className="px-3 py-1.5 rounded-lg text-[11px] font-bold cursor-pointer transition bg-emerald-600 text-white hover:bg-emerald-700"
+                    >
+                      {knowledgeForm.id ? "Kemaskini" : "Simpan"}
+                    </button>
+                    {knowledgeForm.id && (
+                      <button
+                        onClick={() => setKnowledgeForm({ id: "", title: "", body: "", category: "general" })}
+                        className="px-3 py-1.5 rounded-lg text-[11px] font-bold cursor-pointer transition bg-slate-100 text-slate-600 hover:bg-slate-200"
+                      >
+                        Batal
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-2">
+                  {hqKnowledgeArticles.length === 0 ? (
+                    <div className="text-center py-6 bg-slate-50 rounded-xl">
+                      <FileText className="w-6 h-6 text-slate-200 mx-auto mb-1" />
+                      <p className="text-xs text-slate-400">Tiada artikel pengetahuan.</p>
+                    </div>
+                  ) : (
+                    hqKnowledgeArticles.map((a) => (
+                      <div key={a.id} className="flex items-start justify-between gap-3 p-3 bg-slate-50 rounded-xl">
+                        <div className="min-w-0">
+                          <p className="text-xs font-bold text-slate-900">{a.title}</p>
+                          <p className="text-[11px] text-slate-500 line-clamp-2">{a.body}</p>
+                          <p className="text-[10px] text-slate-400">{a.category} &middot; dikemaskini {new Date(a.updatedAt).toLocaleString("ms-MY")}</p>
+                        </div>
+                        <div className="shrink-0 flex items-center gap-1.5">
+                          <button
+                            onClick={() => setKnowledgeForm({ id: a.id, title: a.title, body: a.body, category: a.category })}
+                            className="px-2 py-1 rounded-lg bg-slate-100 text-slate-600 font-bold hover:bg-slate-200 cursor-pointer text-[11px]"
+                          >
+                            Sunting
+                          </button>
+                          {!isStaff && (
+                            <button
+                              onClick={() => removeKnowledgeArticle(a.id)}
+                              className="px-2 py-1 rounded-lg bg-red-50 text-red-700 font-bold hover:bg-red-100 cursor-pointer text-[11px]"
+                            >
+                              Padam
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    ))
                   )}
                 </div>
               </div>
