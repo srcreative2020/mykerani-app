@@ -26,7 +26,8 @@ interface HQConsoleShellProps {
 // HQ_OWNER pages: all 8
 // HQ_STAFF pages: dashboard, customers, subscriptions, support
 type HQPage = "dashboard" | "customers" | "billing" | "usage" | "support" | "revenue" | "settings" | "system" | "subscriptions" | "website"
-  | "customer360" | "alertCenter" | "walletDashboard" | "healthScores" | "governance" | "paymentGovernance" | "storageGovernance";
+  | "customer360" | "alertCenter" | "walletDashboard" | "healthScores" | "governance" | "paymentGovernance" | "storageGovernance"
+  | "aiCostGovernance" | "dataMaskingGovernance";
 
 // â"€â"€ Mock data (demo accounts only) â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 const MOCK_CUSTOMERS = [
@@ -898,6 +899,8 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
     { id: "governance" as HQPage,        label: "Tadbir Urus",          icon: ShieldAlert },
     { id: "paymentGovernance" as HQPage, label: "Tadbir Bayaran",       icon: CreditCard },
     { id: "storageGovernance" as HQPage, label: "Tadbir Storan",        icon: HardDrive },
+    { id: "aiCostGovernance" as HQPage,      label: "Tadbir Kos AI",        icon: DollarSign },
+    { id: "dataMaskingGovernance" as HQPage, label: "Tadbir Topeng Data",   icon: Shield },
   ];
 
   const staffNav = [
@@ -1077,7 +1080,12 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
             {/* â•â•â•â• DASHBOARD â•â•â•â• */}
             {activePage === "dashboard" && (() => {
               // â"€â"€ Intelligence computations â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
-              const mrrAtRisk    = customers.filter(c => c.status === "suspended").reduce((s, c) => s + c.mrr, 0);
+              // hq_alerts (churn_risk) is the single source of truth — Dashboard must not
+              // recompute churn risk independently, or it can disagree with the Alert Center.
+              const churnAlerts  = useRealData ? hqAlerts.filter(a => a.alertType === "churn_risk" && !a.resolvedAt) : [];
+              const mrrAtRisk    = useRealData
+                ? churnAlerts.reduce((s, a) => s + (customers.find(c => c.id === a.tenantId)?.mrr || 0), 0)
+                : customers.filter(c => c.status === "suspended").reduce((s, c) => s + c.mrr, 0);
               const arr          = totalMRR * 12;
               const growthRate   = 0.05;
               const forecast     = [1, 2, 3].map(m => Math.round(totalMRR * Math.pow(1 + growthRate, m)));
@@ -1098,16 +1106,30 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
                 .filter(c => c.score >= 0.75)
                 .sort((a, b) => b.score - a.score);
 
-              // Churn risks
-              const churnRisks = customers
-                .filter(c => c.status === "suspended" || c.attention || c.healthRiskLevel === "high" || allTickets.some(t => t.customer === c.name && t.status !== "resolved"))
-                .map(c => ({
-                  ...c,
-                  riskLevel: (c.status === "suspended" || c.healthRiskLevel === "high") ? "high" : "medium" as "high"|"medium",
-                  riskReason: c.status === "suspended" ? "Digantung - tiada bayaran" : (c.healthReasons && c.healthReasons.length > 0) ? c.healthReasons[0] : c.attention ? "Perlu perhatian" : "Tiket sokongan terbuka",
-                  potentialLoss: c.mrr,
-                }))
-                .sort((a, b) => (b.riskLevel === "high" ? 1 : 0) - (a.riskLevel === "high" ? 1 : 0));
+              // Churn risks — derived from hq_alerts (churn_risk), the single source of truth
+              // shared with the Alert Center, so the two views can never disagree.
+              const churnRisks = useRealData
+                ? churnAlerts
+                    .map(a => {
+                      const c = customers.find(cust => cust.id === a.tenantId);
+                      return c ? {
+                        ...c,
+                        riskLevel: (a.severity === "high") ? "high" : "medium" as "high"|"medium",
+                        riskReason: a.message,
+                        potentialLoss: c.mrr,
+                      } : null;
+                    })
+                    .filter((c): c is NonNullable<typeof c> => c !== null)
+                    .sort((a, b) => (b.riskLevel === "high" ? 1 : 0) - (a.riskLevel === "high" ? 1 : 0))
+                : customers
+                    .filter(c => c.status === "suspended" || c.attention || c.healthRiskLevel === "high" || allTickets.some(t => t.customer === c.name && t.status !== "resolved"))
+                    .map(c => ({
+                      ...c,
+                      riskLevel: (c.status === "suspended" || c.healthRiskLevel === "high") ? "high" : "medium" as "high"|"medium",
+                      riskReason: c.status === "suspended" ? "Digantung - tiada bayaran" : (c.healthReasons && c.healthReasons.length > 0) ? c.healthReasons[0] : c.attention ? "Perlu perhatian" : "Tiket sokongan terbuka",
+                      potentialLoss: c.mrr,
+                    }))
+                    .sort((a, b) => (b.riskLevel === "high" ? 1 : 0) - (a.riskLevel === "high" ? 1 : 0));
 
               // Today's briefing items
               const unresolvedAlerts = useRealData ? hqAlerts.filter(a => !a.resolvedAt) : [];
@@ -2271,7 +2293,7 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
                   )}
                 </div>
 
-                {/* HQ Staff */}
+                {/* HQ Staff account creation — masking/unmask administration relocated to "dataMaskingGovernance" */}
                 <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-4">
                   <div className="flex items-center justify-between">
                     <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2"><Users className="w-4 h-4 text-emerald-600" />Kakitangan HQ</h3>
@@ -2305,33 +2327,17 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
                       )}
                     </div>
                   )}
-                  {hqStaffUsers.length === 0 ? (
-                    <div className="text-center py-4 bg-slate-50 rounded-xl">
-                      <Users className="w-6 h-6 text-slate-200 mx-auto mb-1" />
-                      <p className="text-xs text-slate-400">Hanya anda sebagai pentadbir HQ</p>
+                  <button onClick={() => setActivePage("dataMaskingGovernance")}
+                    className="w-full flex items-center justify-between gap-3 p-3 bg-slate-50 rounded-xl cursor-pointer hover:bg-slate-100 transition text-left">
+                    <div className="flex items-center gap-2">
+                      <Shield className="w-4 h-4 text-emerald-600 shrink-0" />
+                      <div>
+                        <p className="text-xs font-bold text-slate-900">Tadbir Topeng Data (PII)</p>
+                        <p className="text-[11px] text-slate-400">{hqStaffUsers.filter(u => u.unmaskGranted).length}/{hqStaffUsers.length} staf diberi akses unmask &middot; Uruskan akses penuh</p>
+                      </div>
                     </div>
-                  ) : (
-                    <div className="space-y-2">
-                      {hqStaffUsers.map((u) => (
-                        <div key={u.userId} className="flex items-center justify-between gap-3 p-3 bg-slate-50 rounded-xl">
-                          <div className="min-w-0">
-                            <p className="text-xs font-bold text-slate-900 truncate">{u.fullName} <span className="text-slate-400 font-normal">({u.role})</span></p>
-                            <p className="text-[11px] text-slate-500 truncate">{u.email}</p>
-                          </div>
-                          <button
-                            onClick={() => toggleStaffUnmask(u.userId, u.unmaskGranted)}
-                            className={`shrink-0 px-3 py-1.5 rounded-lg text-[11px] font-bold cursor-pointer transition ${
-                              u.unmaskGranted
-                                ? "bg-amber-100 text-amber-800 hover:bg-amber-200"
-                                : "bg-emerald-100 text-emerald-800 hover:bg-emerald-200"
-                            }`}
-                          >
-                            {u.unmaskGranted ? "Tarik Balik Unmask" : "Beri Akses Unmask"}
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
+                    <ChevronRight className="w-4 h-4 text-slate-400 shrink-0" />
+                  </button>
                 </div>
 
                 {/* Notifications */}
@@ -2471,39 +2477,18 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
                   </div>
                 </div>
 
-                {/* AI Cost Governance: real cost rates + spend by tenant */}
-                <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-4">
-                  <div className="flex items-center gap-2">
-                    <DollarSign className="w-4 h-4 text-amber-500" />
-                    <h3 className="text-sm font-bold text-slate-900">Tadbir Urus Kos AI</h3>
+                {/* AI Cost Governance — relocated to its own dedicated page: "aiCostGovernance" */}
+                <button onClick={() => setActivePage("aiCostGovernance")}
+                  className="w-full bg-white rounded-2xl border border-slate-200 shadow-sm p-5 flex items-center justify-between cursor-pointer hover:border-emerald-300 transition">
+                  <div className="flex items-center gap-3 text-left">
+                    <DollarSign className="w-4 h-4 text-amber-500 shrink-0" />
+                    <div>
+                      <h3 className="text-sm font-bold text-slate-900">Tadbir Urus Kos AI</h3>
+                      <p className="text-[11px] text-slate-400 mt-0.5">Lihat & uruskan kadar kos panggilan dan perbelanjaan sebenar mengikut syarikat di Tadbir Kos AI</p>
+                    </div>
                   </div>
-                  <div className="space-y-2">
-                    <p className="text-[11px] font-bold text-slate-500">Kadar kos per panggilan (USD)</p>
-                    {AI_PROVIDERS.flatMap(prov => prov.models.map(m => {
-                      const existing = aiCostRates.find(r => r.provider === prov.id && r.model === m.id);
-                      return (
-                        <div key={`${prov.id}:${m.id}`} className="flex items-center justify-between text-xs p-2 bg-slate-50 rounded-lg">
-                          <span className="text-slate-600">{prov.name} / {m.id}</span>
-                          <input type="number" step="0.0001" min="0" defaultValue={existing?.costPerCallUsd ?? 0}
-                            onBlur={e => saveAiCostRate(prov.id, m.id, parseFloat(e.target.value) || 0)}
-                            className="w-24 border border-slate-200 rounded-lg px-2 py-1 text-right focus:outline-none focus:border-emerald-400" />
-                        </div>
-                      );
-                    }))}
-                  </div>
-                  <div className="space-y-2">
-                    <p className="text-[11px] font-bold text-slate-500">Perbelanjaan sebenar mengikut syarikat</p>
-                    {aiCostSummary.length === 0 ? (
-                      <p className="text-xs text-slate-400 text-center py-3">Tiada data perbelanjaan lagi.</p>
-                    ) : aiCostSummary.map((r, i) => (
-                      <div key={`${r.tenantId}-${r.provider}-${i}`} className="flex items-center justify-between text-xs p-2 bg-amber-50 rounded-lg">
-                        <span className="text-slate-700 font-semibold">{r.tenantName}</span>
-                        <span className="text-slate-500">{r.provider} · {r.totalCalls} panggilan</span>
-                        <span className="font-bold text-amber-700">${r.totalCostUsd.toFixed(4)} (RM{(r.totalCostUsd * usdMyr).toFixed(2)})</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
+                  <ChevronRight className="w-4 h-4 text-slate-400 shrink-0" />
+                </button>
 
                 {/* Provider Cards */}
                 <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-4">
@@ -3088,7 +3073,7 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
                   <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-3">
                     <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2"><Shield className="w-4 h-4 text-emerald-600" />Topeng Data (PII)</h3>
                     <p className="text-[11px] text-slate-400">Unmask: {unmaskAllowed ? "Dibenarkan" : "Disekat"} &middot; {hqStaffUsers.filter(u => u.unmaskGranted).length}/{hqStaffUsers.length} staf diberi akses unmask &middot; {maskingGrants.length} geran aktif</p>
-                    <button onClick={() => setActivePage("settings")} className="text-xs font-bold text-emerald-600 cursor-pointer hover:underline">Urus di Tetapan &rarr;</button>
+                    <button onClick={() => setActivePage("dataMaskingGovernance")} className="text-xs font-bold text-emerald-600 cursor-pointer hover:underline">Buka Tadbir Topeng Data &rarr;</button>
                   </div>
                   <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-3">
                     <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2"><HardDrive className="w-4 h-4 text-emerald-600" />Tadbir Storan</h3>
@@ -3103,7 +3088,7 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
                   <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-3">
                     <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2"><DollarSign className="w-4 h-4 text-amber-500" />Tadbir Kos AI</h3>
                     <p className="text-[11px] text-slate-400">{aiCostSummary.length} rekod perbelanjaan &middot; Jumlah: ${aiCostSummary.reduce((s, r) => s + r.totalCostUsd, 0).toFixed(2)}</p>
-                    <button onClick={() => setActivePage("system")} className="text-xs font-bold text-emerald-600 cursor-pointer hover:underline">Buka AI Router &rarr;</button>
+                    <button onClick={() => setActivePage("aiCostGovernance")} className="text-xs font-bold text-emerald-600 cursor-pointer hover:underline">Buka Tadbir Kos AI &rarr;</button>
                   </div>
                 </div>
               </div>
@@ -3317,6 +3302,120 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
               </div>
               );
             })()}
+
+            {/* ═════ AI COST GOVERNANCE (HQ_OWNER only) ═════ */}
+            {activePage === "aiCostGovernance" && !isStaff && (
+              <div className="space-y-4" id="hq_ai_cost_governance">
+                <h1 className="text-xl font-bold text-slate-900">Tadbir Urus Kos AI</h1>
+                <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-4">
+                  <div className="flex items-center gap-2">
+                    <DollarSign className="w-4 h-4 text-amber-500" />
+                    <h3 className="text-sm font-bold text-slate-900">Kadar Kos Per Panggilan</h3>
+                  </div>
+                  <div className="space-y-2">
+                    <p className="text-[11px] font-bold text-slate-500">Kadar kos per panggilan (USD)</p>
+                    {AI_PROVIDERS.flatMap(prov => prov.models.map(m => {
+                      const existing = aiCostRates.find(r => r.provider === prov.id && r.model === m.id);
+                      return (
+                        <div key={`${prov.id}:${m.id}`} className="flex items-center justify-between text-xs p-2 bg-slate-50 rounded-lg">
+                          <span className="text-slate-600">{prov.name} / {m.id}</span>
+                          <input type="number" step="0.0001" min="0" defaultValue={existing?.costPerCallUsd ?? 0}
+                            onBlur={e => saveAiCostRate(prov.id, m.id, parseFloat(e.target.value) || 0)}
+                            className="w-24 border border-slate-200 rounded-lg px-2 py-1 text-right focus:outline-none focus:border-emerald-400" />
+                        </div>
+                      );
+                    }))}
+                  </div>
+                </div>
+                <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-4">
+                  <div className="flex items-center gap-2">
+                    <DollarSign className="w-4 h-4 text-amber-500" />
+                    <h3 className="text-sm font-bold text-slate-900">Perbelanjaan Sebenar Mengikut Syarikat</h3>
+                  </div>
+                  <p className="text-[11px] text-slate-400">Jumlah keseluruhan: ${aiCostSummary.reduce((s, r) => s + r.totalCostUsd, 0).toFixed(4)} (RM{(aiCostSummary.reduce((s, r) => s + r.totalCostUsd, 0) * usdMyr).toFixed(2)})</p>
+                  <div className="space-y-2">
+                    {aiCostSummary.length === 0 ? (
+                      <p className="text-xs text-slate-400 text-center py-3">Tiada data perbelanjaan lagi.</p>
+                    ) : aiCostSummary.map((r, i) => (
+                      <div key={`${r.tenantId}-${r.provider}-${i}`} className="flex items-center justify-between text-xs p-2 bg-amber-50 rounded-lg">
+                        <span className="text-slate-700 font-semibold">{r.tenantName}</span>
+                        <span className="text-slate-500">{r.provider} · {r.totalCalls} panggilan</span>
+                        <span className="font-bold text-amber-700">${r.totalCostUsd.toFixed(4)} (RM{(r.totalCostUsd * usdMyr).toFixed(2)})</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* ═════ DATA MASKING GOVERNANCE (HQ_OWNER only) ═════ */}
+            {activePage === "dataMaskingGovernance" && !isStaff && (
+              <div className="space-y-4" id="hq_data_masking_governance">
+                <h1 className="text-xl font-bold text-slate-900">Tadbir Topeng Data (PII)</h1>
+
+                <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-3">
+                  <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2"><Shield className="w-4 h-4 text-emerald-600" />Status Akses Unmask</h3>
+                  <p className="text-[11px] text-slate-400">Unmask: {unmaskAllowed ? "Dibenarkan" : "Disekat"} &middot; {hqStaffUsers.filter(u => u.unmaskGranted).length}/{hqStaffUsers.length} staf diberi akses unmask &middot; {maskingGrants.length} geran aktif</p>
+                </div>
+
+                <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-4">
+                  <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2"><Users className="w-4 h-4 text-emerald-600" />Senarai Akses Kakitangan</h3>
+                  {hqStaffUsers.length === 0 ? (
+                    <div className="text-center py-4 bg-slate-50 rounded-xl">
+                      <Users className="w-6 h-6 text-slate-200 mx-auto mb-1" />
+                      <p className="text-xs text-slate-400">Hanya anda sebagai pentadbir HQ</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      {hqStaffUsers.map((u) => (
+                        <div key={u.userId} className="flex items-center justify-between gap-3 p-3 bg-slate-50 rounded-xl">
+                          <div className="min-w-0">
+                            <p className="text-xs font-bold text-slate-900 truncate">{u.fullName} <span className="text-slate-400 font-normal">({u.role})</span></p>
+                            <p className="text-[11px] text-slate-500 truncate">{u.email}</p>
+                          </div>
+                          <button
+                            onClick={() => toggleStaffUnmask(u.userId, u.unmaskGranted)}
+                            className={`shrink-0 px-3 py-1.5 rounded-lg text-[11px] font-bold cursor-pointer transition ${
+                              u.unmaskGranted
+                                ? "bg-amber-100 text-amber-800 hover:bg-amber-200"
+                                : "bg-emerald-100 text-emerald-800 hover:bg-emerald-200"
+                            }`}
+                          >
+                            {u.unmaskGranted ? "Tarik Balik Unmask" : "Beri Akses Unmask"}
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-3">
+                  <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2"><Bell className="w-4 h-4 text-amber-500" />Permintaan Belum Selesai</h3>
+                  <div className="text-center py-4 bg-slate-50 rounded-xl">
+                    <p className="text-xs text-slate-400">Tiada sistem permintaan unmask ditubuhkan. Akses diberi/ditarik balik terus oleh pentadbir HQ di atas.</p>
+                  </div>
+                </div>
+
+                <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-3">
+                  <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2"><Activity className="w-4 h-4 text-emerald-600" />Sejarah Geran Akses</h3>
+                  {maskingGrants.length === 0 ? (
+                    <p className="text-xs text-slate-400 text-center py-3">Tiada sejarah geran lagi.</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {maskingGrants.map((g) => {
+                        const u = hqStaffUsers.find(s => s.userId === g.userId);
+                        return (
+                          <div key={g.userId} className="flex items-center justify-between text-xs p-2 bg-slate-50 rounded-lg">
+                            <span className="text-slate-700 font-semibold">{u?.fullName || g.userId}</span>
+                            <span className="text-slate-400">{new Date(g.grantedAt).toLocaleString("ms-MY")}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
 
           </div>
         </main>
