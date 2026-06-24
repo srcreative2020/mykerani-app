@@ -656,6 +656,59 @@ export async function replySupportTicket(ticketId: string, author: string, text:
   return true;
 }
 
+// --- Data Masking Governance (Module 7) ---
+// HQ_OWNER always sees unmasked data (override authority). HQ_STAFF sees
+// masked PII unless explicitly granted via hq_data_masking_grants.
+
+export async function isUnmaskAllowed(): Promise<boolean> {
+  if (!isSupabaseConfigured() || !supabase) return true;
+  const { data, error } = await supabase.rpc("is_unmask_allowed");
+  if (error) return false;
+  return !!data;
+}
+
+export interface MaskingGrant {
+  userId: string;
+  grantedAt: string;
+}
+
+export async function getMaskingGrants(): Promise<MaskingGrant[]> {
+  if (!isSupabaseConfigured() || !supabase) return [];
+  const { data, error } = await supabase.from("hq_data_masking_grants").select("*");
+  if (error || !data) return [];
+  return data.map((row: any) => ({ userId: row.user_id, grantedAt: row.granted_at }));
+}
+
+export async function grantUnmaskAccess(userId: string): Promise<boolean> {
+  if (!isSupabaseConfigured() || !supabase) return false;
+  const { data: userData } = await supabase.auth.getUser();
+  const { error } = await supabase
+    .from("hq_data_masking_grants")
+    .upsert({ user_id: userId, granted_by: userData?.user?.id || null, granted_at: new Date().toISOString() });
+  return !error;
+}
+
+export async function revokeUnmaskAccess(userId: string): Promise<boolean> {
+  if (!isSupabaseConfigured() || !supabase) return false;
+  const { error } = await supabase.from("hq_data_masking_grants").delete().eq("user_id", userId);
+  return !error;
+}
+
+export function maskEmail(email: string | undefined | null): string {
+  if (!email) return "";
+  const [local, domain] = email.split("@");
+  if (!domain) return "***";
+  const visible = local.slice(0, 1);
+  return `${visible}${"*".repeat(Math.max(local.length - 1, 2))}@${domain}`;
+}
+
+export function maskPhone(phone: string | undefined | null): string {
+  if (!phone) return "";
+  const digits = phone.replace(/\D/g, "");
+  if (digits.length < 4) return "****";
+  return `${"*".repeat(digits.length - 4)}${digits.slice(-4)}`;
+}
+
 // --- Public marketing site CMS (HQ-editable, publicly readable) ---
 
 export interface SiteSettings {

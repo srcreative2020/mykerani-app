@@ -450,6 +450,22 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
   const [enforcementRunning, setEnforcementRunning] = useState(false);
   const [enforcementResult, setEnforcementResult] = useState<string | null>(null);
 
+  // Data Masking Governance (Module 7)
+  const [unmaskAllowed, setUnmaskAllowed] = useState(true);
+  const [maskingGrants, setMaskingGrants] = useState<hqService.MaskingGrant[]>([]);
+  useEffect(() => {
+    if (!useRealData) return;
+    hqService.isUnmaskAllowed().then(setUnmaskAllowed);
+    if (!isStaff) hqService.getMaskingGrants().then(setMaskingGrants);
+  }, [useRealData, isStaff]);
+  const displayEmail = (email: string | undefined | null) => (unmaskAllowed ? (email || "") : hqService.maskEmail(email));
+  const displayPhone = (phone: string | undefined | null) => (unmaskAllowed ? (phone || "") : hqService.maskPhone(phone));
+  const toggleStaffUnmask = async (userId: string, currentlyGranted: boolean) => {
+    if (currentlyGranted) await hqService.revokeUnmaskAccess(userId);
+    else await hqService.grantUnmaskAccess(userId);
+    hqService.getMaskingGrants().then(setMaskingGrants);
+  };
+
   // Fetch real storage usage + freeze/inactivity state from Supabase
   useEffect(() => {
     getAllWorkspacesStorageUsage().then(data => { if (data.length > 0) setRealStorageData(data); });
@@ -1337,7 +1353,7 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
                             </div>
                             <div className="min-w-0">
                               <p className="text-xs font-semibold text-slate-800 truncate">{c.name}</p>
-                              <p className="text-[10px] text-slate-400 truncate">{c.email}</p>
+                              <p className="text-[10px] text-slate-400 truncate">{displayEmail(c.email)}</p>
                               {c.attention && <span className="text-[9px] text-amber-600 font-bold bg-amber-50 px-1.5 py-0.5 rounded-full">Perlu Perhatian</span>}
                             </div>
                           </div>
@@ -1851,7 +1867,7 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
                         <div key={c.id} className="flex items-center justify-between bg-white rounded-xl px-4 py-2.5 border border-red-100">
                           <div>
                             <p className="text-xs font-semibold text-slate-800">{c.name}</p>
-                            <p className="text-[10px] text-slate-400">{c.plan} &middot; {c.email}</p>
+                            <p className="text-[10px] text-slate-400">{c.plan} &middot; {displayEmail(c.email)}</p>
                           </div>
                           <button onClick={() => toggleStatus(c.id)}
                             className="px-3 py-1.5 bg-emerald-600 text-white rounded-lg text-[10px] font-bold cursor-pointer hover:bg-emerald-700 transition">
@@ -2887,7 +2903,7 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
                 </div>
                 <div>
                   <p className="text-sm font-bold text-slate-900">{selectedCustomer.name}</p>
-                  <p className="text-[11px] text-slate-400">{selectedCustomer.email}</p>
+                  <p className="text-[11px] text-slate-400">{displayEmail(selectedCustomer.email)}</p>
                 </div>
               </div>
               <button onClick={() => setSelectedCustomer(null)} className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-slate-100 cursor-pointer"><X className="w-4 h-4 text-slate-500" /></button>
@@ -2914,7 +2930,7 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
               </div>
               {selectedCustomer.phone && (
                 <div className="flex items-center gap-2 text-xs text-slate-500">
-                  <span className="font-semibold">Tel:</span><span>{selectedCustomer.phone}</span>
+                  <span className="font-semibold">Tel:</span><span>{displayPhone(selectedCustomer.phone)}</span>
                 </div>
               )}
               {selectedCustomer.notes && (
