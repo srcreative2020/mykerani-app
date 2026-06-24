@@ -25,7 +25,9 @@ interface HQConsoleShellProps {
 
 // HQ_OWNER pages: all 8
 // HQ_STAFF pages: dashboard, customers, subscriptions, support
-type HQPage = "dashboard" | "customers" | "billing" | "usage" | "support" | "revenue" | "settings" | "system" | "subscriptions" | "website";
+type HQPage = "dashboard" | "customers" | "billing" | "usage" | "support" | "revenue" | "settings" | "system" | "subscriptions" | "website"
+  | "customer360" | "alertCenter" | "walletDashboard" | "healthScores" | "governance" | "paymentGovernance" | "storageGovernance"
+  | "aiCostGovernance" | "dataMaskingGovernance";
 
 // â"€â"€ Mock data (demo accounts only) â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 const MOCK_CUSTOMERS = [
@@ -478,6 +480,15 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
   const [resourceWallets, setResourceWallets] = useState<hqService.ResourceWalletSummary[]>([]);
   const [hqAlerts, setHqAlerts] = useState<hqService.HqAlert[]>([]);
   const [resourceWalletRefreshTick, setResourceWalletRefreshTick] = useState(0);
+
+  // HQ Executive UI: Customer 360 selection, Alert Center filters, Wallet Dashboard sort/search
+  const [c360SelectedId, setC360SelectedId] = useState<string | null>(null);
+  const [alertTypeFilter, setAlertTypeFilter] = useState("all");
+  const [alertSeverityFilter, setAlertSeverityFilter] = useState<"all" | "high" | "medium" | "low">("all");
+  const [alertResolvedFilter, setAlertResolvedFilter] = useState<"all" | "resolved" | "unresolved">("all");
+  const [walletSearch, setWalletSearch] = useState("");
+  const [walletSortKey, setWalletSortKey] = useState<keyof hqService.ResourceWalletSummary>("aiCostUsd30d");
+  const [walletSortDir, setWalletSortDir] = useState<"asc" | "desc">("desc");
   useEffect(() => {
     if (!useRealData) return;
     hqService.getResourceWalletSummary().then(setResourceWallets);
@@ -881,6 +892,15 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
     { id: "website" as HQPage,     label: "Tapak Web",      icon: Globe },
     { id: "settings" as HQPage,    label: "Tetapan",        icon: Settings },
     { id: "system" as HQPage,      label: "Pusat Sistem",   icon: Server },
+    { id: "customer360" as HQPage,       label: "Customer 360",         icon: UserCheck },
+    { id: "healthScores" as HQPage,      label: "Skor Kesihatan",       icon: Activity },
+    { id: "alertCenter" as HQPage,       label: "Pusat Amaran",         icon: Bell, badge: hqAlerts.filter(a => !a.resolvedAt).length },
+    { id: "walletDashboard" as HQPage,   label: "Dompet Sumber",        icon: Package },
+    { id: "governance" as HQPage,        label: "Tadbir Urus",          icon: ShieldAlert },
+    { id: "paymentGovernance" as HQPage, label: "Tadbir Bayaran",       icon: CreditCard },
+    { id: "storageGovernance" as HQPage, label: "Tadbir Storan",        icon: HardDrive },
+    { id: "aiCostGovernance" as HQPage,      label: "Tadbir Kos AI",        icon: DollarSign },
+    { id: "dataMaskingGovernance" as HQPage, label: "Tadbir Topeng Data",   icon: Shield },
   ];
 
   const staffNav = [
@@ -1060,7 +1080,12 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
             {/* â•â•â•â• DASHBOARD â•â•â•â• */}
             {activePage === "dashboard" && (() => {
               // â"€â"€ Intelligence computations â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
-              const mrrAtRisk    = customers.filter(c => c.status === "suspended").reduce((s, c) => s + c.mrr, 0);
+              // hq_alerts (churn_risk) is the single source of truth — Dashboard must not
+              // recompute churn risk independently, or it can disagree with the Alert Center.
+              const churnAlerts  = useRealData ? hqAlerts.filter(a => a.alertType === "churn_risk" && !a.resolvedAt) : [];
+              const mrrAtRisk    = useRealData
+                ? churnAlerts.reduce((s, a) => s + (customers.find(c => c.id === a.tenantId)?.mrr || 0), 0)
+                : customers.filter(c => c.status === "suspended").reduce((s, c) => s + c.mrr, 0);
               const arr          = totalMRR * 12;
               const growthRate   = 0.05;
               const forecast     = [1, 2, 3].map(m => Math.round(totalMRR * Math.pow(1 + growthRate, m)));
@@ -1081,16 +1106,30 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
                 .filter(c => c.score >= 0.75)
                 .sort((a, b) => b.score - a.score);
 
-              // Churn risks
-              const churnRisks = customers
-                .filter(c => c.status === "suspended" || c.attention || c.healthRiskLevel === "high" || allTickets.some(t => t.customer === c.name && t.status !== "resolved"))
-                .map(c => ({
-                  ...c,
-                  riskLevel: (c.status === "suspended" || c.healthRiskLevel === "high") ? "high" : "medium" as "high"|"medium",
-                  riskReason: c.status === "suspended" ? "Digantung - tiada bayaran" : (c.healthReasons && c.healthReasons.length > 0) ? c.healthReasons[0] : c.attention ? "Perlu perhatian" : "Tiket sokongan terbuka",
-                  potentialLoss: c.mrr,
-                }))
-                .sort((a, b) => (b.riskLevel === "high" ? 1 : 0) - (a.riskLevel === "high" ? 1 : 0));
+              // Churn risks — derived from hq_alerts (churn_risk), the single source of truth
+              // shared with the Alert Center, so the two views can never disagree.
+              const churnRisks = useRealData
+                ? churnAlerts
+                    .map(a => {
+                      const c = customers.find(cust => cust.id === a.tenantId);
+                      return c ? {
+                        ...c,
+                        riskLevel: (a.severity === "high") ? "high" : "medium" as "high"|"medium",
+                        riskReason: a.message,
+                        potentialLoss: c.mrr,
+                      } : null;
+                    })
+                    .filter((c): c is NonNullable<typeof c> => c !== null)
+                    .sort((a, b) => (b.riskLevel === "high" ? 1 : 0) - (a.riskLevel === "high" ? 1 : 0))
+                : customers
+                    .filter(c => c.status === "suspended" || c.attention || c.healthRiskLevel === "high" || allTickets.some(t => t.customer === c.name && t.status !== "resolved"))
+                    .map(c => ({
+                      ...c,
+                      riskLevel: (c.status === "suspended" || c.healthRiskLevel === "high") ? "high" : "medium" as "high"|"medium",
+                      riskReason: c.status === "suspended" ? "Digantung - tiada bayaran" : (c.healthReasons && c.healthReasons.length > 0) ? c.healthReasons[0] : c.attention ? "Perlu perhatian" : "Tiket sokongan terbuka",
+                      potentialLoss: c.mrr,
+                    }))
+                    .sort((a, b) => (b.riskLevel === "high" ? 1 : 0) - (a.riskLevel === "high" ? 1 : 0));
 
               // Today's briefing items
               const unresolvedAlerts = useRealData ? hqAlerts.filter(a => !a.resolvedAt) : [];
@@ -1591,44 +1630,16 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
                   <MetricCard label="OCR Digunakan"     value={(usageByFeature.find(f => f.feature === "ocr")?.usageCount ?? 0).toLocaleString()} sub="imbasan bulan ini" icon={Brain} color="violet" />
                 </div>
 
-                {/* Resource Wallet Dashboard (Module 11) — real per-tenant wallet balances + consumption */}
+                {/* Resource Wallet Dashboard (Module 11) — relocated to its own dedicated page: "walletDashboard" */}
                 {useRealData && (
-                  <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-                    <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
-                      <div>
-                        <h3 className="text-sm font-bold text-slate-900">Dompet Sumber Tenant</h3>
-                        <p className="text-[11px] text-slate-400 mt-0.5">Baki kredit & penggunaan 30 hari mengikut tenant</p>
-                      </div>
-                      <button onClick={() => setResourceWalletRefreshTick(t => t + 1)} className="text-slate-300 hover:text-emerald-600 cursor-pointer" title="Refresh">
-                        <RefreshCw className="w-3.5 h-3.5" />
-                      </button>
+                  <button onClick={() => setActivePage("walletDashboard")}
+                    className="w-full bg-white rounded-2xl border border-slate-200 shadow-sm p-5 flex items-center justify-between cursor-pointer hover:border-emerald-300 transition">
+                    <div className="text-left">
+                      <h3 className="text-sm font-bold text-slate-900">Dompet Sumber Tenant</h3>
+                      <p className="text-[11px] text-slate-400 mt-0.5">Lihat baki kredit & penggunaan penuh mengikut tenant di Dompet Sumber</p>
                     </div>
-                    {resourceWallets.length === 0 ? (
-                      <div className="p-8 text-center"><p className="text-xs text-slate-400">Tiada dompet sumber direkodkan</p></div>
-                    ) : (
-                      <div className="divide-y divide-slate-50">
-                        {resourceWallets.map(w => (
-                          <div key={w.tenantId} className="px-5 py-3.5 flex items-center gap-4">
-                            <div className="w-7 h-7 rounded-lg bg-emerald-50 text-emerald-700 font-bold text-xs flex items-center justify-center shrink-0">
-                              {w.tenantName.charAt(0).toUpperCase()}
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <p className="text-xs font-semibold text-slate-800 truncate">{w.tenantName}</p>
-                              <p className="text-[10px] text-slate-400">AI: {w.aiCreditsBalance.toLocaleString()} baki - digunakan {w.aiConsumed30d.toLocaleString()}/30hr &middot; OCR: {w.ocrCreditsBalance.toLocaleString()} baki - digunakan {w.ocrConsumed30d.toLocaleString()}/30hr</p>
-                            </div>
-                            <div className="text-right shrink-0">
-                              <p className="text-xs font-bold text-emerald-700">${w.aiCostUsd30d.toFixed(2)}</p>
-                              <p className="text-[10px] text-slate-400">kos AI/30hr</p>
-                            </div>
-                            <div className="text-right shrink-0">
-                              <p className="text-xs font-bold text-slate-700">{fmtDocBytes(w.storageUsedBytes)}</p>
-                              <p className="text-[10px] text-slate-400">/ {fmtDocBytes(w.storageLimitBytes)}</p>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
+                    <ChevronRight className="w-4 h-4 text-slate-400 shrink-0" />
+                  </button>
                 )}
 
                 {/* Top usage customers */}
@@ -2234,41 +2245,20 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
                   </div>
                 </div>
 
-                {/* Security Foundation: Chip Asia webhook shadow-mode log + enforcement */}
-                <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-4">
-                  <div className="flex items-center gap-2">
-                    <ShieldAlert className="w-4 h-4 text-rose-500" />
-                    <h3 className="text-sm font-bold text-slate-900">Keselamatan Webhook Chip Asia</h3>
-                  </div>
-                  <div className="flex items-center justify-between p-3 border border-slate-100 rounded-xl">
+                {/* Security Foundation: Chip Asia webhook shadow-mode log + enforcement — relocated to "paymentGovernance" page */}
+                <button onClick={() => setActivePage("paymentGovernance")}
+                  className="w-full bg-white rounded-2xl border border-slate-200 shadow-sm p-5 flex items-center justify-between cursor-pointer hover:border-emerald-300 transition">
+                  <div className="flex items-center gap-3 text-left">
+                    <ShieldAlert className="w-4 h-4 text-rose-500 shrink-0" />
                     <div>
-                      <p className="text-xs font-bold text-slate-800">Penguatkuasaan tandatangan (enforce)</p>
-                      <p className="text-[10px] text-slate-400">
-                        {webhookEnforce
-                          ? "AKTIF — webhook yang gagal pengesahan tandatangan akan ditolak (401)."
-                          : "Mod bayang (shadow) — pengesahan direkod tetapi tidak menyekat. Semak log di bawah sebelum mengaktifkan."}
+                      <h3 className="text-sm font-bold text-slate-900">Keselamatan Webhook Chip Asia</h3>
+                      <p className="text-[11px] text-slate-400 mt-0.5">
+                        {webhookEnforce ? "Penguatkuasaan AKTIF" : "Mod bayang (shadow)"} &middot; Lihat log penuh di Tadbir Bayaran
                       </p>
                     </div>
-                    <button onClick={toggleWebhookEnforce}
-                      className={`w-11 h-6 rounded-full relative transition cursor-pointer ${webhookEnforce ? "bg-rose-600" : "bg-slate-200"}`}>
-                      <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full transition ${webhookEnforce ? "translate-x-5" : ""}`} />
-                    </button>
                   </div>
-                  <div className="space-y-1.5 max-h-56 overflow-y-auto">
-                    {webhookEvents.length === 0 ? (
-                      <p className="text-xs text-slate-400 text-center py-4">Tiada log webhook lagi.</p>
-                    ) : webhookEvents.map(ev => (
-                      <div key={ev.id} className="flex items-center justify-between text-[11px] p-2 bg-slate-50 rounded-lg">
-                        <span className="text-slate-600">{ev.transactionReference || "-"}</span>
-                        <span className={`font-bold ${ev.verificationResult === "verified" ? "text-emerald-600" : "text-rose-600"}`}>
-                          {ev.verificationResult}
-                        </span>
-                        {ev.wouldHaveBlocked && <span className="text-amber-600 font-semibold">akan disekat</span>}
-                        <span className="text-slate-400">{new Date(ev.createdAt).toLocaleString("ms-MY")}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
+                  <ChevronRight className="w-4 h-4 text-slate-400 shrink-0" />
+                </button>
 
                 {/* Credit Limits per Plan */}
                 <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-4">
@@ -2303,7 +2293,7 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
                   )}
                 </div>
 
-                {/* HQ Staff */}
+                {/* HQ Staff account creation — masking/unmask administration relocated to "dataMaskingGovernance" */}
                 <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-4">
                   <div className="flex items-center justify-between">
                     <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2"><Users className="w-4 h-4 text-emerald-600" />Kakitangan HQ</h3>
@@ -2337,33 +2327,17 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
                       )}
                     </div>
                   )}
-                  {hqStaffUsers.length === 0 ? (
-                    <div className="text-center py-4 bg-slate-50 rounded-xl">
-                      <Users className="w-6 h-6 text-slate-200 mx-auto mb-1" />
-                      <p className="text-xs text-slate-400">Hanya anda sebagai pentadbir HQ</p>
+                  <button onClick={() => setActivePage("dataMaskingGovernance")}
+                    className="w-full flex items-center justify-between gap-3 p-3 bg-slate-50 rounded-xl cursor-pointer hover:bg-slate-100 transition text-left">
+                    <div className="flex items-center gap-2">
+                      <Shield className="w-4 h-4 text-emerald-600 shrink-0" />
+                      <div>
+                        <p className="text-xs font-bold text-slate-900">Tadbir Topeng Data (PII)</p>
+                        <p className="text-[11px] text-slate-400">{hqStaffUsers.filter(u => u.unmaskGranted).length}/{hqStaffUsers.length} staf diberi akses unmask &middot; Uruskan akses penuh</p>
+                      </div>
                     </div>
-                  ) : (
-                    <div className="space-y-2">
-                      {hqStaffUsers.map((u) => (
-                        <div key={u.userId} className="flex items-center justify-between gap-3 p-3 bg-slate-50 rounded-xl">
-                          <div className="min-w-0">
-                            <p className="text-xs font-bold text-slate-900 truncate">{u.fullName} <span className="text-slate-400 font-normal">({u.role})</span></p>
-                            <p className="text-[11px] text-slate-500 truncate">{u.email}</p>
-                          </div>
-                          <button
-                            onClick={() => toggleStaffUnmask(u.userId, u.unmaskGranted)}
-                            className={`shrink-0 px-3 py-1.5 rounded-lg text-[11px] font-bold cursor-pointer transition ${
-                              u.unmaskGranted
-                                ? "bg-amber-100 text-amber-800 hover:bg-amber-200"
-                                : "bg-emerald-100 text-emerald-800 hover:bg-emerald-200"
-                            }`}
-                          >
-                            {u.unmaskGranted ? "Tarik Balik Unmask" : "Beri Akses Unmask"}
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
+                    <ChevronRight className="w-4 h-4 text-slate-400 shrink-0" />
+                  </button>
                 </div>
 
                 {/* Notifications */}
@@ -2503,39 +2477,18 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
                   </div>
                 </div>
 
-                {/* AI Cost Governance: real cost rates + spend by tenant */}
-                <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-4">
-                  <div className="flex items-center gap-2">
-                    <DollarSign className="w-4 h-4 text-amber-500" />
-                    <h3 className="text-sm font-bold text-slate-900">Tadbir Urus Kos AI</h3>
+                {/* AI Cost Governance — relocated to its own dedicated page: "aiCostGovernance" */}
+                <button onClick={() => setActivePage("aiCostGovernance")}
+                  className="w-full bg-white rounded-2xl border border-slate-200 shadow-sm p-5 flex items-center justify-between cursor-pointer hover:border-emerald-300 transition">
+                  <div className="flex items-center gap-3 text-left">
+                    <DollarSign className="w-4 h-4 text-amber-500 shrink-0" />
+                    <div>
+                      <h3 className="text-sm font-bold text-slate-900">Tadbir Urus Kos AI</h3>
+                      <p className="text-[11px] text-slate-400 mt-0.5">Lihat & uruskan kadar kos panggilan dan perbelanjaan sebenar mengikut syarikat di Tadbir Kos AI</p>
+                    </div>
                   </div>
-                  <div className="space-y-2">
-                    <p className="text-[11px] font-bold text-slate-500">Kadar kos per panggilan (USD)</p>
-                    {AI_PROVIDERS.flatMap(prov => prov.models.map(m => {
-                      const existing = aiCostRates.find(r => r.provider === prov.id && r.model === m.id);
-                      return (
-                        <div key={`${prov.id}:${m.id}`} className="flex items-center justify-between text-xs p-2 bg-slate-50 rounded-lg">
-                          <span className="text-slate-600">{prov.name} / {m.id}</span>
-                          <input type="number" step="0.0001" min="0" defaultValue={existing?.costPerCallUsd ?? 0}
-                            onBlur={e => saveAiCostRate(prov.id, m.id, parseFloat(e.target.value) || 0)}
-                            className="w-24 border border-slate-200 rounded-lg px-2 py-1 text-right focus:outline-none focus:border-emerald-400" />
-                        </div>
-                      );
-                    }))}
-                  </div>
-                  <div className="space-y-2">
-                    <p className="text-[11px] font-bold text-slate-500">Perbelanjaan sebenar mengikut syarikat</p>
-                    {aiCostSummary.length === 0 ? (
-                      <p className="text-xs text-slate-400 text-center py-3">Tiada data perbelanjaan lagi.</p>
-                    ) : aiCostSummary.map((r, i) => (
-                      <div key={`${r.tenantId}-${r.provider}-${i}`} className="flex items-center justify-between text-xs p-2 bg-amber-50 rounded-lg">
-                        <span className="text-slate-700 font-semibold">{r.tenantName}</span>
-                        <span className="text-slate-500">{r.provider} · {r.totalCalls} panggilan</span>
-                        <span className="font-bold text-amber-700">${r.totalCostUsd.toFixed(4)} (RM{(r.totalCostUsd * usdMyr).toFixed(2)})</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
+                  <ChevronRight className="w-4 h-4 text-slate-400 shrink-0" />
+                </button>
 
                 {/* Provider Cards */}
                 <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-4">
@@ -2751,170 +2704,18 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
                   ))}
                 </div>
 
-                {/* HQ Storage Monitor */}
-                {(() => {
-                  const GB = 1_073_741_824;
-                  const supabasePlan = 100 * GB; // Supabase Pro 100GB
-
-                  // Merge real Supabase data with customer list
-                  const tenantViews = customers.map(c => {
-                    const real = realStorageData.find(r => r.tenant_id === c.id);
-                    const quotaMap: Record<string, number> = { Starter: 5*GB, Pro: 25*GB, Enterprise: 100*GB };
-                    const quota = quotaMap[c.plan] || quotaMap.Starter;
-                    const used  = real ? Number(real.total_bytes) : 0;
-                    const fileCount = real ? Number(real.file_count) : 0;
-                    const pct   = used / quota;
-                    // Freeze/inactivity settings: real Supabase state when available (HQ + tenant
-                    // both read/enforce the same record), localStorage fallback for sandbox/mock mode.
-                    const freezeState = freezeStates.find(f => f.tenantId === c.id);
-                    const cfgRaw = useRealData ? null : localStorage.getItem(storageQuotaKey(c.id));
-                    const cfg = cfgRaw ? JSON.parse(cfgRaw) : {};
-                    const lastActive = freezeState?.lastActiveAt || cfg.lastActiveAt || new Date().toISOString();
-                    const daysSinceActive = Math.floor((Date.now() - new Date(lastActive).getTime()) / 86400000);
-                    const isFrozen = freezeState?.isFrozen ?? cfg.isFrozen ?? false;
-                    const frozenReason = freezeState?.frozenReason ?? cfg.frozenReason ?? "";
-                    return { id: c.id, name: c.name, plan: c.plan, used, quota, pct, fileCount, isFrozen, frozenReason, lastActive, daysSince: daysSinceActive, isInactive: daysSinceActive >= inactiveDays };
-                  });
-
-                  const totalUsed = tenantViews.reduce((s, t) => s + t.used, 0);
-                  const supabasePct = totalUsed / supabasePlan;
-
-                  const toggleFreeze = async (tenantId: string, isFrozen: boolean) => {
-                    if (useRealData) {
-                      await hqService.setTenantFrozen(tenantId, !isFrozen, !isFrozen ? "hq_manual" : "");
-                      setStorageRefreshTick(t => t + 1);
-                      return;
-                    }
-                    const key = storageQuotaKey(tenantId);
-                    try {
-                      const raw = localStorage.getItem(key);
-                      const s = raw ? JSON.parse(raw) : {};
-                      localStorage.setItem(key, JSON.stringify({ ...s, isFrozen: !isFrozen, frozenReason: !isFrozen ? "hq_manual" : "" }));
-                      setStorageRefreshTick(t => t + 1);
-                    } catch {}
-                  };
-
-                  const doCleanup = (_tenantId: string) => {
-                    setCleanupTenant(null);
-                    setStorageRefreshTick(t => t + 1);
-                  };
-
-                  return (
-                  <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-4">
-                    <div className="flex items-center justify-between">
-                      <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-                        <HardDrive className="w-4 h-4 text-emerald-600" /> Pemantauan Storan
-                      </h3>
-                      <div className="flex items-center gap-2">
-                        <button onClick={() => setStorageRefreshTick(t => t + 1)} className="text-slate-300 hover:text-emerald-600 cursor-pointer" title="Refresh">
-                          <RefreshCw className="w-3.5 h-3.5" />
-                        </button>
-                        <span className="text-[10px] text-slate-400">{fmtDocBytes(totalUsed)} / {fmtDocBytes(supabasePlan)} Supabase</span>
-                      </div>
+                {/* HQ Storage Monitor — relocated to its own dedicated page: "storageGovernance" */}
+                <button onClick={() => setActivePage("storageGovernance")}
+                  className="w-full bg-white rounded-2xl border border-slate-200 shadow-sm p-5 flex items-center justify-between cursor-pointer hover:border-emerald-300 transition">
+                  <div className="flex items-center gap-3 text-left">
+                    <HardDrive className="w-4 h-4 text-emerald-600 shrink-0" />
+                    <div>
+                      <h3 className="text-sm font-bold text-slate-900">Pemantauan Storan</h3>
+                      <p className="text-[11px] text-slate-400 mt-0.5">Lihat & uruskan beku/penguatkuasaan storan tenant penuh di Tadbir Storan</p>
                     </div>
-
-                    {/* Supabase HQ bar */}
-                    <div className="space-y-1.5">
-                      <div className="flex justify-between text-[11px]">
-                        <span className="text-slate-500">Storan Supabase Anda (HQ)</span>
-                        <span className={`font-bold ${supabasePct > 0.85 ? "text-red-600" : supabasePct > 0.70 ? "text-amber-600" : "text-emerald-600"}`}>{(supabasePct*100).toFixed(1)}%</span>
-                      </div>
-                      <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
-                        <div className={`h-full rounded-full transition-all ${supabasePct > 0.85 ? "bg-red-500" : supabasePct > 0.70 ? "bg-amber-500" : "bg-emerald-500"}`}
-                          style={{ width: `${Math.min(supabasePct*100, 100)}%` }} />
-                      </div>
-                      {supabasePct > 0.70 && (
-                        <p className={`text-[10px] font-semibold ${supabasePct > 0.85 ? "text-red-600" : "text-amber-600"}`}>
-                          {supabasePct > 0.85 ? "KRITIKAL: Upgrade Supabase plan sebelum pelanggan terjejas!" : "Hampir 70% - Sedia upgrade Supabase Pro plan"}
-                        </p>
-                      )}
-                    </div>
-
-                    {/* Auto-cleanup settings */}
-                    <div className="flex items-center justify-between py-2 border-t border-slate-50">
-                      <div>
-                        <p className="text-xs font-semibold text-slate-700">Tempoh Beku Tidak Aktif</p>
-                        <p className="text-[10px] text-slate-400">Bekukan storan tenant yang tidak aktif melebihi tempoh ini</p>
-                      </div>
-                      <div className="flex items-center gap-1.5">
-                        <input type="number" min="7" max="365" value={inactiveDays}
-                          onChange={e => saveInactiveDays(parseInt(e.target.value) || 30)}
-                          className="w-14 border border-slate-200 rounded-lg px-2 py-1 text-xs text-center focus:outline-none focus:border-emerald-400" />
-                        <span className="text-[10px] text-slate-400">hari</span>
-                      </div>
-                    </div>
-
-                    {/* HQ-triggered enforcement (never autonomous) */}
-                    <div className="flex items-center justify-between py-2 border-t border-slate-50">
-                      <div>
-                        <p className="text-xs font-semibold text-slate-700">Jalankan Penguatkuasaan Sekarang</p>
-                        <p className="text-[10px] text-slate-400">
-                          {enforcementResult ?? "Bekukan storan semua tenant tidak aktif mengikut tempoh di atas (manual, bukan automatik)"}
-                        </p>
-                      </div>
-                      <button
-                        onClick={runEnforcementNow}
-                        disabled={enforcementRunning}
-                        className="text-[11px] font-semibold px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white cursor-pointer"
-                      >
-                        {enforcementRunning ? "Memproses..." : "Run Enforcement Now"}
-                      </button>
-                    </div>
-
-                    {/* Per-tenant table */}
-                    <div className="space-y-2">
-                      {tenantViews.map((t: any) => (
-                        <div key={t.id} className={`rounded-xl border p-3 space-y-2 ${t.isFrozen ? "border-red-200 bg-red-50/40" : t.isInactive ? "border-amber-200 bg-amber-50/30" : "border-slate-100"}`}>
-                          <div className="flex items-center justify-between gap-2">
-                            <div className="min-w-0">
-                              <div className="flex items-center gap-1.5 flex-wrap">
-                                <p className="text-xs font-bold text-slate-800 truncate">{t.name}</p>
-                                {t.isFrozen && <span className="text-[9px] font-bold text-red-600 bg-red-100 px-1.5 py-0.5 rounded-full border border-red-200">BEKU</span>}
-                                {t.isInactive && !t.isFrozen && <span className="text-[9px] font-bold text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded-full border border-amber-200">Tidak Aktif {t.daysSince}h</span>}
-                              </div>
-                              <p className="text-[10px] text-slate-400">{t.plan} &middot; {fmtDocBytes(t.used)} / {fmtDocBytes(t.quota)} &middot; {t.fileCount} fail</p>
-                            </div>
-                            <div className="flex gap-1.5 shrink-0">
-                              {t.isInactive && (
-                                <button onClick={() => setCleanupTenant(t.id)}
-                                  className="px-2 py-1 text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200 rounded-lg cursor-pointer hover:bg-amber-100 transition">
-                                  Bersih
-                                </button>
-                              )}
-                              <button onClick={() => toggleFreeze(t.id, t.isFrozen)}
-                                className={`px-2 py-1 text-[10px] font-bold rounded-lg cursor-pointer transition border ${t.isFrozen ? "text-emerald-700 bg-emerald-50 border-emerald-200 hover:bg-emerald-100" : "text-slate-600 bg-slate-50 border-slate-200 hover:bg-slate-100"}`}>
-                                {t.isFrozen ? "Lepas" : "Beku"}
-                              </button>
-                            </div>
-                          </div>
-                          <div className="h-1.5 bg-slate-200 rounded-full overflow-hidden">
-                            <div className={`h-full rounded-full ${t.pct > 0.85 ? "bg-red-500" : t.pct > 0.70 ? "bg-amber-500" : "bg-emerald-500"}`}
-                              style={{ width: `${Math.min(t.pct*100,100).toFixed(0)}%` }} />
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-
-                    {/* Cleanup confirm */}
-                    {cleanupTenant && (
-                      <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 space-y-3">
-                        <p className="text-xs font-bold text-amber-800">Sahkan Padam Fail</p>
-                        <p className="text-[11px] text-amber-700">Semua fail dokumen tenant ini akan dipadam. Data kewangan TIDAK terjejas.</p>
-                        <div className="flex gap-2">
-                          <button onClick={() => doCleanup(cleanupTenant)}
-                            className="flex-1 py-2 bg-amber-500 text-white rounded-lg text-xs font-bold cursor-pointer hover:bg-amber-600 transition">
-                            Ya, Padam
-                          </button>
-                          <button onClick={() => setCleanupTenant(null)}
-                            className="flex-1 py-2 border border-slate-200 rounded-lg text-xs font-bold text-slate-600 cursor-pointer hover:bg-slate-50 transition">
-                            Batal
-                          </button>
-                        </div>
-                      </div>
-                    )}
                   </div>
-                  );
-                })()}
+                  <ChevronRight className="w-4 h-4 text-slate-400 shrink-0" />
+                </button>
 
                 {/* System Health */}
                 <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-4">
@@ -2942,6 +2743,679 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
               </div>
               );
             })()}
+
+            {/* â•â•â•â• CUSTOMER 360 FULL PAGE (HQ_OWNER only) â•â•â•â• */}
+            {activePage === "customer360" && !isStaff && (() => {
+              const c360Wallet = (id: string) => resourceWallets.find(w => w.tenantId === id);
+              const c360Alerts = (id: string) => hqAlerts.filter(a => a.tenantId === id);
+              const filtered = customers.filter(c => !searchQuery || c.name.toLowerCase().includes(searchQuery.toLowerCase()) || c.email.toLowerCase().includes(searchQuery.toLowerCase()));
+              const detail = customers.find(c => c.id === c360SelectedId) || null;
+              return (
+              <div className="space-y-4" id="hq_customer360">
+                <div className="flex items-center justify-between">
+                  <h1 className="text-xl font-bold text-slate-900">Customer 360</h1>
+                  <div className="relative">
+                    <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                    <input type="text" value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
+                      placeholder="Cari pelanggan..."
+                      className="pl-8 pr-3 py-2 text-xs border border-slate-200 rounded-xl outline-none focus:border-emerald-400 bg-white w-48" />
+                  </div>
+                </div>
+                <div className="grid md:grid-cols-5 gap-4">
+                  {/* Master list */}
+                  <div className="md:col-span-2 bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+                    <div className="px-4 py-3 border-b border-slate-100 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                      Senarai Tenant ({filtered.length})
+                    </div>
+                    <div className="max-h-[600px] overflow-y-auto divide-y divide-slate-50">
+                      {filtered.map(c => {
+                        const w = c360Wallet(c.id);
+                        const active = c360SelectedId === c.id;
+                        return (
+                          <button key={c.id} onClick={() => setC360SelectedId(c.id)}
+                            className={`w-full text-left px-4 py-3 flex items-center gap-3 transition cursor-pointer ${active ? "bg-emerald-50" : "hover:bg-slate-50"}`}>
+                            <div className="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-700 font-bold text-sm flex items-center justify-center shrink-0">
+                              {c.name.charAt(0).toUpperCase()}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-xs font-semibold text-slate-800 truncate">{c.name}</p>
+                              <p className="text-[10px] text-slate-400 truncate">{c.plan || "—"} &middot; {w ? `$${w.aiCostUsd30d.toFixed(2)} kos AI/30hr` : "tiada dompet"}</p>
+                            </div>
+                            {typeof c.healthScore === "number" && (
+                              <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full shrink-0 ${
+                                c.healthRiskLevel === "high" ? "text-red-600 bg-red-50" : c.healthRiskLevel === "medium" ? "text-amber-600 bg-amber-50" : "text-emerald-600 bg-emerald-50"
+                              }`}>{c.healthScore}</span>
+                            )}
+                          </button>
+                        );
+                      })}
+                      {filtered.length === 0 && <div className="p-8 text-center text-xs text-slate-400">Tiada pelanggan</div>}
+                    </div>
+                  </div>
+
+                  {/* Detail panel */}
+                  <div className="md:col-span-3 bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
+                    {!detail ? (
+                      <div className="h-full flex flex-col items-center justify-center py-16 text-center">
+                        <UserCheck className="w-10 h-10 text-slate-200 mb-3" />
+                        <p className="text-sm font-semibold text-slate-400">Pilih pelanggan untuk lihat profil 360</p>
+                      </div>
+                    ) : (() => {
+                      const w = c360Wallet(detail.id);
+                      const al = c360Alerts(detail.id);
+                      return (
+                      <div className="space-y-4">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-2xl bg-emerald-50 text-emerald-700 font-bold text-base flex items-center justify-center">
+                              {detail.name.charAt(0).toUpperCase()}
+                            </div>
+                            <div>
+                              <p className="text-sm font-bold text-slate-900">{detail.name}</p>
+                              <p className="text-[11px] text-slate-400">{displayEmail(detail.email)}</p>
+                            </div>
+                          </div>
+                          <StatusBadge status={detail.status} />
+                        </div>
+
+                        <div className="grid grid-cols-3 gap-3">
+                          <div className="bg-slate-50 rounded-xl p-3"><p className="text-[10px] text-slate-400">Plan</p><p className="text-sm font-bold text-slate-800">{detail.plan || "—"}</p></div>
+                          <div className="bg-slate-50 rounded-xl p-3"><p className="text-[10px] text-slate-400">MRR</p><p className="text-sm font-bold text-emerald-700">RM {detail.mrr.toLocaleString()}</p></div>
+                          <div className="bg-slate-50 rounded-xl p-3"><p className="text-[10px] text-slate-400">Jumlah Dibayar</p><p className="text-sm font-bold text-slate-800">RM {detail.totalPaidMyr.toLocaleString()}</p></div>
+                        </div>
+
+                        {typeof detail.healthScore === "number" && (
+                          <div className={`rounded-xl p-3 border ${detail.healthRiskLevel === "high" ? "bg-red-50 border-red-100" : detail.healthRiskLevel === "medium" ? "bg-amber-50 border-amber-100" : "bg-emerald-50 border-emerald-100"}`}>
+                            <p className="text-xs font-bold text-slate-700">Skor Kesihatan: {detail.healthScore}/100</p>
+                            {!!detail.healthReasons?.length && (
+                              <ul className="mt-1 space-y-0.5">{detail.healthReasons.map((r, i) => <li key={i} className="text-[11px] text-slate-500">- {r}</li>)}</ul>
+                            )}
+                          </div>
+                        )}
+
+                        {w && (
+                          <div className="border border-slate-100 rounded-xl p-3 space-y-1">
+                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Dompet Sumber</p>
+                            <p className="text-xs text-slate-600">AI: {w.aiCreditsBalance.toLocaleString()} baki, {w.aiConsumed30d.toLocaleString()} digunakan/30hr &middot; ${w.aiCostUsd30d.toFixed(2)} kos</p>
+                            <p className="text-xs text-slate-600">OCR: {w.ocrCreditsBalance.toLocaleString()} baki, {w.ocrConsumed30d.toLocaleString()} digunakan/30hr</p>
+                            <p className="text-xs text-slate-600">Storan: {fmtDocBytes(w.storageUsedBytes)} / {fmtDocBytes(w.storageLimitBytes)}</p>
+                          </div>
+                        )}
+
+                        <div className="border border-slate-100 rounded-xl p-3 space-y-1.5">
+                          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Amaran Terkini ({al.length})</p>
+                          {al.length === 0 ? <p className="text-xs text-slate-400">Tiada amaran</p> : al.slice(0, 5).map(a => (
+                            <div key={a.id} className="flex items-center justify-between bg-slate-50 rounded-lg px-2.5 py-1.5">
+                              <span className="text-[11px] text-slate-700 truncate">{a.message}</span>
+                              <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full shrink-0 ${a.severity === "high" ? "bg-red-100 text-red-700" : a.severity === "medium" ? "bg-amber-100 text-amber-700" : "bg-slate-100 text-slate-500"}`}>{a.severity}</span>
+                            </div>
+                          ))}
+                        </div>
+
+                        <div className="flex gap-2 pt-1">
+                          <button onClick={() => openEditCustomer(detail)} className="flex-1 py-2 bg-emerald-50 border border-emerald-100 text-emerald-700 rounded-xl text-xs font-bold cursor-pointer hover:bg-emerald-100 transition">Edit</button>
+                          <button onClick={() => toggleStatus(detail.id)} className="flex-1 py-2 border border-slate-200 text-slate-600 rounded-xl text-xs font-bold cursor-pointer hover:bg-slate-50 transition">
+                            {detail.status === "suspended" ? "Aktifkan" : "Gantung"}
+                          </button>
+                        </div>
+                      </div>
+                      );
+                    })()}
+                  </div>
+                </div>
+              </div>
+              );
+            })()}
+
+            {/* â•â•â•â• ALERT CENTER FULL PAGE (HQ_OWNER only) â•â•â•â• */}
+            {activePage === "alertCenter" && !isStaff && (() => {
+              const typeOptions = Array.from(new Set(hqAlerts.map(a => a.alertType)));
+              const filteredAlerts = hqAlerts.filter(a =>
+                (alertTypeFilter === "all" || a.alertType === alertTypeFilter) &&
+                (alertSeverityFilter === "all" || a.severity === alertSeverityFilter) &&
+                (alertResolvedFilter === "all" || (alertResolvedFilter === "resolved" ? !!a.resolvedAt : !a.resolvedAt))
+              );
+              return (
+              <div className="space-y-4" id="hq_alert_center">
+                <h1 className="text-xl font-bold text-slate-900">Pusat Amaran</h1>
+                <div className="grid grid-cols-3 gap-3">
+                  <MetricCard label="Jumlah Amaran" value={hqAlerts.length} icon={Bell} color="slate" />
+                  <MetricCard label="Belum Selesai" value={hqAlerts.filter(a => !a.resolvedAt).length} icon={AlertCircle} color="red" />
+                  <MetricCard label="Risiko Tinggi" value={hqAlerts.filter(a => a.severity === "high" && !a.resolvedAt).length} icon={AlertTriangle} color="amber" />
+                </div>
+                <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 flex flex-wrap items-center gap-3">
+                  <select value={alertTypeFilter} onChange={e => setAlertTypeFilter(e.target.value)}
+                    className="border border-slate-200 rounded-xl px-3 py-2 text-xs bg-white outline-none focus:border-emerald-400 cursor-pointer">
+                    <option value="all">Semua Jenis</option>
+                    {typeOptions.map(t => <option key={t} value={t}>{t}</option>)}
+                  </select>
+                  <select value={alertSeverityFilter} onChange={e => setAlertSeverityFilter(e.target.value as any)}
+                    className="border border-slate-200 rounded-xl px-3 py-2 text-xs bg-white outline-none focus:border-emerald-400 cursor-pointer">
+                    <option value="all">Semua Keseriusan</option>
+                    <option value="high">Tinggi</option>
+                    <option value="medium">Sederhana</option>
+                    <option value="low">Rendah</option>
+                  </select>
+                  <select value={alertResolvedFilter} onChange={e => setAlertResolvedFilter(e.target.value as any)}
+                    className="border border-slate-200 rounded-xl px-3 py-2 text-xs bg-white outline-none focus:border-emerald-400 cursor-pointer">
+                    <option value="all">Semua Status</option>
+                    <option value="unresolved">Belum Selesai</option>
+                    <option value="resolved">Selesai</option>
+                  </select>
+                  <span className="text-[11px] text-slate-400 ml-auto">{filteredAlerts.length} hasil</span>
+                </div>
+                <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+                  {filteredAlerts.length === 0 ? (
+                    <div className="p-12 text-center"><p className="text-xs text-slate-400">Tiada amaran sepadan dengan tapisan</p></div>
+                  ) : (
+                    <div className="divide-y divide-slate-50">
+                      {filteredAlerts.map(a => {
+                        const tenantName = customers.find(c => c.id === a.tenantId)?.name;
+                        return (
+                          <div key={a.id} className="px-5 py-3.5 flex items-center gap-4">
+                            <div className={`w-2 h-2 rounded-full shrink-0 ${a.severity === "high" ? "bg-red-500" : a.severity === "medium" ? "bg-amber-500" : "bg-slate-300"}`} />
+                            <div className="flex-1 min-w-0">
+                              <p className="text-xs font-semibold text-slate-800">{a.message}</p>
+                              <p className="text-[10px] text-slate-400">{a.alertType} &middot; {tenantName || "—"} &middot; {new Date(a.createdAt).toLocaleString("ms-MY")}</p>
+                            </div>
+                            <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full shrink-0 ${a.resolvedAt ? "bg-slate-100 text-slate-500" : "bg-amber-50 text-amber-700"}`}>
+                              {a.resolvedAt ? "Selesai" : "Belum Selesai"}
+                            </span>
+                            {!a.resolvedAt && (
+                              <button onClick={() => hqService.resolveHqAlert(a.id).then(() => hqService.getHqAlerts().then(setHqAlerts))}
+                                className="px-2.5 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded-lg text-[10px] font-bold cursor-pointer transition shrink-0">
+                                Selesaikan
+                              </button>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              </div>
+              );
+            })()}
+
+            {/* â•â•â•â• RESOURCE WALLET DASHBOARD FULL PAGE (HQ_OWNER only) â•â•â•â• */}
+            {activePage === "walletDashboard" && !isStaff && (() => {
+              const sorted = [...resourceWallets].sort((a, b) => {
+                const dir = walletSortDir === "asc" ? 1 : -1;
+                const av = (a as any)[walletSortKey] ?? 0;
+                const bv = (b as any)[walletSortKey] ?? 0;
+                if (typeof av === "string") return av.localeCompare(bv) * dir;
+                return (av - bv) * dir;
+              }).filter(w => !walletSearch || w.tenantName.toLowerCase().includes(walletSearch.toLowerCase()));
+              const sortHeader = (key: typeof walletSortKey, label: string) => (
+                <th onClick={() => { if (walletSortKey === key) setWalletSortDir(d => d === "asc" ? "desc" : "asc"); else { setWalletSortKey(key); setWalletSortDir("desc"); } }}
+                  className="text-right py-2 text-[10px] font-bold text-slate-400 pr-3 cursor-pointer hover:text-emerald-600 select-none">
+                  {label}{walletSortKey === key ? (walletSortDir === "asc" ? " ▲" : " ▼") : ""}
+                </th>
+              );
+              return (
+              <div className="space-y-4" id="hq_wallet_dashboard">
+                <div className="flex items-center justify-between">
+                  <h1 className="text-xl font-bold text-slate-900">Dompet Sumber Tenant</h1>
+                  <div className="flex items-center gap-2">
+                    <div className="relative">
+                      <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                      <input type="text" value={walletSearch} onChange={e => setWalletSearch(e.target.value)}
+                        placeholder="Cari tenant..."
+                        className="pl-8 pr-3 py-2 text-xs border border-slate-200 rounded-xl outline-none focus:border-emerald-400 bg-white w-44" />
+                    </div>
+                    <button onClick={() => setResourceWalletRefreshTick(t => t + 1)} className="text-slate-300 hover:text-emerald-600 cursor-pointer p-2" title="Refresh">
+                      <RefreshCw className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+                <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-x-auto">
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="border-b border-slate-100">
+                        <th className="text-left py-2.5 px-4 text-[10px] font-bold text-slate-400">TENANT</th>
+                        {sortHeader("aiCreditsBalance", "AI BAKI")}
+                        {sortHeader("aiConsumed30d", "AI 30HR")}
+                        {sortHeader("ocrCreditsBalance", "OCR BAKI")}
+                        {sortHeader("ocrConsumed30d", "OCR 30HR")}
+                        {sortHeader("storageUsedBytes", "STORAN")}
+                        {sortHeader("aiCostUsd30d", "KOS AI/30HR")}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {sorted.map(w => (
+                        <tr key={w.tenantId} className="border-b border-slate-50 last:border-0 hover:bg-slate-50">
+                          <td className="py-3 px-4 font-semibold text-slate-800">{w.tenantName}</td>
+                          <td className="py-3 text-right pr-3 text-slate-600">{w.aiCreditsBalance.toLocaleString()}</td>
+                          <td className="py-3 text-right pr-3 text-slate-500">{w.aiConsumed30d.toLocaleString()}</td>
+                          <td className="py-3 text-right pr-3 text-slate-600">{w.ocrCreditsBalance.toLocaleString()}</td>
+                          <td className="py-3 text-right pr-3 text-slate-500">{w.ocrConsumed30d.toLocaleString()}</td>
+                          <td className="py-3 text-right pr-3 text-slate-600">{fmtDocBytes(w.storageUsedBytes)} / {fmtDocBytes(w.storageLimitBytes)}</td>
+                          <td className="py-3 text-right pr-3 font-bold text-emerald-700">${w.aiCostUsd30d.toFixed(2)}</td>
+                        </tr>
+                      ))}
+                      {sorted.length === 0 && (
+                        <tr><td colSpan={7} className="py-10 text-center text-slate-400">Tiada dompet sumber direkodkan</td></tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+              );
+            })()}
+
+            {/* â•â•â•â• HEALTH SCORE DASHBOARD (HQ_OWNER only) â•â•â•â• */}
+            {activePage === "healthScores" && !isStaff && (() => {
+              const ranked = customers
+                .filter(c => typeof c.healthScore === "number")
+                .slice()
+                .sort((a, b) => {
+                  const order = { high: 0, medium: 1, low: 2 } as Record<string, number>;
+                  const ra = order[a.healthRiskLevel || "low"] ?? 2;
+                  const rb = order[b.healthRiskLevel || "low"] ?? 2;
+                  if (ra !== rb) return ra - rb;
+                  return (a.healthScore || 0) - (b.healthScore || 0);
+                });
+              const highRisk = ranked.filter(c => c.healthRiskLevel === "high");
+              return (
+              <div className="space-y-4" id="hq_health_scores">
+                <h1 className="text-xl font-bold text-slate-900">Skor Kesihatan Pelanggan</h1>
+                <div className="grid grid-cols-3 gap-3">
+                  <MetricCard label="Risiko Tinggi" value={highRisk.length} icon={AlertTriangle} color="red" />
+                  <MetricCard label="Risiko Sederhana" value={ranked.filter(c => c.healthRiskLevel === "medium").length} icon={AlertCircle} color="amber" />
+                  <MetricCard label="Sihat" value={ranked.filter(c => c.healthRiskLevel === "low").length} icon={CheckCircle2} color="emerald" />
+                </div>
+                {highRisk.length > 0 && (
+                  <div className="bg-red-50 border border-red-200 rounded-2xl p-4 flex gap-3">
+                    <AlertTriangle className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
+                    <div>
+                      <p className="text-sm font-bold text-red-700">{highRisk.length} pelanggan berisiko churn tinggi</p>
+                      <p className="text-xs text-red-600 mt-0.5">Semak senarai di bawah dan ambil tindakan susulan segera.</p>
+                    </div>
+                  </div>
+                )}
+                <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+                  {ranked.length === 0 ? (
+                    <div className="p-12 text-center"><p className="text-xs text-slate-400">Tiada data skor kesihatan</p></div>
+                  ) : (
+                    <div className="divide-y divide-slate-50">
+                      {ranked.map(c => (
+                        <div key={c.id} className={`px-5 py-3.5 flex items-center gap-4 ${c.healthRiskLevel === "high" ? "bg-red-50/40" : ""}`}>
+                          <div className="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-700 font-bold text-sm flex items-center justify-center shrink-0">
+                            {c.name.charAt(0).toUpperCase()}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs font-semibold text-slate-800 truncate">{c.name}</p>
+                            <p className="text-[10px] text-slate-400 truncate">{c.plan || "—"} &middot; {c.healthReasons?.join(", ") || "Tiada sebab direkod"}</p>
+                          </div>
+                          <span className={`text-xs font-bold px-2.5 py-1 rounded-full shrink-0 ${
+                            c.healthRiskLevel === "high" ? "text-red-600 bg-red-50 border border-red-200" :
+                            c.healthRiskLevel === "medium" ? "text-amber-600 bg-amber-50 border border-amber-200" :
+                            "text-emerald-600 bg-emerald-50 border border-emerald-200"
+                          }`}>{c.healthScore}/100</span>
+                          <button onClick={() => { setC360SelectedId(c.id); setActivePage("customer360"); }}
+                            className="px-2.5 py-1.5 bg-slate-50 hover:bg-emerald-50 hover:text-emerald-700 text-slate-500 rounded-lg text-[10px] font-bold cursor-pointer transition shrink-0">
+                            Lihat 360
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+              );
+            })()}
+
+            {/* â•â•â•â• GOVERNANCE DASHBOARD HUB (HQ_OWNER only) â•â•â•â• */}
+            {activePage === "governance" && !isStaff && (
+              <div className="space-y-4" id="hq_governance">
+                <h1 className="text-xl font-bold text-slate-900">Tadbir Urus HQ</h1>
+                <div className="grid md:grid-cols-2 gap-4">
+                  <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-3">
+                    <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2"><Shield className="w-4 h-4 text-emerald-600" />Topeng Data (PII)</h3>
+                    <p className="text-[11px] text-slate-400">Unmask: {unmaskAllowed ? "Dibenarkan" : "Disekat"} &middot; {hqStaffUsers.filter(u => u.unmaskGranted).length}/{hqStaffUsers.length} staf diberi akses unmask &middot; {maskingGrants.length} geran aktif</p>
+                    <button onClick={() => setActivePage("dataMaskingGovernance")} className="text-xs font-bold text-emerald-600 cursor-pointer hover:underline">Buka Tadbir Topeng Data &rarr;</button>
+                  </div>
+                  <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-3">
+                    <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2"><HardDrive className="w-4 h-4 text-emerald-600" />Tadbir Storan</h3>
+                    <p className="text-[11px] text-slate-400">{storageGovernance ? `Beku selepas ${storageGovernance.freezeDays} hari tidak aktif` : "Tetapan belum dimuat"} &middot; {freezeStates.filter(f => f.isFrozen).length} tenant dibekukan</p>
+                    <button onClick={() => setActivePage("storageGovernance")} className="text-xs font-bold text-emerald-600 cursor-pointer hover:underline">Buka Tadbir Storan &rarr;</button>
+                  </div>
+                  <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-3">
+                    <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2"><ShieldAlert className="w-4 h-4 text-rose-500" />Tadbir Bayaran</h3>
+                    <p className="text-[11px] text-slate-400">Webhook: {webhookEnforce ? "Penguatkuasaan AKTIF" : "Mod bayang"} &middot; {webhookEvents.length} log terkini &middot; {webhookEvents.filter(e => e.wouldHaveBlocked).length} akan disekat</p>
+                    <button onClick={() => setActivePage("paymentGovernance")} className="text-xs font-bold text-emerald-600 cursor-pointer hover:underline">Buka Tadbir Bayaran &rarr;</button>
+                  </div>
+                  <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-3">
+                    <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2"><DollarSign className="w-4 h-4 text-amber-500" />Tadbir Kos AI</h3>
+                    <p className="text-[11px] text-slate-400">{aiCostSummary.length} rekod perbelanjaan &middot; Jumlah: ${aiCostSummary.reduce((s, r) => s + r.totalCostUsd, 0).toFixed(2)}</p>
+                    <button onClick={() => setActivePage("aiCostGovernance")} className="text-xs font-bold text-emerald-600 cursor-pointer hover:underline">Buka Tadbir Kos AI &rarr;</button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* â•â•â•â• PAYMENT GOVERNANCE DASHBOARD (HQ_OWNER only) â•â•â•â• */}
+            {activePage === "paymentGovernance" && !isStaff && (
+              <div className="space-y-5" id="hq_payment_governance">
+                <h1 className="text-xl font-bold text-slate-900">Tadbir Bayaran</h1>
+                <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-4">
+                  <div className="flex items-center gap-2">
+                    <ShieldAlert className="w-4 h-4 text-rose-500" />
+                    <h3 className="text-sm font-bold text-slate-900">Keselamatan Webhook Chip Asia</h3>
+                  </div>
+                  <div className="flex items-center justify-between p-3 border border-slate-100 rounded-xl">
+                    <div>
+                      <p className="text-xs font-bold text-slate-800">Penguatkuasaan tandatangan (enforce)</p>
+                      <p className="text-[10px] text-slate-400">
+                        {webhookEnforce
+                          ? "AKTIF — webhook yang gagal pengesahan tandatangan akan ditolak (401)."
+                          : "Mod bayang (shadow) — pengesahan direkod tetapi tidak menyekat. Semak log di bawah sebelum mengaktifkan."}
+                      </p>
+                    </div>
+                    <button onClick={toggleWebhookEnforce}
+                      className={`w-11 h-6 rounded-full relative transition cursor-pointer ${webhookEnforce ? "bg-rose-600" : "bg-slate-200"}`}>
+                      <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full transition ${webhookEnforce ? "translate-x-5" : ""}`} />
+                    </button>
+                  </div>
+                  <div className="space-y-1.5 max-h-[28rem] overflow-y-auto">
+                    {webhookEvents.length === 0 ? (
+                      <p className="text-xs text-slate-400 text-center py-4">Tiada log webhook lagi.</p>
+                    ) : webhookEvents.map(ev => (
+                      <div key={ev.id} className="flex items-center justify-between text-[11px] p-2 bg-slate-50 rounded-lg">
+                        <span className="text-slate-600">{ev.transactionReference || "-"}</span>
+                        <span className={`font-bold ${ev.verificationResult === "verified" ? "text-emerald-600" : "text-rose-600"}`}>
+                          {ev.verificationResult}
+                        </span>
+                        {ev.wouldHaveBlocked && <span className="text-amber-600 font-semibold">akan disekat</span>}
+                        <span className="text-slate-400">{new Date(ev.createdAt).toLocaleString("ms-MY")}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* â•â•â•â• STORAGE GOVERNANCE DASHBOARD (HQ_OWNER only) â•â•â•â• */}
+            {activePage === "storageGovernance" && !isStaff && (() => {
+              const GB = 1_073_741_824;
+              const supabasePlan = 100 * GB; // Supabase Pro 100GB
+
+              // Merge real Supabase data with customer list
+              const tenantViews = customers.map(c => {
+                const real = realStorageData.find(r => r.tenant_id === c.id);
+                const quotaMap: Record<string, number> = { Starter: 5*GB, Pro: 25*GB, Enterprise: 100*GB };
+                const quota = quotaMap[c.plan] || quotaMap.Starter;
+                const used  = real ? Number(real.total_bytes) : 0;
+                const fileCount = real ? Number(real.file_count) : 0;
+                const pct   = used / quota;
+                // Freeze/inactivity settings: real Supabase state when available (HQ + tenant
+                // both read/enforce the same record), localStorage fallback for sandbox/mock mode.
+                const freezeState = freezeStates.find(f => f.tenantId === c.id);
+                const cfgRaw = useRealData ? null : localStorage.getItem(storageQuotaKey(c.id));
+                const cfg = cfgRaw ? JSON.parse(cfgRaw) : {};
+                const lastActive = freezeState?.lastActiveAt || cfg.lastActiveAt || new Date().toISOString();
+                const daysSinceActive = Math.floor((Date.now() - new Date(lastActive).getTime()) / 86400000);
+                const isFrozen = freezeState?.isFrozen ?? cfg.isFrozen ?? false;
+                const frozenReason = freezeState?.frozenReason ?? cfg.frozenReason ?? "";
+                return { id: c.id, name: c.name, plan: c.plan, used, quota, pct, fileCount, isFrozen, frozenReason, lastActive, daysSince: daysSinceActive, isInactive: daysSinceActive >= inactiveDays };
+              });
+
+              const totalUsed = tenantViews.reduce((s, t) => s + t.used, 0);
+              const supabasePct = totalUsed / supabasePlan;
+
+              const toggleFreeze = async (tenantId: string, isFrozen: boolean) => {
+                if (useRealData) {
+                  await hqService.setTenantFrozen(tenantId, !isFrozen, !isFrozen ? "hq_manual" : "");
+                  setStorageRefreshTick(t => t + 1);
+                  return;
+                }
+                const key = storageQuotaKey(tenantId);
+                try {
+                  const raw = localStorage.getItem(key);
+                  const s = raw ? JSON.parse(raw) : {};
+                  localStorage.setItem(key, JSON.stringify({ ...s, isFrozen: !isFrozen, frozenReason: !isFrozen ? "hq_manual" : "" }));
+                  setStorageRefreshTick(t => t + 1);
+                } catch {}
+              };
+
+              const doCleanup = (_tenantId: string) => {
+                setCleanupTenant(null);
+                setStorageRefreshTick(t => t + 1);
+              };
+
+              return (
+              <div className="space-y-5" id="hq_storage_governance">
+                <h1 className="text-xl font-bold text-slate-900">Tadbir Storan</h1>
+                <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                      <HardDrive className="w-4 h-4 text-emerald-600" /> Pemantauan Storan
+                    </h3>
+                    <div className="flex items-center gap-2">
+                      <button onClick={() => setStorageRefreshTick(t => t + 1)} className="text-slate-300 hover:text-emerald-600 cursor-pointer" title="Refresh">
+                        <RefreshCw className="w-3.5 h-3.5" />
+                      </button>
+                      <span className="text-[10px] text-slate-400">{fmtDocBytes(totalUsed)} / {fmtDocBytes(supabasePlan)} Supabase</span>
+                    </div>
+                  </div>
+
+                  {/* Supabase HQ bar */}
+                  <div className="space-y-1.5">
+                    <div className="flex justify-between text-[11px]">
+                      <span className="text-slate-500">Storan Supabase Anda (HQ)</span>
+                      <span className={`font-bold ${supabasePct > 0.85 ? "text-red-600" : supabasePct > 0.70 ? "text-amber-600" : "text-emerald-600"}`}>{(supabasePct*100).toFixed(1)}%</span>
+                    </div>
+                    <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
+                      <div className={`h-full rounded-full transition-all ${supabasePct > 0.85 ? "bg-red-500" : supabasePct > 0.70 ? "bg-amber-500" : "bg-emerald-500"}`}
+                        style={{ width: `${Math.min(supabasePct*100, 100)}%` }} />
+                    </div>
+                    {supabasePct > 0.70 && (
+                      <p className={`text-[10px] font-semibold ${supabasePct > 0.85 ? "text-red-600" : "text-amber-600"}`}>
+                        {supabasePct > 0.85 ? "KRITIKAL: Upgrade Supabase plan sebelum pelanggan terjejas!" : "Hampir 70% - Sedia upgrade Supabase Pro plan"}
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Auto-cleanup settings */}
+                  <div className="flex items-center justify-between py-2 border-t border-slate-50">
+                    <div>
+                      <p className="text-xs font-semibold text-slate-700">Tempoh Beku Tidak Aktif</p>
+                      <p className="text-[10px] text-slate-400">Bekukan storan tenant yang tidak aktif melebihi tempoh ini</p>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <input type="number" min="7" max="365" value={inactiveDays}
+                        onChange={e => saveInactiveDays(parseInt(e.target.value) || 30)}
+                        className="w-14 border border-slate-200 rounded-lg px-2 py-1 text-xs text-center focus:outline-none focus:border-emerald-400" />
+                      <span className="text-[10px] text-slate-400">hari</span>
+                    </div>
+                  </div>
+
+                  {/* HQ-triggered enforcement (never autonomous) */}
+                  <div className="flex items-center justify-between py-2 border-t border-slate-50">
+                    <div>
+                      <p className="text-xs font-semibold text-slate-700">Jalankan Penguatkuasaan Sekarang</p>
+                      <p className="text-[10px] text-slate-400">
+                        {enforcementResult ?? "Bekukan storan semua tenant tidak aktif mengikut tempoh di atas (manual, bukan automatik)"}
+                      </p>
+                    </div>
+                    <button
+                      onClick={runEnforcementNow}
+                      disabled={enforcementRunning}
+                      className="text-[11px] font-semibold px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white cursor-pointer"
+                    >
+                      {enforcementRunning ? "Memproses..." : "Run Enforcement Now"}
+                    </button>
+                  </div>
+
+                  {/* Per-tenant table */}
+                  <div className="space-y-2">
+                    {tenantViews.map((t: any) => (
+                      <div key={t.id} className={`rounded-xl border p-3 space-y-2 ${t.isFrozen ? "border-red-200 bg-red-50/40" : t.isInactive ? "border-amber-200 bg-amber-50/30" : "border-slate-100"}`}>
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <p className="text-xs font-bold text-slate-800 truncate">{t.name}</p>
+                              {t.isFrozen && <span className="text-[9px] font-bold text-red-600 bg-red-100 px-1.5 py-0.5 rounded-full border border-red-200">BEKU</span>}
+                              {t.isInactive && !t.isFrozen && <span className="text-[9px] font-bold text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded-full border border-amber-200">Tidak Aktif {t.daysSince}h</span>}
+                            </div>
+                            <p className="text-[10px] text-slate-400">{t.plan} &middot; {fmtDocBytes(t.used)} / {fmtDocBytes(t.quota)} &middot; {t.fileCount} fail</p>
+                          </div>
+                          <div className="flex gap-1.5 shrink-0">
+                            {t.isInactive && (
+                              <button onClick={() => setCleanupTenant(t.id)}
+                                className="px-2 py-1 text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200 rounded-lg cursor-pointer hover:bg-amber-100 transition">
+                                Bersih
+                              </button>
+                            )}
+                            <button onClick={() => toggleFreeze(t.id, t.isFrozen)}
+                              className={`px-2 py-1 text-[10px] font-bold rounded-lg cursor-pointer transition border ${t.isFrozen ? "text-emerald-700 bg-emerald-50 border-emerald-200 hover:bg-emerald-100" : "text-slate-600 bg-slate-50 border-slate-200 hover:bg-slate-100"}`}>
+                              {t.isFrozen ? "Lepas" : "Beku"}
+                            </button>
+                          </div>
+                        </div>
+                        <div className="h-1.5 bg-slate-200 rounded-full overflow-hidden">
+                          <div className={`h-full rounded-full ${t.pct > 0.85 ? "bg-red-500" : t.pct > 0.70 ? "bg-amber-500" : "bg-emerald-500"}`}
+                            style={{ width: `${Math.min(t.pct*100,100).toFixed(0)}%` }} />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Cleanup confirm */}
+                  {cleanupTenant && (
+                    <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 space-y-3">
+                      <p className="text-xs font-bold text-amber-800">Sahkan Padam Fail</p>
+                      <p className="text-[11px] text-amber-700">Semua fail dokumen tenant ini akan dipadam. Data kewangan TIDAK terjejas.</p>
+                      <div className="flex gap-2">
+                        <button onClick={() => doCleanup(cleanupTenant)}
+                          className="flex-1 py-2 bg-amber-500 text-white rounded-lg text-xs font-bold cursor-pointer hover:bg-amber-600 transition">
+                          Ya, Padam
+                        </button>
+                        <button onClick={() => setCleanupTenant(null)}
+                          className="flex-1 py-2 border border-slate-200 rounded-lg text-xs font-bold text-slate-600 cursor-pointer hover:bg-slate-50 transition">
+                          Batal
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+              );
+            })()}
+
+            {/* ═════ AI COST GOVERNANCE (HQ_OWNER only) ═════ */}
+            {activePage === "aiCostGovernance" && !isStaff && (
+              <div className="space-y-4" id="hq_ai_cost_governance">
+                <h1 className="text-xl font-bold text-slate-900">Tadbir Urus Kos AI</h1>
+                <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-4">
+                  <div className="flex items-center gap-2">
+                    <DollarSign className="w-4 h-4 text-amber-500" />
+                    <h3 className="text-sm font-bold text-slate-900">Kadar Kos Per Panggilan</h3>
+                  </div>
+                  <div className="space-y-2">
+                    <p className="text-[11px] font-bold text-slate-500">Kadar kos per panggilan (USD)</p>
+                    {AI_PROVIDERS.flatMap(prov => prov.models.map(m => {
+                      const existing = aiCostRates.find(r => r.provider === prov.id && r.model === m.id);
+                      return (
+                        <div key={`${prov.id}:${m.id}`} className="flex items-center justify-between text-xs p-2 bg-slate-50 rounded-lg">
+                          <span className="text-slate-600">{prov.name} / {m.id}</span>
+                          <input type="number" step="0.0001" min="0" defaultValue={existing?.costPerCallUsd ?? 0}
+                            onBlur={e => saveAiCostRate(prov.id, m.id, parseFloat(e.target.value) || 0)}
+                            className="w-24 border border-slate-200 rounded-lg px-2 py-1 text-right focus:outline-none focus:border-emerald-400" />
+                        </div>
+                      );
+                    }))}
+                  </div>
+                </div>
+                <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-4">
+                  <div className="flex items-center gap-2">
+                    <DollarSign className="w-4 h-4 text-amber-500" />
+                    <h3 className="text-sm font-bold text-slate-900">Perbelanjaan Sebenar Mengikut Syarikat</h3>
+                  </div>
+                  <p className="text-[11px] text-slate-400">Jumlah keseluruhan: ${aiCostSummary.reduce((s, r) => s + r.totalCostUsd, 0).toFixed(4)} (RM{(aiCostSummary.reduce((s, r) => s + r.totalCostUsd, 0) * usdMyr).toFixed(2)})</p>
+                  <div className="space-y-2">
+                    {aiCostSummary.length === 0 ? (
+                      <p className="text-xs text-slate-400 text-center py-3">Tiada data perbelanjaan lagi.</p>
+                    ) : aiCostSummary.map((r, i) => (
+                      <div key={`${r.tenantId}-${r.provider}-${i}`} className="flex items-center justify-between text-xs p-2 bg-amber-50 rounded-lg">
+                        <span className="text-slate-700 font-semibold">{r.tenantName}</span>
+                        <span className="text-slate-500">{r.provider} · {r.totalCalls} panggilan</span>
+                        <span className="font-bold text-amber-700">${r.totalCostUsd.toFixed(4)} (RM{(r.totalCostUsd * usdMyr).toFixed(2)})</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* ═════ DATA MASKING GOVERNANCE (HQ_OWNER only) ═════ */}
+            {activePage === "dataMaskingGovernance" && !isStaff && (
+              <div className="space-y-4" id="hq_data_masking_governance">
+                <h1 className="text-xl font-bold text-slate-900">Tadbir Topeng Data (PII)</h1>
+
+                <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-3">
+                  <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2"><Shield className="w-4 h-4 text-emerald-600" />Status Akses Unmask</h3>
+                  <p className="text-[11px] text-slate-400">Unmask: {unmaskAllowed ? "Dibenarkan" : "Disekat"} &middot; {hqStaffUsers.filter(u => u.unmaskGranted).length}/{hqStaffUsers.length} staf diberi akses unmask &middot; {maskingGrants.length} geran aktif</p>
+                </div>
+
+                <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-4">
+                  <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2"><Users className="w-4 h-4 text-emerald-600" />Senarai Akses Kakitangan</h3>
+                  {hqStaffUsers.length === 0 ? (
+                    <div className="text-center py-4 bg-slate-50 rounded-xl">
+                      <Users className="w-6 h-6 text-slate-200 mx-auto mb-1" />
+                      <p className="text-xs text-slate-400">Hanya anda sebagai pentadbir HQ</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      {hqStaffUsers.map((u) => (
+                        <div key={u.userId} className="flex items-center justify-between gap-3 p-3 bg-slate-50 rounded-xl">
+                          <div className="min-w-0">
+                            <p className="text-xs font-bold text-slate-900 truncate">{u.fullName} <span className="text-slate-400 font-normal">({u.role})</span></p>
+                            <p className="text-[11px] text-slate-500 truncate">{u.email}</p>
+                          </div>
+                          <button
+                            onClick={() => toggleStaffUnmask(u.userId, u.unmaskGranted)}
+                            className={`shrink-0 px-3 py-1.5 rounded-lg text-[11px] font-bold cursor-pointer transition ${
+                              u.unmaskGranted
+                                ? "bg-amber-100 text-amber-800 hover:bg-amber-200"
+                                : "bg-emerald-100 text-emerald-800 hover:bg-emerald-200"
+                            }`}
+                          >
+                            {u.unmaskGranted ? "Tarik Balik Unmask" : "Beri Akses Unmask"}
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-3">
+                  <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2"><Bell className="w-4 h-4 text-amber-500" />Permintaan Belum Selesai</h3>
+                  <div className="text-center py-4 bg-slate-50 rounded-xl">
+                    <p className="text-xs text-slate-400">Tiada sistem permintaan unmask ditubuhkan. Akses diberi/ditarik balik terus oleh pentadbir HQ di atas.</p>
+                  </div>
+                </div>
+
+                <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-3">
+                  <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2"><Activity className="w-4 h-4 text-emerald-600" />Sejarah Geran Akses</h3>
+                  {maskingGrants.length === 0 ? (
+                    <p className="text-xs text-slate-400 text-center py-3">Tiada sejarah geran lagi.</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {maskingGrants.map((g) => {
+                        const u = hqStaffUsers.find(s => s.userId === g.userId);
+                        return (
+                          <div key={g.userId} className="flex items-center justify-between text-xs p-2 bg-slate-50 rounded-lg">
+                            <span className="text-slate-700 font-semibold">{u?.fullName || g.userId}</span>
+                            <span className="text-slate-400">{new Date(g.grantedAt).toLocaleString("ms-MY")}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
 
           </div>
         </main>
