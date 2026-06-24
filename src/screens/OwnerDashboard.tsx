@@ -18,7 +18,7 @@ import {
   Paperclip, Mic, Square, File as FileIcon, Plus, Building2,
 } from "lucide-react";
 import { FinancialEvidencePackageManager } from "../components/FinancialEvidencePackage";
-import { createTenantSupportTicket, getMyTenantSupportTickets, SupportTicket, updateTenantMasterProfile, SUPPORT_TICKET_TEMPLATES, uploadTicketAttachment, getTicketAttachmentUrl, ticketSlaState, TICKET_STATUS_LABEL_MS, TICKET_STATUS_STYLE } from "../lib/hqService";
+import { createTenantSupportTicket, getMyTenantSupportTickets, SupportTicket, updateTenantMasterProfile, SUPPORT_TICKET_TEMPLATES, uploadTicketAttachment, getTicketAttachmentUrl, ticketSlaState, TICKET_STATUS_LABEL_MS, TICKET_STATUS_STYLE, tenantAssignStaffRole, tenantRevokeStaffRole, tenantSubmitAppeal } from "../lib/hqService";
 import { FinancialReportsAnalytics } from "../components/FinancialReportsAnalytics";
 import { StorageBar } from "../components/StorageBar";
 import { DocumentsManager } from "../components/DocumentsManager";
@@ -278,6 +278,13 @@ export function OwnerDashboard() {
   const [inviteName, setInviteName] = useState("");
   const [inviteLoading, setInviteLoading] = useState(false);
   const [inviteResult, setInviteResult] = useState<{ success: boolean; message: string; tempPassword?: string } | null>(null);
+  const [roleChangeLoadingId, setRoleChangeLoadingId] = useState<string | null>(null);
+  const [memberRoleOverrides, setMemberRoleOverrides] = useState<Record<string, string>>({});
+  const [revokedMemberIds, setRevokedMemberIds] = useState<Record<string, boolean>>({});
+  const [showAppeal, setShowAppeal] = useState(false);
+  const [appealReason, setAppealReason] = useState("");
+  const [appealLoading, setAppealLoading] = useState(false);
+  const [appealResult, setAppealResult] = useState<{ success: boolean; message: string } | null>(null);
 
   // â"€â"€ Create Workspace (AUTH-02B â€" Tenant Owner can create additional
   // workspaces beyond their initial provisioned one, scoped to their own
@@ -1675,6 +1682,44 @@ export function OwnerDashboard() {
     }
   };
 
+  const handleChangeMemberRole = async (member: { id: string; userId: string; email: string; fullName: string }, newRole: string) => {
+    setRoleChangeLoadingId(member.id);
+    try {
+      const ok = await tenantAssignStaffRole(member.userId, member.email, member.fullName, newRole);
+      if (ok) setMemberRoleOverrides(prev => ({ ...prev, [member.id]: newRole }));
+    } finally {
+      setRoleChangeLoadingId(null);
+    }
+  };
+
+  const handleRevokeMember = async (member: { id: string; fullName: string; email: string }) => {
+    if (!window.confirm(`Tarik balik akses ${member.fullName} (${member.email})?`)) return;
+    setRoleChangeLoadingId(member.id);
+    try {
+      const ok = await tenantRevokeStaffRole(member.id);
+      if (ok) setRevokedMemberIds(prev => ({ ...prev, [member.id]: true }));
+    } finally {
+      setRoleChangeLoadingId(null);
+    }
+  };
+
+  const handleSubmitAppeal = async () => {
+    if (!appealReason.trim()) return;
+    setAppealLoading(true);
+    setAppealResult(null);
+    try {
+      const id = await tenantSubmitAppeal(appealReason.trim());
+      if (id) {
+        setAppealResult({ success: true, message: "Rayuan anda telah dihantar kepada HQ untuk semakan." });
+        setAppealReason("");
+      } else {
+        setAppealResult({ success: false, message: "Gagal menghantar rayuan. Sila cuba lagi." });
+      }
+    } finally {
+      setAppealLoading(false);
+    }
+  };
+
   const QUICK_PROMPTS = [
     { label: "Baki tunai saya?", q: "Berapa baki tunai saya sekarang?" },
     { label: "Ringkasan bulan ini", q: "Ringkaskan kewangan saya bulan ini." },
@@ -2744,7 +2789,9 @@ export function OwnerDashboard() {
                     </div>
                   </div>
                   {(() => {
-                    const otherMembers = userRoles.filter(r => r.email !== user?.email);
+                    const otherMembers = userRoles
+                      .filter(r => r.email !== user?.email)
+                      .filter(r => !revokedMemberIds[r.id]);
                     if (otherMembers.length === 0) {
                       return (
                         <div className="text-center py-4">
@@ -2753,21 +2800,77 @@ export function OwnerDashboard() {
                         </div>
                       );
                     }
-                    return otherMembers.map(member => (
-                      <div key={member.id} className="flex items-center space-x-3 p-3 bg-slate-50 rounded-xl" id={`team_member_${member.id}`}>
-                        <div className="w-10 h-10 rounded-xl bg-slate-400 text-white flex items-center justify-center font-bold">
-                          {(member.fullName || member.email).charAt(0).toUpperCase()}
+                    return otherMembers.map(member => {
+                      const effectiveRole = memberRoleOverrides[member.id] || member.role;
+                      return (
+                        <div key={member.id} className="flex items-center justify-between space-x-3 p-3 bg-slate-50 rounded-xl" id={`team_member_${member.id}`}>
+                          <div className="flex items-center space-x-3">
+                            <div className="w-10 h-10 rounded-xl bg-slate-400 text-white flex items-center justify-center font-bold">
+                              {(member.fullName || member.email).charAt(0).toUpperCase()}
+                            </div>
+                            <div>
+                              <p className="font-bold text-slate-900 text-sm">{member.fullName}</p>
+                              <p className="text-xs text-slate-500">{member.email}</p>
+                              <span className="text-[10px] bg-slate-200 text-slate-700 font-bold px-2 py-0.5 rounded-full">
+                                {effectiveRole === "TENANT_OWNER" ? "Pemilik" : effectiveRole}
+                              </span>
+                            </div>
+                          </div>
+                          {effectiveRole !== "TENANT_OWNER" && (
+                            <div className="flex flex-col items-end space-y-1">
+                              <select
+                                value={effectiveRole}
+                                disabled={roleChangeLoadingId === member.id}
+                                onChange={e => handleChangeMemberRole(member, e.target.value)}
+                                title="Tukar peranan kakitangan (direkod dalam role_change_audit_log)"
+                                className="text-[10px] border border-slate-200 rounded-lg px-1.5 py-1 bg-white cursor-pointer"
+                              >
+                                <option value="TENANT_ADMIN">TENANT_ADMIN</option>
+                                <option value="MANAGER">MANAGER</option>
+                                <option value="STAFF">STAFF</option>
+                                <option value="VIEWER">VIEWER</option>
+                              </select>
+                              <button
+                                onClick={() => handleRevokeMember(member)}
+                                disabled={roleChangeLoadingId === member.id}
+                                title="Tarik balik akses (direkod dalam role_change_audit_log)"
+                                className="text-[10px] font-bold text-rose-600 hover:text-rose-700 cursor-pointer disabled:opacity-50"
+                              >
+                                Buang
+                              </button>
+                            </div>
+                          )}
                         </div>
-                        <div>
-                          <p className="font-bold text-slate-900 text-sm">{member.fullName}</p>
-                          <p className="text-xs text-slate-500">{member.email}</p>
-                          <span className="text-[10px] bg-slate-200 text-slate-700 font-bold px-2 py-0.5 rounded-full">
-                            {member.role === "TENANT_OWNER" ? "Pemilik" : "Kakitangan"}
-                          </span>
-                        </div>
-                      </div>
-                    ));
+                      );
+                    });
                   })()}
+                </div>
+
+                <div className="bg-white border border-slate-200 rounded-2xl p-5 space-y-3 shadow-sm">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-sm font-bold text-slate-900">Hantar Rayuan ke HQ</h3>
+                    <button onClick={() => { setShowAppeal(v => !v); setAppealResult(null); }}
+                      className="text-xs font-bold text-indigo-600 hover:text-indigo-700 cursor-pointer">
+                      {showAppeal ? "Tutup" : "Buka"}
+                    </button>
+                  </div>
+                  <p className="text-xs text-slate-400">Jika akaun anda digantung atau dibekukan dan anda rasa ini silap, hantar rayuan di sini untuk semakan HQ.</p>
+                  {showAppeal && (
+                    <div className="space-y-2">
+                      <textarea value={appealReason} onChange={e => setAppealReason(e.target.value)}
+                        placeholder="Terangkan sebab rayuan anda..." rows={3}
+                        className="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-400 bg-white" />
+                      <button onClick={handleSubmitAppeal} disabled={appealLoading || !appealReason.trim()}
+                        className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 text-white rounded-xl text-xs font-bold cursor-pointer transition">
+                        {appealLoading ? "Menghantar..." : "Hantar Rayuan"}
+                      </button>
+                      {appealResult && (
+                        <div className={`rounded-xl p-3 text-xs ${appealResult.success ? "bg-emerald-50 border border-emerald-200" : "bg-rose-50 border border-rose-200"}`}>
+                          <p className={appealResult.success ? "text-emerald-600" : "text-rose-600"}>{appealResult.message}</p>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
             )}
