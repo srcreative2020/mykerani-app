@@ -18,11 +18,11 @@ import {
   Paperclip, Mic, Square, File as FileIcon, Plus, Building2, ScanLine,
 } from "lucide-react";
 import { FinancialEvidencePackageManager } from "../components/FinancialEvidencePackage";
-import { createTenantSupportTicket, getMyTenantSupportTickets, SupportTicket, updateTenantMasterProfile, SUPPORT_TICKET_TEMPLATES, uploadTicketAttachment, getTicketAttachmentUrl, ticketSlaState, TICKET_STATUS_LABEL_MS, TICKET_STATUS_STYLE, tenantAssignStaffRole, tenantRevokeStaffRole, tenantSubmitAppeal, tenantReplySupportTicket, getTenantMyHealthScore, TenantHealthScore, getTenantAiCostSummary, TenantAiCostSummary, getMyDataAccessLog, DataAccessLogEntry } from "../lib/hqService";
+import { createTenantSupportTicket, getMyTenantSupportTickets, SupportTicket, updateTenantMasterProfile, SUPPORT_TICKET_TEMPLATES, uploadTicketAttachment, getTicketAttachmentUrl, ticketSlaState, TICKET_STATUS_LABEL_MS, TICKET_STATUS_STYLE, tenantAssignStaffRole, tenantRevokeStaffRole, tenantSubmitAppeal, tenantReplySupportTicket, getTenantMyHealthScore, TenantHealthScore, getTenantAiCostSummary, TenantAiCostSummary, getMyDataAccessLog, DataAccessLogEntry, getAddonPackages, AddonPackage } from "../lib/hqService";
 import { FinancialReportsAnalytics } from "../components/FinancialReportsAnalytics";
 import { StorageBar } from "../components/StorageBar";
 import { DocumentsManager } from "../components/DocumentsManager";
-import { useStorageQuota, PLAN_QUOTAS, GB } from "../lib/storageQuota";
+import { useStorageQuota, PLAN_QUOTAS } from "../lib/storageQuota";
 import { useAiCredits, useOcrCredits } from "../lib/aiCredits";
 import { useNotifications, buildTenantNotifs, buildFinancialNotifs, fmtNotifTime } from "../lib/notifications";
 import { computeFinancialHealthScoring } from "../lib/financialHealth";
@@ -729,6 +729,14 @@ export function OwnerDashboard() {
   const ocrCredits = useOcrCredits(tenantId, wsId || undefined);
   const [showAddonModal, setShowAddonModal] = useState(false);
   const [showCreditModal, setShowCreditModal] = useState<"AI" | "OCR" | null>(null);
+  const [storagePackages, setStoragePackages] = useState<AddonPackage[]>([]);
+  const [aiCreditPackages, setAiCreditPackages] = useState<AddonPackage[]>([]);
+  const [ocrCreditPackages, setOcrCreditPackages] = useState<AddonPackage[]>([]);
+  useEffect(() => {
+    getAddonPackages("STORAGE").then(setStoragePackages);
+    getAddonPackages("AI").then(setAiCreditPackages);
+    getAddonPackages("OCR").then(setOcrCreditPackages);
+  }, []);
 
   // ── Subscription plan + payment (real, Supabase-backed) ──
   interface PlanOption {
@@ -4365,22 +4373,20 @@ export function OwnerDashboard() {
             </div>
             <p className="text-[11px] text-slate-500">Pilih pakej tambahan storan. Bayaran akan disahkan oleh HQ.</p>
             <div className="space-y-2">
-              {[
-                { gb: 5,  label: "+5 GB",  priceMyr: 15, best: false },
-                { gb: 20, label: "+20 GB", priceMyr: 45, best: true  },
-                { gb: 50, label: "+50 GB", priceMyr: 99, best: false },
-              ].map(({ gb, label, priceMyr, best }) => (
-                <button key={gb}
+              {storagePackages.length === 0 ? (
+                <p className="text-xs text-slate-400 text-center py-3">Tiada pakej tersedia.</p>
+              ) : storagePackages.map((pkg) => (
+                <button key={pkg.id}
                   onClick={() => {
                     setShowAddonModal(false);
-                    openAddonPurchaseModal("STORAGE", gb * GB, `Tambahan Storan ${label}`, priceMyr);
+                    openAddonPurchaseModal("STORAGE", pkg.amount, `Tambahan Storan ${pkg.label}`, pkg.priceMyr);
                   }}
-                  className={`w-full flex items-center justify-between p-4 rounded-xl border-2 transition cursor-pointer ${best ? "border-emerald-500 bg-emerald-50" : "border-slate-100 hover:border-slate-200"}`}>
+                  className={`w-full flex items-center justify-between p-4 rounded-xl border-2 transition cursor-pointer ${pkg.isBestValue ? "border-emerald-500 bg-emerald-50" : "border-slate-100 hover:border-slate-200"}`}>
                   <div className="text-left">
-                    <p className={`text-sm font-bold ${best ? "text-emerald-800" : "text-slate-800"}`}>{label}</p>
-                    {best && <span className="text-[9px] font-bold text-emerald-600 bg-emerald-100 px-1.5 py-0.5 rounded-full">TERBAIK</span>}
+                    <p className={`text-sm font-bold ${pkg.isBestValue ? "text-emerald-800" : "text-slate-800"}`}>{pkg.label}</p>
+                    {pkg.isBestValue && <span className="text-[9px] font-bold text-emerald-600 bg-emerald-100 px-1.5 py-0.5 rounded-full">TERBAIK</span>}
                   </div>
-                  <p className={`text-sm font-bold ${best ? "text-emerald-700" : "text-slate-600"}`}>RM {priceMyr}/bln</p>
+                  <p className={`text-sm font-bold ${pkg.isBestValue ? "text-emerald-700" : "text-slate-600"}`}>RM {pkg.priceMyr}/bln</p>
                 </button>
               ))}
             </div>
@@ -4401,23 +4407,21 @@ export function OwnerDashboard() {
             </div>
             <p className="text-[11px] text-slate-500">Pilih pakej kredit tambahan. Kredit ditambah ke wallet selepas pembayaran disahkan.</p>
             <div className="space-y-2">
-              {[
-                { amount: 100,  label: "+100 kredit",  priceMyr: 10, best: false },
-                { amount: 500,  label: "+500 kredit",  priceMyr: 40, best: true  },
-                { amount: 1500, label: "+1500 kredit", priceMyr: 99, best: false },
-              ].map(({ amount, label, priceMyr, best }) => (
-                <button key={amount}
+              {(showCreditModal === "AI" ? aiCreditPackages : ocrCreditPackages).length === 0 ? (
+                <p className="text-xs text-slate-400 text-center py-3">Tiada pakej tersedia.</p>
+              ) : (showCreditModal === "AI" ? aiCreditPackages : ocrCreditPackages).map((pkg) => (
+                <button key={pkg.id}
                   onClick={() => {
                     const creditType = showCreditModal;
                     setShowCreditModal(null);
-                    openAddonPurchaseModal(creditType, amount, `Tambahan Kredit ${creditType === "AI" ? "AI" : "OCR"} ${label}`, priceMyr);
+                    openAddonPurchaseModal(creditType, pkg.amount, `Tambahan Kredit ${creditType === "AI" ? "AI" : "OCR"} ${pkg.label}`, pkg.priceMyr);
                   }}
-                  className={`w-full flex items-center justify-between p-4 rounded-xl border-2 transition cursor-pointer ${best ? "border-emerald-500 bg-emerald-50" : "border-slate-100 hover:border-slate-200"}`}>
+                  className={`w-full flex items-center justify-between p-4 rounded-xl border-2 transition cursor-pointer ${pkg.isBestValue ? "border-emerald-500 bg-emerald-50" : "border-slate-100 hover:border-slate-200"}`}>
                   <div className="text-left">
-                    <p className={`text-sm font-bold ${best ? "text-emerald-800" : "text-slate-800"}`}>{label}</p>
-                    {best && <span className="text-[9px] font-bold text-emerald-600 bg-emerald-100 px-1.5 py-0.5 rounded-full">TERBAIK</span>}
+                    <p className={`text-sm font-bold ${pkg.isBestValue ? "text-emerald-800" : "text-slate-800"}`}>{pkg.label}</p>
+                    {pkg.isBestValue && <span className="text-[9px] font-bold text-emerald-600 bg-emerald-100 px-1.5 py-0.5 rounded-full">TERBAIK</span>}
                   </div>
-                  <p className={`text-sm font-bold ${best ? "text-emerald-700" : "text-slate-600"}`}>RM {priceMyr}</p>
+                  <p className={`text-sm font-bold ${pkg.isBestValue ? "text-emerald-700" : "text-slate-600"}`}>RM {pkg.priceMyr}</p>
                 </button>
               ))}
             </div>

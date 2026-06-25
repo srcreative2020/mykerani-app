@@ -1267,6 +1267,54 @@ export async function getMyHqStaffNotifications(): Promise<HqStaffNotification[]
   }));
 }
 
+// --- Addon Package Catalog ---
+// HQ-configurable storage/AI/OCR add-on tiers shown to tenants when buying
+// top-ups. Reads are direct (non-sensitive pricing data); writes always go
+// through the pending_hq_actions dual-approval inbox — never a direct table
+// write — per the Commercial Governance Principle (no literal pricing in
+// code, no single-approver changes to global commercial config).
+
+export type AddonCreditType = "AI" | "OCR" | "STORAGE" | "NOTIFICATION";
+
+export interface AddonPackage {
+  id: string;
+  creditType: AddonCreditType;
+  amount: number;
+  priceMyr: number;
+  label: string;
+  sortOrder: number;
+  isBestValue: boolean;
+}
+
+export async function getAddonPackages(creditType?: AddonCreditType): Promise<AddonPackage[]> {
+  if (!isSupabaseConfigured() || !supabase) return [];
+  const { data, error } = await supabase.rpc("get_addon_packages", { p_credit_type: creditType ?? null });
+  if (error || !data) return [];
+  return data.map((row: any) => ({
+    id: row.id,
+    creditType: row.credit_type,
+    amount: Number(row.amount),
+    priceMyr: Number(row.price_myr),
+    label: row.label,
+    sortOrder: row.sort_order,
+    isBestValue: row.is_best_value,
+  }));
+}
+
+export async function submitAddonPackageUpsert(pkg: {
+  id?: string; creditType: AddonCreditType; amount: number; priceMyr: number;
+  label: string; sortOrder?: number; isBestValue?: boolean;
+}): Promise<string | null> {
+  return submitPendingHqAction("addon_package_upsert", "addon_packages", pkg.id ?? null, {
+    id: pkg.id, credit_type: pkg.creditType, amount: pkg.amount, price_myr: pkg.priceMyr,
+    label: pkg.label, sort_order: pkg.sortOrder ?? 0, is_best_value: pkg.isBestValue ?? false,
+  });
+}
+
+export async function submitAddonPackageDeactivate(id: string): Promise<string | null> {
+  return submitPendingHqAction("addon_package_deactivate", "addon_packages", id, {});
+}
+
 export async function markHqStaffNotificationRead(id: string): Promise<boolean> {
   if (!isSupabaseConfigured() || !supabase) return false;
   const { error } = await supabase.rpc("mark_hq_staff_notification_read", { p_id: id });

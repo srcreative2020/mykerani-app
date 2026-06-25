@@ -29,7 +29,7 @@ interface HQConsoleShellProps {
 type HQPage = "dashboard" | "customers" | "billing" | "usage" | "support" | "revenue" | "settings" | "system" | "subscriptions" | "website"
   | "customer360" | "alertCenter" | "walletDashboard" | "healthScores" | "governance" | "paymentGovernance" | "storageGovernance"
   | "aiCostGovernance" | "dataMaskingGovernance" | "approvalCenter"
-  | "activityCenter" | "costCenter" | "knowledgeCenter";
+  | "activityCenter" | "costCenter" | "knowledgeCenter" | "addonCatalog";
 
 // â"€â"€ Mock data (demo accounts only) â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 const MOCK_CUSTOMERS = [
@@ -553,6 +553,7 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
     const result = await hqService.reviewPendingHqAction(actionId, approve);
     if (!result.ok) setApprovalActionError(result.error || "Tindakan gagal");
     await loadPendingHqActions(pendingHqActionsFilter);
+    if (approve) loadAddonPackages();
     setApprovalActionBusy(null);
   };
   const requestStaffSuspension = async (userId: string, suspend: boolean) => {
@@ -651,6 +652,46 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
     const updated = { ...storageGovernance, freezeDays: days };
     setStorageGovernance(updated);
     await hqService.saveStorageGovernanceSettings(updated);
+  };
+
+  // Addon/credit package catalog (HQ-configurable, dual-approval writes)
+  const [addonPackages, setAddonPackages] = useState<hqService.AddonPackage[]>([]);
+  const [addonForm, setAddonForm] = useState<{ creditType: hqService.AddonCreditType; amount: string; priceMyr: string; label: string; sortOrder: string; isBestValue: boolean }>({
+    creditType: "STORAGE", amount: "", priceMyr: "", label: "", sortOrder: "1", isBestValue: false,
+  });
+  const [addonSubmitError, setAddonSubmitError] = useState<string | null>(null);
+  const [addonSubmitBusy, setAddonSubmitBusy] = useState(false);
+
+  const loadAddonPackages = () => hqService.getAddonPackages().then(setAddonPackages);
+  useEffect(() => { if (useRealData) loadAddonPackages(); }, [useRealData]);
+
+  const submitAddonPackage = async () => {
+    setAddonSubmitError(null);
+    const amount = parseFloat(addonForm.amount);
+    const priceMyr = parseFloat(addonForm.priceMyr);
+    if (!addonForm.label.trim() || !(amount > 0) || !(priceMyr > 0)) {
+      setAddonSubmitError("Sila isi label, kuantiti dan harga yang sah.");
+      return;
+    }
+    setAddonSubmitBusy(true);
+    try {
+      const storageAmount = addonForm.creditType === "STORAGE" ? amount * 1073741824 : amount;
+      const id = await hqService.submitAddonPackageUpsert({
+        creditType: addonForm.creditType, amount: storageAmount, priceMyr,
+        label: addonForm.label.trim(), sortOrder: parseInt(addonForm.sortOrder, 10) || 0,
+        isBestValue: addonForm.isBestValue,
+      });
+      if (!id) { setAddonSubmitError("Gagal menghantar permintaan."); return; }
+      setAddonForm({ creditType: "STORAGE", amount: "", priceMyr: "", label: "", sortOrder: "1", isBestValue: false });
+      if (pendingHqActionsFilter === "pending") await loadPendingHqActions("pending");
+    } finally {
+      setAddonSubmitBusy(false);
+    }
+  };
+
+  const requestAddonDeactivate = async (id: string) => {
+    await hqService.submitAddonPackageDeactivate(id);
+    if (pendingHqActionsFilter === "pending") await loadPendingHqActions("pending");
   };
 
   const runEnforcementNow = async () => {
@@ -1125,6 +1166,7 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
     { id: "paymentGovernance" as HQPage, label: "Tadbir Bayaran",       icon: CreditCard, section: "Tadbir Urus" },
     { id: "storageGovernance" as HQPage, label: "Tadbir Storan",        icon: HardDrive, section: "Tadbir Urus" },
     { id: "aiCostGovernance" as HQPage,      label: "Tadbir Kos AI",        icon: DollarSign, section: "Tadbir Urus" },
+    { id: "addonCatalog" as HQPage,      label: "Katalog Add-On",       icon: Package, section: "Tadbir Urus" },
     { id: "dataMaskingGovernance" as HQPage, label: "Tadbir Topeng Data",   icon: Shield, section: "Tadbir Urus" },
     { id: "approvalCenter" as HQPage, label: "Pusat Kelulusan",   icon: ShieldAlert, section: "Tadbir Urus" },
     { id: "activityCenter" as HQPage, label: "Pusat Aktiviti",    icon: Clock, badge: hqActivityUnseenCount, section: "Tadbir Urus" },
@@ -3809,6 +3851,73 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
               </div>
             )}
 
+            {activePage === "addonCatalog" && !isStaff && (
+              <div className="space-y-4" id="hq_addon_catalog">
+                <h1 className="text-xl font-bold text-slate-900">Katalog Pakej Add-On</h1>
+                <p className="text-xs text-slate-400">Pakej storan/kredit AI/kredit OCR yang dipaparkan kepada tenant semasa membeli tambahan. Perubahan dihantar ke Pusat Kelulusan dan memerlukan kelulusan kakitangan HQ kedua sebelum berkuat kuasa.</p>
+
+                <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-3">
+                  <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2"><Package className="w-4 h-4 text-emerald-600" />Pakej Aktif</h3>
+                  {addonPackages.length === 0 ? (
+                    <p className="text-xs text-slate-400 text-center py-3">Tiada pakej aktif.</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {addonPackages.map((p) => (
+                        <div key={p.id} className="flex items-center justify-between gap-3 p-3 bg-slate-50 rounded-xl">
+                          <div className="min-w-0">
+                            <p className="text-xs font-bold text-slate-900">{p.label} <span className="text-slate-400 font-normal">({p.creditType})</span> {p.isBestValue && <span className="text-emerald-600">★ Terbaik</span>}</p>
+                            <p className="text-[11px] text-slate-500">RM {p.priceMyr.toFixed(2)} &middot; susunan {p.sortOrder}</p>
+                          </div>
+                          <button
+                            onClick={() => requestAddonDeactivate(p.id)}
+                            className="shrink-0 px-3 py-1.5 rounded-lg text-[11px] font-bold cursor-pointer transition bg-red-100 text-red-800 hover:bg-red-200"
+                            title="Hantar permintaan nyahaktif ke Pusat Kelulusan"
+                          >
+                            Minta Nyahaktif
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-3">
+                  <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2"><Package className="w-4 h-4 text-amber-500" />Tambah Pakej Baharu</h3>
+                  {addonSubmitError && (
+                    <div className="bg-red-50 border border-red-100 rounded-xl p-3 text-xs text-red-700 font-semibold">{addonSubmitError}</div>
+                  )}
+                  <div className="grid grid-cols-2 gap-2">
+                    <select value={addonForm.creditType} onChange={e => setAddonForm({ ...addonForm, creditType: e.target.value as hqService.AddonCreditType })}
+                      className="border border-slate-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:border-emerald-400">
+                      {(["STORAGE", "AI", "OCR"] as hqService.AddonCreditType[]).map(t => <option key={t} value={t}>{t}</option>)}
+                    </select>
+                    <input placeholder="Label (cth: +5 GB)" value={addonForm.label} onChange={e => setAddonForm({ ...addonForm, label: e.target.value })}
+                      className="border border-slate-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:border-emerald-400" />
+                    <input placeholder={addonForm.creditType === "STORAGE" ? "Kuantiti (GB)" : "Kuantiti (kredit)"} type="number" min="0" value={addonForm.amount}
+                      onChange={e => setAddonForm({ ...addonForm, amount: e.target.value })}
+                      className="border border-slate-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:border-emerald-400" />
+                    <input placeholder="Harga (RM)" type="number" min="0" step="0.01" value={addonForm.priceMyr}
+                      onChange={e => setAddonForm({ ...addonForm, priceMyr: e.target.value })}
+                      className="border border-slate-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:border-emerald-400" />
+                    <input placeholder="Susunan" type="number" min="0" value={addonForm.sortOrder}
+                      onChange={e => setAddonForm({ ...addonForm, sortOrder: e.target.value })}
+                      className="border border-slate-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:border-emerald-400" />
+                    <label className="flex items-center gap-2 text-xs text-slate-600">
+                      <input type="checkbox" checked={addonForm.isBestValue} onChange={e => setAddonForm({ ...addonForm, isBestValue: e.target.checked })} />
+                      Tanda "Terbaik"
+                    </label>
+                  </div>
+                  <button
+                    disabled={addonSubmitBusy}
+                    onClick={submitAddonPackage}
+                    className="px-4 py-2 rounded-lg text-xs font-bold cursor-pointer transition bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50"
+                  >
+                    Hantar ke Pusat Kelulusan
+                  </button>
+                </div>
+              </div>
+            )}
+
             {/* ═════ DATA MASKING GOVERNANCE (HQ_OWNER only) ═════ */}
             {activePage === "dataMaskingGovernance" && !isStaff && (
               <div className="space-y-4" id="hq_data_masking_governance">
@@ -3963,6 +4072,8 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
                                 : a.actionType === "staff_reactivate" ? "Aktifkan Semula Kakitangan"
                                 : a.actionType === "tenant_suspend" ? "Gantung Pelanggan"
                                 : a.actionType === "tenant_reactivate" ? "Aktifkan Semula Pelanggan"
+                                : a.actionType === "addon_package_upsert" ? `Tambah/Kemaskini Pakej Add-On${(a.payload as any)?.label ? `: ${(a.payload as any).label}` : ""}`
+                                : a.actionType === "addon_package_deactivate" ? "Nyahaktifkan Pakej Add-On"
                                 : a.actionType}
                             </p>
                             <p className="text-[11px] text-slate-500 truncate">
