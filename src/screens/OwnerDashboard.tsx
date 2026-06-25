@@ -18,7 +18,7 @@ import {
   Paperclip, Mic, Square, File as FileIcon, Plus, Building2,
 } from "lucide-react";
 import { FinancialEvidencePackageManager } from "../components/FinancialEvidencePackage";
-import { createTenantSupportTicket, getMyTenantSupportTickets, SupportTicket, updateTenantMasterProfile, SUPPORT_TICKET_TEMPLATES, uploadTicketAttachment, getTicketAttachmentUrl, ticketSlaState, TICKET_STATUS_LABEL_MS, TICKET_STATUS_STYLE, tenantAssignStaffRole, tenantRevokeStaffRole, tenantSubmitAppeal } from "../lib/hqService";
+import { createTenantSupportTicket, getMyTenantSupportTickets, SupportTicket, updateTenantMasterProfile, SUPPORT_TICKET_TEMPLATES, uploadTicketAttachment, getTicketAttachmentUrl, ticketSlaState, TICKET_STATUS_LABEL_MS, TICKET_STATUS_STYLE, tenantAssignStaffRole, tenantRevokeStaffRole, tenantSubmitAppeal, tenantReplySupportTicket, getTenantMyHealthScore, TenantHealthScore } from "../lib/hqService";
 import { FinancialReportsAnalytics } from "../components/FinancialReportsAnalytics";
 import { StorageBar } from "../components/StorageBar";
 import { DocumentsManager } from "../components/DocumentsManager";
@@ -323,6 +323,9 @@ export function OwnerDashboard() {
   const [myTickets, setMyTickets] = useState<SupportTicket[]>([]);
   const [myTicketsLoading, setMyTicketsLoading] = useState(false);
   const [openTicketId, setOpenTicketId] = useState<string | null>(null);
+  const [ticketReplyDraft, setTicketReplyDraft] = useState("");
+  const [ticketReplySending, setTicketReplySending] = useState(false);
+  const [myHealthScore, setMyHealthScore] = useState<TenantHealthScore | null>(null);
   const [ticketAttachFile, setTicketAttachFile] = useState<File | null>(null);
   const [ticketAttachUploading, setTicketAttachUploading] = useState(false);
   const supportEndRef = useRef<HTMLDivElement>(null);
@@ -892,6 +895,10 @@ export function OwnerDashboard() {
     getMyTenantSupportTickets().then(tickets => { if (active) { setMyTickets(tickets); setMyTicketsLoading(false); } });
     return () => { active = false; };
   }, [morePage, supportView, isMockUser]);
+  useEffect(() => {
+    if (isMockUser) return;
+    getTenantMyHealthScore().then(setMyHealthScore);
+  }, [isMockUser]);
 
   useEffect(() => {
     if (!wsId || !user) return;
@@ -1957,6 +1964,22 @@ export function OwnerDashboard() {
                   {/* Storage compact bar */}
                   {storageQuota.warnLevel !== "none" && (
                     <StorageBar quota={storageQuota} compact onBuyAddon={() => setShowAddonModal(true)} />
+                  )}
+
+                  {/* Account Health (read-only, gap 8.3) */}
+                  {myHealthScore && myHealthScore.riskLevel !== "low" && (
+                    <div className={`rounded-2xl p-4 border ${myHealthScore.riskLevel === "high" ? "bg-red-50 border-red-100" : "bg-amber-50 border-amber-100"}`}>
+                      <p className={`text-xs font-bold ${myHealthScore.riskLevel === "high" ? "text-red-700" : "text-amber-700"}`}>
+                        Kesihatan Akaun: {myHealthScore.riskLevel === "high" ? "Perlu Perhatian" : "Sederhana"}
+                      </p>
+                      {myHealthScore.reasons.length > 0 && (
+                        <ul className="mt-1 space-y-0.5">
+                          {myHealthScore.reasons.map((reason, i) => (
+                            <li key={i} className={`text-[11px] ${myHealthScore.riskLevel === "high" ? "text-red-600" : "text-amber-600"}`}>• {reason}</li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
                   )}
 
                   <p className="text-xs text-slate-400 text-center">Tanya saya apa sahaja tentang kewangan anda</p>
@@ -3744,6 +3767,29 @@ export function OwnerDashboard() {
                                             <span className="font-bold text-slate-700">{r.author}: </span>{r.text}
                                           </div>
                                         ))}
+                                      </div>
+                                    )}
+                                    {t.status !== "resolved" && t.status !== "closed" && (
+                                      <div className="space-y-1.5">
+                                        <textarea
+                                          value={ticketReplyDraft}
+                                          onChange={e => setTicketReplyDraft(e.target.value)}
+                                          placeholder="Balas tiket ini..."
+                                          rows={2}
+                                          className="w-full text-[11px] border border-slate-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-indigo-400"
+                                        />
+                                        <button
+                                          disabled={!ticketReplyDraft.trim() || ticketReplySending}
+                                          onClick={async () => {
+                                            setTicketReplySending(true);
+                                            const ok = await tenantReplySupportTicket(t.id, ticketReplyDraft.trim());
+                                            setTicketReplySending(false);
+                                            if (ok) { setTicketReplyDraft(""); refreshMyTickets(); }
+                                          }}
+                                          className="px-3 py-1.5 bg-indigo-600 text-white rounded-lg text-[11px] font-bold disabled:opacity-40 cursor-pointer"
+                                        >
+                                          {ticketReplySending ? "Menghantar..." : "Hantar Balasan"}
+                                        </button>
                                       </div>
                                     )}
                                     {t.attachments.length > 0 && (
