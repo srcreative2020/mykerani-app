@@ -18,7 +18,7 @@ import {
   Paperclip, Mic, Square, File as FileIcon, Plus, Building2, ScanLine, Star,
 } from "lucide-react";
 import { FinancialEvidencePackageManager } from "../components/FinancialEvidencePackage";
-import { createTenantSupportTicket, getMyTenantSupportTickets, SupportTicket, updateTenantMasterProfile, SUPPORT_TICKET_TEMPLATES, uploadTicketAttachment, getTicketAttachmentUrl, ticketSlaState, TICKET_STATUS_LABEL_MS, TICKET_STATUS_STYLE, tenantAssignStaffRole, tenantRevokeStaffRole, tenantSubmitAppeal, tenantReplySupportTicket, getTenantMyHealthScore, TenantHealthScore, getTenantAiCostSummary, TenantAiCostSummary, getMyDataAccessLog, DataAccessLogEntry, getAddonPackages, AddonPackage, redeemPromotion, getTenantActivityFeed } from "../lib/hqService";
+import { createTenantSupportTicket, getMyTenantSupportTickets, SupportTicket, updateTenantMasterProfile, SUPPORT_TICKET_TEMPLATES, uploadTicketAttachment, getTicketAttachmentUrl, ticketSlaState, TICKET_STATUS_LABEL_MS, TICKET_STATUS_STYLE, tenantAssignStaffRole, tenantRevokeStaffRole, tenantSubmitAppeal, tenantReplySupportTicket, getTenantMyHealthScore, TenantHealthScore, getTenantAiCostSummary, TenantAiCostSummary, getMyDataAccessLog, DataAccessLogEntry, getAddonPackages, AddonPackage, redeemPromotion, getTenantActivityFeed, getMyPromotionRedemptions } from "../lib/hqService";
 import { FinancialReportsAnalytics } from "../components/FinancialReportsAnalytics";
 import { StorageBar } from "../components/StorageBar";
 import { DocumentsManager } from "../components/DocumentsManager";
@@ -745,6 +745,7 @@ export function OwnerDashboard() {
   const [promoCode, setPromoCode] = useState("");
   const [promoBusy, setPromoBusy] = useState(false);
   const [promoResult, setPromoResult] = useState<string | null>(null);
+  const [promoHistory, setPromoHistory] = useState<any[]>([]);
   const submitPromoRedeem = async () => {
     if (!promoCode.trim() || !activeWorkspace) return;
     setPromoBusy(true);
@@ -754,6 +755,7 @@ export function OwnerDashboard() {
       if (res.ok) {
         setPromoResult(res.kind === "trial_extension_days" ? `Berjaya! Percubaan dilanjutkan ${res.amount} hari.` : `Berjaya! Kredit ditambah ke dompet anda.`);
         setPromoCode("");
+        if (activeTenant?.id) getMyPromotionRedemptions(activeTenant.id).then(setPromoHistory);
       } else {
         setPromoResult(res.message || "Kod promosi tidak sah atau telah tamat tempoh.");
       }
@@ -805,6 +807,7 @@ export function OwnerDashboard() {
         }
       });
     getTenantPaymentTransactions(activeTenant.id).then(setPaymentTxs);
+    getMyPromotionRedemptions(activeTenant.id).then(setPromoHistory);
   }, [activeTenant?.id, paymentTxRefresh]);
 
   const openPaymentModal = (planId?: string) => {
@@ -4198,6 +4201,17 @@ export function OwnerDashboard() {
                   </div>
                   <p className="text-[11px] text-slate-500">Ada kod promosi? Tebus untuk kredit dompet percuma atau lanjutan tempoh percubaan.</p>
                   <button onClick={() => { setShowPromoModal(true); setPromoResult(null); }} className="w-full py-2.5 bg-emerald-50 border border-emerald-100 text-emerald-700 rounded-xl text-xs font-bold cursor-pointer hover:bg-emerald-100 transition">Tebus Kod Promosi</button>
+                  {/* Promo history */}
+                  {promoHistory.length > 0 && (
+                    <div className="pt-2 border-t border-slate-100 space-y-1">
+                      <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 4 }}>Histori Promosi</div>
+                      {promoHistory.slice(0, 3).map((r: any) => (
+                        <div key={r.id} style={{ fontSize: 12, color: '#555', padding: '3px 0' }}>
+                          {r.promotions?.code} — {r.promotions?.kind === 'wallet_credit' ? `+${r.promotions?.amount} kredit` : `+${r.promotions?.amount} hari trial`} ({new Date(r.redeemed_at).toLocaleDateString('ms-MY')})
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
 
                 {/* Invoices / payment history */}

@@ -25,6 +25,8 @@ interface StorageContextType {
   updateProviderSetting: (provider: "HQ_MANAGED" | "GOOGLE_DRIVE" | "ONEDRIVE" | "DROPBOX") => Promise<void>;
   toggleConnectionStatus: () => Promise<void>;
   isOwnerOrAdmin: boolean;
+  storageUsedBytes: number;
+  storageLimitBytes: number;
 }
 
 const StorageContext = createContext<StorageContextType | undefined>(undefined);
@@ -38,6 +40,8 @@ export const StorageProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const [activeProvider, setActiveProvider] = useState<StorageProviderRegistry | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [storageUsedBytes, setStorageUsedBytes] = useState(0);
+  const [storageLimitBytes, setStorageLimitBytes] = useState(0);
 
   // Permission Integration: Only HQ_ADMIN, TENANT_OWNER, TENANT_ADMIN can modify storage settings
   const isOwnerOrAdmin = !!(user && ["HQ_OWNER", "TENANT_OWNER"].includes(user.role));
@@ -160,6 +164,18 @@ export const StorageProvider: React.FC<{ children: React.ReactNode }> = ({ child
               createdAt: inserted.created_at,
               updatedAt: inserted.updated_at,
             });
+          }
+
+          // Load real storage bytes from resource_wallets
+          const { data: walletData } = await supabase
+            .from("resource_wallets")
+            .select("storage_used_bytes, storage_limit_bytes")
+            .eq("workspace_id", activeWorkspace.id)
+            .single();
+
+          if (walletData) {
+            setStorageUsedBytes(walletData.storage_used_bytes || 0);
+            setStorageLimitBytes(walletData.storage_limit_bytes || 0);
           }
         } catch (err: any) {
           console.error("Storage Provider Context initialization alert:", err.message);
@@ -348,6 +364,8 @@ export const StorageProvider: React.FC<{ children: React.ReactNode }> = ({ child
         updateProviderSetting,
         toggleConnectionStatus,
         isOwnerOrAdmin,
+        storageUsedBytes,
+        storageLimitBytes,
       }}
     >
       {children}

@@ -5086,10 +5086,11 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
           { id: "__more__" as any,      label: "Lagi",       icon: Menu },
         ];
         const staffBottomNav = [
-          { id: "dashboard" as HQPage,     label: "Dashboard",  icon: LayoutDashboard },
-          { id: "customers" as HQPage,     label: "Pelanggan",  icon: Users },
-          { id: "subscriptions" as HQPage, label: "Langganan",  icon: Repeat },
-          { id: "support" as HQPage,       label: "Sokongan",   icon: Headphones, badge: openCases },
+          { id: "dashboard" as HQPage,      label: "Dashboard",  icon: LayoutDashboard },
+          { id: "customers" as HQPage,      label: "Pelanggan",  icon: Users },
+          { id: "support" as HQPage,        label: "Sokongan",   icon: Headphones, badge: openCases },
+          { id: "approvalCenter" as HQPage, label: "Kelulusan",  icon: Bell, badge: pendingHqActions.length },
+          { id: "__more__" as any,          label: "Lagi",       icon: Menu },
         ];
         const mobileNav = isStaff ? staffBottomNav : ownerBottomNav;
         return (

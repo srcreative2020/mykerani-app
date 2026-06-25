@@ -1,3 +1,6 @@
+// NOTE: This context uses financial_evidence_packages (legacy single-file system).
+// The evidence_bundles/evidence_documents/ledger_evidence_mappings system (migration 1)
+// exists in the DB but is currently not used from client. Planned for Phase 3 evidence upgrade.
 import React, { createContext, useContext, useState, useEffect } from "react";
 import { type FinancialEvent, type CashAccount, type BankAccount, type DebtRecord, type Workspace, type FinancialRecordType, type FinancialCommitment, type FinancialEvidencePackage, type OcrLearnedPattern, type SourceSystem, type DuplicateFlag, type DuplicateClassification } from "../types";
 import { useAuth } from "./AuthContext";

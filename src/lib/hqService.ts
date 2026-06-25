@@ -1792,6 +1792,17 @@ export async function submitPromotionDeactivate(id: string): Promise<string | nu
   return submitPendingHqAction("promotion_deactivate", "promotions", id, {});
 }
 
+export async function getMyPromotionRedemptions(tenantId: string): Promise<any[]> {
+  if (!supabase) return [];
+  const { data, error } = await supabase
+    .from("promotion_redemptions")
+    .select("*, promotions(code, kind, amount)")
+    .eq("tenant_id", tenantId)
+    .order("redeemed_at", { ascending: false });
+  if (error) { console.warn("getMyPromotionRedemptions:", error.message); return []; }
+  return data || [];
+}
+
 export async function redeemPromotion(
   code: string, tenantId: string, workspaceId: string
 ): Promise<{ ok: boolean; kind?: PromotionKind; amount?: number; message: string }> {
@@ -1896,6 +1907,29 @@ export async function getTenantActivityFeed(
     metadata: r.metadata,
     createdAt: r.created_at,
   }));
+}
+
+// --- Knowledge Bank Gap Reporter (L-03) ---
+// Called when AI fails to classify a transaction or confidence is low.
+// Inserts a record into knowledge_bank_gaps for HQ review / future training.
+export async function reportKnowledgeGap(params: {
+  tenantId?: string;
+  workspaceId?: string;
+  rawText: string;
+  detectedType?: string;
+  detectedAmount?: number;
+  relatedParty?: string;
+}): Promise<void> {
+  if (!supabase || !isSupabaseConfigured()) return;
+  await supabase.from("knowledge_bank_gaps").insert({
+    tenant_id: params.tenantId || null,
+    workspace_id: params.workspaceId || null,
+    raw_text: params.rawText,
+    detected_type: params.detectedType || null,
+    detected_amount: params.detectedAmount || null,
+    related_party: params.relatedParty || null,
+    status: "OPEN",
+  });
 }
 
 export async function logTenantActivity(params: {
