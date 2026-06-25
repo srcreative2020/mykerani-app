@@ -385,3 +385,319 @@ export const deleteDependent = async (
   if (!canPersist(workspaceId, isMockUser) || !supabase) return;
   await supabase.from("dependents").delete().eq("id", dependentId).eq("workspace_id", workspaceId);
 };
+
+// ═════════════════════════════════════════════════════════════════════════════
+// Financial Profile Enhancement — New Repository Types & CRUD Functions
+// Blueprint: docs/superpowers/specs/2026-06-26-financial-profile-enhancement-design.md
+// All follow the exact same pattern as the existing businesses/vehicles CRUD.
+// ═════════════════════════════════════════════════════════════════════════════
+
+// ─── Customers ─────────────────────────────────────────────────────────────────
+
+export interface Customer {
+  id: string;
+  name: string;
+  email: string;
+  phone: string;
+  address: string;
+  notes: string;
+  isActive: boolean;
+}
+
+export const EMPTY_CUSTOMER: Customer = {
+  id: "", name: "", email: "", phone: "", address: "", notes: "", isActive: true,
+};
+
+function mapCustomerRow(row: any): Customer {
+  return {
+    id: row.id,
+    name: row.name || "",
+    email: row.email || "",
+    phone: row.phone || "",
+    address: row.address || "",
+    notes: row.notes || "",
+    isActive: row.is_active !== false,
+  };
+}
+
+export const loadCustomers = async (workspaceId: string | undefined, isMockUser: boolean): Promise<Customer[]> => {
+  if (!canPersist(workspaceId, isMockUser) || !supabase) return [];
+  const { data, error } = await supabase
+    .from("profile_customers").select("*").eq("workspace_id", workspaceId)
+    .order("created_at", { ascending: true });
+  if (error || !data) return [];
+  return data.map(mapCustomerRow);
+};
+
+export const addCustomer = async (workspaceId: string | undefined, isMockUser: boolean, c: Omit<Customer, "id" | "isActive">): Promise<void> => {
+  if (!canPersist(workspaceId, isMockUser) || !supabase) return;
+  await supabase.from("profile_customers").insert({
+    workspace_id: workspaceId, name: c.name,
+    email: c.email || null, phone: c.phone || null, address: c.address || null, notes: c.notes || null,
+  });
+};
+
+export const updateCustomer = async (workspaceId: string | undefined, isMockUser: boolean, id: string, c: Omit<Customer, "id" | "isActive">): Promise<void> => {
+  if (!canPersist(workspaceId, isMockUser) || !supabase) return;
+  await supabase.from("profile_customers").update({
+    name: c.name, email: c.email || null, phone: c.phone || null, address: c.address || null, notes: c.notes || null,
+  }).eq("id", id).eq("workspace_id", workspaceId);
+};
+
+export const deleteCustomer = async (workspaceId: string | undefined, isMockUser: boolean, id: string): Promise<void> => {
+  if (!canPersist(workspaceId, isMockUser) || !supabase) return;
+  await supabase.from("profile_customers").delete().eq("id", id).eq("workspace_id", workspaceId);
+};
+
+// ─── Suppliers ──────────────────────────────────────────────────────────────────
+
+export interface Supplier {
+  id: string;
+  name: string;
+  email: string;
+  phone: string;
+  address: string;
+  notes: string;
+  isActive: boolean;
+}
+
+export const EMPTY_SUPPLIER: Supplier = {
+  id: "", name: "", email: "", phone: "", address: "", notes: "", isActive: true,
+};
+
+function mapSupplierRow(row: any): Supplier {
+  return {
+    id: row.id,
+    name: row.name || "",
+    email: row.email || "",
+    phone: row.phone || "",
+    address: row.address || "",
+    notes: row.notes || "",
+    isActive: row.is_active !== false,
+  };
+}
+
+export const loadSuppliers = async (workspaceId: string | undefined, isMockUser: boolean): Promise<Supplier[]> => {
+  if (!canPersist(workspaceId, isMockUser) || !supabase) return [];
+  const { data, error } = await supabase
+    .from("profile_suppliers").select("*").eq("workspace_id", workspaceId)
+    .order("created_at", { ascending: true });
+  if (error || !data) return [];
+  return data.map(mapSupplierRow);
+};
+
+export const addSupplier = async (workspaceId: string | undefined, isMockUser: boolean, s: Omit<Supplier, "id" | "isActive">): Promise<void> => {
+  if (!canPersist(workspaceId, isMockUser) || !supabase) return;
+  await supabase.from("profile_suppliers").insert({
+    workspace_id: workspaceId, name: s.name,
+    email: s.email || null, phone: s.phone || null, address: s.address || null, notes: s.notes || null,
+  });
+};
+
+export const updateSupplier = async (workspaceId: string | undefined, isMockUser: boolean, id: string, s: Omit<Supplier, "id" | "isActive">): Promise<void> => {
+  if (!canPersist(workspaceId, isMockUser) || !supabase) return;
+  await supabase.from("profile_suppliers").update({
+    name: s.name, email: s.email || null, phone: s.phone || null, address: s.address || null, notes: s.notes || null,
+  }).eq("id", id).eq("workspace_id", workspaceId);
+};
+
+export const deleteSupplier = async (workspaceId: string | undefined, isMockUser: boolean, id: string): Promise<void> => {
+  if (!canPersist(workspaceId, isMockUser) || !supabase) return;
+  await supabase.from("profile_suppliers").delete().eq("id", id).eq("workspace_id", workspaceId);
+};
+
+// ─── Properties ─────────────────────────────────────────────────────────────────
+
+export interface PropertyRecord {
+  id: string;
+  propertyName: string;
+  propertyType: string;
+  address: string;
+  purchaseValueMyr: number;
+  notes: string;
+  isActive: boolean;
+}
+
+export const EMPTY_PROPERTY: PropertyRecord = {
+  id: "", propertyName: "", propertyType: "", address: "", purchaseValueMyr: 0, notes: "", isActive: true,
+};
+
+function mapPropertyRow(row: any): PropertyRecord {
+  return {
+    id: row.id,
+    propertyName: row.property_name || "",
+    propertyType: row.property_type || "",
+    address: row.address || "",
+    purchaseValueMyr: Number(row.purchase_value_myr) || 0,
+    notes: row.notes || "",
+    isActive: row.is_active !== false,
+  };
+}
+
+export const loadProperties = async (workspaceId: string | undefined, isMockUser: boolean): Promise<PropertyRecord[]> => {
+  if (!canPersist(workspaceId, isMockUser) || !supabase) return [];
+  const { data, error } = await supabase
+    .from("profile_properties").select("*").eq("workspace_id", workspaceId)
+    .order("created_at", { ascending: true });
+  if (error || !data) return [];
+  return data.map(mapPropertyRow);
+};
+
+export const addProperty = async (workspaceId: string | undefined, isMockUser: boolean, p: Omit<PropertyRecord, "id" | "isActive">): Promise<void> => {
+  if (!canPersist(workspaceId, isMockUser) || !supabase) return;
+  await supabase.from("profile_properties").insert({
+    workspace_id: workspaceId, property_name: p.propertyName,
+    property_type: p.propertyType || null, address: p.address || null,
+    purchase_value_myr: p.purchaseValueMyr || null, notes: p.notes || null,
+  });
+};
+
+export const updateProperty = async (workspaceId: string | undefined, isMockUser: boolean, id: string, p: Omit<PropertyRecord, "id" | "isActive">): Promise<void> => {
+  if (!canPersist(workspaceId, isMockUser) || !supabase) return;
+  await supabase.from("profile_properties").update({
+    property_name: p.propertyName, property_type: p.propertyType || null, address: p.address || null,
+    purchase_value_myr: p.purchaseValueMyr || null, notes: p.notes || null,
+  }).eq("id", id).eq("workspace_id", workspaceId);
+};
+
+export const deleteProperty = async (workspaceId: string | undefined, isMockUser: boolean, id: string): Promise<void> => {
+  if (!canPersist(workspaceId, isMockUser) || !supabase) return;
+  await supabase.from("profile_properties").delete().eq("id", id).eq("workspace_id", workspaceId);
+};
+
+// ─── Insurance ──────────────────────────────────────────────────────────────────
+
+export interface InsurancePolicy {
+  id: string;
+  policyName: string;
+  insuranceType: string;
+  provider: string;
+  policyNumber: string;
+  premiumAmountMyr: number;
+  premiumFrequency: string;
+  coverageAmountMyr: number;
+  startDate: string;
+  endDate: string;
+  notes: string;
+  isActive: boolean;
+}
+
+export const EMPTY_INSURANCE: InsurancePolicy = {
+  id: "", policyName: "", insuranceType: "", provider: "", policyNumber: "",
+  premiumAmountMyr: 0, premiumFrequency: "", coverageAmountMyr: 0,
+  startDate: "", endDate: "", notes: "", isActive: true,
+};
+
+function mapInsuranceRow(row: any): InsurancePolicy {
+  return {
+    id: row.id,
+    policyName: row.policy_name || "",
+    insuranceType: row.insurance_type || "",
+    provider: row.provider || "",
+    policyNumber: row.policy_number || "",
+    premiumAmountMyr: Number(row.premium_amount_myr) || 0,
+    premiumFrequency: row.premium_frequency || "",
+    coverageAmountMyr: Number(row.coverage_amount_myr) || 0,
+    startDate: row.start_date || "",
+    endDate: row.end_date || "",
+    notes: row.notes || "",
+    isActive: row.is_active !== false,
+  };
+}
+
+export const loadInsurancePolicies = async (workspaceId: string | undefined, isMockUser: boolean): Promise<InsurancePolicy[]> => {
+  if (!canPersist(workspaceId, isMockUser) || !supabase) return [];
+  const { data, error } = await supabase
+    .from("profile_insurance").select("*").eq("workspace_id", workspaceId)
+    .order("created_at", { ascending: true });
+  if (error || !data) return [];
+  return data.map(mapInsuranceRow);
+};
+
+export const addInsurancePolicy = async (workspaceId: string | undefined, isMockUser: boolean, p: Omit<InsurancePolicy, "id" | "isActive">): Promise<void> => {
+  if (!canPersist(workspaceId, isMockUser) || !supabase) return;
+  await supabase.from("profile_insurance").insert({
+    workspace_id: workspaceId, policy_name: p.policyName,
+    insurance_type: p.insuranceType || null, provider: p.provider || null,
+    policy_number: p.policyNumber || null, premium_amount_myr: p.premiumAmountMyr || null,
+    premium_frequency: p.premiumFrequency || null, coverage_amount_myr: p.coverageAmountMyr || null,
+    start_date: p.startDate || null, end_date: p.endDate || null, notes: p.notes || null,
+  });
+};
+
+export const updateInsurancePolicy = async (workspaceId: string | undefined, isMockUser: boolean, id: string, p: Omit<InsurancePolicy, "id" | "isActive">): Promise<void> => {
+  if (!canPersist(workspaceId, isMockUser) || !supabase) return;
+  await supabase.from("profile_insurance").update({
+    policy_name: p.policyName, insurance_type: p.insuranceType || null, provider: p.provider || null,
+    policy_number: p.policyNumber || null, premium_amount_myr: p.premiumAmountMyr || null,
+    premium_frequency: p.premiumFrequency || null, coverage_amount_myr: p.coverageAmountMyr || null,
+    start_date: p.startDate || null, end_date: p.endDate || null, notes: p.notes || null,
+  }).eq("id", id).eq("workspace_id", workspaceId);
+};
+
+export const deleteInsurancePolicy = async (workspaceId: string | undefined, isMockUser: boolean, id: string): Promise<void> => {
+  if (!canPersist(workspaceId, isMockUser) || !supabase) return;
+  await supabase.from("profile_insurance").delete().eq("id", id).eq("workspace_id", workspaceId);
+};
+
+// ─── Investments ────────────────────────────────────────────────────────────────
+
+export interface Investment {
+  id: string;
+  investmentName: string;
+  investmentType: string;
+  institution: string;
+  accountNumber: string;
+  currentValueMyr: number;
+  notes: string;
+  isActive: boolean;
+}
+
+export const EMPTY_INVESTMENT: Investment = {
+  id: "", investmentName: "", investmentType: "", institution: "", accountNumber: "",
+  currentValueMyr: 0, notes: "", isActive: true,
+};
+
+function mapInvestmentRow(row: any): Investment {
+  return {
+    id: row.id,
+    investmentName: row.investment_name || "",
+    investmentType: row.investment_type || "",
+    institution: row.institution || "",
+    accountNumber: row.account_number || "",
+    currentValueMyr: Number(row.current_value_myr) || 0,
+    notes: row.notes || "",
+    isActive: row.is_active !== false,
+  };
+}
+
+export const loadInvestments = async (workspaceId: string | undefined, isMockUser: boolean): Promise<Investment[]> => {
+  if (!canPersist(workspaceId, isMockUser) || !supabase) return [];
+  const { data, error } = await supabase
+    .from("profile_investments").select("*").eq("workspace_id", workspaceId)
+    .order("created_at", { ascending: true });
+  if (error || !data) return [];
+  return data.map(mapInvestmentRow);
+};
+
+export const addInvestment = async (workspaceId: string | undefined, isMockUser: boolean, i: Omit<Investment, "id" | "isActive">): Promise<void> => {
+  if (!canPersist(workspaceId, isMockUser) || !supabase) return;
+  await supabase.from("profile_investments").insert({
+    workspace_id: workspaceId, investment_name: i.investmentName,
+    investment_type: i.investmentType || null, institution: i.institution || null,
+    account_number: i.accountNumber || null, current_value_myr: i.currentValueMyr || null, notes: i.notes || null,
+  });
+};
+
+export const updateInvestment = async (workspaceId: string | undefined, isMockUser: boolean, id: string, i: Omit<Investment, "id" | "isActive">): Promise<void> => {
+  if (!canPersist(workspaceId, isMockUser) || !supabase) return;
+  await supabase.from("profile_investments").update({
+    investment_name: i.investmentName, investment_type: i.investmentType || null, institution: i.institution || null,
+    account_number: i.accountNumber || null, current_value_myr: i.currentValueMyr || null, notes: i.notes || null,
+  }).eq("id", id).eq("workspace_id", workspaceId);
+};
+
+export const deleteInvestment = async (workspaceId: string | undefined, isMockUser: boolean, id: string): Promise<void> => {
+  if (!canPersist(workspaceId, isMockUser) || !supabase) return;
+  await supabase.from("profile_investments").delete().eq("id", id).eq("workspace_id", workspaceId);
+};
