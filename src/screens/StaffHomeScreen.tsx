@@ -155,7 +155,7 @@ export function StaffHomeScreen() {
   const { activeWorkspace, workspaces, selectWorkspace } = useWorkspace();
   const { financialEvents, addFinancialEvent, addFinancialEventAwaited, addFinancialEventsBatch, editFinancialEvent, addDebtRecord, addDebtRecordAwaited, editDebtRecord, addFinancialCommitment, addFinancialCommitmentAwaited, editFinancialCommitment, learnOcrPattern, learnOcrPatternsBatch, ocrLearnedPatterns, addFinancialEvidencePackage, linkEvidenceToRecord, financialEvidencePackages, duplicateFlags, addBankAccount, scanForDuplicates } = useFinancials();
   const { activeTenant } = useTenant();
-  const { userRoles } = usePermission();
+  const { userRoles, hasPermission } = usePermission();
   const userNameById = useMemo(() => {
     const map: Record<string, string> = {};
     userRoles.forEach(r => { map[r.userId] = r.fullName; });
@@ -716,6 +716,11 @@ export function StaffHomeScreen() {
 
   const handleChatConfirmSuggestion = async (s: ChatSuggestion, edited?: typeof chatEditDraft) => {
     if (!activeWorkspace || chatSuggestionStatus[s.id]?.status === "confirmed") return;
+    // R-06: Permission check before allowing record creation
+    if (!hasPermission('Financial Records', 'create')) {
+      setChatMessages(prev => [...prev, { id: `e-${Date.now()}`, sender: "ai", text: "Anda tidak mempunyai kebenaran untuk menyimpan rekod kewangan." }]);
+      return;
+    }
     setChatActionErrors(prev => { const next = { ...prev }; delete next[s.id]; return next; });
     const extra = chatSuggestionExtra[s.id];
     if (!extra || !extra.businessPicked) return;
@@ -813,6 +818,11 @@ export function StaffHomeScreen() {
   };
 
   const handleSaveRecord = (data: { type: string; amount: number; description: string; party: string; date: string; category: string }) => {
+    // R-06: Permission check before allowing record creation
+    if (!hasPermission('Financial Records', 'create')) {
+      alert("Anda tidak mempunyai kebenaran untuk menambah rekod.");
+      return;
+    }
     if (!activeWorkspace) return;
     const categoryName = data.category.trim() || (data.type === "INCOME" ? "Pendapatan" : "Perbelanjaan");
     addFinancialEvent({

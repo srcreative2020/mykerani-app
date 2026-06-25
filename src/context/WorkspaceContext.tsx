@@ -142,6 +142,7 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
               name: user?.fullName ? `${user.fullName} - Workspace` : "Workspace Utama",
               slug: "main",
               isActive: true,
+              workspaceType: 'personal',
             };
             setState({ workspaces: [realWS], activeWorkspace: realWS, loading: false, error: null });
             return;
@@ -155,6 +156,7 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
               slug: row.slug,
               isActive: row.is_active,
               createdAt: row.created_at,
+              workspaceType: row.workspace_type || 'personal',
             }));
 
             // Restore from localStorage
@@ -180,6 +182,7 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
                 name: defaultName,
                 slug: defaultSlug,
                 is_active: true,
+                workspace_type: 'personal',
               })
               .select()
               .single();
@@ -195,6 +198,7 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
               slug: newWS.slug,
               isActive: newWS.is_active,
               createdAt: newWS.created_at,
+              workspaceType: newWS.workspace_type || 'personal',
             };
 
             setState({

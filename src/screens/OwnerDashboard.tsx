@@ -18,7 +18,7 @@ import {
   Paperclip, Mic, Square, File as FileIcon, Plus, Building2, ScanLine, Star,
 } from "lucide-react";
 import { FinancialEvidencePackageManager } from "../components/FinancialEvidencePackage";
-import { createTenantSupportTicket, getMyTenantSupportTickets, SupportTicket, updateTenantMasterProfile, SUPPORT_TICKET_TEMPLATES, uploadTicketAttachment, getTicketAttachmentUrl, ticketSlaState, TICKET_STATUS_LABEL_MS, TICKET_STATUS_STYLE, tenantAssignStaffRole, tenantRevokeStaffRole, tenantSubmitAppeal, tenantReplySupportTicket, getTenantMyHealthScore, TenantHealthScore, getTenantAiCostSummary, TenantAiCostSummary, getMyDataAccessLog, DataAccessLogEntry, getAddonPackages, AddonPackage, redeemPromotion, getTenantActivityFeed, getMyPromotionRedemptions } from "../lib/hqService";
+import { createTenantSupportTicket, getMyTenantSupportTickets, SupportTicket, updateTenantMasterProfile, SUPPORT_TICKET_TEMPLATES, uploadTicketAttachment, getTicketAttachmentUrl, ticketSlaState, TICKET_STATUS_LABEL_MS, TICKET_STATUS_STYLE, tenantAssignStaffRole, tenantRevokeStaffRole, tenantSubmitAppeal, tenantReplySupportTicket, getTenantMyHealthScore, TenantHealthScore, getTenantAiCostSummary, TenantAiCostSummary, getMyDataAccessLog, DataAccessLogEntry, getAddonPackages, AddonPackage, redeemPromotion, getTenantActivityFeed, getMyPromotionRedemptions, logTenantActivity } from "../lib/hqService";
 import { FinancialReportsAnalytics } from "../components/FinancialReportsAnalytics";
 import { StorageBar } from "../components/StorageBar";
 import { DocumentsManager } from "../components/DocumentsManager";
@@ -1647,6 +1647,21 @@ export function OwnerDashboard() {
       confirmedByUserId: user?.id || undefined,
     });
 
+    // C-02: Log owner financial record action for activity feed
+    if (isSupabaseConfigured() && !isMockUser && user && activeWorkspace) {
+      logTenantActivity({
+        workspaceId: activeWorkspace.id,
+        actorId: user.id,
+        actorEmail: user.email || '',
+        actorRole: user.role || 'TENANT_OWNER',
+        actorName: user.fullName,
+        actionType: 'RECORD_CREATED',
+        module: 'Financial Records',
+        description: `Owner sahkan cadangan rekod ${s.payload?.type || 'kewangan'} — RM${s.payload?.amount || 0}`,
+        metadata: { recordId: result.recordId, type: s.payload?.type, amount: s.payload?.amount },
+      }).catch(() => {}); // fire and forget
+    }
+
     setEditingChatSuggestionId(null);
   };
 
@@ -1756,6 +1771,20 @@ export function OwnerDashboard() {
         recordType: data.type as any,
         confidenceScore: 0.9,
       });
+    }
+    // C-02: Log owner record addition for activity feed
+    if (isSupabaseConfigured() && !isMockUser && user && activeWorkspace) {
+      logTenantActivity({
+        workspaceId: activeWorkspace.id,
+        actorId: user.id,
+        actorEmail: user.email || '',
+        actorRole: user.role || 'TENANT_OWNER',
+        actorName: user.fullName,
+        actionType: 'RECORD_CREATED',
+        module: 'Financial Records',
+        description: `Owner tambah rekod ${data.type} — RM${data.amount}`,
+        metadata: { type: data.type, amount: data.amount, category: categoryName, party: data.party, date: data.date },
+      }).catch(() => {}); // fire and forget
     }
   };
 
