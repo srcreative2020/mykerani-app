@@ -722,9 +722,10 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
     hqService.getRecentPaymentWebhookEvents().then(setWebhookEvents);
     hqService.getWebhookEnforceFlag().then(setWebhookEnforceState);
   }, [useRealData, webhookRefreshTick]);
+  const [webhookProposalSent, setWebhookProposalSent] = useState(false);
   const toggleWebhookEnforce = async () => {
-    const ok = await hqService.setWebhookEnforceFlag(!webhookEnforce);
-    if (ok) setWebhookRefreshTick(t => t + 1);
+    const id = await hqService.proposeWebhookEnforceFlagChange(!webhookEnforce);
+    if (id) { setWebhookProposalSent(true); setTimeout(() => setWebhookProposalSent(false), 3000); }
   };
 
   // Notifications (HQ)
@@ -1004,7 +1005,7 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
   const saveTicket = async () => {
     if (!ticketForm.customer.trim() || !ticketForm.subject.trim()) return;
     if (useRealData) {
-      await hqService.createSupportTicket(ticketForm);
+      await hqService.hqCreateSupportTicketForTenant(ticketForm.customer, ticketForm.subject, ticketForm.summary, ticketForm.priority, ticketForm.category);
       setTicketsRefreshTick(t => t + 1);
       setTicketForm({ customer: "", email: "", subject: "", priority: "medium", summary: "", category: "" });
       setShowTicketModal(false);
@@ -3573,6 +3574,10 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
                       <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full transition ${webhookEnforce ? "translate-x-5" : ""}`} />
                     </button>
                   </div>
+                  {webhookProposalSent && (
+                    <p className="text-[10px] text-emerald-600 font-semibold">Cadangan perubahan dihantar untuk kelulusan dua peringkat HQ. Lihat Pusat Kelulusan.</p>
+                  )}
+                  <p className="text-[10px] text-slate-400">Perubahan kepada tetapan ini memerlukan kelulusan HQ_OWNER kedua melalui Pusat Kelulusan.</p>
                   <div className="space-y-1.5 max-h-[28rem] overflow-y-auto">
                     {webhookEvents.length === 0 ? (
                       <p className="text-xs text-slate-400 text-center py-4">Tiada log webhook lagi.</p>
@@ -4225,13 +4230,13 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
             <div className="space-y-3">
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-xs font-semibold text-slate-500 mb-1 block">Nama Pelanggan *</label>
-                  <input value={ticketForm.customer} onChange={e => setTicketForm(f => ({...f, customer: e.target.value}))}
-                    list="ticket-customers" placeholder="Nama syarikat"
-                    className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-emerald-400" />
-                  <datalist id="ticket-customers">
-                    {customers.map(c => <option key={c.id} value={c.name} />)}
-                  </datalist>
+                  <label className="text-xs font-semibold text-slate-500 mb-1 block">Pelanggan (Tenant) *</label>
+                  <select value={ticketForm.customer} onChange={e => setTicketForm(f => ({...f, customer: e.target.value}))}
+                    className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-emerald-400 bg-white">
+                    <option value="">Pilih pelanggan...</option>
+                    {customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  </select>
+                  <p className="text-[10px] text-slate-400 mt-1">Tiket mesti dikaitkan dengan tenant sedia ada supaya kelihatan kepada pelanggan.</p>
                 </div>
                 <div>
                   <label className="text-xs font-semibold text-slate-500 mb-1 block">E-mel</label>

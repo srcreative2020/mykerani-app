@@ -779,24 +779,14 @@ export async function getMyTenantSupportTickets(): Promise<SupportTicket[]> {
   );
 }
 
-export async function createSupportTicket(ticket: {
-  customer: string;
-  email?: string;
-  subject: string;
-  priority: SupportTicketPriority;
-  summary?: string;
-}): Promise<boolean> {
-  if (!isSupabaseConfigured() || !supabase) return false;
-  const { data: userData } = await supabase.auth.getUser();
-  const { error } = await supabase.from("support_tickets").insert({
-    customer_name: ticket.customer,
-    customer_email: ticket.email || null,
-    subject: ticket.subject,
-    priority: ticket.priority,
-    summary: ticket.summary || null,
-    created_by: userData?.user?.id || null,
+export async function hqCreateSupportTicketForTenant(
+  tenantId: string, subject: string, summary: string, priority: SupportTicketPriority = "medium", category?: string
+): Promise<string | null> {
+  if (!isSupabaseConfigured() || !supabase) return null;
+  const { data, error } = await supabase.rpc("hq_create_support_ticket_for_tenant", {
+    p_tenant_id: tenantId, p_subject: subject, p_summary: summary, p_priority: priority, p_category: category || null,
   });
-  return !error;
+  return error ? null : (data as string);
 }
 
 export async function createTenantSupportTicket(
