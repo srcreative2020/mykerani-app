@@ -891,6 +891,12 @@ export function StaffHomeScreen() {
           if (res.ok) {
             const payload = await res.json();
             extractedContext = `Maklumat dibaca daripada dokumen: merchant=${payload.merchantName || "-"}, tarikh=${payload.date || "-"}, jumlah=${payload.amount ?? "-"}, kategori cadangan=${payload.suggestedCategory || "-"}.`;
+            logEvent({
+              tenantId: activeWorkspace?.tenantId || "", workspaceId: wsId, userId: user?.id,
+              userEmail: user?.email, userRole: user?.role, eventType: "OCR_PROCESS",
+              description: `Staff processed document via OCR: ${file.name}`,
+              metadata: { fileName: file.name, merchantName: payload.merchantName, amount: payload.amount, suggestedCategory: payload.suggestedCategory },
+            });
           }
         }
       } catch {
