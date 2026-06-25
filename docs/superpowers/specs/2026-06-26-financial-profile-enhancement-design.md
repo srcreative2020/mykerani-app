@@ -1012,3 +1012,254 @@ All profile CRUD operations (from both Owner and Staff) log to `tenant_activity_
 - `description`: includes entity type and name
 
 This extends the existing activity logging pattern already used for financial records.
+
+---
+
+## 16. DATABASE IMPACT
+
+### 16.1 New Tables (5)
+
+| Table | Migration File | Purpose |
+|-------|---------------|---------|
+| `profile_customers` | `20260803000000_financial_profile_repositories.sql` | Customer master data |
+| `profile_suppliers` | Same migration | Supplier master data |
+| `profile_properties` | Same migration | Property/real estate registry |
+| `profile_insurance` | Same migration | Insurance policy registry |
+| `profile_investments` | Same migration | Investment registry |
+
+Each follows the exact `businesses` table pattern:
+- UUID PK + `uuid_generate_v4()`
+- `workspace_id` FK → `workspaces` with `ON DELETE CASCADE`
+- `is_active BOOLEAN DEFAULT true`
+- `created_at` + `updated_at` TIMESTAMPTZ with trigger
+- RLS: SELECT/INSERT/UPDATE for workspace members, DELETE for TENANT_OWNER/HQ_OWNER only
+- GRANT SELECT/INSERT/UPDATE/DELETE to `authenticated`, all to `service_role`
+- Index on `workspace_id`
+
+### 16.2 New Junction Tables (3)
+
+| Table | Migration File | Purpose |
+|-------|---------------|---------|
+| `vehicle_businesses` | `20260803010000_financial_profile_junctions.sql` | Vehicle ↔ Business M:N |
+| `bank_account_businesses` | Same migration | Bank Account ↔ Business M:N |
+| `property_businesses` | Same migration | Property ↔ Business M:N |
+
+Each follows: UUID PK, dual FK with CASCADE, `workspace_id` for RLS, UNIQUE constraint on the pair, GRANT to `authenticated`.
+
+### 16.3 Column Additions (Existing Tables)
+
+| Table | New Column | Migration File | Type | Nullable |
+|-------|-----------|---------------|------|----------|
+| `receivables` | `customer_id` | `20260803020000_financial_profile_foreign_keys.sql` | UUID FK → `profile_customers` | YES |
+| `payables` | `supplier_id` | Same migration | UUID FK → `profile_suppliers` | YES |
+| `income_records` | `customer_id` | Same migration | UUID FK → `profile_customers` | YES |
+| `expense_records` | `supplier_id` | Same migration | UUID FK → `profile_suppliers` | YES |
+
+All new columns are nullable — existing records are unaffected. No data migration is forced; the AI suggests links going forward.
+
+### 16.4 Index Additions
+
+```sql
+CREATE INDEX idx_receivables_customer ON receivables(customer_id) WHERE customer_id IS NOT NULL;
+CREATE INDEX idx_payables_supplier ON payables(supplier_id) WHERE supplier_id IS NOT NULL;
+CREATE INDEX idx_income_customer ON income_records(customer_id) WHERE customer_id IS NOT NULL;
+CREATE INDEX idx_expense_supplier ON expense_records(supplier_id) WHERE supplier_id IS NOT NULL;
+```
+
+### 16.5 Total Migration Count
+
+| # | Migration | Scope |
+|---|-----------|-------|
+| 1 | `20260803000000_financial_profile_repositories.sql` | 5 new tables + RLS + triggers + indexes |
+| 2 | `20260803010000_financial_profile_junctions.sql` | 3 junction tables + RLS + indexes |
+| 3 | `20260803020000_financial_profile_foreign_keys.sql` | 4 nullable FK columns + partial indexes |
+| 4 | `20260803030000_financial_profile_seed.sql` | Optional: seed customers/suppliers from existing receivables/payables (non-destructive) |
+
+All migrations are **additive** — no DROP statements, no column removals, no type changes to existing columns. Rollback is safe (see Section 23).
+
+---
+
+## 17. RPC IMPACT
+
+### 17.1 No New RPCs Required
+
+The existing profile data access pattern uses direct Supabase client reads/writes (not RPCs) for most profile entities. The new repositories follow the same pattern:
+
+- `profileData.ts` functions read/write directly via `supabase.from('profile_customers').select(...)` etc.
+- RLS enforces isolation (no need for SECURITY DEFINER wrappers)
+- The only existing RPCs are `get_asset_purchases` and `get_owner_transactions` (for `asset_purchases`/`owner_transactions` which have stricter membership checks)
+
+### 17.2 Optional: `get_full_financial_profile` RPC
+
+An optional SERVER-SIDE RPC could load ALL profile data in a single round-trip:
+
+```sql
+CREATE OR REPLACE FUNCTION get_full_financial_profile(p_workspace_id UUID)
+RETURNS JSONB
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public
+AS $$
+DECLARE
+  v_result JSONB;
+BEGIN
+  SELECT jsonb_build_object(
+    'personalProfile', (SELECT to_jsonb(p) FROM personal_profiles p WHERE p.workspace_id = p_workspace_id),
+    'businesses', (SELECT COALESCE(jsonb_agg(to_jsonb(b)), '[]') FROM businesses b WHERE b.workspace_id = p_workspace_id),
+    'branches', (SELECT COALESCE(jsonb_agg(to_jsonb(br)), '[]') FROM business_branches br WHERE br.workspace_id = p_workspace_id),
+    'vehicles', (SELECT COALESCE(jsonb_agg(to_jsonb(v)), '[]') FROM vehicles v WHERE v.workspace_id = p_workspace_id),
+    'dependents', (SELECT COALESCE(jsonb_agg(to_jsonb(d)), '[]') FROM dependents d WHERE d.workspace_id = p_workspace_id),
+    'customers', (SELECT COALESCE(jsonb_agg(to_jsonb(c)), '[]') FROM profile_customers c WHERE c.workspace_id = p_workspace_id),
+    'suppliers', (SELECT COALESCE(jsonb_agg(to_jsonb(s)), '[]') FROM profile_suppliers s WHERE s.workspace_id = p_workspace_id),
+    'properties', (SELECT COALESCE(jsonb_agg(to_jsonb(pr)), '[]') FROM profile_properties pr WHERE pr.workspace_id = p_workspace_id),
+    'insurance', (SELECT COALESCE(jsonb_agg(to_jsonb(i)), '[]') FROM profile_insurance i WHERE i.workspace_id = p_workspace_id),
+    'investments', (SELECT COALESCE(jsonb_agg(to_jsonb(inv)), '[]') FROM profile_investments inv WHERE inv.workspace_id = p_workspace_id)
+  ) INTO v_result;
+  RETURN v_result;
+END;
+$$;
+```
+
+**Benefit:** `buildFinancialContext()` makes 1 RPC call instead of 10+ separate `supabase.from(...).select(...)` calls, reducing latency on slow connections.
+
+**Decision:** Include as optional optimization. The client-side builder works without it (multiple parallel selects). The RPC is a performance enhancement, not a functional requirement.
+
+### 17.3 No Changes to Existing RPCs
+
+All existing RPCs (`get_asset_purchases`, `get_owner_transactions`, `log_tenant_activity`, `get_tenant_activity_feed`, wallet RPCs, billing RPCs) remain unchanged. The Financial Profile Enhancement is purely additive at the RPC level.
+
+---
+
+## 18. SERVICE IMPACT
+
+### 18.1 New Service Files (3)
+
+| File | Purpose | Lines (est.) |
+|------|---------|-------------|
+| `src/lib/buildFinancialContext.ts` | Central context builder — loads ALL repositories and assembles `FinancialContextPayload` | ~150 |
+| `src/lib/customerMatching.ts` | Customer name matching (pure function, same pattern as `businessMatching.ts`) | ~60 |
+| `src/lib/supplierMatching.ts` | Supplier name matching (pure function) | ~60 |
+
+### 18.2 Modified Service Files (3)
+
+| File | Change | Nature |
+|------|--------|--------|
+| `src/lib/profileData.ts` | Add CRUD functions for `profile_customers`, `profile_suppliers`, `profile_properties`, `profile_insurance`, `profile_investments` + junction table management | Additive — new functions appended, existing functions unchanged |
+| `src/lib/financialCompletenessEngine.ts` | Add `computeProfileCompleteness()` function | Additive — new export, existing function unchanged |
+| `src/lib/internalTransferDetection.ts` | Add `detectInternalTransfersWithContext()` wrapper that uses business/account associations | Additive — new export, existing function unchanged |
+
+### 18.3 Unchanged Service Files
+
+| File | Why Unchanged |
+|------|---------------|
+| `src/lib/assetOwnerData.ts` | Already migrated to Supabase, no changes needed |
+| `src/lib/businessMatching.ts` | Works as-is; new matching functions are separate files |
+| `src/lib/transactionRecoveryEngine.ts` | Works as-is; profile context flows through `buildFinancialContext()` |
+| `src/lib/financialHealth.ts` | Works as-is; reads from typed collections, not profile directly |
+| `src/lib/paymentService.ts` | No billing impact |
+| `src/lib/hqService.ts` | No HQ service changes needed |
+| `src/lib/storageQuota.ts` | No storage changes |
+| `src/lib/aiCredits.ts` | No credit system changes |
+
+---
+
+## 19. UI IMPACT
+
+### 19.1 Modified UI Files (3)
+
+| File | Change |
+|------|--------|
+| `src/screens/OwnerDashboard.tsx` | Replace manual `financialContext` in `sendChat` with `buildFinancialContext()`. Add new profile repository cards (customers, suppliers, properties, insurance, investments) in the `myProfile` section. Add evidence attachment buttons on profile entities. |
+| `src/screens/StaffHomeScreen.tsx` | Replace manual `financialContext` in `sendChat` with `buildFinancialContext()`. Add read-only profile repository views in the More tab. |
+| `server.ts` | Extend system prompt with sections 12-17 (branches, properties, insurance, investments, customers, suppliers). |
+
+### 19.2 New UI Sections (OwnerDashboard)
+
+Added to the `myProfile` section (after existing Tanggungan card, before Belian Aset):
+
+```
+12. Pelanggan (Customers) — CRUD card with name, email, phone, address, notes
+13. Pembekal (Suppliers) — CRUD card with name, email, phone, address, notes
+14. Hartanah (Properties) — CRUD card with property name, type, address, value, notes
+15. Insurans (Insurance) — CRUD card with policy name, type, provider, premium, coverage
+16. Pelaburan (Investments) — CRUD card with name, type, institution, value
+```
+
+Each card follows the existing `businesses` CRUD card pattern (list + add form + edit form + delete with confirm).
+
+### 19.3 Evidence Attachment UI
+
+Each profile entity card gets a "📎 Lampiran" button (same pattern as support ticket attachments):
+- Click → file picker → `uploadDocument()` → `linkEvidenceToRecord()` with `relatedRecordType: "VEHICLE"` etc.
+- Existing evidence packages for the entity are listed below the card
+
+### 19.4 No New Screens
+
+No new routes, no new modals, no new pages. All new repositories live within the existing `myProfile` More tab. All new UI is additive within the existing layout.
+
+### 19.5 Profile Completeness Banner
+
+A new banner at the top of the `myProfile` section shows profile completeness:
+- "Profil anda 75% lengkap. Tambah maklumat insurans dan pelaburan untuk konteks AI yang lebih baik."
+- Color: amber if < 80%, green if ≥ 80%
+- Links to incomplete sections
+
+---
+
+## 20. NOTIFICATION IMPACT
+
+### 20.1 New Notification Type: Profile Completeness Reminder
+
+| Field | Value |
+|-------|-------|
+| `category` | `'PROFILE'` |
+| `title` | `'Lengkapkan Profil Kewangan Anda'` |
+| `message` | `'Profil kewangan anda [X]% lengkap. Tambah [missing repositories] untuk bantuan AI yang lebih tepat.'` |
+| `status` | `'UNREAD'` |
+| `metadata` | `{ completenessPct, missingRepos: [...] }` |
+
+Generated by `NotificationContext.generateDynamicAdvisoryAlerts()` when `computeProfileCompleteness()` drops below a threshold (configurable, default 80%). Respects `preferences.enableInApp`.
+
+### 20.2 Existing Notifications (Unchanged)
+
+- Staff financial action notifications (DB triggers) — unchanged
+- HQ wallet adjustment notifications — unchanged
+- Payment approval notifications — unchanged
+- Support ticket notifications — unchanged
+- Advisory alerts (commitments, receivables, payables, health) — unchanged
+
+### 20.3 Activity Center Logging for Profile Actions
+
+All profile CRUD operations log to `tenant_activity_log`:
+```
+actionType: 'PROFILE_CREATED' | 'PROFILE_UPDATED' | 'PROFILE_DELETED'
+module: 'Financial Profile'
+description: '[Entity type] [entity name] [action verb]'
+```
+
+This extends the existing `logTenantActivity()` calls already used for financial records. No new RPC needed.
+
+---
+
+## 21. AUDIT IMPACT
+
+### 21.1 New Audit Triggers
+
+All 5 new tables get the same audit trigger pattern as `asset_purchases`/`owner_transactions` (from migration `20260802000000`):
+
+```sql
+CREATE TRIGGER trg_audit_profile_customers
+  AFTER INSERT OR UPDATE OR DELETE ON public.profile_customers
+  FOR EACH ROW EXECUTE FUNCTION public.audit_asset_owner_action();
+```
+
+The existing `audit_asset_owner_action()` function is generic enough to handle any table (it uses `TG_TABLE_NAME` for the module label and `to_jsonb(OLD/NEW)` for the values). It just needs to be attached to each new table.
+
+### 21.2 Junction Table Auditing
+
+Junction tables (`vehicle_businesses`, `bank_account_businesses`, `property_businesses`) are relationship links, not financial records. They do NOT get audit triggers — their CREATE/DELETE is implicit in the profile CRUD operations that manage them. This matches the existing pattern (e.g., `ocr_learned_patterns` has no audit trigger, only `financial_commitments` and `debts` do).
+
+### 21.3 Existing Audit Trail (Unchanged)
+
+- `audit_logs` table — unchanged, same structure, same RLS
+- `event_logs` — unchanged
+- `hq_governance_audit_log` — unchanged (no HQ-side governance for profile data)
+- `tenant_activity_log` — extended with `PROFILE_*` action types (additive)
