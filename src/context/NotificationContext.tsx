@@ -491,6 +491,9 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
   const generateDynamicAdvisoryAlerts = async () => {
     if (!activeWorkspace || !activeTenant || !user) return;
 
+    // If in-app notifications are disabled, skip advisory alerts entirely
+    if (preferences?.enableInApp === false) return;
+
     const workspaceId = activeWorkspace.id;
     const tenantId = activeTenant.id;
 

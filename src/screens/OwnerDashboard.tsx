@@ -65,7 +65,7 @@ import {
 } from "../lib/paymentService";
 
 type MainTab = "home" | "dashboard" | "documents" | "reports" | "more";
-type MorePage = "menu" | "team" | "history" | "settings" | "myProfile" | "support" | "billing" | "resources" | "chatArchive" | "activity";
+type MorePage = "menu" | "team" | "history" | "settings" | "myProfile" | "support" | "billing" | "resources" | "chatArchive" | "activity" | "account360";
 
 // AI chat suggestions may carry a server-computed default date; if the AI
 // didn't extract a date from the user's message, normalize to the user's
@@ -2834,6 +2834,7 @@ export function OwnerDashboard() {
                     { id: "history" as MorePage,   label: "Sejarah Aktiviti",  desc: "Log semua transaksi & aktiviti",        icon: History },
                     { id: "activity" as MorePage,  label: "Pusat Aktiviti",    desc: "Pantau aktiviti staf dalam ruang kerja", icon: Bell },
                     { id: "support" as MorePage,   label: "Pusat Sokongan",    desc: "Bantuan, FAQ & tiket sokongan",         icon: HelpCircle },
+                    { id: "account360" as MorePage, label: "Akaun Saya 360",  desc: "Skor kesihatan, status langganan & akaun", icon: Star },
                   ]).map(({ id, label, desc, icon: Icon }) => (
                     <button key={id} onClick={() => setMorePage(id)}
                       className="w-full flex items-center space-x-4 px-4 py-4 hover:bg-slate-50 transition cursor-pointer text-left">
@@ -3681,6 +3682,73 @@ export function OwnerDashboard() {
                 ))}
               </div>
             )}
+            {/* Account 360 View (H-04) */}
+            {morePage === "account360" && (
+              <div className="space-y-3">
+                <h2 className="text-lg font-bold text-slate-900">Akaun Saya 360</h2>
+
+                {/* Health Score */}
+                {myHealthScore && (
+                  <div className="bg-white border border-slate-200 rounded-2xl px-4 py-4 shadow-sm">
+                    <p className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-3">Skor Kesihatan Akaun</p>
+                    <div className="flex items-center gap-4">
+                      <div style={{ fontSize: 40, fontWeight: 800, lineHeight: 1, color: (myHealthScore.score || 0) >= 70 ? '#22c55e' : (myHealthScore.score || 0) >= 40 ? '#f59e0b' : '#ef4444' }}>
+                        {myHealthScore.score ?? '--'}
+                      </div>
+                      <div>
+                        <p className="text-sm font-semibold text-slate-800">
+                          Tahap Risiko:{' '}
+                          {myHealthScore.riskLevel === 'low' ? 'Rendah' : myHealthScore.riskLevel === 'medium' ? 'Sederhana' : 'Tinggi'}
+                        </p>
+                        {myHealthScore.reasons.length > 0 && (
+                          <ul className="mt-1 space-y-0.5">
+                            {myHealthScore.reasons.map((r, i) => (
+                              <li key={i} className="text-[11px] text-slate-400">• {r}</li>
+                            ))}
+                          </ul>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+                {!myHealthScore && !isMockUser && (
+                  <div className="bg-white border border-slate-200 rounded-2xl px-4 py-4 shadow-sm text-center text-slate-400 text-sm">
+                    Skor kesihatan tidak tersedia buat masa ini.
+                  </div>
+                )}
+
+                {/* Subscription Status */}
+                <div className="bg-white border border-slate-200 rounded-2xl px-4 py-4 shadow-sm">
+                  <p className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-2">Status Langganan</p>
+                  <p className="text-sm text-slate-600">
+                    Maklumat plan, kredit AI & storan tersedia di bahagian <strong className="text-slate-800">Bil &amp; Langganan</strong>.
+                  </p>
+                  <button onClick={() => setMorePage('billing')}
+                    className="mt-3 text-xs font-semibold text-indigo-600 hover:text-indigo-800 transition cursor-pointer">
+                    Ke Bil &amp; Langganan →
+                  </button>
+                </div>
+
+                {/* Quick links */}
+                <div className="bg-white border border-slate-200 rounded-2xl px-4 py-4 shadow-sm">
+                  <p className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-3">Pautan Pantas</p>
+                  <div className="space-y-2">
+                    {[
+                      { label: 'Profil Saya & Kewangan AI', page: 'myProfile' as MorePage },
+                      { label: 'Sejarah Aktiviti', page: 'history' as MorePage },
+                      { label: 'Pusat Sokongan', page: 'support' as MorePage },
+                    ].map(({ label, page }) => (
+                      <button key={page} onClick={() => setMorePage(page)}
+                        className="w-full flex items-center justify-between px-0 py-1 text-sm text-slate-700 hover:text-indigo-600 transition cursor-pointer text-left">
+                        <span>{label}</span>
+                        <ChevronRight className="w-3.5 h-3.5 text-slate-300" />
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+
             {morePage === "support" && (
               <div className="space-y-4">
                 <h2 className="text-lg font-bold text-slate-900">Pusat Sokongan</h2>
