@@ -1,24 +1,27 @@
 # MYKERANI PHASE 4 — SAAS COMMERCIAL & SCALE
-## MASTER BLUEPRINT (V1.0 — DRAFT FOR REVIEW)
+## MASTER BLUEPRINT (V1.1 — IMPLEMENTATION-READY)
 
 > **STATUS: PLANNING ONLY. NO PRODUCTION CODE IN THIS DOCUMENT OR ASSOCIATED WITH IT.**
 > This is the single, complete architecture and workflow reference for the
-> entire MYKERANI commercial platform. Implementation begins only after this
-> document is reviewed and explicitly approved.
+> entire MYKERANI commercial platform. Implementation begins only after
+> architecture review of this document.
 
-> **Governance note on source documents.** This blueprint is written against
-> the governing documents that are actually LOCKED and present in this
-> repository today: `MYKERANI_VISION.md`, `MYKERANI_CONSTITUTION.md`, and
-> `MYKERANI_OWNER_STAFF_PARITY_RULE.md` (all referenced as LOCKED in
-> `CLAUDE.md`). The authorization request named a "MYKERANI GOVERNANCE
-> EXTENSION" and "MYKERANI ECOSYSTEM GOVERNANCE PRINCIPLE" as locked and
-> mandatory; no files with those names exist in the repo. I have treated the
-> *principles* described in the authorization (closed-loop workflows,
-> unified resource wallet, no hardcoded commercial rules, full ecosystem
-> connectivity) as binding design constraints throughout this blueprint,
-> since they are consistent with and extend the existing locked docs. If
-> those two documents exist elsewhere and should supersede anything below,
-> flag it before implementation starts.
+> **Governance basis.** This blueprint is written against all five LOCKED
+> governing documents: `MYKERANI_VISION.md`, `MYKERANI_CONSTITUTION.md`,
+> `MYKERANI_OWNER_STAFF_PARITY_RULE.md`, `MYKERANI_GOVERNANCE_EXTENSION.md`,
+> and `MYKERANI_ECOSYSTEM_GOVERNANCE_PRINCIPLE.md`. The latter two were
+> created alongside this revision to formalize the principles the original
+> authorization named (closed-loop workflows, unified resource wallet, no
+> hardcoded commercial rules, full ecosystem connectivity) as durable,
+> citable rules rather than one-off instructions, since they govern every
+> future module, not just Phase 4. §0 below references them directly
+> instead of restating them informally.
+
+> **V1.1 change note.** V1.0 left four open questions blocking
+> implementation. Per direction, none of them rises to "fundamentally
+> changes the commercial architecture," so each has been resolved with a
+> default decision and rationale in §15. There are no remaining
+> architectural blockers in this document.
 
 ---
 
@@ -294,7 +297,10 @@ in `support_tickets`/`pending_hq_actions` linkage elsewhere in the schema.
   non-void invoice for the period first).
 - `record_payment_attempt(p_invoice_id, p_gateway_ref, p_status, ...)` —
   called from a payment-gateway webhook handler (server-side only, never
-  client-callable).
+  client-callable). `p_gateway` defaults to `billplz` per §15 decision 3;
+  the handler itself sits behind a `PaymentGatewayAdapter` interface so a
+  second gateway can be added without changing this RPC's signature or
+  the `billing_payment_attempts` schema.
 - `mark_invoice_paid(p_invoice_id)` / closed loop: validation (amount
   matches) → resource change (none directly) → wallet change (if invoice
   included a topup line item, credit wallet here) → notify → audit →
@@ -755,9 +761,14 @@ Phase 1) if a job is overdue.
 
 **Security:** payment-gateway webhooks verified via provider signature
 before touching any RPC (never trust an unauthenticated POST to mutate
-billing state); all commercial RPCs are `SECURITY DEFINER` with explicit
-role checks per existing project convention, never relying on RLS alone
-for write-path authorization (RLS remains the read-path backstop).
+billing state) — for the Billplz default (§15 decision 3) this is the
+`X-Signature` callback verification against the collection's
+X-Signature-Key, implemented inside the `PaymentGatewayAdapter`, not
+inlined in the webhook route, so the verification logic moves with the
+adapter if a second gateway is added; all commercial RPCs are
+`SECURITY DEFINER` with explicit role checks per existing project
+convention, never relying on RLS alone for write-path authorization (RLS
+remains the read-path backstop).
 
 **Dependencies:** underlies Modules 1, 2, 3 most heavily (the ones with
 real money/scheduled jobs); conceptually wraps all of them.
@@ -837,10 +848,11 @@ any module complete during implementation.
 
 ---
 
-## 14. SUGGESTED IMPLEMENTATION SEQUENCING (NOT AUTHORIZED YET)
+## 14. IMPLEMENTATION SEQUENCING (PHASE 4.1 / 4.2)
 
-Listed for planning visibility only — no implementation begins until this
-blueprint is approved:
+Listed for planning visibility — no implementation begins until this
+blueprint clears architecture review. Per §15 decision 4, Module 9 is its
+own wave (Phase 4.2); everything else below is Phase 4.1:
 
 1. **Foundation first:** §0.1 Wallet, §0.2 Governance Config, §0.4
    pattern as reusable RPC scaffolding — nothing else can be built
@@ -863,33 +875,100 @@ blueprint is approved:
 8. **Module 12 Analytics** — can start its event-stream plumbing earlier
    (each module writes events as it ships) but its reporting UI lands
    last, once there's data to report on.
-9. **Module 9 Partner & Agency Platform** — last, deliberately: it is the
-   highest-risk module for the Data Ownership Rule and depends on
-   Modules 1/2/8 being stable before adding a third actor type on top.
+
+**— end of Phase 4.1 —** Phase 4.1 ships and stabilizes in production
+(real tenants on real plans, paying real invoices, consuming metered
+AI/OCR/storage) before Phase 4.2 design work resumes.
+
+9. **Module 9 Partner & Agency Platform (Phase 4.2)** — deliberately
+   held to its own wave: it is the highest-risk module for the Data
+   Ownership Rule and depends on Modules 1/2/8 being stable before
+   adding a third actor type on top.
 
 ---
 
-## 15. OPEN QUESTIONS FOR APPROVAL (do not implement past these unresolved)
+## 15. RESOLVED DESIGN DECISIONS (DEFAULT IMPLEMENTATION)
 
-1. Confirm whether "MYKERANI GOVERNANCE EXTENSION" /
-   "MYKERANI ECOSYSTEM GOVERNANCE PRINCIPLE" are documents that exist
-   outside this repo and should be supplied before implementation, or
-   whether this blueprint's treatment of the existing locked docs +
-   stated principles is the intended governance basis.
-2. Confirm Owner-only gating for Subscription/Billing/Wallet-management
-   *actions* (vs. Staff read-only visibility into balances/quotas) is the
-   intended commercial permission model — this blueprint assumes it from
-   the existing Owner/Staff parity rule's scope (financial *engines*, not
-   financial *commitments*), but it is a new judgment call worth
-   explicit sign-off since the parity rule predates this commercial
-   surface.
-3. Confirm payment gateway choice (not specified anywhere in scope —
-   needed before Module 2/11 webhook design can be finalized).
-4. Confirm whether Module 9 (Partner & Agency) is in scope for the first
-   implementation wave or can be deferred past initial commercial launch,
-   given its dependency depth and risk profile.
+V1.0 left four open questions. None of them changes the commercial
+architecture itself (wallet model, closed-loop pattern, module
+boundaries, table design all stand as specified in §0-§13 regardless of
+how these resolve) — each is a parameter within that architecture, so
+each is resolved here with a default and a rationale, per direction not
+to stop for approval below that bar.
+
+**1. Governance basis.** Resolved by creating
+`MYKERANI_GOVERNANCE_EXTENSION.md` and
+`MYKERANI_ECOSYSTEM_GOVERNANCE_PRINCIPLE.md` as LOCKED V1.0 documents in
+this repository (committed alongside this revision). They formalize the
+Closed Loop Rule, Resource Wallet Principle, Commercial Governance
+Principle, Automation Restraint Rule, and Ecosystem Review Requirement as
+durable rules rather than instructions scoped to this one conversation.
+This blueprint's §0 foundations are the implementation of those two
+documents for Phase 4 specifically; future phases cite the same two
+documents rather than re-deriving these principles.
+
+**2. Commercial-action permission model — DEFAULT: Owner-only actions,
+Owner/Staff parity for visibility.** Subscription changes, billing/
+payment management, and wallet top-up/adjustment actions are Owner-only.
+Staff have full read access to the figures that affect their daily work
+(AI/OCR credit balance, storage quota) because those gate the financial
+*engines* the Parity Rule protects, but never to the commercial
+*commitment* actions themselves (signing up for a plan, paying an
+invoice, moving money). **Rationale:** `MYKERANI_OWNER_STAFF_PARITY_RULE.md`
+scopes parity to a named list of financial *engines*
+(OCR, AI transaction processing, voice notes, business/branch mapping,
+evidence linking, import recovery, learning memory, duplicate detection,
+ledger processing) — committing the business to a spend is categorically
+different from operating those engines, and is already how every
+existing financial-commitment surface in the app is gated (e.g.
+`MyKeraniBackupRecovery.tsx`'s full-workspace export is `TENANT_OWNER`-
+gated, not parity'd to Staff). This blueprint's Modules 1/2/3 sections
+already state this split; this entry makes it the binding default rather
+than an assumption.
+
+**3. Payment gateway — DEFAULT: Billplz as primary rail, designed behind
+a gateway-abstraction interface from day one.** MyKerani's tenant base is
+Malaysian SMEs operating in MYR with FPX/online-banking as the dominant
+local payment habit for B2B SaaS spend (cards are secondary for this
+segment). Billplz is selected as the primary integration for Module 2/11
+because it has native FPX support, MYR settlement, and a webhook model
+that maps directly onto the `billing_payment_attempts` /
+`record_payment_attempt()` design already specified. **Rationale for the
+abstraction requirement, not just the gateway pick:** Module 11's webhook
+verification and idempotency-key design must sit behind a
+`PaymentGatewayAdapter` interface (`createCharge`, `verifyWebhookSignature`,
+`refund`) so that card-rail support (e.g., Stripe, for any future non-MYR
+or international expansion) can be added as a second adapter without
+touching `billing_invoices`/`billing_payment_attempts` schema or the
+closed-loop RPCs — this is the same "don't hardcode" principle from
+`MYKERANI_GOVERNANCE_EXTENSION.md` §3 applied to infrastructure choice,
+not just commercial config values.
+
+**4. Module 9 (Partner & Agency Platform) sequencing — DEFAULT: deferred
+to Phase 4.2, not in the first implementation wave.** Modules 1-8 and
+10-12 (everything except Partner & Agency) constitute Phase 4.1 and are
+implementation-ready as specified. Module 9 is held to Phase 4.2.
+**Rationale:** §9's own security section identifies Module 9 as "the
+highest-risk module for violating the Data Ownership Rule" and its
+dependency list requires Modules 1/2/8 to be stable in production first;
+shipping it in the same wave as the foundation it depends on maximizes
+risk for a module that is additive (a new partner channel) rather than
+required for MyKerani's core commercial launch (a tenant subscribing,
+paying, and consuming metered AI/OCR/storage). §14's sequencing already
+places Module 9 last — this entry promotes that from a sequencing
+preference to a binding wave boundary: Phase 4.1 ships and stabilizes
+before Module 9 design is revisited in detail.
+
+**No remaining architectural blockers.** This blueprint, together with
+`MYKERANI_GOVERNANCE_EXTENSION.md` and
+`MYKERANI_ECOSYSTEM_GOVERNANCE_PRINCIPLE.md`, is implementation-ready for
+Phase 4.1 (Modules 1-8, 10-12). Module 9 (Phase 4.2) is architecturally
+specified in §9 but intentionally sequenced after Phase 4.1 stabilizes,
+per decision 4 above — that is a sequencing decision, not an unresolved
+design question.
 
 **This blueprint is complete as a single document covering all 12
 requested modules plus the cross-cutting foundations, ecosystem impact
-matrix, and sequencing. No implementation code has been written. Awaiting
-review and approval before Phase 4 implementation begins.**
+matrix, sequencing, and resolved design decisions. No implementation code
+has been written. Awaiting architecture review before Phase 4
+implementation begins.**
