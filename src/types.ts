@@ -73,6 +73,7 @@ export interface Workspace {
   name: string;
   slug: string;
   isActive: boolean;
+  workspaceType?: string; // L-02: 'personal' | 'business' — set on create, never changed
   createdAt?: string;
 }
 

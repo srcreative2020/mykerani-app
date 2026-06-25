@@ -4,9 +4,10 @@ import { useAuth } from "./AuthContext";
 import { useTenant } from "./TenantContext";
 import { type Workspace, type WorkspaceState } from "../types";
 import { PERMANENT_DEMO_TENANT_ID, PERMANENT_DEMO_WORKSPACES } from "../lib/seeder";
+import { endActiveSession } from "../lib/chatSession";
 
 interface WorkspaceContextType extends WorkspaceState {
-  createWorkspace: (name: string, slug?: string) => Promise<Workspace>;
+  createWorkspace: (name: string, slug?: string, workspaceType?: string) => Promise<Workspace>;
   selectWorkspace: (workspaceId: string) => void;
   clearWorkspaceError: () => void;
   getWorkspaceHeaders: () => Record<string, string>;
@@ -57,6 +58,10 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
     const target = state.workspaces.find(ws => ws.id === workspaceId);
     if (target) {
+      // Archive current chat session before switching workspace (M-02/L-08)
+      if (state.activeWorkspace && state.activeWorkspace.id !== workspaceId) {
+        endActiveSession(user.id, !isSupabaseConfigured() || isMockUser).catch(() => {});
+      }
       localStorage.setItem(`mykerani_active_ws_${user.id}_${activeTenant.id}`, workspaceId);
       setState(prev => ({ ...prev, activeWorkspace: target }));
     }
@@ -213,7 +218,7 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   }, [user, activeTenant, isMockUser]);
 
   // Create a new Workspace
-  const createWorkspace = async (name: string, slug?: string): Promise<Workspace> => {
+  const createWorkspace = async (name: string, slug?: string, workspaceType?: string): Promise<Workspace> => {
     if (!user || !activeTenant) {
       throw new Error("Active Tenant session is required to initialize client workspaces.");
     }
@@ -224,6 +229,7 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     }
 
     const calculatedSlug = slug || name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
+    const resolvedType = workspaceType || "personal";
 
     if (!isSupabaseConfigured() || isMockUser) {
       // --- SANDBOX CREATE ---
@@ -233,6 +239,7 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         name,
         slug: calculatedSlug,
         isActive: true,
+        workspaceType: resolvedType,
         createdAt: new Date().toISOString(),
       };
 
@@ -258,6 +265,7 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
           name,
           slug: calculatedSlug,
           is_active: true,
+          workspace_type: resolvedType,
         })
         .select()
         .single();
@@ -272,6 +280,7 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         name: data.name,
         slug: data.slug,
         isActive: data.is_active,
+        workspaceType: data.workspace_type || resolvedType,
         createdAt: data.created_at,
       };
 
