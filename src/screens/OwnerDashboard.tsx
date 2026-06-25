@@ -54,6 +54,7 @@ import {
   type PersonalProfile, type Vehicle, type Dependent,
   type Business, type BusinessBranch,
 } from "../lib/profileData";
+import { buildFinancialContext } from "../lib/buildFinancialContext";
 import {
   addAssetPurchase, addOwnerTransaction, loadAssetPurchases, loadOwnerTransactions,
   deleteAssetPurchase, deleteOwnerTransaction, type AssetPurchase, type OwnerTransaction,
@@ -1313,12 +1314,20 @@ export function OwnerDashboard() {
     setChatLoading(true);
     try {
       const { getAuthHeader } = await import("../lib/supabase");
+      const financialContext = await buildFinancialContext({
+        activeTenant, activeWorkspace,
+        financialEvents, cashAccounts, bankAccounts, debtRecords,
+        financialCommitments, financialEvidencePackages, ocrLearnedPatterns,
+        personalProfile, businesses, vehicles, dependents,
+        assetPurchases, ownerTransactions,
+        workspaceId: wsId, isMockUser,
+      });
       const res = await fetch("/api/ai/assistant", {
         method: "POST",
         headers: { "Content-Type": "application/json", ...(await getAuthHeader()) },
         body: JSON.stringify({
           query: q,
-          financialContext: { activeTenant, activeWorkspace, financialEvents, personalProfile, businesses, vehicles, dependents },
+          financialContext,
           userId: user?.id,
         }),
       });
@@ -1731,12 +1740,20 @@ export function OwnerDashboard() {
     setSupportLoading(true);
     try {
       const { getAuthHeader } = await import("../lib/supabase");
+      const financialContext = await buildFinancialContext({
+        activeTenant, activeWorkspace,
+        financialEvents, cashAccounts, bankAccounts, debtRecords,
+        financialCommitments, financialEvidencePackages, ocrLearnedPatterns,
+        personalProfile, businesses, vehicles, dependents,
+        assetPurchases, ownerTransactions,
+        workspaceId: wsId, isMockUser,
+      });
       const res = await fetch("/api/ai/assistant", {
         method: "POST",
         headers: { "Content-Type": "application/json", ...(await getAuthHeader()) },
         body: JSON.stringify({
           query: `[SOKONGAN MYKERANI] ${q}`,
-          financialContext: { activeTenant, activeWorkspace, financialEvents },
+          financialContext,
           userId: user?.id,
         }),
       });

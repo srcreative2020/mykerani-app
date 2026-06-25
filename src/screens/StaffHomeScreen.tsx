@@ -20,6 +20,7 @@ import {
   EMPTY_PERSONAL_PROFILE, EMPTY_BUSINESS_PROFILE, type Vehicle, type Dependent, type Business,
 } from "../lib/profileData";
 import { addAssetPurchase, addOwnerTransaction } from "../lib/assetOwnerData";
+import { buildFinancialContext } from "../lib/buildFinancialContext";
 import { matchOwnBusiness, matchOwnBusinessAndBranch } from "../lib/businessMatching";
 import { loadBusinessBranches, type BusinessBranch } from "../lib/profileData";
 import { DuplicateReviewQueue } from "../components/DuplicateReviewQueue";
@@ -153,7 +154,7 @@ function AddRecordForm({
 export function StaffHomeScreen() {
   const { user, signOut, isMockUser, updateProfile } = useAuth();
   const { activeWorkspace, workspaces, selectWorkspace } = useWorkspace();
-  const { financialEvents, addFinancialEvent, addFinancialEventAwaited, addFinancialEventsBatch, editFinancialEvent, addDebtRecord, addDebtRecordAwaited, editDebtRecord, addFinancialCommitment, addFinancialCommitmentAwaited, editFinancialCommitment, learnOcrPattern, learnOcrPatternsBatch, ocrLearnedPatterns, addFinancialEvidencePackage, linkEvidenceToRecord, financialEvidencePackages, duplicateFlags, addBankAccount, scanForDuplicates } = useFinancials();
+  const { financialEvents, addFinancialEvent, addFinancialEventAwaited, addFinancialEventsBatch, editFinancialEvent, addDebtRecord, addDebtRecordAwaited, editDebtRecord, addFinancialCommitment, addFinancialCommitmentAwaited, editFinancialCommitment, learnOcrPattern, learnOcrPatternsBatch, ocrLearnedPatterns, addFinancialEvidencePackage, linkEvidenceToRecord, financialEvidencePackages, duplicateFlags, addBankAccount, scanForDuplicates, cashAccounts, bankAccounts, debtRecords, financialCommitments } = useFinancials();
   const { activeTenant } = useTenant();
   const { userRoles, hasPermission } = usePermission();
   const userNameById = useMemo(() => {
@@ -502,10 +503,18 @@ export function StaffHomeScreen() {
     setSupportLoading(true);
     try {
       const { getAuthHeader } = await import("../lib/supabase");
+      const financialContext = await buildFinancialContext({
+        activeTenant, activeWorkspace,
+        financialEvents, cashAccounts, bankAccounts, debtRecords,
+        financialCommitments, financialEvidencePackages, ocrLearnedPatterns,
+        personalProfile, businesses, vehicles, dependents,
+        assetPurchases: [], ownerTransactions: [],
+        workspaceId: wsId, isMockUser,
+      });
       const res = await fetch("/api/ai/assistant", {
         method: "POST",
         headers: { "Content-Type": "application/json", ...(await getAuthHeader()) },
-        body: JSON.stringify({ query: `[SOKONGAN MYKERANI] ${q}`, financialContext: { activeTenant, activeWorkspace, financialEvents }, userId: user?.id }),
+        body: JSON.stringify({ query: `[SOKONGAN MYKERANI] ${q}`, financialContext, userId: user?.id }),
       });
       const data = await res.json() as any;
       setSupportMessages(prev => [...prev, { id: `a-${Date.now()}`, sender: "ai", text: data.text || data.error || "Saya sedang menyemak soalan anda." }]);
@@ -540,12 +549,20 @@ export function StaffHomeScreen() {
     setChatLoading(true);
     try {
       const { getAuthHeader } = await import("../lib/supabase");
+      const financialContext = await buildFinancialContext({
+        activeTenant, activeWorkspace,
+        financialEvents, cashAccounts, bankAccounts, debtRecords,
+        financialCommitments, financialEvidencePackages, ocrLearnedPatterns,
+        personalProfile, businesses, vehicles, dependents,
+        assetPurchases: [], ownerTransactions: [],
+        workspaceId: wsId, isMockUser,
+      });
       const res = await fetch("/api/ai/assistant", {
         method: "POST",
         headers: { "Content-Type": "application/json", ...(await getAuthHeader()) },
         body: JSON.stringify({
           query: q,
-          financialContext: { activeTenant, activeWorkspace, financialEvents, personalProfile, businessProfile, businesses, vehicles, dependents },
+          financialContext,
           userId: user?.id,
         }),
       });

@@ -3,6 +3,8 @@ import { type DashboardSummary } from "../lib/financialService";
 import { useFinancials } from "../context/FinancialRecordsContext";
 import { useWorkspace } from "../context/WorkspaceContext";
 import { useAuth } from "../context/AuthContext";
+import { useTenant } from "../context/TenantContext";
+import { buildFinancialContext } from "../lib/buildFinancialContext";
 import { 
   Plus, 
   Trash2, 
@@ -58,6 +60,7 @@ export const FinancialRecordsConsole: React.FC<FinancialRecordsConsoleProps> = (
   summaryLoading = false,
 }) => {
   const { activeWorkspace } = useWorkspace();
+  const { activeTenant } = useTenant();
   const {
     financialEvents,
     cashAccounts,
@@ -77,6 +80,8 @@ export const FinancialRecordsConsole: React.FC<FinancialRecordsConsoleProps> = (
     editDebtRecord,
     deleteDebtRecord,
     resetWorkspaceData,
+    financialEvidencePackages,
+    ocrLearnedPatterns,
   } = useFinancials();
 
   const [boardAiLoading, setBoardAiLoading] = useState(false);
@@ -167,7 +172,7 @@ export const FinancialRecordsConsole: React.FC<FinancialRecordsConsoleProps> = (
   };
 
   const { hasPermission } = usePermission();
-  const { user } = useAuth();
+  const { user, isMockUser } = useAuth();
   const sessionUserRole = user?.role || "TENANT_STAFF";
 
   // Selected sub-module navigation
@@ -182,15 +187,26 @@ export const FinancialRecordsConsole: React.FC<FinancialRecordsConsoleProps> = (
     const fetchDashboardSummary = async () => {
       setBoardAiLoading(true);
       try {
-        const financialContext = {
+        const { getAuthHeader } = await import("../lib/supabase");
+        const financialContext = await buildFinancialContext({
+          activeTenant,
           activeWorkspace,
           financialEvents,
           cashAccounts,
           bankAccounts,
           debtRecords,
-          financialCommitments
-        };
-        const { getAuthHeader } = await import("../lib/supabase");
+          financialCommitments,
+          financialEvidencePackages,
+          ocrLearnedPatterns,
+          personalProfile: null,
+          businesses: [],
+          vehicles: [],
+          dependents: [],
+          assetPurchases: [],
+          ownerTransactions: [],
+          workspaceId: activeWorkspace?.id || "",
+          isMockUser: !!isMockUser,
+        });
         const res = await fetch("/api/ai/assistant", {
           method: "POST",
           headers: { "Content-Type": "application/json", ...(await getAuthHeader()) },
