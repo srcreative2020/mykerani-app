@@ -18,7 +18,7 @@ import {
   Paperclip, Mic, Square, File as FileIcon, Plus, Building2,
 } from "lucide-react";
 import { FinancialEvidencePackageManager } from "../components/FinancialEvidencePackage";
-import { createTenantSupportTicket, getMyTenantSupportTickets, SupportTicket, updateTenantMasterProfile, SUPPORT_TICKET_TEMPLATES, uploadTicketAttachment, getTicketAttachmentUrl, ticketSlaState, TICKET_STATUS_LABEL_MS, TICKET_STATUS_STYLE, tenantAssignStaffRole, tenantRevokeStaffRole, tenantSubmitAppeal } from "../lib/hqService";
+import { createTenantSupportTicket, getMyTenantSupportTickets, SupportTicket, updateTenantMasterProfile, SUPPORT_TICKET_TEMPLATES, uploadTicketAttachment, getTicketAttachmentUrl, ticketSlaState, TICKET_STATUS_LABEL_MS, TICKET_STATUS_STYLE, tenantAssignStaffRole, tenantRevokeStaffRole, tenantSubmitAppeal, tenantReplySupportTicket, getTenantMyHealthScore, TenantHealthScore, getTenantAiCostSummary, TenantAiCostSummary, getMyDataAccessLog, DataAccessLogEntry } from "../lib/hqService";
 import { FinancialReportsAnalytics } from "../components/FinancialReportsAnalytics";
 import { StorageBar } from "../components/StorageBar";
 import { DocumentsManager } from "../components/DocumentsManager";
@@ -323,6 +323,12 @@ export function OwnerDashboard() {
   const [myTickets, setMyTickets] = useState<SupportTicket[]>([]);
   const [myTicketsLoading, setMyTicketsLoading] = useState(false);
   const [openTicketId, setOpenTicketId] = useState<string | null>(null);
+  const [ticketReplyDraft, setTicketReplyDraft] = useState("");
+  const [ticketReplySending, setTicketReplySending] = useState(false);
+  const [myHealthScore, setMyHealthScore] = useState<TenantHealthScore | null>(null);
+  const [aiCostSummary, setAiCostSummary] = useState<TenantAiCostSummary[]>([]);
+  const [dataAccessLog, setDataAccessLog] = useState<DataAccessLogEntry[]>([]);
+  const [showDataAccessLog, setShowDataAccessLog] = useState(false);
   const [ticketAttachFile, setTicketAttachFile] = useState<File | null>(null);
   const [ticketAttachUploading, setTicketAttachUploading] = useState(false);
   const supportEndRef = useRef<HTMLDivElement>(null);
@@ -892,6 +898,18 @@ export function OwnerDashboard() {
     getMyTenantSupportTickets().then(tickets => { if (active) { setMyTickets(tickets); setMyTicketsLoading(false); } });
     return () => { active = false; };
   }, [morePage, supportView, isMockUser]);
+  useEffect(() => {
+    if (isMockUser) return;
+    getTenantMyHealthScore().then(setMyHealthScore);
+  }, [isMockUser]);
+  useEffect(() => {
+    if (isMockUser || morePage !== "resources") return;
+    getTenantAiCostSummary().then(setAiCostSummary);
+  }, [isMockUser, morePage]);
+  useEffect(() => {
+    if (isMockUser || !showDataAccessLog || !tenantId) return;
+    getMyDataAccessLog(tenantId).then(setDataAccessLog);
+  }, [isMockUser, showDataAccessLog, tenantId]);
 
   useEffect(() => {
     if (!wsId || !user) return;
@@ -1957,6 +1975,22 @@ export function OwnerDashboard() {
                   {/* Storage compact bar */}
                   {storageQuota.warnLevel !== "none" && (
                     <StorageBar quota={storageQuota} compact onBuyAddon={() => setShowAddonModal(true)} />
+                  )}
+
+                  {/* Account Health (read-only, gap 8.3) */}
+                  {myHealthScore && myHealthScore.riskLevel !== "low" && (
+                    <div className={`rounded-2xl p-4 border ${myHealthScore.riskLevel === "high" ? "bg-red-50 border-red-100" : "bg-amber-50 border-amber-100"}`}>
+                      <p className={`text-xs font-bold ${myHealthScore.riskLevel === "high" ? "text-red-700" : "text-amber-700"}`}>
+                        Kesihatan Akaun: {myHealthScore.riskLevel === "high" ? "Perlu Perhatian" : "Sederhana"}
+                      </p>
+                      {myHealthScore.reasons.length > 0 && (
+                        <ul className="mt-1 space-y-0.5">
+                          {myHealthScore.reasons.map((reason, i) => (
+                            <li key={i} className={`text-[11px] ${myHealthScore.riskLevel === "high" ? "text-red-600" : "text-amber-600"}`}>• {reason}</li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
                   )}
 
                   <p className="text-xs text-slate-400 text-center">Tanya saya apa sahaja tentang kewangan anda</p>
@@ -3499,6 +3533,36 @@ export function OwnerDashboard() {
                     Simpan Peringatan
                   </button>
                 </div>
+
+                {/* Data Access Log (gap 7.2) */}
+                <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-3">
+                  <button onClick={() => setShowDataAccessLog(v => !v)} className="w-full flex items-center justify-between cursor-pointer">
+                    <div className="flex items-center space-x-2">
+                      <Shield className="w-4 h-4 text-indigo-500" />
+                      <p className="text-sm font-bold text-slate-900">Log Akses Data Peribadi</p>
+                    </div>
+                    <ChevronRight className={`w-3.5 h-3.5 text-slate-300 transition-transform ${showDataAccessLog ? "rotate-90" : ""}`} />
+                  </button>
+                  {showDataAccessLog && (
+                    dataAccessLog.length === 0 ? (
+                      <p className="text-xs text-slate-400 text-center py-3">Tiada akses unmask direkodkan untuk data anda.</p>
+                    ) : (
+                      <div className="space-y-1.5">
+                        {dataAccessLog.map(entry => (
+                          <div key={entry.id} className="flex items-center justify-between text-[11px] p-2 bg-slate-50 rounded-lg">
+                            <div>
+                              <p className="font-bold text-slate-700">{entry.staffEmail || "Staf HQ"}</p>
+                              <p className="text-slate-400">{entry.action} • {new Date(entry.timestamp).toLocaleString("ms-MY")}</p>
+                            </div>
+                            {entry.currentlyActive && (
+                              <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700">Aktif</span>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )
+                  )}
+                </div>
               </div>
             )}
 
@@ -3744,6 +3808,29 @@ export function OwnerDashboard() {
                                             <span className="font-bold text-slate-700">{r.author}: </span>{r.text}
                                           </div>
                                         ))}
+                                      </div>
+                                    )}
+                                    {t.status !== "resolved" && t.status !== "closed" && (
+                                      <div className="space-y-1.5">
+                                        <textarea
+                                          value={ticketReplyDraft}
+                                          onChange={e => setTicketReplyDraft(e.target.value)}
+                                          placeholder="Balas tiket ini..."
+                                          rows={2}
+                                          className="w-full text-[11px] border border-slate-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-indigo-400"
+                                        />
+                                        <button
+                                          disabled={!ticketReplyDraft.trim() || ticketReplySending}
+                                          onClick={async () => {
+                                            setTicketReplySending(true);
+                                            const ok = await tenantReplySupportTicket(t.id, ticketReplyDraft.trim());
+                                            setTicketReplySending(false);
+                                            if (ok) { setTicketReplyDraft(""); refreshMyTickets(); }
+                                          }}
+                                          className="px-3 py-1.5 bg-indigo-600 text-white rounded-lg text-[11px] font-bold disabled:opacity-40 cursor-pointer"
+                                        >
+                                          {ticketReplySending ? "Menghantar..." : "Hantar Balasan"}
+                                        </button>
                                       </div>
                                     )}
                                     {t.attachments.length > 0 && (
@@ -4019,6 +4106,25 @@ export function OwnerDashboard() {
                     </div>
                   )}
                 </div>
+
+                {/* AI Cost Summary (gap 3.1) */}
+                {aiCostSummary.length > 0 && (
+                  <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm space-y-2">
+                    <div className="flex items-center gap-2">
+                      <Cpu className="w-4 h-4 text-indigo-500" />
+                      <p className="text-sm font-bold text-slate-900">Kos & Perbelanjaan AI</p>
+                    </div>
+                    {aiCostSummary.map(row => (
+                      <div key={row.model} className="flex items-center justify-between text-[11px] p-2 bg-slate-50 rounded-lg">
+                        <div>
+                          <p className="font-bold text-slate-700">{row.model}</p>
+                          <p className="text-slate-400">USD {row.costPerCallUsd.toFixed(4)}/panggilan • {row.callsThisMonth} panggilan bulan ini</p>
+                        </div>
+                        <p className="font-bold text-slate-700">USD {row.spendThisMonthUsd.toFixed(2)}</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
 
                 {/* BYOS Storage */}
                 <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm space-y-3">

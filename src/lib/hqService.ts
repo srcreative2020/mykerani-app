@@ -779,24 +779,14 @@ export async function getMyTenantSupportTickets(): Promise<SupportTicket[]> {
   );
 }
 
-export async function createSupportTicket(ticket: {
-  customer: string;
-  email?: string;
-  subject: string;
-  priority: SupportTicketPriority;
-  summary?: string;
-}): Promise<boolean> {
-  if (!isSupabaseConfigured() || !supabase) return false;
-  const { data: userData } = await supabase.auth.getUser();
-  const { error } = await supabase.from("support_tickets").insert({
-    customer_name: ticket.customer,
-    customer_email: ticket.email || null,
-    subject: ticket.subject,
-    priority: ticket.priority,
-    summary: ticket.summary || null,
-    created_by: userData?.user?.id || null,
+export async function hqCreateSupportTicketForTenant(
+  tenantId: string, subject: string, summary: string, priority: SupportTicketPriority = "medium", category?: string
+): Promise<string | null> {
+  if (!isSupabaseConfigured() || !supabase) return null;
+  const { data, error } = await supabase.rpc("hq_create_support_ticket_for_tenant", {
+    p_tenant_id: tenantId, p_subject: subject, p_summary: summary, p_priority: priority, p_category: category || null,
   });
-  return !error;
+  return error ? null : (data as string);
 }
 
 export async function createTenantSupportTicket(
@@ -1463,4 +1453,121 @@ export async function getHqKnowledgeArticleForReply(id: string): Promise<{ title
   const { data, error } = await supabase.rpc("get_hq_knowledge_article_for_reply", { p_id: id });
   if (error || !data || !data[0]) return null;
   return { title: data[0].title, body: data[0].body };
+}
+
+// --- Phase 1 Reconciliation Wave 2 ---
+
+export interface TenantAiCostSummary {
+  model: string;
+  costPerCallUsd: number;
+  callsThisMonth: number;
+  spendThisMonthUsd: number;
+}
+
+export async function getTenantAiCostSummary(): Promise<TenantAiCostSummary[]> {
+  if (!isSupabaseConfigured() || !supabase) return [];
+  const { data, error } = await supabase.rpc("get_tenant_ai_cost_summary");
+  if (error || !data) return [];
+  return data.map((row: any) => ({
+    model: row.model,
+    costPerCallUsd: Number(row.cost_per_call_usd),
+    callsThisMonth: Number(row.calls_this_month),
+    spendThisMonthUsd: Number(row.spend_this_month_usd),
+  }));
+}
+
+export interface AiCostRateSimulation {
+  model: string;
+  currentRate: number;
+  newRate: number;
+  callsLast30Days: number;
+  currentMonthlyCostUsd: number;
+  projectedMonthlyCostUsd: number;
+  deltaUsd: number;
+}
+
+export async function simulateAiCostRateChange(model: string, newRate: number): Promise<AiCostRateSimulation | null> {
+  if (!isSupabaseConfigured() || !supabase) return null;
+  const { data, error } = await supabase.rpc("simulate_ai_cost_rate_change", { p_model: model, p_new_rate: newRate });
+  if (error || !data || !data[0]) return null;
+  const row = data[0];
+  return {
+    model: row.model,
+    currentRate: Number(row.current_rate),
+    newRate: Number(row.new_rate),
+    callsLast30Days: Number(row.calls_last_30_days),
+    currentMonthlyCostUsd: Number(row.current_monthly_cost_usd),
+    projectedMonthlyCostUsd: Number(row.projected_monthly_cost_usd),
+    deltaUsd: Number(row.delta_usd),
+  };
+}
+
+export async function tenantReplySupportTicket(ticketId: string, message: string): Promise<boolean> {
+  if (!isSupabaseConfigured() || !supabase) return false;
+  const { error } = await supabase.rpc("tenant_reply_support_ticket", { p_ticket_id: ticketId, p_message: message });
+  return !error;
+}
+
+export interface DataAccessLogEntry {
+  id: string;
+  staffEmail: string;
+  action: string;
+  currentlyActive: boolean;
+  timestamp: string;
+}
+
+export async function getMyDataAccessLog(tenantId: string): Promise<DataAccessLogEntry[]> {
+  if (!isSupabaseConfigured() || !supabase) return [];
+  const { data, error } = await supabase.rpc("get_my_data_access_log", { p_tenant_id: tenantId });
+  if (error || !data) return [];
+  return data.map((row: any) => ({
+    id: row.id,
+    staffEmail: row.staff_email || "",
+    action: row.action,
+    currentlyActive: !!row.currently_active,
+    timestamp: row.timestamp,
+  }));
+}
+
+export interface TenantHealthScore {
+  score: number;
+  riskLevel: "high" | "medium" | "low";
+  reasons: string[];
+  createdAt: string;
+}
+
+export async function getTenantMyHealthScore(): Promise<TenantHealthScore | null> {
+  if (!isSupabaseConfigured() || !supabase) return null;
+  const { data, error } = await supabase.rpc("tenant_get_my_health_score");
+  if (error || !data || !data[0]) return null;
+  const row = data[0];
+  return {
+    score: Number(row.score),
+    riskLevel: row.risk_level,
+    reasons: row.reasons || [],
+    createdAt: row.created_at,
+  };
+}
+
+export async function proposeWebhookEnforceFlagChange(enabled: boolean, reason?: string): Promise<string | null> {
+  if (!isSupabaseConfigured() || !supabase) return null;
+  const { data, error } = await supabase.rpc("propose_webhook_enforce_flag_change", {
+    p_enabled: enabled, p_reason: reason ?? null,
+  });
+  if (error) return null;
+  return data as string;
+}
+
+export async function snapshotCustomerHealthScores(): Promise<number> {
+  if (!isSupabaseConfigured() || !supabase) return 0;
+  const { data, error } = await supabase.rpc("snapshot_customer_health_scores");
+  if (error || data === null) return 0;
+  return Number(data);
+}
+
+export async function checkPermission(userId: string, permission: string): Promise<boolean> {
+  if (!isSupabaseConfigured() || !supabase) return false;
+  const { data, error } = await supabase.rpc("check_permission", { p_user_id: userId, p_permission: permission });
+  if (error) return false;
+  return !!data;
 }

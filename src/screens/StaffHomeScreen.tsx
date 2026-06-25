@@ -9,7 +9,7 @@ import { supabase, isSupabaseConfigured } from "../lib/supabase";
 import { isDemoWorkspace } from "../lib/seeder";
 import { uploadDocument, getDocumentUrl, type UploadedDoc } from "../lib/documentStorage";
 import { logEvent } from "../lib/eventLog";
-import { createTenantSupportTicket, getMyTenantSupportTickets, SupportTicket, SUPPORT_TICKET_TEMPLATES, uploadTicketAttachment, getTicketAttachmentUrl, ticketSlaState, TICKET_STATUS_LABEL_MS, TICKET_STATUS_STYLE, tenantSubmitAppeal } from "../lib/hqService";
+import { createTenantSupportTicket, getMyTenantSupportTickets, SupportTicket, SUPPORT_TICKET_TEMPLATES, uploadTicketAttachment, getTicketAttachmentUrl, ticketSlaState, TICKET_STATUS_LABEL_MS, TICKET_STATUS_STYLE, tenantSubmitAppeal, tenantReplySupportTicket } from "../lib/hqService";
 import { usePermission } from "../context/PermissionContext";
 import { useStorageQuota } from "../lib/storageQuota";
 import { DocumentsManager } from "../components/DocumentsManager";
@@ -228,6 +228,8 @@ export function StaffHomeScreen() {
   const [ticketError, setTicketError] = useState<string | null>(null);
   const [myTickets, setMyTickets] = useState<SupportTicket[]>([]);
   const [myTicketsLoading, setMyTicketsLoading] = useState(false);
+  const [ticketReplyDraft, setTicketReplyDraft] = useState("");
+  const [ticketReplySending, setTicketReplySending] = useState(false);
   const [openTicketId, setOpenTicketId] = useState<string | null>(null);
   const [ticketAttachFile, setTicketAttachFile] = useState<File | null>(null);
   const [showAppeal, setShowAppeal] = useState(false);
@@ -1985,6 +1987,32 @@ export function StaffHomeScreen() {
                                         <span className="font-bold text-slate-700">{r.author}: </span>{r.text}
                                       </div>
                                     ))}
+                                  </div>
+                                )}
+                                {t.status !== "resolved" && t.status !== "closed" && (
+                                  <div className="space-y-1.5">
+                                    <textarea
+                                      value={ticketReplyDraft}
+                                      onChange={e => setTicketReplyDraft(e.target.value)}
+                                      placeholder="Balas tiket ini..."
+                                      rows={2}
+                                      className="w-full text-[11px] border border-slate-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-indigo-400"
+                                    />
+                                    <button
+                                      disabled={!ticketReplyDraft.trim() || ticketReplySending}
+                                      onClick={async () => {
+                                        setTicketReplySending(true);
+                                        const ok = await tenantReplySupportTicket(t.id, ticketReplyDraft.trim());
+                                        setTicketReplySending(false);
+                                        if (ok) {
+                                          setTicketReplyDraft("");
+                                          getMyTenantSupportTickets().then(setMyTickets);
+                                        }
+                                      }}
+                                      className="px-3 py-1.5 bg-indigo-600 text-white rounded-lg text-[11px] font-bold disabled:opacity-40 cursor-pointer"
+                                    >
+                                      {ticketReplySending ? "Menghantar..." : "Hantar Balasan"}
+                                    </button>
                                   </div>
                                 )}
                                 {t.attachments.length > 0 && (
