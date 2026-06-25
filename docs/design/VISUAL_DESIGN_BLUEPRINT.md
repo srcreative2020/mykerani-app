@@ -790,3 +790,537 @@ Staff sees the same layout but:
 │ [📎] [🎤] Message... [Send]  │  ← Chat input (sticky, glass)
 └──────────────────────────────┘
 ```
+
+---
+
+## 21. DESKTOP LAYOUT
+
+### 21.1 Desktop Design Principles
+
+1. **Side navigation** for HQ (240px sidebar), **tab bar** for Tenant
+2. **Multi-column grids** for dashboards (4 metric tiles, 2/3 + 1/3 content split)
+3. **Hover states** are meaningful — cards elevate, buttons shift colour
+4. **Keyboard navigation** — all interactive elements focusable with visible focus rings
+5. **Chat area max 800px** centered — conversation remains focused even on wide screens
+6. **Tooltips** on icon-only buttons and truncated text
+
+### 21.2 Desktop Screen Structure (Tenant)
+
+```
+┌──────────────────────────────────────────────────────────────────────────┐
+│  [Logo 32px]  [Workspace: LemonTree Bakery ▾]     [🔔 2]  [Avatar ▾]   │  ← Header (64px, glass, sticky)
+├──────────────────────────────────────────────────────────────────────────┤
+│  [Home] [Dashboard] [Dokumen] [Laporan]                          [☰ Lagi] │  ← Tab Bar (48px)
+├──────────────────────────────────────────────────────────────────────────┤
+│                                                                          │
+│  ┌──────────────────────────────────────┐  ┌──────────────────────────┐ │
+│  │  AI Chat (max 800px)                 │  │  Side Panel (optional)   │ │
+│  │                                      │  │  Suggestions, quick      │ │
+│  │  [KERI] + conversation               │  │  stats, storage bar      │ │
+│  │                                      │  │  (only on wide screens)  │ │
+│  │  [📎] [🎤] Type... [Send]            │  │                          │ │
+│  └──────────────────────────────────────┘  └──────────────────────────┘ │
+│                                                                          │
+└──────────────────────────────────────────────────────────────────────────┘
+```
+
+### 21.3 Desktop Screen Structure (HQ)
+
+```
+┌──────────────────────────────────────────────────────────────────────────┐
+│  [Logo]  HQ Console                              [🔔 3]  [Avatar ▾]     │  ← Header (64px)
+├────────────┬─────────────────────────────────────────────────────────────┤
+│            │                                                             │
+│  Sidebar   │  Page Content (fills remaining width)                       │
+│  (240px)   │                                                             │
+│            │  ┌─────────────────────────────────────────────────────────┐│
+│  📊 Dash   │  │  KERI Briefing                                        ││
+│  👥 Cust   │  └─────────────────────────────────────────────────────────┘│
+│  💳 Bill   │                                                             │
+│  🎫 Sup    │  ┌──────┐ ┌──────┐ ┌──────┐ ┌──────┐                      │
+│  🤖 AI     │  │Metric│ │Metric│ │Metric│ │Metric│                      │
+│  📦 Sub    │  └──────┘ └──────┘ └──────┘ └──────┘                      │
+│  💰 Rev    │                                                             │
+│  🌐 Web    │  ┌─────────────────────────────────────────────────────────┐│
+│  ⚙️ Set    │  │  Data Table                                           ││
+│  ⚖️ Gov    │  └─────────────────────────────────────────────────────────┘│
+│  ✅ App    │                                                             │
+│  📋 Act    │                                                             │
+│  💵 Cost   │                                                             │
+│  📚 Know   │                                                             │
+│            │                                                             │
+├────────────┴─────────────────────────────────────────────────────────────┤
+└──────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 22. TABLET LAYOUT
+
+### 22.1 Tablet Design Principles
+
+1. **Sidebar collapses to drawer** (HQ) or **tab bar remains** (Tenant)
+2. **2-column grids** for metrics (2x2)
+3. **Content is single column** — no side panels
+4. **Touch targets minimum 44px**
+5. **Chat is full width** — no side panel for suggestions
+6. **Bottom nav hidden** on tablet — tab bar is sufficient
+
+### 22.2 Tablet Screen Structure
+
+```
+┌──────────────────────────────────────────────────────────────────────────┐
+│  [Logo]  [Workspace ▾]                              [🔔]  [Avatar ▾]   │  ← Header (56px)
+├──────────────────────────────────────────────────────────────────────────┤
+│  [Home] [Dashboard] [Dokumen] [Laporan]                          [☰ Lagi] │  ← Tab Bar (48px)
+├──────────────────────────────────────────────────────────────────────────┤
+│                                                                          │
+│  ┌──────────────┐  ┌──────────────┐                                    │
+│  │  Metric 1    │  │  Metric 2    │                                    │  ← 2-column metrics
+│  └──────────────┘  └──────────────┘                                    │
+│  ┌──────────────┐  ┌──────────────┐                                    │
+│  │  Metric 3    │  │  Metric 4    │                                    │
+│  └──────────────┘  └──────────────┘                                    │
+│                                                                          │
+│  ┌──────────────────────────────────────────────────────────────────────┐│
+│  │  AI Chat (full width)                                                ││
+│  └──────────────────────────────────────────────────────────────────────┘│
+│                                                                          │
+│  ┌──────────────────────────────────────────────────────────────────────┐│
+│  │  [📎] [🎤] Type message...                              [Send →]   ││  ← Chat input (sticky)
+│  └──────────────────────────────────────────────────────────────────────┘│
+└──────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 23. RESPONSIVE RULES
+
+### 23.1 Breakpoint Behaviour Summary
+
+| Element | Mobile (<640px) | Tablet (640-1023px) | Desktop (1024px+) | Wide (1280px+) |
+|---------|-----------------|---------------------|--------------------|----|
+| Header | 44px, compact | 56px | 64px | 64px |
+| Navigation | Bottom nav (5 items) | Tab bar | Tab bar + sidebar (HQ) | Same as desktop |
+| Metric tiles | 1 column (stacked) | 2x2 grid | 4 in a row | 4 in a row, wider |
+| AI Chat | Full width | Full width | Max 800px centered | Max 800px + side panel |
+| Cards | Full width, stacked | Full width or 2-col | Multi-column grid | Multi-column grid |
+| KERI | 32px (chat), 48px (empty) | 48px, 64px | 64px, 80px | Same as desktop |
+| Font sizes | Base 13px | Base 14px | Base 14px | Base 14px |
+| Touch targets | 44px min | 44px min | 36px min | 36px min |
+| Glass blur | 8px (reduced) | 12px | 12px | 12px |
+
+### 23.2 Responsive Rules
+
+1. **Mobile-first CSS** — base styles target mobile, `@media (min-width)` upgrades for larger screens
+2. **No horizontal scroll** — all content fits within the viewport at every breakpoint
+3. **Images/illustrations scale** — `max-width: 100%; height: auto`
+4. **Tables become cards on mobile** — data tables transform to stacked card layouts
+5. **Modals become full-screen on mobile** — `border-radius` reduces to 12px, padding increases
+6. **Sidebar becomes drawer on tablet** (HQ) — hamburger toggle, overlay backdrop
+7. **Bottom nav appears only on mobile** — hidden at 640px+
+8. **Tab bar hidden on mobile** — replaced by bottom nav
+9. **Chat input is always sticky** — never scrolls out of view
+10. **Touch vs hover** — hover states only apply at 1024px+ (pointer: fine)
+
+---
+
+## 24. ANIMATION RULES
+
+### 24.1 Animation Tokens
+
+| Token | Duration | Easing | Usage |
+|-------|----------|--------|-------|
+| `--anim-fast` | 150ms | `ease-out` | Button presses, toggles, small state changes |
+| `--anim-default` | 250ms | `ease` | Card hover, dropdown open, tab switch |
+| `--anim-slow` | 400ms | `ease-in-out` | Modal open/close, page transitions |
+| `--anim-spring` | 300ms | `cubic-bezier(0.34, 1.56, 0.64, 1)` | KERI appearance, suggestion card pop-in |
+
+### 24.2 Animation Rules
+
+1. **KERI appears with a spring bounce** — the mascot gently bounces when it appears in chat
+2. **AI suggestion cards slide up + fade in** — `transform: translateY(8px) → 0; opacity: 0 → 1`
+3. **Cards elevate on hover** — `transform: translateY(-2px)` + shadow transition
+4. **Tab switches fade** — old tab content fades out (150ms), new content fades in (150ms)
+5. **Modals scale in** — `transform: scale(0.95) → 1; opacity: 0 → 1` over 400ms
+6. **Loading skeletons shimmer** — `background: linear-gradient(90deg, surface → surface-2 → surface)` infinite
+7. **Numbers count up** — financial metrics animate from 0 to value on first load (300ms)
+8. **Bottom nav active indicator slides** — a green dot slides between active items
+9. **Chat messages slide in from bottom** — `transform: translateY(12px) → 0`
+10. **No animations respect `prefers-reduced-motion`** — when set, all animations are instant
+
+### 24.3 Reduced Motion
+
+```css
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+```
+
+---
+
+## 25. EMPTY STATE DESIGN
+
+### 25.1 Empty State Anatomy
+
+```
+┌──────────────────────────────────────────────────────────────────┐
+│                                                                  │
+│                    [ILLUSTRATION: empty_*]                       │  ← Illustration (120x120)
+│                                                                  │
+│                    [KERI_MASCOT 48px]                            │  ← KERI (optional, for AI contexts)
+│                                                                  │
+│              "Belum ada transaksi lagi"                          │  ← Headline (h3, text-primary)
+│         "Cakap dengan KERI atau upload resit                     │  ← Description (body, text-secondary)
+│           untuk mula merekod kewangan anda"                     │
+│                                                                  │
+│              [Mula Cakap dengan KERI]                            │  ← CTA (green primary button)
+│              atau                                                │
+│              [Upload Dokumen]                                    │  ← Secondary CTA (ghost button)
+│                                                                  │
+└──────────────────────────────────────────────────────────────────┘
+```
+
+### 25.2 Empty State Variants
+
+| Context | Illustration | KERI? | Headline | CTA |
+|---------|-------------|-------|----------|-----|
+| No transactions | `empty_transactions` | ✅ | "Belum ada transaksi" | "Mula Cakap" / "Upload Resit" |
+| No documents | `empty_documents` | ❌ | "Belum ada dokumen" | "Upload Dokumen" |
+| No businesses | `empty_businesses` | ❌ | "Tambah perniagaan pertama anda" | "Tambah Perniagaan" |
+| No chat history | `empty_chat` | ✅ | "Mula bercakap dengan KERI" | "Cakap Sekarang" |
+| No reports | `empty_reports` | ❌ | "Belum ada laporan tersedia" | "Tambah Data Kewangan" |
+| No support tickets | `empty_tickets` | ❌ | "Tiada tiket sokongan" | "Buka Tiket" |
+| No activity | `empty_activity` | ❌ | "Tiada aktiviti direkodkan" | (none) |
+
+### 25.3 Rules
+
+- Empty states are centered vertically and horizontally in their container
+- Illustration is decorative — the headline + CTA carry the message
+- KERI appears in AI-related empty states (chat, transactions) but not in system empty states (settings, audit)
+- The CTA is always green (primary) — it's the next action the user should take
+- Empty states never feel like errors — they feel like invitations
+
+---
+
+## 26. LOADING STATE
+
+### 26.1 Loading Patterns
+
+| Pattern | Usage | Visual |
+|---------|-------|--------|
+| Skeleton | Card content, list items, table rows | Shimmering grey blocks matching content shape |
+| Spinner | Button loading, small inline actions | 16px circular spinner, green stroke |
+| KERI Thinking | AI chat loading | KERI 32px with "thinking" expression + 3 animated dots |
+| Progress Bar | File upload, batch operations | Green bar filling left-to-right |
+| Page Loader | Initial app load | Centered [MYKERANI_LOGO] with pulse animation |
+
+### 26.2 Skeleton Design
+
+```
+┌──────────────────────────────────────────┐
+│  ████████████  ████████                  │  ← Title skeleton (shimmer)
+│  ████████████                            │
+│                                          │
+│  ┌──────────┐  ┌──────────┐             │  ← Card skeleton
+│  │ ████████ │  │ ████████ │             │
+│  │ ████████ │  │ ████████ │             │
+│  └──────────┘  └──────────┘             │
+└──────────────────────────────────────────┘
+```
+
+Skeleton colour: `--bg-surface-2` (#16201C) base with shimmer gradient to `--bg-surface-3` (#1C2823).
+
+### 26.3 Rules
+
+- Skeletons match the shape of the content that will load (not generic spinners for card content)
+- AI chat loading shows KERI thinking — this is the ONLY place KERI animates during loading
+- Button loading replaces text with a 16px spinner (same colour as text)
+- Page loader uses the logo with a CSS pulse (scale 1.0 → 1.05 → 1.0, 1.5s infinite)
+- Loading states must never flash — minimum 200ms before showing (avoid flicker on fast loads)
+
+---
+
+## 27. ERROR STATE
+
+### 27.1 Error State Anatomy
+
+```
+┌──────────────────────────────────────────────────────────────────┐
+│                                                                  │
+│                    [ILLUSTRATION: error_*]                       │  ← Illustration (120x120, amber/red tinted)
+│                                                                  │
+│                    [KERI_MASCOT 48px]                            │  ← KERI (concerned expression)
+│                                                                  │
+│              "Sambungan terputus"                                │  ← Headline (h3, text-primary)
+│         "Maaf, saya tidak dapat mencapai pelayan.                │  ← Description (body, text-secondary)
+│          Sila cuba sekali lagi."                                 │
+│                                                                  │
+│              [Cuba Lagi]                                         │  ← CTA (green primary)
+│              [Hubungi Sokongan]                                  │  ← Secondary (ghost)
+│                                                                  │
+└──────────────────────────────────────────────────────────────────┘
+```
+
+### 27.2 Error Variants
+
+| Type | Colour | KERI? | Illustration |
+|------|--------|-------|-------------|
+| Connection error | Amber | ✅ (concerned) | `error_connection` |
+| Permission denied | Red | ❌ | `error_generic` |
+| Not found (404) | Amber | ❌ | `error_generic` |
+| Server error (500) | Red | ❌ | `error_generic` |
+| Form validation | Red (inline) | ❌ | None — inline error text |
+| AI error (chat) | Amber (inline) | ✅ (concerned) | None — KERI speaks the error |
+
+### 27.3 Rules
+
+- Errors are never scary — KERI helps soften the experience
+- Inline form errors: red text below the field, no illustration
+- AI chat errors: KERI sends a message explaining what happened in Malay
+- Full-page errors: illustration + KERI + headline + description + CTA
+- Toast errors: red left border, `--bg-surface`, auto-dismiss after 5s
+- Error messages are in Bahasa Melayu, never technical jargon
+
+---
+
+## 28. AI CHAT LAYOUT
+
+### 28.1 Chat Area Anatomy
+
+```
+┌──────────────────────────────────────────────────────────────────────────┐
+│  ┌────────────────────────────────────────────────────────────────────┐  │
+│  │  [KERI 64px]  "Selamat pagi! Saya KERI, kerani kewangan anda.    │  │  ← AI Greeting (welcome)
+│  │               Apa yang anda ingin buat hari ini?"                │  │
+│  │               [Cakap] [Upload Resit] [Upload Penyata Bank]      │  │  ← Quick action chips
+│  └────────────────────────────────────────────────────────────────────┘  │
+│                                                                          │
+│  ── Quick Prompts (when chat is empty) ──                                │
+│  ┌────────────────┐ ┌────────────────┐ ┌────────────────┐               │
+│  │ "Rekod jualan  │ │ "Tambah        │ │ "Upload resit  │               │  ← Quick prompt cards
+│  │  hari ini"     │ │  perbelanjaan" │ │  terkini"      │               │
+│  └────────────────┘ └────────────────┘ └────────────────┘               │
+│                                                                          │
+│  ── Conversation ──                                                      │
+│                              ┌──────────────────────────────────────┐   │
+│                              │  "Saya jual kuih RM 200 tadi pagi"  │   │  ← User message (right, bg-surface-2)
+│                              └──────────────────────────────────────┘   │
+│                                                                          │
+│  ┌──────────────────────────────────────────────────────────────────┐   │
+│  │  [KERI 32px]  Baik! Saya cadangkan:                              │   │  ← AI message (left, violet glass)
+│  │  ┌──────────────────────────────────────────────────────────────┐│   │
+│  │  │  ┌─────────────────────────────────────────────────────────┐ ││   │  ← Suggestion card (glass, green glow)
+│  │  │  │  Pendapatan  RM 200.00                                   │ ││   │
+│  │  │  │  Kategori: Jualan | Tarikh: 26 Jun 2026                 │ ││   │
+│  │  │  │  ☑️ Cadangan Semaka: Utiliti (accounting intelligence)  │ ││   │
+│  │  │  │  [✅ Sahkan]  [✏️ Edit]  [❌ Tolak]                    │ ││   │
+│  │  │  └─────────────────────────────────────────────────────────┘ ││   │
+│  │  └──────────────────────────────────────────────────────────────┘│   │
+│  └──────────────────────────────────────────────────────────────────┘   │
+│                                                                          │
+│  ── Chat Input (sticky bottom) ──                                        │
+│  ┌──────────────────────────────────────────────────────────────────┐   │
+│  │  [📎]  [🎤]  Type pesan...                           [Send →]   │   │  ← Input (glass, rounded)
+│  └──────────────────────────────────────────────────────────────────┘   │
+└──────────────────────────────────────────────────────────────────────────┘
+```
+
+### 28.2 Chat Bubble Styles
+
+| Bubble | Background | Border | Corner | Alignment |
+|--------|-----------|--------|--------|-----------|
+| User message | `--bg-surface-2` (#16201C) | `--border-subtle` | 16px, bottom-right sharp | Right-aligned |
+| AI message (text) | `--glass-card` (violet tint) | glass border | 16px, bottom-left sharp | Left-aligned |
+| AI suggestion card | `--glass-card` + green left border | glass border | 16px | Left-aligned, within AI bubble |
+| System message | transparent, text only | none | none | Centered |
+
+### 28.3 Rules
+
+- KERI avatar (32px) appears to the left of every AI message
+- User messages have NO avatar — alignment alone distinguishes speaker
+- Suggestion cards have a green glow (`--shadow-glow`) to draw the eye to the confirm action
+- Quick prompts are only shown when chat is empty — they disappear after first message
+- Chat input is always sticky at the bottom — never scrolls out of view
+- The attach (📎) and voice (🎤) icons are input prefix icons, not separate buttons
+- On mobile, the chat input adapts: full width, icons are 44px touch targets
+
+---
+
+## 29. AI WIDGET LAYOUT
+
+### 29.1 AI Widget Definition
+
+The "AI Widget" is the compact AI presence on non-chat screens — a small KERI card or suggestion panel that appears on the Dashboard, Documents, or Reports tabs.
+
+### 29.2 Widget Variants
+
+| Widget | Location | Content | Size |
+|--------|----------|---------|------|
+| KERI Briefing | Dashboard top | Natural language summary of financial status | Full width card |
+| KERI Suggestion | Dashboard side panel | "You have 3 unconfirmed suggestions" + link to chat | 1/3 column on desktop |
+| KERI Tip | Documents tab | "Upload a receipt to get started" | Inline banner |
+| KERI Insight | Reports tab | "Your revenue grew 15% this month" | Full width card |
+
+### 29.3 KERI Briefing Card (Dashboard)
+
+```
+┌──────────────────────────────────────────────────────────────────────────┐
+│  [KERI 48px]  Ringkasan KERI                                   [✕]      │
+│                                                                          │
+│  "Pendapatan bulan ini RM 12,500 (+15%). Perbelanjaan RM 8,300 (-5%).  │
+│   Baki bank stabil. Anda ada 2 resit belum disahkan.                     │
+│   Cadangan: Semak komitmen kewangan anda yang akan tiba minggu depan."  │
+│                                                                          │
+│  [Lihat Cadangan]  [Upload Resit]                                       │
+└──────────────────────────────────────────────────────────────────────────┘
+```
+
+### 29.4 Rules
+
+- KERI widgets use a violet-tinted background (`--accent-secondary-muted` at 20% opacity)
+- KERI avatar is always present (48px in widgets, 32px in chat)
+- Widget text is in Bahasa Melayu, conversational tone
+- Widgets are dismissible (✕ button) — user can hide them
+- Widgets reappear when new suggestions/insights are available
+- On mobile, widgets are full-width cards at the top of the content area
+
+---
+
+## 30. COMPONENT HIERARCHY
+
+### 30.1 Atomic Design Structure
+
+```
+Atoms (basic HTML elements styled)
+├── Button (primary, secondary, ghost, danger — all with loading state)
+├── Input (text, number, date, select, textarea — all with label, error, icon)
+├── Badge (success, warning, danger, info, neutral)
+├── Icon (lucide-react wrapper with size + colour tokens)
+├── Text (display, h1, h2, h3, body, body-sm, caption, micro)
+├── Avatar (image or initials, with status dot)
+├── Divider (horizontal, vertical)
+├── Spinner (16px, 20px, 24px — green stroke)
+└── Checkbox / Radio / Toggle (green when active)
+
+Molecules (2+ atoms combined)
+├── FormField (label + input + error + help text)
+├── MetricTile (icon + number + label + trend indicator)
+├── ChatBubble (avatar + text + timestamp)
+├── SuggestionCard (KERI avatar + transaction details + confirm/edit/reject buttons)
+├── NavItem (icon + label + active indicator)
+├── TabItem (label + optional badge count)
+├── Toast (icon + message + action + close)
+├── SearchBar (icon + input + clear button)
+└── FileUpload (dropzone + file list + progress)
+
+Organisms (complex sections)
+├── Header (logo + workspace selector + notifications + avatar)
+├── Sidebar (nav items grouped by section + user footer)
+├── BottomNav (5 nav items + active indicator)
+├── TabBar (horizontal tabs + "More" button)
+├── ChatArea (messages + suggestions + quick prompts)
+├── ChatInput (attach + voice + text input + send)
+├── DashboardGrid (metric tiles + activity list + AI widget)
+├── DataTable (header + rows + pagination + filters)
+├── Modal (overlay + glass card + header + body + footer)
+├── EmptyState (illustration + KERI + headline + CTA)
+├── LoadingState (skeletons or KERI thinking)
+├── ErrorState (illustration + KERI + headline + CTA)
+├── KERIBriefing (mascot + natural language summary + actions)
+├── StorageBar (progress bar + percentage + buy addon link)
+└── TransactionList (filterable list with edit/evidence/flags)
+
+Templates (page-level layouts)
+├── LandingTemplate (hero + features + pricing + FAQ + footer)
+├── LoginTemplate (centered card on dark background)
+├── TenantTemplate (header + tab bar + content + bottom nav)
+├── HQTemplate (header + sidebar + content)
+└── ModalTemplate (overlay + centered glass card)
+```
+
+### 30.2 Component Styling Approach
+
+All components will use **Tailwind CSS utility classes** with **CSS custom properties** for design tokens. The project already uses Tailwind CSS v4 (`@tailwindcss/vite`).
+
+Design tokens (colours, spacing, radius, shadows) will be defined as CSS custom properties in `src/index.css` and mapped to Tailwind theme values. This allows:
+- Consistent token usage across all components
+- Easy theme adjustment (change one variable, all components update)
+- Future light mode support (override tokens in a `.light` class)
+
+### 30.3 CSS Token Structure
+
+```css
+:root {
+  /* Colours */
+  --bg-base: #0A0F0D;
+  --bg-surface: #111815;
+  --bg-surface-2: #16201C;
+  --bg-surface-3: #1C2823;
+  --border-subtle: #1F2B26;
+  --border-default: #2A3832;
+  --border-strong: #3A4A43;
+  --accent-primary: #10B981;
+  --accent-primary-hover: #059669;
+  --accent-primary-muted: #064E3B;
+  --accent-secondary: #8B5CF6;
+  --accent-secondary-muted: #4C1D95;
+  --text-primary: #F0FDF4;
+  --text-secondary: #A7B3AE;
+  --text-tertiary: #6B7872;
+  --text-disabled: #4A544F;
+
+  /* Semantic */
+  --semantic-success: #22C55E;
+  --semantic-warning: #F59E0B;
+  --semantic-danger: #EF4444;
+  --semantic-info: #3B82F6;
+
+  /* Radius */
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 20px;
+  --radius-full: 9999px;
+
+  /* Shadows */
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.3);
+  --shadow-md: 0 4px 12px rgba(0,0,0,0.4);
+  --shadow-lg: 0 8px 24px rgba(0,0,0,0.5);
+  --shadow-xl: 0 16px 48px rgba(0,0,0,0.6);
+  --shadow-glow: 0 0 24px rgba(16,185,129,0.15);
+
+  /* Glass */
+  --glass-panel: rgba(17,24,21,0.8);
+  --glass-card: rgba(22,32,28,0.7);
+  --glass-modal: rgba(28,40,35,0.9);
+}
+```
+
+---
+
+## BLUEPRINT STATUS
+
+**Implementation Status:** STOP — awaiting Owner approval.
+
+This blueprint is complete. No code has been written. No styles have been changed. No components have been modified.
+
+The blueprint defines the complete visual design language for MYKERANI:
+- Dark premium theme with green accents
+- KERI mascot as the AI face
+- Glass effects for floating elements
+- 30 design sections covering every aspect of the visual presentation layer
+- Placeholder system for logo, mascot, illustrations, and icons
+- Responsive rules for mobile, tablet, desktop, and wide screens
+- Component hierarchy from atoms to templates
+
+Per the user's instruction: "Only after the Owner approves the blueprint may implementation begin."
+
+---
+
+*Blueprint authored: 2026-06-26*
+*Repository: srcreative2020/mykerani-app*
+*Design system: Dark Premium SaaS + Green Accent + KERI Mascot*
