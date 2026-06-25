@@ -811,3 +811,204 @@ CREATE TABLE property_businesses (
 Purpose: A property can be associated with multiple businesses (e.g., a commercial lot shared by two businesses).
 
 All junction tables follow the same pattern: UUID PK, dual FK with CASCADE, workspace_id for RLS, unique constraint on the pair.
+
+---
+
+## 11. ATTACHMENT ARCHITECTURE
+
+### 11.1 Current Attachment System
+
+The existing `financial_evidence_packages` table uses a polymorphic link pattern:
+
+```
+financial_evidence_packages:
+  - related_record_type: VARCHAR(50)  -- e.g. "INCOME", "EXPENSE", "RECEIVABLE", "PAYABLE", "DEBT", "COMMITMENT"
+  - related_record_id:   VARCHAR(100) -- UUID of the related record
+```
+
+This pattern is **extensible by design** — no schema change is needed to attach evidence to new entity types. The `related_record_type` is free-text, so new values can be added without migration.
+
+### 11.2 Extension to Profile Entities
+
+New `related_record_type` values for profile evidence:
+- `"VEHICLE"` — vehicle registration documents, photos
+- `"PROPERTY"` — property deeds, valuation reports
+- `"INSURANCE"` — policy documents, premium receipts
+- `"INVESTMENT"` — investment account statements
+- `"CUSTOMER"` — customer contracts, KYC documents
+- `"SUPPLIER"` — supplier agreements, vendor forms
+- `"BUSINESS"` — business registration certificates
+- `"BRANCH"` — branch permits, leases
+- `"PERSONAL_PROFILE"` — IC/passport copies
+
+### 11.3 Attachment Flow (Reused)
+
+```
+User uploads document
+       ↓
+documentStorage.uploadDocument() → uploads to Supabase Storage bucket
+       ↓
+Returns file_url
+       ↓
+linkEvidenceToRecord({ workspaceId, documentType, fileName, fileUrl, relatedRecordType, relatedRecordId })
+       ↓
+financial_evidence_packages INSERT (polymorphic, RLS-scoped)
+       ↓
+Audit log written (existing)
+```
+
+This flow is **unchanged** — the only addition is new `relatedRecordType` values passed by the UI when attaching evidence to profile entities.
+
+### 11.4 No New Storage Buckets
+
+All evidence files continue to use the existing `evidence-packages` Supabase Storage bucket. No new buckets are needed. RLS on the bucket already enforces tenant isolation via the storage policies defined in migration `20260611000003`.
+
+---
+
+## 12. MASTER DATA ARCHITECTURE
+
+### 12.1 Master Data Principle
+
+Per the locked requirements and `MYKERANI_TENANT_ECOSYSTEM_GOVERNANCE_PRINCIPLE.md` (Master Data Rule): **one authoritative master record per entity across all modules.**
+
+### 12.2 Current Master Data Status
+
+| Entity | Master Table | Used By | Gap |
+|--------|-------------|---------|-----|
+| Tenant | `tenants` | All modules | ✅ No gap |
+| Workspace | `workspaces` | All modules | ✅ No gap |
+| User/Staff | `user_role_assignments` | Auth, Permission | ✅ No gap |
+| Business | `businesses` | Transactions, OCR, AI | ✅ No gap |
+| Branch | `business_branches` | Transactions, OCR | ⚠️ Not sent to AI |
+| Vehicle | `vehicles` | Transactions, AI | ✅ No gap |
+| Bank Account | `bank_accounts` | Transactions | ⚠️ Not sent to AI |
+| Cash Account | `cash_accounts` | Transactions | ⚠️ Not sent to AI |
+| Debt | `debts` | Reports, AI | ⚠️ Not sent to AI |
+| Commitment | `financial_commitments` | Reports, AI | ⚠️ Not sent to AI |
+| Customer | ❌ None | `receivables.customer_name` is free-text | ❌ No master |
+| Supplier | ❌ None | `payables.vendor_name` is free-text | ❌ No master |
+| Property | ❌ None | N/A | ❌ No master |
+| Insurance | ❌ None | N/A | ❌ No master |
+| Investment | ❌ None | N/A | ❌ No master |
+
+### 12.3 Master Data Migration Strategy
+
+For customers and suppliers, the migration is **non-breaking**:
+
+1. Create `profile_customers` and `profile_suppliers` tables
+2. Add nullable `customer_id` FK to `receivables` and `income_records`
+3. Add nullable `supplier_id` FK to `payables` and `expense_records`
+4. Existing `customer_name`/`vendor_name` columns remain (backward compatible)
+5. A data migration script (run once) extracts distinct customer/supplier names from existing records and creates master entries, then links them back
+
+```sql
+-- Example: seed customers from existing receivables
+INSERT INTO profile_customers (workspace_id, name)
+SELECT DISTINCT workspace_id, customer_name
+FROM receivables
+WHERE customer_name IS NOT NULL AND customer_name != ''
+ON CONFLICT DO NOTHING;
+```
+
+After seeding, the AI can match by name and pre-fill the `customer_id`/`supplier_id` FK on new transactions. Existing transactions remain unlinked (no forced migration) — the AI suggests links going forward.
+
+### 12.4 No HQ-Level Customer Master Duplication
+
+HQ already has `get_hq_customer_health_scores` and `get_customer_360` that aggregate tenant-level data. These operate on `tenants` (the tenant IS the customer from HQ's perspective). The new `profile_customers` table is TENANT-LEVEL customer master data (the tenant's own customers) — this is a different entity entirely. No duplication.
+
+---
+
+## 13. ECOSYSTEM IMPACT ANALYSIS
+
+### 13.1 Ecosystem Impact Matrix
+
+| System | Impact | Nature |
+|--------|--------|--------|
+| HQ Owner | None — HQ operates on tenant-level, not profile-level | No change |
+| HQ Staff | None — same as HQ Owner | No change |
+| Tenant Owner | Enhanced — full profile UI with new repositories + full AI context | Additive |
+| Tenant Staff | Enhanced — read access to profile data + full AI context in chat | Additive |
+| Workspace | None — workspace remains the isolation boundary | No change |
+| Customer Master Data | NEW — `profile_customers` table | Additive |
+| Financial Records | Enhanced — `customer_id`/`supplier_id` FKs (nullable) | Additive, non-breaking |
+| AI Credits | None — same credit consumption per AI call | No change |
+| OCR Credits | None — same OCR consumption | No change |
+| Storage | Minimal — new tables occupy negligible storage | Negligible |
+| Resource Wallet | None — no new resource consumption | No change |
+| Financial Evidence | Extended — new `relatedRecordType` values | Additive |
+| Audit Logs | Extended — new audit triggers on new tables | Additive |
+| Notifications | Extended — profile completeness reminders | Additive |
+| Approval Workflows | None — profile data doesn't require approval | No change |
+| Customer 360 (HQ) | None — HQ Customer 360 operates on tenants, not tenant-customers | No change |
+| Support | None — support tickets are tenant-level, not profile-level | No change |
+| Reports | Enhanced — more profile context available for report generation | Additive |
+| Activity Center | Extended — profile CRUD actions logged to `tenant_activity_log` | Additive |
+
+### 13.2 Disconnected Workflow Check
+
+Per `MYKERANI_ECOSYSTEM_GOVERNANCE_PRINCIPLE.md` §3: "if a workflow becomes disconnected from a system it should plausibly touch, that workflow has FAILED ecosystem review."
+
+| New Workflow | Touches | Connected? |
+|-------------|--------|-----------|
+| Profile CRUD (new repositories) | Audit, Notifications, Activity Center | ✅ Via existing patterns |
+| AI Chat with full context | Financial Records, AI Credits, OCR Credits (if attachment), Activity Center | ✅ All connected |
+| Customer/Supplier matching | Financial Records (receivables/payables), AI Suggestions | ✅ Connected |
+| Evidence attachment to profile | Storage, Evidence Packages, Audit | ✅ Connected |
+| Profile completeness reminder | Notifications, Financial Completeness Engine | ✅ Connected |
+| Internal transfer with profile awareness | Bank Accounts, Businesses, AI Suggestions | ✅ Connected |
+
+No disconnected workflows identified.
+
+---
+
+## 14. HQ ↔ TENANT IMPACT
+
+### 14.1 Impact Assessment
+
+| Area | HQ Side | Tenant Side | Sync Needed? |
+|------|---------|-------------|--------------|
+| Profile tables | HQ can read all via RLS (`is_hq_user()` bypass) | Tenant reads/writes own workspace data | No — RLS handles isolation |
+| New repositories | HQ can view tenant's profile data for support/audit | Tenant owns and manages all profile data | No — same pattern as existing |
+| Customer/Supplier master | HQ has no equivalent — `profile_customers` is tenant-level only | Tenant manages own customers/suppliers | No — different concepts |
+| AI context | HQ uses AI Router settings, not tenant financial context | Tenant uses `buildFinancialContext()` | No — different concerns |
+| Audit | New tables need audit triggers (same pattern as existing) | Tenant audit_logs + tenant_activity_log | ✅ Existing patterns |
+| Notifications | None | Profile completeness reminders | No |
+| RLS | All new tables must have HQ read-all + tenant workspace-scoped policies | Standard | ✅ Per migration plan |
+
+### 14.2 No HQ Duplication
+
+The Financial Profile Enhancement does NOT create any HQ-side equivalent of profile data. The locked requirements specify Financial Profile is the tenant's context repository — HQ does not manage tenant profile data. HQ's existing Customer 360, Health Scores, and Resource Wallet operate on tenant-level aggregates, not tenant profile data.
+
+---
+
+## 15. OWNER ↔ STAFF IMPACT
+
+### 15.1 Owner-Staff Parity Compliance
+
+Per `MYKERANI_OWNER_STAFF_PARITY_RULE.md`: Owner and Staff must NEVER have different financial engines. The Financial Profile Enhancement maintains this:
+
+| Capability | Owner | Staff | Same Engine? |
+|-----------|-------|-------|-------------|
+| View profile repositories | ✅ Full edit UI | ✅ Read-only view | ✅ Same `profileData.ts` service |
+| AI Chat with full context | ✅ `buildFinancialContext()` | ✅ Same builder | ✅ Same function |
+| AI Suggestion confirmation | ✅ Can save profile suggestions | ✅ Can save profile suggestions | ✅ Same `FinancialRecordsContext` |
+| Evidence attachment | ✅ Can attach to profile entities | ✅ Can attach (if permission allows) | ✅ Same `linkEvidenceToRecord()` |
+| Customer/Supplier matching | ✅ Auto-match on suggestions | ✅ Auto-match on suggestions | ✅ Same `customerMatching.ts`/`supplierMatching.ts` |
+| Profile completeness reminder | ✅ Receives notifications | ✅ Receives notifications | ✅ Same `NotificationContext` |
+| Profile CRUD | ✅ Full create/edit/delete | ⚠️ Read-only by default | ⚠️ Configurable via `hasPermission()` |
+
+### 15.2 Staff Profile Access
+
+Staff currently see a read-only summary of `personalProfile` in the More tab. Enhancement:
+- Staff see all profile repositories (businesses, vehicles, customers, suppliers, etc.) in read-only mode
+- Staff CAN create/edit profile records if `hasPermission('Financial Records', 'create')` returns true (reuse existing permission matrix)
+- Staff chat uses the same `buildFinancialContext()` as Owner — no context asymmetry
+
+### 15.3 Activity Center Logging
+
+All profile CRUD operations (from both Owner and Staff) log to `tenant_activity_log` via `logTenantActivity()`:
+- `actionType: 'PROFILE_CREATED'`, `'PROFILE_UPDATED'`, `'PROFILE_DELETED'`
+- `module: 'Financial Profile'`
+- `description`: includes entity type and name
+
+This extends the existing activity logging pattern already used for financial records.
