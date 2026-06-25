@@ -383,3 +383,431 @@ Extend the server prompt (in `server.ts`) to add new sections for the new reposi
 - Section 17: Supplier Master
 
 These are additive sections — existing sections 1-11 are not modified. The server reads from `financialContext` which is now fully populated by the central builder.
+
+---
+
+## 6. REPOSITORY ARCHITECTURE
+
+### 6.1 Complete Repository Map
+
+After enhancement, the Financial Context Repository contains these repositories, each with unlimited records:
+
+```
+Financial Context Repository
+├── Personal Repository          → personal_profiles (existing, 1:1 per workspace)
+├── Family Repository            → dependents (existing, 1:N)
+├── Business Repository          → businesses (existing, 1:N)
+│   └── Branch Repository        → business_branches (existing, 1:N per business)
+├── Vehicle Repository           → vehicles (existing, 1:N)
+├── Asset Repository             → asset_purchases (existing, 1:N)
+├── Owner Equity Repository      → owner_transactions (existing, 1:N)
+├── Bank Account Repository      → bank_accounts (existing, 1:N, loaded by FinancialRecordsContext)
+├── Cash Account Repository      → cash_accounts (existing, 1:N, loaded by FinancialRecordsContext)
+├── Loan Repository              → debts (existing, 1:N, loaded by FinancialRecordsContext)
+├── Commitment Repository        → financial_commitments (existing, 1:N, loaded by FinancialRecordsContext)
+├── Evidence Repository          → financial_evidence_packages (existing, 1:N, extended to profile entities)
+├── Learning Memory Repository   → ocr_learned_patterns (existing, 1:N)
+├── Staff Repository             → user_role_assignments (existing, 1:N)
+├── Customer Repository          → profile_customers (NEW, 1:N)
+├── Supplier Repository          → profile_suppliers (NEW, 1:N)
+├── Property Repository          → profile_properties (NEW, 1:N)
+├── Insurance Repository         → profile_insurance (NEW, 1:N)
+└── Investment Repository        → profile_investments (NEW, 1:N)
+```
+
+### 6.2 Repository Design Principles
+
+Each repository follows these locked requirements:
+
+1. **All information is optional** — no field is required to save a record (except workspace_id)
+2. **Unlimited records** — no artificial limit on rows per workspace
+3. **Multiple input methods** — records can be created via:
+   - Manual form entry in the profile UI
+   - AI Chat suggestion → User Confirm → Save (auto-populated)
+   - OCR document processing → User Confirm → Save
+   - Bank statement import → User Confirm → Save
+4. **AI Suggest → User Confirm → Save** — no profile record is ever created without explicit user confirmation (per MYKERANI Constitution)
+5. **Financial Evidence Attachment** — every repository entity can have evidence packages attached
+6. **Many-to-many relationships** — see Section 10 for relationship architecture
+7. **Context only** — repository data provides context TO the AI and financial engines; it never creates or modifies financial transactions automatically
+8. **No redundancy** — bank accounts, cash accounts, debts, and commitments are NOT duplicated; they remain in their existing tables and are loaded by `FinancialRecordsContext`. The Financial Profile simply reads them for context.
+
+### 6.3 New Tables — Column Specifications
+
+#### `profile_customers`
+```sql
+CREATE TABLE profile_customers (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  workspace_id UUID REFERENCES workspaces(id) ON DELETE CASCADE NOT NULL,
+  name VARCHAR(255) NOT NULL,
+  email VARCHAR(255),
+  phone VARCHAR(50),
+  address TEXT,
+  notes TEXT,
+  is_active BOOLEAN DEFAULT true,
+  created_at TIMESTAMPTZ DEFAULT now() NOT NULL,
+  updated_at TIMESTAMPTZ DEFAULT now() NOT NULL
+);
+```
+Index: `idx_profile_customers_workspace` on `workspace_id`
+RLS: workspace-in-tenant OR HQ (same pattern as `businesses`)
+
+#### `profile_suppliers`
+```sql
+CREATE TABLE profile_suppliers (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  workspace_id UUID REFERENCES workspaces(id) ON DELETE CASCADE NOT NULL,
+  name VARCHAR(255) NOT NULL,
+  email VARCHAR(255),
+  phone VARCHAR(50),
+  address TEXT,
+  notes TEXT,
+  is_active BOOLEAN DEFAULT true,
+  created_at TIMESTAMPTZ DEFAULT now() NOT NULL,
+  updated_at TIMESTAMPTZ DEFAULT now() NOT NULL
+);
+```
+Same index/RLS pattern.
+
+#### `profile_properties`
+```sql
+CREATE TABLE profile_properties (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  workspace_id UUID REFERENCES workspaces(id) ON DELETE CASCADE NOT NULL,
+  property_name VARCHAR(255) NOT NULL,
+  property_type VARCHAR(50),  -- 'RESIDENTIAL', 'COMMERCIAL', 'LAND', 'OTHER'
+  address TEXT,
+  purchase_value_myr NUMERIC(19,4),
+  notes TEXT,
+  is_active BOOLEAN DEFAULT true,
+  created_at TIMESTAMPTZ DEFAULT now() NOT NULL,
+  updated_at TIMESTAMPTZ DEFAULT now() NOT NULL
+);
+```
+
+#### `profile_insurance`
+```sql
+CREATE TABLE profile_insurance (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  workspace_id UUID REFERENCES workspaces(id) ON DELETE CASCADE NOT NULL,
+  policy_name VARCHAR(255) NOT NULL,
+  insurance_type VARCHAR(50),  -- 'LIFE', 'HEALTH', 'VEHICLE', 'PROPERTY', 'BUSINESS', 'OTHER'
+  provider VARCHAR(255),
+  policy_number VARCHAR(100),
+  premium_amount_myr NUMERIC(19,4),
+  premium_frequency VARCHAR(20),  -- 'MONTHLY', 'QUARTERLY', 'YEARLY', 'ONE-TIME'
+  coverage_amount_myr NUMERIC(19,4),
+  start_date DATE,
+  end_date DATE,
+  notes TEXT,
+  is_active BOOLEAN DEFAULT true,
+  created_at TIMESTAMPTZ DEFAULT now() NOT NULL,
+  updated_at TIMESTAMPTZ DEFAULT now() NOT NULL
+);
+```
+
+#### `profile_investments`
+```sql
+CREATE TABLE profile_investments (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  workspace_id UUID REFERENCES workspaces(id) ON DELETE CASCADE NOT NULL,
+  investment_name VARCHAR(255) NOT NULL,
+  investment_type VARCHAR(50),  -- 'STOCK', 'UNIT_TRUST', 'ETF', 'FIXED_DEPOSIT', 'CRYPTO', 'REAL_ESTATE', 'OTHER'
+  institution VARCHAR(255),
+  account_number VARCHAR(100),
+  current_value_myr NUMERIC(19,4),
+  notes TEXT,
+  is_active BOOLEAN DEFAULT true,
+  created_at TIMESTAMPTZ DEFAULT now() NOT NULL,
+  updated_at TIMESTAMPTZ DEFAULT now() NOT NULL
+);
+```
+
+All 5 new tables follow the exact same pattern: UUID PK, `workspace_id` FK with CASCADE, `is_active` flag, timestamp triggers, and RLS policies matching the `businesses` table pattern (SELECT/INSERT for workspace members, UPDATE for workspace members + HQ, DELETE for TENANT_OWNER/HQ_OWNER only).
+
+---
+
+## 7. DATA FLOW ARCHITECTURE
+
+### 7.1 Current Data Flow (Broken)
+
+```
+User Input (Chat/OCR/Upload)
+       ↓
+Client builds financialContext MANUALLY (incomplete)
+  OwnerDashboard.sendChat:  { events, profile, businesses, vehicles, dependents }
+  StaffHomeScreen.sendChat: { events, profile, businessProfile, businesses, vehicles, dependents }
+  (MISSING: bankAccounts, cashAccounts, debts, commitments, evidence, patterns, branches)
+       ↓
+POST /api/ai/assistant { query, financialContext, userId }
+       ↓
+Server builds system prompt from financialContext (sections 2-7 get [])
+       ↓
+LLM generates suggestion (BLIND to bank accounts, debts, commitments, patterns)
+       ↓
+Client receives suggestion
+       ↓
+User confirms → FinancialRecord saved → AI learns pattern
+```
+
+### 7.2 Enhanced Data Flow (Target)
+
+```
+User Input (Chat/OCR/Upload/Voice/Camera)
+       ↓
+Client calls buildFinancialContext() — SINGLE SHARED BUILDER
+  Loads ALL repositories:
+    ✅ events, cashAccounts, bankAccounts, debts, commitments, evidence, patterns
+    ✅ personalProfile, businesses, businessBranches, vehicles, dependents
+    ✅ assetPurchases, ownerTransactions
+    ✅ customers, suppliers, properties, insurancePolicies, investments
+       ↓
+POST /api/ai/assistant { query, financialContext, userId }
+       ↓
+Server builds system prompt — ALL 17 SECTIONS POPULATED
+       ↓
+LLM generates suggestion with FULL CONTEXT
+  - Can suggest bank account assignment
+  - Can detect internal transfers (knows accounts)
+  - Can consider debt obligations
+  - Can reference learned patterns (memory)
+  - Can suggest branch attribution
+  - Can match customers/suppliers by name
+  - Can reference insurance premiums
+  - Can distinguish investment income from business income
+       ↓
+Client receives suggestion
+       ↓
+Post-LLM enrichment (existing):
+  - businessMatching.ts → pre-fills businessId/branchId
+  - evaluateAccountingSuggestion() → accounting recommendation banner
+  - NEW: customerMatching.ts → pre-fills customerId if name matches master
+  - NEW: supplierMatching.ts → pre-fills supplierId if name matches master
+       ↓
+User confirms → FinancialRecord saved → AI learns pattern → tenant_activity_log updated
+```
+
+### 7.3 Input Engine Unified Flow
+
+Every input engine follows the SAME flow:
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│ INPUT ENGINE (AI Chat / Voice / OCR / Camera / Receipt / Invoice /  │
+│ Bank Statement / Quotation / Contract / PDF / Image / Document)    │
+└──────────────────────────┬──────────────────────────────────────────┘
+                           ↓
+┌──────────────────────────────────────────────────────────────────────┐
+│ buildFinancialContext() — loads ALL repositories from workspace      │
+│ Returns: FinancialContextPayload (typed, complete)                   │
+└──────────────────────────┬───────────────────────────────────────────┘
+                           ↓
+┌──────────────────────────────────────────────────────────────────────┐
+│ EXISTING FINANCIAL RECORDS — from FinancialRecordsContext            │
+│ (events, accounts, debts, commitments, evidence, patterns)          │
+└──────────────────────────┬───────────────────────────────────────────┘
+                           ↓
+┌──────────────────────────────────────────────────────────────────────┐
+│ AI SUGGESTION — LLM with full context (17 prompt sections)           │
+└──────────────────────────┬───────────────────────────────────────────┘
+                           ↓
+┌──────────────────────────────────────────────────────────────────────┐
+│ USER CONFIRMATION — User reviews and confirms (never auto-saved)     │
+└──────────────────────────┬───────────────────────────────────────────┘
+                           ↓
+┌──────────────────────────────────────────────────────────────────────┐
+│ FINANCIAL RECORD SAVED — via FinancialRecordsContext                  │
+└──────────────────────────┬───────────────────────────────────────────┘
+                           ↓
+┌──────────────────────────────────────────────────────────────────────┐
+│ AI LEARNING — OCR pattern learned, tenant_activity_log updated         │
+└──────────────────────────────────────────────────────────────────────┘
+```
+
+This flow is IDENTICAL across every input engine. The only variable is HOW the user inputs data (text, voice, image, document) — the context assembly, AI call, confirmation, and learning steps are shared.
+
+---
+
+## 8. AI CONTEXT ARCHITECTURE
+
+### 8.1 Context Priority Order (Existing — Preserved)
+
+The server prompt already defines a SUGGEST-FIRST priority order. This order is preserved:
+
+1. **User Profile** (personal, business, vehicles, dependents) — highest priority
+2. **Workspace/Tenant** identity
+3. **Financial Events** (existing records)
+4. **OCR Learned Patterns** (tenant's own learning memory)
+5. **Knowledge Bank** (cross-tenant curated scenarios)
+6. **World knowledge** (LLM's general knowledge)
+
+### 8.2 Context Matching Engines
+
+Each repository feeds a specific matching capability:
+
+| Repository | AI Matching Capability | Existing Engine? |
+|-----------|----------------------|-----------------|
+| Businesses + Branches | Business/branch attribution on transactions | ✅ `businessMatching.ts` |
+| Vehicles | Vehicle ownership disambiguation (personal vs business) | ✅ Server prompt section 10 |
+| Customers | Customer name → customer master record match | ❌ NEW: `customerMatching.ts` |
+| Suppliers | Supplier name → supplier master record match | ❌ NEW: `supplierMatching.ts` |
+| Bank Accounts | Suggest which account a transaction belongs to | ❌ NEW (via populated context) |
+| Debts | Reference loan obligations in suggestions | ❌ NEW (via populated context) |
+| Commitments | Flag transactions matching recurring obligations | ❌ NEW (via populated context) |
+| Properties | Property-related transaction matching | ❌ NEW (via populated context) |
+| Insurance | Insurance premium transaction matching | ❌ NEW (via populated context) |
+| Investments | Investment income classification | ❌ NEW (via populated context) |
+| OCR Patterns | Vendor → category auto-suggest | ✅ Server prompt section 7 + `transactionRecoveryEngine.ts` |
+
+### 8.3 New Matching Engines (Minimal)
+
+Two new lightweight matching functions, modeled on `businessMatching.ts`:
+
+#### `customerMatching.ts`
+```typescript
+export function matchCustomer(
+  text: string,
+  customers: Customer[]
+): Customer | undefined
+```
+- Normalizes text and customer names (reuses `normalizeForMatch` from `businessMatching.ts`)
+- Returns the first matching active customer by name containment
+- Used post-LLM to pre-fill `customerId` on receivable suggestions
+
+#### `supplierMatching.ts`
+```typescript
+export function matchSupplier(
+  text: string,
+  suppliers: Supplier[]
+): Supplier | undefined
+```
+- Same pattern for payables
+
+These are pure functions — no DB, no I/O, no React. They run client-side after the AI returns suggestions, exactly like `matchOwnBusinessAndBranch()` does today.
+
+### 8.4 Internal Transfer Context Enhancement
+
+Currently `internalTransferDetection.ts` detects transfers purely by amount+date+account match. The enhancement adds profile awareness:
+
+```typescript
+export function detectInternalTransfersWithContext(
+  transactions: ImportedBankTransaction[],
+  bankAccounts: BankAccount[],
+  cashAccounts: CashAccount[],
+  businesses: Business[],
+  businessBranches: Record<string, BusinessBranch[]>
+): InternalTransferMatch[]
+```
+
+This enhanced version can determine:
+- Transfer between two accounts of the same business → "internal transfer" (exclude from income/expense)
+- Transfer between personal and business accounts → "owner transaction" (classify as CAPITAL_INJECTION/DRAWING)
+- Transfer between two different businesses → "inter-business transfer" (flag for review)
+
+This does NOT replace the existing `detectInternalTransfers()` — it wraps it with a profile-aware layer. The existing function remains for backward compatibility.
+
+---
+
+## 9. INPUT ENGINE ARCHITECTURE
+
+### 9.1 Input Engine Matrix
+
+| Input Engine | Current Status | Profile Context Used? | Enhancement |
+|-------------|---------------|----------------------|-------------|
+| AI Chat | ✅ Working | Partial (5/17 sections) | Wire full context via `buildFinancialContext()` |
+| Voice Notes | ✅ Working (transcribed to chat) | Same as AI Chat | Inherits enhancement from AI Chat |
+| OCR (Receipt/Invoice/Statement) | ✅ Working | Uses `transactionRecoveryEngine` (learned patterns + KB) | Pass full profile context to recovery engine |
+| Camera Capture | ✅ Works via OCR pipeline | Same as OCR | Inherits OCR enhancement |
+| Receipt Upload | ✅ Works via `FinancialEvidencePackage` | None | Add profile context to upload processing |
+| Invoice Upload | ✅ Works via OCR | Same as OCR | Inherits OCR enhancement |
+| Bank Statement Upload | ✅ Works via `bankStatementImport` + `HistoricalRecoveryWorkspace` | Uses `transactionRecoveryEngine` + `internalTransferDetection` | Add profile-aware internal transfer detection |
+| Quotation Upload | ⚠️ Treated as document | None | No change — quotations are not financial records (out of scope per Constitution) |
+| Contract Upload | ⚠️ Treated as document | None | No change — contracts are not financial records (out of scope per Constitution) |
+| PDF Upload | ✅ Works via OCR | Same as OCR | Inherits OCR enhancement |
+| Image Upload | ✅ Works via OCR | Same as OCR | Inherits OCR enhancement |
+| Document Module | ✅ `DocumentsManager` component | None | No change — document module is evidence storage, not transaction creation |
+
+### 9.2 Key Insight: Most Enhancements Are Automatic
+
+Because `buildFinancialContext()` is a single shared function, most input engines automatically benefit from the enhanced context WITHOUT any per-engine changes. The only engines needing direct modification are:
+
+1. **AI Chat** (OwnerDashboard + StaffHomeScreen `sendChat`) — replace manual `financialContext` with `buildFinancialContext()`
+2. **Bank Statement Import** — pass profile data to the internal transfer detection
+3. **OCR Pipeline** — pass profile data to the recovery engine
+
+All other engines (voice, camera, receipt, invoice, PDF, image) inherit enhancements through the shared AI chat flow.
+
+---
+
+## 10. RELATIONSHIP ARCHITECTURE
+
+### 10.1 Current Relationships (Explicit FKs)
+
+| Entity | Relates To | FK Column | Type |
+|--------|-----------|-----------|------|
+| `business_branches` | `businesses` | `business_id` | 1:N (business → branches) |
+| `income_records` | `businesses` | `business_id` | N:1 (income → business, nullable) |
+| `income_records` | `business_branches` | `branch_id` | N:1 (income → branch, nullable) |
+| `expense_records` | `businesses` | `business_id` | N:1 (expense → business, nullable) |
+| `expense_records` | `business_branches` | `branch_id` | N:1 (expense → branch, nullable) |
+| `receivables` | `businesses` | `business_id` | N:1 (receivable → business, nullable) |
+| `payables` | `businesses` | `business_id` | N:1 (payable → business, nullable) |
+| `debts` | `businesses` | `business_id` | N:1 (debt → business, nullable) |
+| `financial_commitments` | `businesses` | `business_id` | N:1 (commitment → business, nullable) |
+| `ocr_learned_patterns` | `businesses` | `business_id` | N:1 (pattern → business, nullable) |
+| `ocr_learned_patterns` | `business_branches` | `branch_id` | N:1 (pattern → branch, nullable) |
+| `financial_evidence_packages` | (free-text) | `related_record_type` + `related_record_id` | Polymorphic |
+
+### 10.2 New Relationships (Explicit FKs)
+
+| Entity | Relates To | FK Column | Type |
+|--------|-----------|-----------|------|
+| `income_records` | `profile_customers` | `customer_id` (NEW) | N:1 (income → customer, nullable) |
+| `receivables` | `profile_customers` | `customer_id` (NEW) | N:1 (receivable → customer, nullable) |
+| `expense_records` | `profile_suppliers` | `supplier_id` (NEW) | N:1 (expense → supplier, nullable) |
+| `payables` | `profile_suppliers` | `supplier_id` (NEW) | N:1 (payable → supplier, nullable) |
+
+### 10.3 Many-to-Many Relationships (New Junction Tables)
+
+Some relationships are genuinely many-to-many and require junction tables:
+
+#### `vehicle_businesses` (Vehicle ↔ Business)
+```sql
+CREATE TABLE vehicle_businesses (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  vehicle_id UUID REFERENCES vehicles(id) ON DELETE CASCADE NOT NULL,
+  business_id UUID REFERENCES businesses(id) ON DELETE CASCADE NOT NULL,
+  workspace_id UUID REFERENCES workspaces(id) ON DELETE CASCADE NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT now() NOT NULL,
+  CONSTRAINT uniq_vehicle_business UNIQUE (vehicle_id, business_id)
+);
+```
+Purpose: A vehicle can serve multiple businesses (delivery vehicle shared across businesses). The existing `vehicles.ownership` field remains for PERSONAL vehicles (not in this junction).
+
+#### `bank_account_businesses` (Bank Account ↔ Business)
+```sql
+CREATE TABLE bank_account_businesses (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  bank_account_id UUID REFERENCES bank_accounts(id) ON DELETE CASCADE NOT NULL,
+  business_id UUID REFERENCES businesses(id) ON DELETE CASCADE NOT NULL,
+  workspace_id UUID REFERENCES workspaces(id) ON DELETE CASCADE NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT now() NOT NULL,
+  CONSTRAINT uniq_bankacc_business UNIQUE (bank_account_id, business_id)
+);
+```
+Purpose: A bank account may serve multiple businesses. The internal transfer detector uses this to determine if a transfer is inter-business or intra-business.
+
+#### `property_businesses` (Property ↔ Business)
+```sql
+CREATE TABLE property_businesses (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  property_id UUID REFERENCES profile_properties(id) ON DELETE CASCADE NOT NULL,
+  business_id UUID REFERENCES businesses(id) ON DELETE CASCADE NOT NULL,
+  workspace_id UUID REFERENCES workspaces(id) ON DELETE CASCADE NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT now() NOT NULL,
+  CONSTRAINT uniq_property_business UNIQUE (property_id, business_id)
+);
+```
+Purpose: A property can be associated with multiple businesses (e.g., a commercial lot shared by two businesses).
+
+All junction tables follow the same pattern: UUID PK, dual FK with CASCADE, workspace_id for RLS, unique constraint on the pair.
