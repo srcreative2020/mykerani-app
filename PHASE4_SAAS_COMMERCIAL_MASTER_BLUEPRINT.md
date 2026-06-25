@@ -761,10 +761,11 @@ Phase 1) if a job is overdue.
 
 **Security:** payment-gateway webhooks verified via provider signature
 before touching any RPC (never trust an unauthenticated POST to mutate
-billing state) — for the Billplz default (§15 decision 3) this is the
-`X-Signature` callback verification against the collection's
-X-Signature-Key, implemented inside the `PaymentGatewayAdapter`, not
-inlined in the webhook route, so the verification logic moves with the
+billing state) — for the CHIP Asia rail (§15 decision 3) this is the
+public-key signature verification already implemented in `server.ts`'s
+`/api/payments/chip-asia/webhook` route, to be moved inside the
+`PaymentGatewayAdapter` rather than inlined in the route, so the
+verification logic moves with the
 adapter if a second gateway is added; all commercial RPCs are
 `SECURITY DEFINER` with explicit role checks per existing project
 convention, never relying on RLS alone for write-path authorization (RLS
@@ -926,21 +927,29 @@ gated, not parity'd to Staff). This blueprint's Modules 1/2/3 sections
 already state this split; this entry makes it the binding default rather
 than an assumption.
 
-**3. Payment gateway — DEFAULT: Billplz as primary rail, designed behind
-a gateway-abstraction interface from day one.** MyKerani's tenant base is
-Malaysian SMEs operating in MYR with FPX/online-banking as the dominant
-local payment habit for B2B SaaS spend (cards are secondary for this
-segment). Billplz is selected as the primary integration for Module 2/11
-because it has native FPX support, MYR settlement, and a webhook model
-that maps directly onto the `billing_payment_attempts` /
-`record_payment_attempt()` design already specified. **Rationale for the
-abstraction requirement, not just the gateway pick:** Module 11's webhook
-verification and idempotency-key design must sit behind a
-`PaymentGatewayAdapter` interface (`createCharge`, `verifyWebhookSignature`,
-`refund`) so that card-rail support (e.g., Stripe, for any future non-MYR
-or international expansion) can be added as a second adapter without
-touching `billing_invoices`/`billing_payment_attempts` schema or the
-closed-loop RPCs — this is the same "don't hardcode" principle from
+**3. Payment gateway — CORRECTED: CHIP Asia is the live primary rail
+(not Billplz).** This decision originally defaulted to Billplz on the
+assumption that no payment gateway integration existed yet. A
+pre-implementation reuse audit (per the Final Implementation
+Authorization's Mandatory Pre-Implementation Review) found this
+assumption was wrong: CHIP Asia is already integrated and live —
+`payment_transactions.chip_asia_reference`, the
+`finalize_chip_asia_transaction()` RPC, and the `/api/payments/chip-asia/init`
++ `/api/payments/chip-asia/webhook` server routes are all in production,
+alongside a manual bank-slip + HQ-approval rail (`method = 'manual'`,
+`review_payment_transaction()`). Per the Reuse Rule, this existing
+dual-rail (CHIP Asia online checkout + manual slip approval) is the
+permanent payment layer for Module 2/11 commercial workflows — including
+plan subscriptions and addon/credit top-ups (see
+`supabase/migrations/20260729000000_phase4_wallet_addon_purchase_closed_loop.sql`).
+No Billplz integration is to be built. **The abstraction rationale still
+holds, target adapter updated:** Module 11's webhook verification and
+idempotency-key design should still sit behind a `PaymentGatewayAdapter`
+interface (`createCharge`, `verifyWebhookSignature`, `refund`) wrapping
+the existing CHIP Asia + manual rails, so that a second gateway (for any
+future non-MYR/international expansion) can be added without touching
+`payment_transactions`/`billing_invoices` schema or the closed-loop RPCs
+— the same "don't hardcode" principle from
 `MYKERANI_GOVERNANCE_EXTENSION.md` §3 applied to infrastructure choice,
 not just commercial config values.
 
