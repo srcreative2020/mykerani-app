@@ -24,10 +24,23 @@
 >   Audit (A-E questions). Modifying `OwnerDashboard.tsx` for one of these
 >   engines without verifying `StaffHomeScreen.tsx`'s equivalent flow is a
 >   RED FLAG — the feature is not complete.
+> - `MYKERANI_TENANT_ECOSYSTEM_GOVERNANCE_PRINCIPLE.md` (STATUS: LOCKED,
+>   V1.0) governs tenant-internal (Owner ↔ Staff) connectedness — broader
+>   than the parity rule above. Where the parity rule covers shared
+>   financial *engines*, this document covers every Owner↔Staff workflow:
+>   permission/workspace/notification/audit propagation, one master record
+>   per entity across modules, resource (AI/OCR/storage) visibility, the
+>   approval chain (Staff Action → Owner Review → Approval/Rejection →
+>   Notification → Audit → Completion), and the full closed loop (Action →
+>   Visibility → Notification → Audit → Response → Resolution). A feature
+>   is NOT complete just because the page/UI/API/DB works — it must verify
+>   both the Owner and Staff side of every rule in that document before
+>   being marked COMPLETE.
 > - Where these overlap: the vision document defines WHY/intent, the
->   constitution defines WHAT is in/out of scope, the parity rule defines
->   HOW multi-user logic must be structured, and this file adds
->   implementation-level detail on top of all three.
+>   constitution defines WHAT is in/out of scope, the parity rule and the
+>   tenant ecosystem governance principle define HOW multi-user logic must
+>   be structured and verified, and this file adds implementation-level
+>   detail on top of all four.
 
 ## Data Ownership Rule
 
