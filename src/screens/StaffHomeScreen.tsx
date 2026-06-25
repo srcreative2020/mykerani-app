@@ -758,8 +758,8 @@ export function StaffHomeScreen() {
         actorName: user.fullName,
         actionType: 'RECORD_CREATED',
         module: 'Financial Records',
-        description: `Staff telah ${isEdit ? 'kemaskini' : 'tambah'} rekod ${s.payload?.type || 'kewangan'} — RM${s.payload?.amount || 0}`,
-        metadata: { recordId: result.recordId, type: s.payload?.type, amount: s.payload?.amount },
+        description: `Staff telah ${isEdit ? 'kemaskini' : 'tambah'} rekod ${s.payload?.transactionType || 'kewangan'} — RM${s.payload?.amount || 0}`,
+        metadata: { recordId: result.recordId, type: s.payload?.transactionType, amount: s.payload?.amount },
       }).catch(() => {}); // fire and forget
     }
 
