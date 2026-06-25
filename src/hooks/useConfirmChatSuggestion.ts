@@ -39,7 +39,7 @@ export interface ConfirmChatSuggestionResult {
 // confirm tap -- it never auto-approves anything (AI Suggests -> User
 // Confirms -> AI Learns).
 export const useConfirmChatSuggestion = () => {
-  const { isMockUser, user } = useAuth();
+  const { user } = useAuth();
   const { activeWorkspace } = useWorkspace();
   const { addFinancialEventAwaited, addDebtRecordAwaited, addFinancialCommitmentAwaited, linkEvidenceToRecord, learnOcrPattern } = useFinancials();
 
@@ -107,11 +107,11 @@ export const useConfirmChatSuggestion = () => {
         });
         newRecordId = cmt.id; newRecordType = "COMMITMENT";
       } else if (transactionType === "ASSET_PURCHASE") {
-        addAssetPurchase(activeWorkspace.id, isMockUser, {
+        await addAssetPurchase(activeWorkspace.id, {
           assetName: category, category, purchaseAmountMyr: amount, purchaseDate: date, vendorName: relatedParty, notes: description,
         });
       } else if (transactionType === "OWNER_TRANSACTION") {
-        addOwnerTransaction(activeWorkspace.id, isMockUser, {
+        await addOwnerTransaction(activeWorkspace.id, {
           type: s.payload?.ownerTransactionSubtype || (category.toUpperCase().includes("DRAWING") ? "DRAWING" : "CAPITAL_INJECTION"),
           amountMyr: amount, transactionDate: date, description,
         });

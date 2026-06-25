@@ -43,12 +43,12 @@ const financialCommitments: FinancialCommitment[] = [
 ];
 
 const assetPurchases: AssetPurchase[] = [
-  { id: "asset-1", assetName: "Printer Laser", category: "Equipment / Fixed Assets", purchaseAmountMyr: 1200, purchaseDate: "2026-03-01", vendorName: "Tech Store", notes: "" },
+  { id: "asset-1", workspaceId: "ws-1", assetName: "Printer Laser", category: "Equipment / Fixed Assets", purchaseAmountMyr: 1200, purchaseDate: "2026-03-01", vendorName: "Tech Store", notes: "", createdAt: "2026-03-01T00:00:00.000Z" },
 ];
 
 const ownerTransactions: OwnerTransaction[] = [
-  { id: "owner-1", type: "CAPITAL_INJECTION", amountMyr: 20000, transactionDate: "2026-01-01", description: "Modal permulaan pemilik" },
-  { id: "owner-2", type: "DRAWING", amountMyr: 1000, transactionDate: "2026-04-01", description: "Pengeluaran peribadi pemilik" },
+  { id: "owner-1", workspaceId: "ws-1", type: "CAPITAL_INJECTION", amountMyr: 20000, transactionDate: "2026-01-01", description: "Modal permulaan pemilik", createdAt: "2026-01-01T00:00:00.000Z" },
+  { id: "owner-2", workspaceId: "ws-1", type: "DRAWING", amountMyr: 1000, transactionDate: "2026-04-01", description: "Pengeluaran peribadi pemilik", createdAt: "2026-04-01T00:00:00.000Z" },
 ];
 
 const evidencePackages: FinancialEvidencePackage[] = [

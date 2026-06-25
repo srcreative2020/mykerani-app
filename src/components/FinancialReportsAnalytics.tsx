@@ -93,8 +93,8 @@ export const FinancialReportsAnalytics: React.FC<FinancialReportsAnalyticsProps>
   const [ownerTransactions, setOwnerTransactions] = useState<import("../lib/assetOwnerData").OwnerTransaction[]>([]);
   useEffect(() => {
     if (!activeWorkspace?.id) return;
-    loadAssetPurchases(activeWorkspace.id, isMockUser).then(setAssetPurchases);
-    loadOwnerTransactions(activeWorkspace.id, isMockUser).then(setOwnerTransactions);
+    loadAssetPurchases(activeWorkspace.id).then(setAssetPurchases);
+    loadOwnerTransactions(activeWorkspace.id).then(setOwnerTransactions);
   }, [activeWorkspace?.id, isMockUser]);
 
   // Search filter inside specific reports

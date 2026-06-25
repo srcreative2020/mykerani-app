@@ -39,10 +39,10 @@ const printing: Scenario = {
     { id: "commit-pr-1", workspaceId: "ws-print", description: "Sewa kedai bulanan", obligeeName: "Landlord Wisma ABC", amountPerIntervalMyr: 1200, recurrence: "MONTHLY", startDate: "2026-01-01", isActive: true, status: "ACTIVE" },
   ],
   assetPurchases: [
-    { id: "asset-pr-1", assetName: "Mesin Cetak Digital", category: "Equipment / Fixed Assets", purchaseAmountMyr: 22000, purchaseDate: "2026-02-01", vendorName: "Tech Print Sdn Bhd", notes: "" },
+    { id: "asset-pr-1", workspaceId: "ws-print", assetName: "Mesin Cetak Digital", category: "Equipment / Fixed Assets", purchaseAmountMyr: 22000, purchaseDate: "2026-02-01", vendorName: "Tech Print Sdn Bhd", notes: "", createdAt: "2026-02-01T00:00:00.000Z" },
   ],
   ownerTransactions: [
-    { id: "owner-pr-1", type: "CAPITAL_INJECTION", amountMyr: 10000, transactionDate: "2026-01-01", description: "Modal permulaan pemilik" },
+    { id: "owner-pr-1", workspaceId: "ws-print", type: "CAPITAL_INJECTION", amountMyr: 10000, transactionDate: "2026-01-01", description: "Modal permulaan pemilik", createdAt: "2026-01-01T00:00:00.000Z" },
   ],
 };
 
@@ -57,11 +57,11 @@ const restaurant: Scenario = {
     { id: "commit-rb-1", workspaceId: "ws-resto", description: "Sewa restoran bulanan", obligeeName: "Landlord Plaza Makan", amountPerIntervalMyr: 4000, recurrence: "MONTHLY", startDate: "2026-01-01", isActive: true, status: "ACTIVE" },
   ],
   assetPurchases: [
-    { id: "asset-rb-1", assetName: "Peti Sejuk Komersial", category: "Equipment / Fixed Assets", purchaseAmountMyr: 6500, purchaseDate: "2026-03-01", vendorName: "Kitchen Supplies Sdn Bhd", notes: "" },
+    { id: "asset-rb-1", workspaceId: "ws-resto", assetName: "Peti Sejuk Komersial", category: "Equipment / Fixed Assets", purchaseAmountMyr: 6500, purchaseDate: "2026-03-01", vendorName: "Kitchen Supplies Sdn Bhd", notes: "", createdAt: "2026-03-01T00:00:00.000Z" },
   ],
   ownerTransactions: [
-    { id: "owner-rb-1", type: "CAPITAL_INJECTION", amountMyr: 25000, transactionDate: "2026-01-01", description: "Modal permulaan restoran" },
-    { id: "owner-rb-2", type: "DRAWING", amountMyr: 2000, transactionDate: "2026-06-20", description: "Pengeluaran peribadi pemilik" },
+    { id: "owner-rb-1", workspaceId: "ws-resto", type: "CAPITAL_INJECTION", amountMyr: 25000, transactionDate: "2026-01-01", description: "Modal permulaan restoran", createdAt: "2026-01-01T00:00:00.000Z" },
+    { id: "owner-rb-2", workspaceId: "ws-resto", type: "DRAWING", amountMyr: 2000, transactionDate: "2026-06-20", description: "Pengeluaran peribadi pemilik", createdAt: "2026-06-20T00:00:00.000Z" },
   ],
 };
 
@@ -74,10 +74,10 @@ const service: Scenario = {
   debtRecords: [],
   financialCommitments: [],
   assetPurchases: [
-    { id: "asset-sv-1", assetName: "Laptop Konsultan", category: "Equipment / Fixed Assets", purchaseAmountMyr: 4500, purchaseDate: "2026-02-15", vendorName: "Tech Store", notes: "" },
+    { id: "asset-sv-1", workspaceId: "ws-service", assetName: "Laptop Konsultan", category: "Equipment / Fixed Assets", purchaseAmountMyr: 4500, purchaseDate: "2026-02-15", vendorName: "Tech Store", notes: "", createdAt: "2026-02-15T00:00:00.000Z" },
   ],
   ownerTransactions: [
-    { id: "owner-sv-1", type: "CAPITAL_INJECTION", amountMyr: 8000, transactionDate: "2026-01-01", description: "Modal permulaan konsultansi" },
+    { id: "owner-sv-1", workspaceId: "ws-service", type: "CAPITAL_INJECTION", amountMyr: 8000, transactionDate: "2026-01-01", description: "Modal permulaan konsultansi", createdAt: "2026-01-01T00:00:00.000Z" },
   ],
 };
 
@@ -95,7 +95,7 @@ const retail: Scenario = {
   ],
   assetPurchases: [],
   ownerTransactions: [
-    { id: "owner-rt-1", type: "CAPITAL_INJECTION", amountMyr: 15000, transactionDate: "2026-01-01", description: "Modal permulaan kedai retail" },
+    { id: "owner-rt-1", workspaceId: "ws-retail", type: "CAPITAL_INJECTION", amountMyr: 15000, transactionDate: "2026-01-01", description: "Modal permulaan kedai retail", createdAt: "2026-01-01T00:00:00.000Z" },
   ],
 };
 
@@ -124,7 +124,7 @@ const negativeProfit: Scenario = {
   financialCommitments: [],
   assetPurchases: [],
   ownerTransactions: [
-    { id: "owner-np-1", type: "CAPITAL_INJECTION", amountMyr: 3000, transactionDate: "2026-01-01", description: "Modal permulaan kecil" },
+    { id: "owner-np-1", workspaceId: "ws-negative", type: "CAPITAL_INJECTION", amountMyr: 3000, transactionDate: "2026-01-01", description: "Modal permulaan kecil", createdAt: "2026-01-01T00:00:00.000Z" },
   ],
 };
 

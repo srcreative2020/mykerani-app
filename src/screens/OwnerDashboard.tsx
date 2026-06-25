@@ -1146,8 +1146,8 @@ export function OwnerDashboard() {
     ]).finally(() => setProfileLoading(false));
     setAllBranchesLoaded(false);
     loadDependents(wsId, isMockUser).then(setDependents);
-    loadAssetPurchases(wsId, isMockUser).then(setAssetPurchases);
-    loadOwnerTransactions(wsId, isMockUser).then(setOwnerTransactions);
+    loadAssetPurchases(wsId).then(setAssetPurchases);
+    loadOwnerTransactions(wsId).then(setOwnerTransactions);
   };
 
   useEffect(() => { refreshProfileData(); }, [wsId, isMockUser]);
@@ -1269,12 +1269,12 @@ export function OwnerDashboard() {
   };
 
   const removeAssetPurchase = async (id: string) => {
-    await deleteAssetPurchase(wsId, isMockUser, id);
+    await deleteAssetPurchase(wsId, id);
     refreshProfileData();
   };
 
   const removeOwnerTransaction = async (id: string) => {
-    await deleteOwnerTransaction(wsId, isMockUser, id);
+    await deleteOwnerTransaction(wsId, id);
     refreshProfileData();
   };
 

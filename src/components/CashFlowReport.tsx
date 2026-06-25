@@ -62,8 +62,8 @@ export const CashFlowReport: React.FC<CashFlowReportProps> = ({
   const [selectedActivity, setSelectedActivity] = useState<CashFlowActivity | null>(null);
 
   useEffect(() => {
-    loadAssetPurchases(workspaceId, isMockUser).then(setAssetPurchases);
-    loadOwnerTransactions(workspaceId, isMockUser).then(setOwnerTransactions);
+    if (workspaceId) loadAssetPurchases(workspaceId).then(setAssetPurchases);
+    if (workspaceId) loadOwnerTransactions(workspaceId).then(setOwnerTransactions);
   }, [workspaceId, isMockUser]);
 
   const today = useMemo(() => new Date(), []);

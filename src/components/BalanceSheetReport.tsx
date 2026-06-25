@@ -46,8 +46,8 @@ export const BalanceSheetReport: React.FC<BalanceSheetReportProps> = ({
   const [selectedLine, setSelectedLine] = useState<BsLine | null>(null);
 
   useEffect(() => {
-    loadAssetPurchases(workspaceId, isMockUser).then(setAssetPurchases);
-    loadOwnerTransactions(workspaceId, isMockUser).then(setOwnerTransactions);
+    if (workspaceId) loadAssetPurchases(workspaceId).then(setAssetPurchases);
+    if (workspaceId) loadOwnerTransactions(workspaceId).then(setOwnerTransactions);
   }, [workspaceId, isMockUser]);
 
   // Balance Sheet is point-in-time (all-time), not period-filtered like P&L —
