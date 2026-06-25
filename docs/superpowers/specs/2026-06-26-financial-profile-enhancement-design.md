@@ -1263,3 +1263,210 @@ Junction tables (`vehicle_businesses`, `bank_account_businesses`, `property_busi
 - `event_logs` — unchanged
 - `hq_governance_audit_log` — unchanged (no HQ-side governance for profile data)
 - `tenant_activity_log` — extended with `PROFILE_*` action types (additive)
+
+---
+
+## 22. MIGRATION STRATEGY
+
+### 22.1 Migration Wave Plan
+
+All migrations are **additive** and **non-breaking**. They can be applied in sequence without downtime.
+
+| Wave | Migration | What It Does | Risk |
+|------|-----------|-------------|------|
+| 1 | `20260803000000_financial_profile_repositories.sql` | Creates 5 new tables (customers, suppliers, properties, insurance, investments) with RLS, triggers, indexes | NONE — new tables, no existing data touched |
+| 2 | `20260803010000_financial_profile_junctions.sql` | Creates 3 junction tables (vehicle_businesses, bank_account_businesses, property_businesses) | NONE — new tables |
+| 3 | `20260803020000_financial_profile_foreign_keys.sql` | Adds nullable FK columns to receivables, payables, income_records, expense_records | LOW — nullable columns, existing rows get NULL |
+| 4 | `20260803030000_financial_profile_seed.sql` (optional) | Seeds customers/suppliers from existing receivables/payables (extracts distinct names, creates master records, links back) | LOW — uses INSERT ... ON CONFLICT DO NOTHING, no UPDATE of existing rows |
+
+### 22.2 Application Order
+
+```
+Wave 1 (tables)           → Wave 2 (junctions)        → Wave 3 (FKs)              → Wave 4 (seed, optional)
+```
+
+Waves 1-2 must complete before Wave 3 (FKs reference tables from Wave 1). Wave 4 requires Wave 3 (links need the FK columns).
+
+### 22.3 Rollforward After Migration
+
+After migration, deploy the service + UI changes:
+1. Deploy `buildFinancialContext.ts` (new file — no impact until called)
+2. Deploy `customerMatching.ts` and `supplierMatching.ts` (new files)
+3. Deploy updated `profileData.ts` (additive — new functions appended)
+4. Deploy updated `OwnerDashboard.tsx` and `StaffHomeScreen.tsx` (use builder instead of manual context)
+5. Deploy updated `server.ts` (extended prompt sections 12-17)
+
+### 22.4 No Backward Compatibility Concerns
+
+- Old clients that don't send sections 12-17 in `financialContext` still work — the server prompt has `|| []` fallbacks for every section
+- Old clients that don't send bank accounts, debts, etc. still work — the server treats missing fields as empty arrays
+- New clients that DO send full context get enhanced AI suggestions
+- The `buildFinancialContext()` function is the migration bridge — once all call sites use it, the context is complete
+
+---
+
+## 23. RISK ANALYSIS
+
+### 23.1 Technical Risks
+
+| Risk | Probability | Impact | Mitigation |
+|------|------------|--------|------------|
+| Larger `financialContext` payload increases AI latency | Medium | Low | The payload is JSON-serialized and sent as HTTP body; even with all 17 sections, it's typically < 50KB. The LLM processes it in the same number of tokens as before — the sections were already in the prompt, just empty. |
+| Larger payload increases token usage / cost | Medium | Medium | The server prompt already includes all 11 sections. Adding 6 more (branches, properties, insurance, investments, customers, suppliers) adds ~500-1000 tokens depending on data volume. This is within the existing token budget. For large workspaces (>100 records), consider truncation or summary. |
+| New tables add maintenance overhead | Low | Low | All 5 new tables follow the exact same pattern as `businesses`. No new patterns to learn. |
+| Customer/supplier seeding creates duplicates | Low | Low | The seed script uses `ON CONFLICT DO NOTHING` and normalizes names. Edge cases (slightly different spellings) are handled by the AI matching layer. |
+| Permission checks not enforced on Staff profile edits | Low | Medium | Staff profile edit is gated by `hasPermission('Financial Records', 'create')` — same permission used for financial records. No new permission matrix entries needed. |
+| Junction table management complicates UI | Medium | Low | Junction tables are managed transparently — the UI shows a multi-select for "associate vehicles with businesses" and the service layer handles the junction INSERT/DELETE. |
+
+### 23.2 Business Risks
+
+| Risk | Probability | Impact | Mitigation |
+|------|------------|--------|------------|
+| Users overwhelmed by too many profile fields | Medium | Low | All fields are optional. The intro note explicitly states "more data = smarter AI" but no data is required. Profile completeness banner guides users to fill in gradually. |
+| AI suggestions become overly specific (too much context) | Low | Medium | The server prompt's priority order (User Profile → Workspace → Events → Patterns → KB → World) already handles this. The AI is instructed to prioritize, not to use all context simultaneously. |
+| Existing UAT workflows break | Very Low | High | All changes are additive. Existing `financialContext` fields are a subset of the new payload. If `buildFinancialContext()` fails for any reason, the call site falls back to the manual construction (defensive). |
+
+### 23.3 Risk Rating
+
+**Overall risk: LOW.** The enhancement is purely additive:
+- No existing tables are dropped or altered (only nullable columns added)
+- No existing services are replaced (only extended with new functions)
+- No existing UI flows are removed (only new sections added)
+- No existing RPCs are changed (only an optional new one)
+- The central builder is defensive — it catches errors and returns partial context rather than failing
+
+---
+
+## 24. ROLLBACK STRATEGY
+
+### 24.1 Database Rollback
+
+If the migration needs to be rolled back:
+
+```sql
+-- Reverse Wave 3 (drop FK columns)
+ALTER TABLE receivables DROP COLUMN IF EXISTS customer_id;
+ALTER TABLE payables DROP COLUMN IF EXISTS supplier_id;
+ALTER TABLE income_records DROP COLUMN IF EXISTS customer_id;
+ALTER TABLE expense_records DROP COLUMN IF EXISTS supplier_id;
+
+-- Reverse Wave 2 (drop junction tables)
+DROP TABLE IF EXISTS property_businesses;
+DROP TABLE IF EXISTS bank_account_businesses;
+DROP TABLE IF EXISTS vehicle_businesses;
+
+-- Reverse Wave 1 (drop new tables)
+DROP TABLE IF EXISTS profile_investments;
+DROP TABLE IF EXISTS profile_insurance;
+DROP TABLE IF EXISTS profile_properties;
+DROP TABLE IF EXISTS profile_suppliers;
+DROP TABLE IF EXISTS profile_customers;
+```
+
+All drops are safe — no existing data depends on these tables/columns. The `IF EXISTS` clause makes rollback idempotent.
+
+### 24.2 Code Rollback
+
+```bash
+# Revert to the commit before the enhancement
+git revert HEAD~N..HEAD --no-edit  # where N is the number of commits in the wave
+```
+
+Or simply deploy the previous build. The code changes are:
+- 3 new files (`buildFinancialContext.ts`, `customerMatching.ts`, `supplierMatching.ts`) — can be deleted
+- 3 modified files (`profileData.ts`, `OwnerDashboard.tsx`, `StaffHomeScreen.tsx`) — revert to pre-enhancement versions
+- 1 modified server file (`server.ts`) — revert prompt sections
+
+### 24.3 No Data Loss Risk
+
+- Existing financial records (income, expense, receivables, payables, debts, commitments) are NEVER touched by the enhancement
+- The only data that would be lost on rollback is data entered into the new repositories (customers, suppliers, properties, insurance, investments) — which is profile context data, not financial transaction data
+- The optional seed migration (Wave 4) creates master records from existing free-text names — rolling it back leaves the free-text names in place (no data loss)
+
+---
+
+## 25. FINAL IMPLEMENTMENT ROADMAP
+
+### 25.1 Wave Structure
+
+The implementation is planned as a single complete remediation wave (per user instruction: "No partial implementation is permitted").
+
+```
+Phase A: Database Migrations (Waves 1-4)
+    ↓
+Phase B: Service Layer (3 new files + 3 modified files)
+    ↓
+Phase C: Server Prompt Extension (server.ts)
+    ↓
+Phase D: UI Enhancement (OwnerDashboard + StaffHomeScreen)
+    ↓
+Phase E: Verification (typecheck, build, test, push)
+```
+
+### 25.2 Task Breakdown
+
+| Task | Description | Dependencies | Est. Lines |
+|------|-------------|-------------|------------|
+| A1 | Create migration: 5 new repository tables | None | ~250 |
+| A2 | Create migration: 3 junction tables | A1 | ~80 |
+| A3 | Create migration: 4 nullable FK columns + indexes | A1 | ~40 |
+| A4 | Create migration: customer/supplier seed (optional) | A3 | ~30 |
+| B1 | Create `buildFinancialContext.ts` | A1 | ~150 |
+| B2 | Create `customerMatching.ts` | None | ~60 |
+| B3 | Create `supplierMatching.ts` | None | ~60 |
+| B4 | Extend `profileData.ts` with 5 new repository CRUD functions | A1 | ~250 |
+| B5 | Extend `financialCompletenessEngine.ts` with profile completeness | B4 | ~80 |
+| B6 | Extend `internalTransferDetection.ts` with profile-aware wrapper | B4 | ~60 |
+| C1 | Extend `server.ts` system prompt with sections 12-17 | B1 | ~30 |
+| D1 | Update `OwnerDashboard.tsx` — use builder + new profile UI sections | B1, B4 | ~400 |
+| D2 | Update `StaffHomeScreen.tsx` — use builder + read-only profile views | B1, B4 | ~150 |
+| D3 | Add evidence attachment UI to profile entities | D1 | ~100 |
+| D4 | Add profile completeness banner UI | B5, D1 | ~50 |
+| E1 | Run typecheck, build, verify | All | — |
+| E2 | Commit, push to GitHub, merge | E1 | — |
+
+### 25.3 Estimated Total
+
+| Metric | Value |
+|--------|-------|
+| New SQL migration files | 4 |
+| New TypeScript files | 3 |
+| Modified TypeScript files | 5 |
+| New table definitions | 8 (5 repo + 3 junction) |
+| New CRUD functions | ~25 (5 repos × 5 functions each) |
+| New UI sections | 5 (customer, supplier, property, insurance, investment cards) |
+| Estimated total lines added | ~1,800 |
+| Estimated implementation time | 1 wave (single session) |
+
+### 25.4 Success Criteria
+
+The enhancement is complete when:
+
+1. ✅ `buildFinancialContext()` is used by ALL call sites (OwnerDashboard.sendChat, StaffHomeScreen.sendChat, sendSupport variants)
+2. ✅ AI prompt receives ALL 17 context sections populated with real data
+3. ✅ 5 new repository tables exist with full RLS, triggers, and audit
+4. ✅ Customer/supplier FK columns exist on financial tables (nullable)
+5. ✅ Profile completeness reminder fires in notifications
+6. ✅ Profile entities support evidence attachment
+7. ✅ Owner ↔ Staff parity maintained (same builder, same engines, same matching)
+8. ✅ No existing functionality broken (typecheck = same baseline, build passes)
+9. ✅ All changes pushed to GitHub and merged to main
+10. ✅ No duplicated tables, RPCs, services, or workflows
+
+---
+
+## BLUEPRINT STATUS
+
+**Implementation Status:** STOP — awaiting Owner review and approval.
+
+This blueprint is complete. No code has been written. No migrations have been created. No services have been modified. No UI has been changed.
+
+Per the user's instruction: "Only after explicit approval may implementation begin as one complete remediation wave. No partial implementation is permitted."
+
+The Owner must review this blueprint and provide explicit approval before implementation begins.
+
+---
+
+*Blueprint authored: 2026-06-26*
+*Repository: srcreative2020/mykerani-app*
+*Governing documents: MYKERANI Constitution, Governance Extension, Ecosystem Governance Principle, Tenant Ecosystem Governance Principle, Owner-Staff Parity Rule*
