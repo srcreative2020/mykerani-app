@@ -9,7 +9,7 @@ import { supabase, isSupabaseConfigured } from "../lib/supabase";
 import { isDemoWorkspace } from "../lib/seeder";
 import { uploadDocument, getDocumentUrl, type UploadedDoc } from "../lib/documentStorage";
 import { logEvent } from "../lib/eventLog";
-import { createTenantSupportTicket, getMyTenantSupportTickets, SupportTicket, SUPPORT_TICKET_TEMPLATES, uploadTicketAttachment, getTicketAttachmentUrl, ticketSlaState, TICKET_STATUS_LABEL_MS, TICKET_STATUS_STYLE, tenantSubmitAppeal, tenantReplySupportTicket } from "../lib/hqService";
+import { createTenantSupportTicket, getMyTenantSupportTickets, SupportTicket, SUPPORT_TICKET_TEMPLATES, uploadTicketAttachment, getTicketAttachmentUrl, ticketSlaState, TICKET_STATUS_LABEL_MS, TICKET_STATUS_STYLE, tenantSubmitAppeal, tenantReplySupportTicket, logTenantActivity } from "../lib/hqService";
 import { usePermission } from "../context/PermissionContext";
 import { useStorageQuota } from "../lib/storageQuota";
 import { useAiCredits, useOcrCredits } from "../lib/aiCredits";
@@ -153,7 +153,7 @@ function AddRecordForm({
 export function StaffHomeScreen() {
   const { user, signOut, isMockUser, updateProfile } = useAuth();
   const { activeWorkspace, workspaces, selectWorkspace } = useWorkspace();
-  const { financialEvents, addFinancialEvent, addFinancialEventAwaited, addFinancialEventsBatch, editFinancialEvent, addDebtRecord, addDebtRecordAwaited, editDebtRecord, addFinancialCommitment, addFinancialCommitmentAwaited, editFinancialCommitment, learnOcrPattern, learnOcrPatternsBatch, ocrLearnedPatterns, addFinancialEvidencePackage, linkEvidenceToRecord, financialEvidencePackages, duplicateFlags, addBankAccount } = useFinancials();
+  const { financialEvents, addFinancialEvent, addFinancialEventAwaited, addFinancialEventsBatch, editFinancialEvent, addDebtRecord, addDebtRecordAwaited, editDebtRecord, addFinancialCommitment, addFinancialCommitmentAwaited, editFinancialCommitment, learnOcrPattern, learnOcrPatternsBatch, ocrLearnedPatterns, addFinancialEvidencePackage, linkEvidenceToRecord, financialEvidencePackages, duplicateFlags, addBankAccount, scanForDuplicates } = useFinancials();
   const { activeTenant } = useTenant();
   const { userRoles } = usePermission();
   const userNameById = useMemo(() => {
@@ -742,6 +742,27 @@ export function StaffHomeScreen() {
       confirmedByUserId: user?.id || undefined,
     });
 
+    // C-02: Log staff financial record action for owner review
+    if (isSupabaseConfigured() && !isMockUser && user && activeWorkspace) {
+      const isEdit = false; // This confirm path always creates a new record
+      logTenantActivity({
+        workspaceId: activeWorkspace.id,
+        actorId: user.id,
+        actorEmail: user.email || '',
+        actorRole: user.role || 'TENANT_STAFF',
+        actorName: user.fullName,
+        actionType: 'RECORD_CREATED',
+        module: 'Financial Records',
+        description: `Staff telah ${isEdit ? 'kemaskini' : 'tambah'} rekod ${s.payload?.type || 'kewangan'} — RM${s.payload?.amount || 0}`,
+        metadata: { recordId: result.recordId, type: s.payload?.type, amount: s.payload?.amount },
+      }).catch(() => {}); // fire and forget
+    }
+
+    // M-01: trigger duplicate scan after confirming a chat suggestion record
+    if (financialEvents.length > 0) {
+      scanForDuplicates().catch(() => {});
+    }
+
     setEditingChatSuggestionId(null);
   };
 
@@ -813,6 +834,24 @@ export function StaffHomeScreen() {
         recordType: data.type as any,
         confidenceScore: 0.9,
       });
+    }
+    // C-02: Log staff record addition for owner review
+    if (isSupabaseConfigured() && !isMockUser && user && activeWorkspace) {
+      logTenantActivity({
+        workspaceId: activeWorkspace.id,
+        actorId: user.id,
+        actorEmail: user.email || '',
+        actorRole: user.role || 'TENANT_STAFF',
+        actorName: user.fullName,
+        actionType: 'RECORD_CREATED',
+        module: 'Financial Records',
+        description: `Staff tambah rekod ${data.type} — RM${data.amount}`,
+        metadata: { type: data.type, amount: data.amount, category: categoryName, party: data.party, date: data.date },
+      }).catch(() => {}); // fire and forget
+    }
+    // M-01: trigger duplicate scan after saving a financial record
+    if (financialEvents.length > 0) {
+      scanForDuplicates().catch(() => {});
     }
   };
 
@@ -1587,6 +1626,17 @@ export function StaffHomeScreen() {
         {activeTab === "more" && (
           <div className="flex-1 overflow-y-auto p-4 pb-24 max-w-lg mx-auto w-full space-y-4" id="staff_profile_pane">
             <h2 className="text-lg font-bold text-slate-900">Profil Saya</h2>
+
+            {/* L-01: Personal Profile Summary */}
+            {(personalProfile.fullName || personalProfile.occupation || personalProfile.monthlyIncomeMyr) && (
+              <div style={{ background: '#fff', border: '1px solid #eee', borderRadius: 12, padding: '12px 16px', marginBottom: 12 }}>
+                <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 8 }}>Maklumat Peribadi</div>
+                <div style={{ fontSize: 13, color: '#555' }}>Nama: {personalProfile.fullName || user?.fullName || '-'}</div>
+                {personalProfile.occupation && <div style={{ fontSize: 13, color: '#555' }}>Pekerjaan: {personalProfile.occupation}</div>}
+                {personalProfile.monthlyIncomeMyr && <div style={{ fontSize: 13, color: '#555' }}>Pendapatan Bulanan: RM {Number(personalProfile.monthlyIncomeMyr).toLocaleString()}</div>}
+              </div>
+            )}
+
             <div className="bg-white border border-slate-200 rounded-2xl p-6 space-y-5 shadow-sm">
               <div className="flex items-center space-x-4">
                 <div className="w-14 h-14 rounded-2xl bg-slate-800 text-white flex items-center justify-center text-2xl font-bold shadow shrink-0">
