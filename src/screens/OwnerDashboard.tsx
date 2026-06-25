@@ -15,10 +15,10 @@ import {
   BookOpen, Ticket, MessageCircle, Zap, Database, Edit3,
   UserCheck, UserX, KeyRound, AlertCircle, CheckCircle2,
   ToggleLeft, ToggleRight, ExternalLink, Trash2, Download,
-  Paperclip, Mic, Square, File as FileIcon, Plus, Building2, ScanLine,
+  Paperclip, Mic, Square, File as FileIcon, Plus, Building2, ScanLine, Star,
 } from "lucide-react";
 import { FinancialEvidencePackageManager } from "../components/FinancialEvidencePackage";
-import { createTenantSupportTicket, getMyTenantSupportTickets, SupportTicket, updateTenantMasterProfile, SUPPORT_TICKET_TEMPLATES, uploadTicketAttachment, getTicketAttachmentUrl, ticketSlaState, TICKET_STATUS_LABEL_MS, TICKET_STATUS_STYLE, tenantAssignStaffRole, tenantRevokeStaffRole, tenantSubmitAppeal, tenantReplySupportTicket, getTenantMyHealthScore, TenantHealthScore, getTenantAiCostSummary, TenantAiCostSummary, getMyDataAccessLog, DataAccessLogEntry, getAddonPackages, AddonPackage } from "../lib/hqService";
+import { createTenantSupportTicket, getMyTenantSupportTickets, SupportTicket, updateTenantMasterProfile, SUPPORT_TICKET_TEMPLATES, uploadTicketAttachment, getTicketAttachmentUrl, ticketSlaState, TICKET_STATUS_LABEL_MS, TICKET_STATUS_STYLE, tenantAssignStaffRole, tenantRevokeStaffRole, tenantSubmitAppeal, tenantReplySupportTicket, getTenantMyHealthScore, TenantHealthScore, getTenantAiCostSummary, TenantAiCostSummary, getMyDataAccessLog, DataAccessLogEntry, getAddonPackages, AddonPackage, redeemPromotion } from "../lib/hqService";
 import { FinancialReportsAnalytics } from "../components/FinancialReportsAnalytics";
 import { StorageBar } from "../components/StorageBar";
 import { DocumentsManager } from "../components/DocumentsManager";
@@ -737,6 +737,26 @@ export function OwnerDashboard() {
     getAddonPackages("AI").then(setAiCreditPackages);
     getAddonPackages("OCR").then(setOcrCreditPackages);
   }, []);
+  const [showPromoModal, setShowPromoModal] = useState(false);
+  const [promoCode, setPromoCode] = useState("");
+  const [promoBusy, setPromoBusy] = useState(false);
+  const [promoResult, setPromoResult] = useState<string | null>(null);
+  const submitPromoRedeem = async () => {
+    if (!promoCode.trim() || !activeWorkspace) return;
+    setPromoBusy(true);
+    setPromoResult(null);
+    try {
+      const res = await redeemPromotion(promoCode.trim().toUpperCase(), activeWorkspace.tenantId, activeWorkspace.id);
+      if (res.ok) {
+        setPromoResult(res.kind === "trial_extension_days" ? `Berjaya! Percubaan dilanjutkan ${res.amount} hari.` : `Berjaya! Kredit ditambah ke dompet anda.`);
+        setPromoCode("");
+      } else {
+        setPromoResult(res.message || "Kod promosi tidak sah atau telah tamat tempoh.");
+      }
+    } finally {
+      setPromoBusy(false);
+    }
+  };
 
   // ── Subscription plan + payment (real, Supabase-backed) ──
   interface PlanOption {
@@ -4059,6 +4079,16 @@ export function OwnerDashboard() {
                   </div>
                 </div>
 
+                {/* Promo Code Redemption */}
+                <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-3">
+                  <div className="flex items-center space-x-2">
+                    <Star className="w-4 h-4 text-emerald-500" />
+                    <p className="text-sm font-bold text-slate-900">Kod Promosi</p>
+                  </div>
+                  <p className="text-[11px] text-slate-500">Ada kod promosi? Tebus untuk kredit dompet percuma atau lanjutan tempoh percubaan.</p>
+                  <button onClick={() => { setShowPromoModal(true); setPromoResult(null); }} className="w-full py-2.5 bg-emerald-50 border border-emerald-100 text-emerald-700 rounded-xl text-xs font-bold cursor-pointer hover:bg-emerald-100 transition">Tebus Kod Promosi</button>
+                </div>
+
                 {/* Invoices / payment history */}
                 <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-3">
                   <p className="text-sm font-bold text-slate-900">Invois & Sejarah Pembayaran</p>
@@ -4426,6 +4456,39 @@ export function OwnerDashboard() {
               ))}
             </div>
             <p className="text-[10px] text-slate-400 text-center">Kredit tambahan aktif selepas pembayaran disahkan (Chip Asia serta-merta, slip manual selepas semakan HQ).</p>
+          </div>
+        </div>
+      )}
+
+      {/* Promo Code Redemption Modal */}
+      {showPromoModal && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 backdrop-blur-sm">
+          <div className="bg-white rounded-t-3xl sm:rounded-2xl w-full max-w-sm shadow-2xl p-5 space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="font-bold text-slate-900">Tebus Kod Promosi</h3>
+              <button onClick={() => setShowPromoModal(false)} className="p-1.5 rounded-xl hover:bg-slate-100 cursor-pointer">
+                <X className="w-4 h-4 text-slate-400" />
+              </button>
+            </div>
+            <p className="text-[11px] text-slate-500">Masukkan kod promosi untuk menebus kredit dompet percuma atau lanjutan tempoh percubaan.</p>
+            <input
+              value={promoCode}
+              onChange={(e) => setPromoCode(e.target.value)}
+              placeholder="Kod promosi"
+              className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-emerald-400"
+            />
+            {promoResult && (
+              <div className={`rounded-xl p-3 text-xs font-semibold ${promoResult.startsWith("Berjaya") ? "bg-emerald-50 text-emerald-700 border border-emerald-100" : "bg-red-50 text-red-700 border border-red-100"}`}>
+                {promoResult}
+              </div>
+            )}
+            <button
+              disabled={promoBusy || !promoCode.trim()}
+              onClick={submitPromoRedeem}
+              className="w-full py-2.5 bg-emerald-600 text-white rounded-xl text-sm font-bold cursor-pointer hover:bg-emerald-700 transition disabled:opacity-50"
+            >
+              {promoBusy ? "Menebus..." : "Tebus Sekarang"}
+            </button>
           </div>
         </div>
       )}

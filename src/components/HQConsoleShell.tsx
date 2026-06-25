@@ -29,7 +29,7 @@ interface HQConsoleShellProps {
 type HQPage = "dashboard" | "customers" | "billing" | "usage" | "support" | "revenue" | "settings" | "system" | "subscriptions" | "website"
   | "customer360" | "alertCenter" | "walletDashboard" | "healthScores" | "governance" | "paymentGovernance" | "storageGovernance"
   | "aiCostGovernance" | "dataMaskingGovernance" | "approvalCenter"
-  | "activityCenter" | "costCenter" | "knowledgeCenter" | "addonCatalog";
+  | "activityCenter" | "costCenter" | "knowledgeCenter" | "addonCatalog" | "phase4Ops";
 
 // â"€â"€ Mock data (demo accounts only) â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 const MOCK_CUSTOMERS = [
@@ -694,6 +694,94 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
     if (pendingHqActionsFilter === "pending") await loadPendingHqActions("pending");
   };
 
+  // Phase 4 Ops: Promotions, Commercial Governance, Commercial Analytics, Production Governance, Customer Success
+  const [promotions, setPromotions] = useState<hqService.Promotion[]>([]);
+  const [promoForm, setPromoForm] = useState<{ code: string; kind: hqService.PromotionKind; creditType: hqService.AddonCreditType; amount: string; maxRedemptions: string; expiresAt: string }>({
+    code: "", kind: "wallet_credit", creditType: "STORAGE", amount: "", maxRedemptions: "", expiresAt: "",
+  });
+  const [promoSubmitError, setPromoSubmitError] = useState<string | null>(null);
+  const [promoSubmitBusy, setPromoSubmitBusy] = useState(false);
+
+  const loadPromotions = () => hqService.getActivePromotions().then(setPromotions);
+  useEffect(() => { if (useRealData) loadPromotions(); }, [useRealData]);
+
+  const submitPromotion = async () => {
+    setPromoSubmitError(null);
+    const amount = parseFloat(promoForm.amount);
+    if (!promoForm.code.trim() || !(amount > 0)) {
+      setPromoSubmitError("Sila isi kod promosi dan kuantiti yang sah.");
+      return;
+    }
+    setPromoSubmitBusy(true);
+    try {
+      const storageAmount = promoForm.kind === "wallet_credit" && promoForm.creditType === "STORAGE" ? amount * 1073741824 : amount;
+      const id = await hqService.submitPromotionUpsert({
+        code: promoForm.code.trim().toUpperCase(),
+        kind: promoForm.kind,
+        creditType: promoForm.kind === "wallet_credit" ? promoForm.creditType : undefined,
+        amount: storageAmount,
+        maxRedemptions: promoForm.maxRedemptions ? parseInt(promoForm.maxRedemptions, 10) : undefined,
+        expiresAt: promoForm.expiresAt || undefined,
+      });
+      if (!id) { setPromoSubmitError("Gagal menghantar permintaan."); return; }
+      setPromoForm({ code: "", kind: "wallet_credit", creditType: "STORAGE", amount: "", maxRedemptions: "", expiresAt: "" });
+      if (pendingHqActionsFilter === "pending") await loadPendingHqActions("pending");
+    } finally {
+      setPromoSubmitBusy(false);
+    }
+  };
+
+  const requestPromotionDeactivate = async (id: string) => {
+    await hqService.submitPromotionDeactivate(id);
+    if (pendingHqActionsFilter === "pending") await loadPendingHqActions("pending");
+  };
+
+  const [commercialEvents, setCommercialEvents] = useState<hqService.CommercialEvent[]>([]);
+  const [planDistribution, setPlanDistribution] = useState<hqService.PlanDistributionRow[]>([]);
+  const loadCommercialAnalytics = () => {
+    hqService.getCommercialEvents(undefined, 50).then(setCommercialEvents);
+    hqService.getPlanDistribution().then(setPlanDistribution);
+  };
+  useEffect(() => { if (useRealData) loadCommercialAnalytics(); }, [useRealData]);
+
+  const [commercialConfigItems, setCommercialConfigItems] = useState<hqService.CommercialConfigItem[]>([]);
+  const [approvalThresholds, setApprovalThresholds] = useState<hqService.CommercialApprovalThreshold[]>([]);
+  const [configForm, setConfigForm] = useState<{ configKey: string; value: string }>({ configKey: "", value: "" });
+  const [configSubmitBusy, setConfigSubmitBusy] = useState(false);
+  const [configSubmitError, setConfigSubmitError] = useState<string | null>(null);
+  const loadCommercialGovernance = () => {
+    hqService.getCommercialConfigItems().then(setCommercialConfigItems);
+    hqService.getCommercialApprovalThresholds().then(setApprovalThresholds);
+  };
+  useEffect(() => { if (useRealData) loadCommercialGovernance(); }, [useRealData]);
+
+  const submitConfigItem = async () => {
+    setConfigSubmitError(null);
+    if (!configForm.configKey.trim() || !configForm.value.trim()) {
+      setConfigSubmitError("Sila isi kunci konfigurasi dan nilai.");
+      return;
+    }
+    setConfigSubmitBusy(true);
+    try {
+      let parsedValue: unknown = configForm.value;
+      try { parsedValue = JSON.parse(configForm.value); } catch { /* keep as raw string */ }
+      const id = await hqService.submitCommercialConfigUpsert(configForm.configKey.trim(), "global", parsedValue);
+      if (!id) { setConfigSubmitError("Gagal menghantar permintaan."); return; }
+      setConfigForm({ configKey: "", value: "" });
+      if (pendingHqActionsFilter === "pending") await loadPendingHqActions("pending");
+    } finally {
+      setConfigSubmitBusy(false);
+    }
+  };
+
+  const [scheduledJobRuns, setScheduledJobRuns] = useState<hqService.ScheduledJobRun[]>([]);
+  const loadScheduledJobRuns = () => hqService.getScheduledJobRuns(50).then(setScheduledJobRuns);
+  useEffect(() => { if (useRealData) loadScheduledJobRuns(); }, [useRealData]);
+
+  const [recommendedActions, setRecommendedActions] = useState<hqService.RecommendedAction[]>([]);
+  const loadRecommendedActions = () => hqService.getRecommendedActions().then(setRecommendedActions);
+  useEffect(() => { if (useRealData) loadRecommendedActions(); }, [useRealData]);
+
   const runEnforcementNow = async () => {
     setEnforcementRunning(true);
     setEnforcementResult(null);
@@ -1167,6 +1255,7 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
     { id: "storageGovernance" as HQPage, label: "Tadbir Storan",        icon: HardDrive, section: "Tadbir Urus" },
     { id: "aiCostGovernance" as HQPage,      label: "Tadbir Kos AI",        icon: DollarSign, section: "Tadbir Urus" },
     { id: "addonCatalog" as HQPage,      label: "Katalog Add-On",       icon: Package, section: "Tadbir Urus" },
+    { id: "phase4Ops" as HQPage,         label: "Promosi & Analitik",   icon: TrendingUp, section: "Tadbir Urus" },
     { id: "dataMaskingGovernance" as HQPage, label: "Tadbir Topeng Data",   icon: Shield, section: "Tadbir Urus" },
     { id: "approvalCenter" as HQPage, label: "Pusat Kelulusan",   icon: ShieldAlert, section: "Tadbir Urus" },
     { id: "activityCenter" as HQPage, label: "Pusat Aktiviti",    icon: Clock, badge: hqActivityUnseenCount, section: "Tadbir Urus" },
@@ -3914,6 +4003,193 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
                   >
                     Hantar ke Pusat Kelulusan
                   </button>
+                </div>
+              </div>
+            )}
+
+            {/* ═════ PHASE 4 OPS: PROMOTIONS, COMMERCIAL GOVERNANCE & ANALYTICS, PRODUCTION GOVERNANCE, CUSTOMER SUCCESS (HQ_OWNER only) ═════ */}
+            {activePage === "phase4Ops" && !isStaff && (
+              <div className="space-y-4" id="hq_phase4_ops">
+                <h1 className="text-xl font-bold text-slate-900">Promosi, Tadbir Urus &amp; Analitik Komersial</h1>
+                <p className="text-xs text-slate-400">Promosi tenant, konfigurasi komersial global, ambang kelulusan, aliran peristiwa komersial, taburan pelan, status tugas berjadual dan tindakan kejayaan pelanggan yang disyorkan.</p>
+
+                {/* Promotions */}
+                <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-3">
+                  <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2"><Star className="w-4 h-4 text-emerald-600" />Promosi Aktif</h3>
+                  {promotions.length === 0 ? (
+                    <p className="text-xs text-slate-400 text-center py-3">Tiada promosi aktif.</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {promotions.map((p) => (
+                        <div key={p.id} className="flex items-center justify-between gap-3 p-3 bg-slate-50 rounded-xl">
+                          <div className="min-w-0">
+                            <p className="text-xs font-bold text-slate-900">{p.code} <span className="text-slate-400 font-normal">({p.kind === "wallet_credit" ? `kredit ${p.creditType}` : "lanjutan percubaan"})</span></p>
+                            <p className="text-[11px] text-slate-500">Tebusan: {p.redemptionsCount}{p.maxRedemptions ? ` / ${p.maxRedemptions}` : ""} &middot; {p.expiresAt ? `tamat ${new Date(p.expiresAt).toLocaleDateString("ms-MY")}` : "tiada tamat tempoh"}</p>
+                          </div>
+                          <button
+                            onClick={() => requestPromotionDeactivate(p.id)}
+                            className="shrink-0 px-3 py-1.5 rounded-lg text-[11px] font-bold cursor-pointer transition bg-red-100 text-red-800 hover:bg-red-200"
+                            title="Hantar permintaan nyahaktif ke Pusat Kelulusan"
+                          >
+                            Minta Nyahaktif
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-3">
+                  <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2"><Star className="w-4 h-4 text-amber-500" />Cipta Promosi Baharu</h3>
+                  {promoSubmitError && (
+                    <div className="bg-red-50 border border-red-100 rounded-xl p-3 text-xs text-red-700 font-semibold">{promoSubmitError}</div>
+                  )}
+                  <div className="grid grid-cols-2 gap-2">
+                    <input placeholder="Kod promosi (cth: LAUNCH50)" value={promoForm.code} onChange={e => setPromoForm({ ...promoForm, code: e.target.value })}
+                      className="border border-slate-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:border-emerald-400" />
+                    <select value={promoForm.kind} onChange={e => setPromoForm({ ...promoForm, kind: e.target.value as hqService.PromotionKind })}
+                      className="border border-slate-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:border-emerald-400">
+                      <option value="wallet_credit">Kredit Dompet</option>
+                      <option value="trial_extension_days">Lanjutan Percubaan (hari)</option>
+                    </select>
+                    {promoForm.kind === "wallet_credit" && (
+                      <select value={promoForm.creditType} onChange={e => setPromoForm({ ...promoForm, creditType: e.target.value as hqService.AddonCreditType })}
+                        className="border border-slate-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:border-emerald-400">
+                        {(["STORAGE", "AI", "OCR"] as hqService.AddonCreditType[]).map(t => <option key={t} value={t}>{t}</option>)}
+                      </select>
+                    )}
+                    <input placeholder={promoForm.kind === "wallet_credit" && promoForm.creditType === "STORAGE" ? "Kuantiti (GB)" : "Kuantiti"} type="number" min="0" value={promoForm.amount}
+                      onChange={e => setPromoForm({ ...promoForm, amount: e.target.value })}
+                      className="border border-slate-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:border-emerald-400" />
+                    <input placeholder="Had tebusan (kosongkan jika tiada had)" type="number" min="0" value={promoForm.maxRedemptions}
+                      onChange={e => setPromoForm({ ...promoForm, maxRedemptions: e.target.value })}
+                      className="border border-slate-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:border-emerald-400" />
+                    <input placeholder="Tamat tempoh" type="date" value={promoForm.expiresAt}
+                      onChange={e => setPromoForm({ ...promoForm, expiresAt: e.target.value })}
+                      className="border border-slate-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:border-emerald-400" />
+                  </div>
+                  <button
+                    disabled={promoSubmitBusy}
+                    onClick={submitPromotion}
+                    className="px-4 py-2 rounded-lg text-xs font-bold cursor-pointer transition bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50"
+                  >
+                    Hantar ke Pusat Kelulusan
+                  </button>
+                </div>
+
+                {/* Commercial Governance: config items + approval thresholds */}
+                <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-3">
+                  <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2"><ShieldAlert className="w-4 h-4 text-emerald-600" />Konfigurasi Komersial Global</h3>
+                  {commercialConfigItems.length === 0 ? (
+                    <p className="text-xs text-slate-400 text-center py-3">Tiada item konfigurasi.</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {commercialConfigItems.map((c) => (
+                        <div key={c.id} className="p-3 bg-slate-50 rounded-xl">
+                          <p className="text-xs font-bold text-slate-900">{c.configKey} <span className="text-slate-400 font-normal">({c.scope})</span></p>
+                          <p className="text-[11px] text-slate-500 break-all">{JSON.stringify(c.value)}</p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {configSubmitError && (
+                    <div className="bg-red-50 border border-red-100 rounded-xl p-3 text-xs text-red-700 font-semibold">{configSubmitError}</div>
+                  )}
+                  <div className="grid grid-cols-2 gap-2">
+                    <input placeholder="Kunci konfigurasi (cth: trial_days_default)" value={configForm.configKey} onChange={e => setConfigForm({ ...configForm, configKey: e.target.value })}
+                      className="border border-slate-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:border-emerald-400" />
+                    <input placeholder='Nilai (cth: 14 atau "teks" atau {"a":1})' value={configForm.value} onChange={e => setConfigForm({ ...configForm, value: e.target.value })}
+                      className="border border-slate-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:border-emerald-400" />
+                  </div>
+                  <button
+                    disabled={configSubmitBusy}
+                    onClick={submitConfigItem}
+                    className="px-4 py-2 rounded-lg text-xs font-bold cursor-pointer transition bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50"
+                  >
+                    Hantar ke Pusat Kelulusan
+                  </button>
+                  <div className="border-t border-slate-100 pt-3">
+                    <p className="text-xs font-bold text-slate-900 mb-2">Ambang Kelulusan</p>
+                    {approvalThresholds.length === 0 ? (
+                      <p className="text-xs text-slate-400 text-center py-3">Tiada ambang ditetapkan.</p>
+                    ) : (
+                      <div className="space-y-1">
+                        {approvalThresholds.map((t) => (
+                          <div key={t.actionType} className="flex items-center justify-between p-2 bg-slate-50 rounded-lg text-[11px]">
+                            <span className="text-slate-700 font-semibold">{t.actionType}</span>
+                            <span className="text-slate-500">RM {t.valueThresholdMyr.toFixed(2)} &middot; {t.requiresDualApproval ? "perlu kelulusan kembar" : "kelulusan tunggal"}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Commercial Analytics: events + plan distribution */}
+                <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-3">
+                  <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2"><BarChart3 className="w-4 h-4 text-emerald-600" />Taburan Pelan</h3>
+                  {planDistribution.length === 0 ? (
+                    <p className="text-xs text-slate-400 text-center py-3">Tiada data.</p>
+                  ) : (
+                    <div className="space-y-1">
+                      {planDistribution.map((p) => (
+                        <div key={p.planName} className="flex items-center justify-between p-2 bg-slate-50 rounded-lg text-[11px]">
+                          <span className="text-slate-700 font-semibold">{p.planName}</span>
+                          <span className="text-slate-500">{p.tenantCount} tenant &middot; RM {p.mrrMyr.toFixed(2)} MRR</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-3">
+                  <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2"><Activity className="w-4 h-4 text-emerald-600" />Aliran Peristiwa Komersial</h3>
+                  {commercialEvents.length === 0 ? (
+                    <p className="text-xs text-slate-400 text-center py-3">Tiada peristiwa.</p>
+                  ) : (
+                    <div className="space-y-1 max-h-72 overflow-y-auto">
+                      {commercialEvents.map((e) => (
+                        <div key={e.id} className="p-2 bg-slate-50 rounded-lg text-[11px]">
+                          <p className="font-semibold text-slate-700">{e.eventType} {e.tenantName && <span className="text-slate-400 font-normal">&middot; {e.tenantName}</span>}</p>
+                          <p className="text-slate-400">{new Date(e.occurredAt).toLocaleString("ms-MY")}</p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Production Governance: scheduled job runs */}
+                <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-3">
+                  <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2"><Server className="w-4 h-4 text-emerald-600" />Tugas Berjadual</h3>
+                  {scheduledJobRuns.length === 0 ? (
+                    <p className="text-xs text-slate-400 text-center py-3">Tiada rekod tugas berjadual.</p>
+                  ) : (
+                    <div className="space-y-1 max-h-72 overflow-y-auto">
+                      {scheduledJobRuns.map((j, idx) => (
+                        <div key={`${j.jobName}-${j.startedAt}-${idx}`} className="flex items-center justify-between p-2 bg-slate-50 rounded-lg text-[11px]">
+                          <span className="text-slate-700 font-semibold">{j.jobName}</span>
+                          <span className={`font-semibold ${j.status === "success" ? "text-emerald-600" : j.status === "failed" ? "text-red-600" : "text-slate-500"}`}>{j.status}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Customer Success: recommended actions */}
+                <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-3">
+                  <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2"><UserCheck className="w-4 h-4 text-emerald-600" />Tindakan Disyorkan (Kejayaan Pelanggan)</h3>
+                  {recommendedActions.length === 0 ? (
+                    <p className="text-xs text-slate-400 text-center py-3">Tiada tindakan disyorkan.</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {recommendedActions.map((a, idx) => (
+                        <div key={`${a.tenantId}-${idx}`} className="p-3 bg-slate-50 rounded-xl">
+                          <p className="text-xs font-bold text-slate-900">{a.tenantName} <span className="text-slate-400 font-normal">(skor: {a.healthScore})</span></p>
+                          <p className="text-[11px] text-slate-500">{a.playbookName}: {a.recommendedAction}</p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
             )}
