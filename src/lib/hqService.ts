@@ -1856,3 +1856,69 @@ export async function getCustomer360(tenantId: string): Promise<Record<string, u
   if (error) return null;
   return data;
 }
+
+// Tenant Activity Center
+export interface TenantActivityEntry {
+  id: string;
+  workspaceId: string;
+  actorId: string;
+  actorEmail: string;
+  actorRole: string;
+  actorName?: string;
+  actionType: string;
+  module: string;
+  description: string;
+  metadata?: Record<string, any>;
+  createdAt: string;
+}
+
+export async function getTenantActivityFeed(
+  workspaceId?: string,
+  limit = 50
+): Promise<TenantActivityEntry[]> {
+  if (!supabase) return [];
+  const { data, error } = await supabase.rpc('get_tenant_activity_feed', {
+    p_workspace_id: workspaceId || null,
+    p_limit: limit,
+    p_offset: 0,
+  });
+  if (error) { console.warn('getTenantActivityFeed:', error.message); return []; }
+  return (data || []).map((r: any) => ({
+    id: r.id,
+    workspaceId: r.workspace_id,
+    actorId: r.actor_id,
+    actorEmail: r.actor_email,
+    actorRole: r.actor_role,
+    actorName: r.actor_name,
+    actionType: r.action_type,
+    module: r.module,
+    description: r.description,
+    metadata: r.metadata,
+    createdAt: r.created_at,
+  }));
+}
+
+export async function logTenantActivity(params: {
+  workspaceId: string;
+  actorId: string;
+  actorEmail: string;
+  actorRole: string;
+  actorName?: string;
+  actionType: string;
+  module: string;
+  description: string;
+  metadata?: Record<string, any>;
+}): Promise<void> {
+  if (!supabase || !isSupabaseConfigured()) return;
+  await supabase.rpc('log_tenant_activity', {
+    p_workspace_id: params.workspaceId,
+    p_actor_id: params.actorId,
+    p_actor_email: params.actorEmail,
+    p_actor_role: params.actorRole,
+    p_actor_name: params.actorName || null,
+    p_action_type: params.actionType,
+    p_module: params.module,
+    p_description: params.description,
+    p_metadata: params.metadata || null,
+  });
+}

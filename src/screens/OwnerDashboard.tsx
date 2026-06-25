@@ -18,7 +18,7 @@ import {
   Paperclip, Mic, Square, File as FileIcon, Plus, Building2, ScanLine, Star,
 } from "lucide-react";
 import { FinancialEvidencePackageManager } from "../components/FinancialEvidencePackage";
-import { createTenantSupportTicket, getMyTenantSupportTickets, SupportTicket, updateTenantMasterProfile, SUPPORT_TICKET_TEMPLATES, uploadTicketAttachment, getTicketAttachmentUrl, ticketSlaState, TICKET_STATUS_LABEL_MS, TICKET_STATUS_STYLE, tenantAssignStaffRole, tenantRevokeStaffRole, tenantSubmitAppeal, tenantReplySupportTicket, getTenantMyHealthScore, TenantHealthScore, getTenantAiCostSummary, TenantAiCostSummary, getMyDataAccessLog, DataAccessLogEntry, getAddonPackages, AddonPackage, redeemPromotion } from "../lib/hqService";
+import { createTenantSupportTicket, getMyTenantSupportTickets, SupportTicket, updateTenantMasterProfile, SUPPORT_TICKET_TEMPLATES, uploadTicketAttachment, getTicketAttachmentUrl, ticketSlaState, TICKET_STATUS_LABEL_MS, TICKET_STATUS_STYLE, tenantAssignStaffRole, tenantRevokeStaffRole, tenantSubmitAppeal, tenantReplySupportTicket, getTenantMyHealthScore, TenantHealthScore, getTenantAiCostSummary, TenantAiCostSummary, getMyDataAccessLog, DataAccessLogEntry, getAddonPackages, AddonPackage, redeemPromotion, getTenantActivityFeed } from "../lib/hqService";
 import { FinancialReportsAnalytics } from "../components/FinancialReportsAnalytics";
 import { StorageBar } from "../components/StorageBar";
 import { DocumentsManager } from "../components/DocumentsManager";
@@ -65,7 +65,7 @@ import {
 } from "../lib/paymentService";
 
 type MainTab = "home" | "dashboard" | "documents" | "reports" | "more";
-type MorePage = "menu" | "team" | "history" | "settings" | "myProfile" | "support" | "billing" | "resources" | "chatArchive";
+type MorePage = "menu" | "team" | "history" | "settings" | "myProfile" | "support" | "billing" | "resources" | "chatArchive" | "activity";
 
 // AI chat suggestions may carry a server-computed default date; if the AI
 // didn't extract a date from the user's message, normalize to the user's
@@ -333,6 +333,10 @@ export function OwnerDashboard() {
   const [ticketAttachFile, setTicketAttachFile] = useState<File | null>(null);
   const [ticketAttachUploading, setTicketAttachUploading] = useState(false);
   const supportEndRef = useRef<HTMLDivElement>(null);
+
+  // â"€â"€ Tenant Activity Center â"€â"€
+  const [tenantActivity, setTenantActivity] = useState<any[]>([]);
+  const [activityLoading, setActivityLoading] = useState(false);
 
   // â"€â"€ Reminder Settings â"€â"€
   const [reminders, setReminders] = useState({ subscription: "7", bill: "3", aiCredit: "7", storage: "7" });
@@ -981,6 +985,14 @@ export function OwnerDashboard() {
     if (isMockUser || !showDataAccessLog || !tenantId) return;
     getMyDataAccessLog(tenantId).then(setDataAccessLog);
   }, [isMockUser, showDataAccessLog, tenantId]);
+  useEffect(() => {
+    if (morePage !== 'activity' || !isSupabaseConfigured() || isMockUser) return;
+    setActivityLoading(true);
+    getTenantActivityFeed(activeWorkspace?.id).then(data => {
+      setTenantActivity(data);
+      setActivityLoading(false);
+    }).catch(() => setActivityLoading(false));
+  }, [morePage, activeWorkspace?.id]);
 
   useEffect(() => {
     if (!wsId || !user) return;
@@ -2820,6 +2832,7 @@ export function OwnerDashboard() {
                     { id: "resources" as MorePage, label: "Tetapan Sumber",    desc: "AI & storan yang digunakan",            icon: Cpu },
                     { id: "chatArchive" as MorePage, label: "Arkib Perbualan", desc: "Sejarah perbualan dengan MYKERANI ikut tarikh", icon: MessageCircle },
                     { id: "history" as MorePage,   label: "Sejarah Aktiviti",  desc: "Log semua transaksi & aktiviti",        icon: History },
+                    { id: "activity" as MorePage,  label: "Pusat Aktiviti",    desc: "Pantau aktiviti staf dalam ruang kerja", icon: Bell },
                     { id: "support" as MorePage,   label: "Pusat Sokongan",    desc: "Bantuan, FAQ & tiket sokongan",         icon: HelpCircle },
                   ]).map(({ id, label, desc, icon: Icon }) => (
                     <button key={id} onClick={() => setMorePage(id)}
@@ -3638,6 +3651,36 @@ export function OwnerDashboard() {
             )}
 
             {/* â•â•â• SUPPORT CENTER â€" Feature 1 â•â•â• */}
+            {/* Pusat Aktiviti */}
+            {morePage === "activity" && (
+              <div className="space-y-3">
+                <h2 className="text-lg font-bold text-slate-900">Pusat Aktiviti</h2>
+                {activityLoading && (
+                  <div className="text-center text-slate-400 py-8">Memuatkan...</div>
+                )}
+                {!activityLoading && tenantActivity.length === 0 && (
+                  <div className="text-center text-slate-400 py-8">
+                    <Bell className="w-10 h-10 mx-auto mb-2 text-slate-200" />
+                    <p className="text-sm">Tiada aktiviti direkodkan.</p>
+                  </div>
+                )}
+                {tenantActivity.map(entry => (
+                  <div key={entry.id} className="bg-white border border-slate-100 rounded-2xl px-4 py-3 shadow-sm">
+                    <div className="flex justify-between items-start gap-3">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-semibold text-slate-900 leading-snug">{entry.description}</p>
+                        <p className="text-[11px] text-slate-400 mt-0.5">
+                          {entry.actorName || entry.actorEmail} &middot; {entry.actorRole} &middot; {entry.module}
+                        </p>
+                      </div>
+                      <p className="text-[10px] text-slate-300 whitespace-nowrap shrink-0">
+                        {new Date(entry.createdAt).toLocaleDateString('ms-MY', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
             {morePage === "support" && (
               <div className="space-y-4">
                 <h2 className="text-lg font-bold text-slate-900">Pusat Sokongan</h2>
