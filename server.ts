@@ -2094,8 +2094,8 @@ Only include a "CONFIRM_TRANSACTION" suggestion entry when financialIntent.detec
   // returns the checkout_url for the client to redirect the user to.
   app.post("/api/payments/chip-asia/init", async (req, res) => {
     try {
-      const { transactionId, tenantId, planId, amountMyr } = req.body || {};
-      if (!transactionId || !tenantId || !planId || !amountMyr) {
+      const { transactionId, tenantId, planId, amountMyr, addonLabel } = req.body || {};
+      if (!transactionId || !tenantId || !amountMyr || (!planId && !addonLabel)) {
         return res.status(400).json({ error: "Maklumat pembayaran tidak lengkap." });
       }
 
@@ -2120,7 +2120,7 @@ Only include a "CONFIRM_TRANSACTION" suggestion entry when financialIntent.detec
           brand_id: settings.chipAsiaBrandId,
           client: { email: req.body.email || "billing@mykerani.app" },
           purchase: {
-            products: [{ name: `Pelan Langganan MyKerani`, price: Math.round(Number(amountMyr) * 100) }],
+            products: [{ name: addonLabel ? `MyKerani: ${addonLabel}` : `Pelan Langganan MyKerani`, price: Math.round(Number(amountMyr) * 100) }],
           },
           reference: transactionId,
           success_redirect: `${baseUrl}/?payment=success`,

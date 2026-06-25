@@ -432,14 +432,16 @@ export interface PendingPaymentApproval {
   id: string;
   tenantId: string;
   tenantName: string;
-  planId: string;
-  planName: string;
+  planId: string | null;
+  planName: string | null;
   amountMyr: number;
   method: "chip_asia" | "manual";
   slipPath: string | null;
   submittedByName: string;
   submittedByEmail: string;
   createdAt: string;
+  kind: "plan_subscription" | "addon";
+  addonLabel: string | null;
 }
 
 export async function getPendingPaymentApprovals(): Promise<PendingPaymentApproval[]> {
@@ -458,6 +460,8 @@ export async function getPendingPaymentApprovals(): Promise<PendingPaymentApprov
     submittedByName: row.submitted_by_name || "",
     submittedByEmail: row.submitted_by_email || "",
     createdAt: row.created_at,
+    kind: row.kind,
+    addonLabel: row.addon_label,
   }));
 }
 

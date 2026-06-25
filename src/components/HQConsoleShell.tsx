@@ -1893,7 +1893,7 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
                       {pendingApprovals.map(a => (
                         <div key={a.id} className="flex items-center justify-between p-3 border border-slate-100 rounded-xl">
                           <div className="min-w-0">
-                            <p className="text-xs font-bold text-slate-800 truncate">{a.tenantName} — {a.planName}</p>
+                            <p className="text-xs font-bold text-slate-800 truncate">{a.tenantName} — {a.kind === "addon" ? a.addonLabel : a.planName}</p>
                             <p className="text-[10px] text-slate-400 truncate">
                               RM {a.amountMyr.toLocaleString()} · {a.method === "manual" ? "Manual (slip)" : "Chip Asia"} · dihantar oleh {a.submittedByName || a.submittedByEmail}
                             </p>
