@@ -15,15 +15,15 @@ import {
   BookOpen, Ticket, MessageCircle, Zap, Database, Edit3,
   UserCheck, UserX, KeyRound, AlertCircle, CheckCircle2,
   ToggleLeft, ToggleRight, ExternalLink, Trash2, Download,
-  Paperclip, Mic, Square, File as FileIcon, Plus, Building2,
+  Paperclip, Mic, Square, File as FileIcon, Plus, Building2, ScanLine, Star,
 } from "lucide-react";
 import { FinancialEvidencePackageManager } from "../components/FinancialEvidencePackage";
-import { createTenantSupportTicket, getMyTenantSupportTickets, SupportTicket, updateTenantMasterProfile, SUPPORT_TICKET_TEMPLATES, uploadTicketAttachment, getTicketAttachmentUrl, ticketSlaState, TICKET_STATUS_LABEL_MS, TICKET_STATUS_STYLE, tenantAssignStaffRole, tenantRevokeStaffRole, tenantSubmitAppeal, tenantReplySupportTicket, getTenantMyHealthScore, TenantHealthScore, getTenantAiCostSummary, TenantAiCostSummary, getMyDataAccessLog, DataAccessLogEntry } from "../lib/hqService";
+import { createTenantSupportTicket, getMyTenantSupportTickets, SupportTicket, updateTenantMasterProfile, SUPPORT_TICKET_TEMPLATES, uploadTicketAttachment, getTicketAttachmentUrl, ticketSlaState, TICKET_STATUS_LABEL_MS, TICKET_STATUS_STYLE, tenantAssignStaffRole, tenantRevokeStaffRole, tenantSubmitAppeal, tenantReplySupportTicket, getTenantMyHealthScore, TenantHealthScore, getTenantAiCostSummary, TenantAiCostSummary, getMyDataAccessLog, DataAccessLogEntry, getAddonPackages, AddonPackage, redeemPromotion } from "../lib/hqService";
 import { FinancialReportsAnalytics } from "../components/FinancialReportsAnalytics";
 import { StorageBar } from "../components/StorageBar";
 import { DocumentsManager } from "../components/DocumentsManager";
-import { useStorageQuota, PLAN_QUOTAS, GB } from "../lib/storageQuota";
-import { useAiCredits } from "../lib/aiCredits";
+import { useStorageQuota, PLAN_QUOTAS } from "../lib/storageQuota";
+import { useAiCredits, useOcrCredits } from "../lib/aiCredits";
 import { useNotifications, buildTenantNotifs, buildFinancialNotifs, fmtNotifTime } from "../lib/notifications";
 import { computeFinancialHealthScoring } from "../lib/financialHealth";
 import {
@@ -60,7 +60,8 @@ import {
 } from "../lib/assetOwnerData";
 import {
   submitManualPayment, initiateChipAsiaPayment, getTenantPaymentTransactions, startTrialSubscription,
-  type TenantPaymentTransaction,
+  purchaseAddonManual, purchaseAddonChipAsia,
+  type TenantPaymentTransaction, type ResourceCreditType,
 } from "../lib/paymentService";
 
 type MainTab = "home" | "dashboard" | "documents" | "reports" | "more";
@@ -725,7 +726,37 @@ export function OwnerDashboard() {
   const tenantId = activeTenant?.id || user?.id || "guest";
   const storageQuota = useStorageQuota(tenantId, wsId || undefined);
   const aiCredits = useAiCredits(tenantId, wsId || undefined);
+  const ocrCredits = useOcrCredits(tenantId, wsId || undefined);
   const [showAddonModal, setShowAddonModal] = useState(false);
+  const [showCreditModal, setShowCreditModal] = useState<"AI" | "OCR" | null>(null);
+  const [storagePackages, setStoragePackages] = useState<AddonPackage[]>([]);
+  const [aiCreditPackages, setAiCreditPackages] = useState<AddonPackage[]>([]);
+  const [ocrCreditPackages, setOcrCreditPackages] = useState<AddonPackage[]>([]);
+  useEffect(() => {
+    getAddonPackages("STORAGE").then(setStoragePackages);
+    getAddonPackages("AI").then(setAiCreditPackages);
+    getAddonPackages("OCR").then(setOcrCreditPackages);
+  }, []);
+  const [showPromoModal, setShowPromoModal] = useState(false);
+  const [promoCode, setPromoCode] = useState("");
+  const [promoBusy, setPromoBusy] = useState(false);
+  const [promoResult, setPromoResult] = useState<string | null>(null);
+  const submitPromoRedeem = async () => {
+    if (!promoCode.trim() || !activeWorkspace) return;
+    setPromoBusy(true);
+    setPromoResult(null);
+    try {
+      const res = await redeemPromotion(promoCode.trim().toUpperCase(), activeWorkspace.tenantId, activeWorkspace.id);
+      if (res.ok) {
+        setPromoResult(res.kind === "trial_extension_days" ? `Berjaya! Percubaan dilanjutkan ${res.amount} hari.` : `Berjaya! Kredit ditambah ke dompet anda.`);
+        setPromoCode("");
+      } else {
+        setPromoResult(res.message || "Kod promosi tidak sah atau telah tamat tempoh.");
+      }
+    } finally {
+      setPromoBusy(false);
+    }
+  };
 
   // ── Subscription plan + payment (real, Supabase-backed) ──
   interface PlanOption {
@@ -745,6 +776,7 @@ export function OwnerDashboard() {
   const [paymentError, setPaymentError] = useState<string | null>(null);
   const [trialSubmitting, setTrialSubmitting] = useState(false);
   const [trialError, setTrialError] = useState<string | null>(null);
+  const [addonPurchase, setAddonPurchase] = useState<{ creditType: ResourceCreditType; creditAmount: number; label: string; amountMyr: number } | null>(null);
 
   useEffect(() => {
     if (!isSupabaseConfigured() || !supabase || !activeTenant?.id) return;
@@ -772,7 +804,16 @@ export function OwnerDashboard() {
   }, [activeTenant?.id, paymentTxRefresh]);
 
   const openPaymentModal = (planId?: string) => {
+    setAddonPurchase(null);
     setPaymentModalPlanId(planId || currentSub?.planId || availablePlans[0]?.id || "");
+    setPaymentMethod(paymentMethods.chipAsiaEnabled ? "chip_asia" : "manual");
+    setSlipFile(null);
+    setPaymentError(null);
+    setShowPaymentModal(true);
+  };
+
+  const openAddonPurchaseModal = (creditType: ResourceCreditType, creditAmount: number, label: string, amountMyr: number) => {
+    setAddonPurchase({ creditType, creditAmount, label, amountMyr });
     setPaymentMethod(paymentMethods.chipAsiaEnabled ? "chip_asia" : "manual");
     setSlipFile(null);
     setPaymentError(null);
@@ -793,7 +834,37 @@ export function OwnerDashboard() {
   };
 
   const submitPayment = async () => {
-    if (!activeTenant?.id || !paymentModalPlanId) return;
+    if (!activeTenant?.id) return;
+
+    if (addonPurchase) {
+      if (!wsId) return;
+      setPaymentSubmitting(true);
+      setPaymentError(null);
+      try {
+        if (paymentMethod === "manual") {
+          if (!slipFile) { setPaymentError("Sila muat naik slip pembayaran."); return; }
+          const { error } = await purchaseAddonManual(
+            activeTenant.id, wsId, addonPurchase.creditType, addonPurchase.creditAmount, addonPurchase.amountMyr, addonPurchase.label, slipFile
+          );
+          if (error) { setPaymentError(error); return; }
+        } else {
+          const { checkoutUrl, error } = await purchaseAddonChipAsia(
+            activeTenant.id, wsId, addonPurchase.creditType, addonPurchase.creditAmount, addonPurchase.amountMyr, addonPurchase.label
+          );
+          if (error || !checkoutUrl) { setPaymentError(error || "Gagal memulakan pembayaran."); return; }
+          window.location.href = checkoutUrl;
+          return;
+        }
+        setShowPaymentModal(false);
+        setAddonPurchase(null);
+        setPaymentTxRefresh(t => t + 1);
+      } finally {
+        setPaymentSubmitting(false);
+      }
+      return;
+    }
+
+    if (!paymentModalPlanId) return;
     const plan = availablePlans.find(p => p.id === paymentModalPlanId);
     if (!plan) return;
     setPaymentSubmitting(true);
@@ -3953,7 +4024,32 @@ export function OwnerDashboard() {
                     <p className="text-[10px] text-slate-400">{Math.max(0, aiCredits.total - aiCredits.used)} kredit berbaki</p>
                   </div>
                   <div className="grid grid-cols-2 gap-2">
-                    <button onClick={() => setMorePage("resources")} className="py-2.5 bg-amber-50 border border-amber-100 text-amber-700 rounded-xl text-xs font-bold cursor-pointer hover:bg-amber-100 transition">Beli Kredit</button>
+                    <button onClick={() => setShowCreditModal("AI")} className="py-2.5 bg-amber-50 border border-amber-100 text-amber-700 rounded-xl text-xs font-bold cursor-pointer hover:bg-amber-100 transition">Beli Kredit</button>
+                    <button onClick={() => setMorePage("resources")} className="py-2.5 bg-slate-50 border border-slate-200 text-slate-600 rounded-xl text-xs font-bold cursor-pointer hover:bg-slate-100 transition">Lihat Penggunaan</button>
+                  </div>
+                </div>
+
+                {/* OCR Credits */}
+                <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-2">
+                      <ScanLine className="w-4 h-4 text-violet-500" />
+                      <p className="text-sm font-bold text-slate-900">Kredit OCR</p>
+                    </div>
+                    <span className="text-xs text-slate-400">Paket {ocrCredits.planName}</span>
+                  </div>
+                  <div className="space-y-1">
+                    <div className="flex justify-between text-xs">
+                      <span className="text-slate-500">Digunakan</span>
+                      <span className="font-semibold text-slate-800">{ocrCredits.used} / {ocrCredits.total} kredit</span>
+                    </div>
+                    <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
+                      <div className="h-full bg-violet-400 rounded-full" style={{ width: `${Math.min(100, (ocrCredits.used / Math.max(1, ocrCredits.total)) * 100)}%` }} />
+                    </div>
+                    <p className="text-[10px] text-slate-400">{Math.max(0, ocrCredits.total - ocrCredits.used)} kredit berbaki</p>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button onClick={() => setShowCreditModal("OCR")} className="py-2.5 bg-violet-50 border border-violet-100 text-violet-700 rounded-xl text-xs font-bold cursor-pointer hover:bg-violet-100 transition">Beli Kredit</button>
                     <button onClick={() => setMorePage("resources")} className="py-2.5 bg-slate-50 border border-slate-200 text-slate-600 rounded-xl text-xs font-bold cursor-pointer hover:bg-slate-100 transition">Lihat Penggunaan</button>
                   </div>
                 </div>
@@ -3983,6 +4079,16 @@ export function OwnerDashboard() {
                   </div>
                 </div>
 
+                {/* Promo Code Redemption */}
+                <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-3">
+                  <div className="flex items-center space-x-2">
+                    <Star className="w-4 h-4 text-emerald-500" />
+                    <p className="text-sm font-bold text-slate-900">Kod Promosi</p>
+                  </div>
+                  <p className="text-[11px] text-slate-500">Ada kod promosi? Tebus untuk kredit dompet percuma atau lanjutan tempoh percubaan.</p>
+                  <button onClick={() => { setShowPromoModal(true); setPromoResult(null); }} className="w-full py-2.5 bg-emerald-50 border border-emerald-100 text-emerald-700 rounded-xl text-xs font-bold cursor-pointer hover:bg-emerald-100 transition">Tebus Kod Promosi</button>
+                </div>
+
                 {/* Invoices / payment history */}
                 <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-3">
                   <p className="text-sm font-bold text-slate-900">Invois & Sejarah Pembayaran</p>
@@ -3996,7 +4102,7 @@ export function OwnerDashboard() {
                       {paymentTxs.map(tx => (
                         <div key={tx.id} className="flex items-center justify-between p-2.5 border border-slate-100 rounded-xl">
                           <div>
-                            <p className="text-xs font-semibold text-slate-800">{tx.planName} — RM {tx.amountMyr.toLocaleString()}</p>
+                            <p className="text-xs font-semibold text-slate-800">{tx.kind === "addon" ? tx.addonLabel : tx.planName} — RM {tx.amountMyr.toLocaleString()}</p>
                             <p className="text-[10px] text-slate-400">{new Date(tx.createdAt).toLocaleDateString("ms-MY", { day: "numeric", month: "short", year: "numeric" })} · {tx.method === "manual" ? "Manual" : "Chip Asia"}</p>
                           </div>
                           <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
@@ -4018,17 +4124,24 @@ export function OwnerDashboard() {
               <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-6" onClick={() => setShowPaymentModal(false)}>
                 <div className="bg-white rounded-2xl p-5 max-w-sm w-full space-y-4" onClick={e => e.stopPropagation()}>
                   <div className="flex items-center justify-between">
-                    <h3 className="text-sm font-bold text-slate-900">Bayar Langganan</h3>
-                    <button onClick={() => setShowPaymentModal(false)} className="text-slate-400 hover:text-slate-600 cursor-pointer"><X className="w-4 h-4" /></button>
+                    <h3 className="text-sm font-bold text-slate-900">{addonPurchase ? "Bayar Tambahan" : "Bayar Langganan"}</h3>
+                    <button onClick={() => { setShowPaymentModal(false); setAddonPurchase(null); }} className="text-slate-400 hover:text-slate-600 cursor-pointer"><X className="w-4 h-4" /></button>
                   </div>
 
-                  <div>
-                    <label className="text-xs font-semibold text-slate-500 mb-1 block">Pilih Plan</label>
-                    <select value={paymentModalPlanId} onChange={e => setPaymentModalPlanId(e.target.value)}
-                      className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-indigo-400 bg-white">
-                      {availablePlans.map(p => <option key={p.id} value={p.id}>{p.name} — RM {p.price.toLocaleString()}/bln</option>)}
-                    </select>
-                  </div>
+                  {addonPurchase ? (
+                    <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl">
+                      <p className="text-sm font-bold text-slate-800">{addonPurchase.label}</p>
+                      <p className="text-xs text-slate-500">RM {addonPurchase.amountMyr.toLocaleString()}</p>
+                    </div>
+                  ) : (
+                    <div>
+                      <label className="text-xs font-semibold text-slate-500 mb-1 block">Pilih Plan</label>
+                      <select value={paymentModalPlanId} onChange={e => setPaymentModalPlanId(e.target.value)}
+                        className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-indigo-400 bg-white">
+                        {availablePlans.map(p => <option key={p.id} value={p.id}>{p.name} — RM {p.price.toLocaleString()}/bln</option>)}
+                      </select>
+                    </div>
+                  )}
 
                   {(paymentMethods.chipAsiaEnabled || paymentMethods.manualPaymentEnabled) ? (
                     <div className="flex gap-2">
@@ -4290,26 +4403,92 @@ export function OwnerDashboard() {
             </div>
             <p className="text-[11px] text-slate-500">Pilih pakej tambahan storan. Bayaran akan disahkan oleh HQ.</p>
             <div className="space-y-2">
-              {[
-                { gb: 5,  label: "+5 GB",  price: "RM 15/bln", best: false },
-                { gb: 20, label: "+20 GB", price: "RM 45/bln", best: true  },
-                { gb: 50, label: "+50 GB", price: "RM 99/bln", best: false },
-              ].map(({ gb, label, price, best }) => (
-                <button key={gb}
+              {storagePackages.length === 0 ? (
+                <p className="text-xs text-slate-400 text-center py-3">Tiada pakej tersedia.</p>
+              ) : storagePackages.map((pkg) => (
+                <button key={pkg.id}
                   onClick={() => {
-                    storageQuota.applyAddon(gb * GB);
                     setShowAddonModal(false);
+                    openAddonPurchaseModal("STORAGE", pkg.amount, `Tambahan Storan ${pkg.label}`, pkg.priceMyr);
                   }}
-                  className={`w-full flex items-center justify-between p-4 rounded-xl border-2 transition cursor-pointer ${best ? "border-emerald-500 bg-emerald-50" : "border-slate-100 hover:border-slate-200"}`}>
+                  className={`w-full flex items-center justify-between p-4 rounded-xl border-2 transition cursor-pointer ${pkg.isBestValue ? "border-emerald-500 bg-emerald-50" : "border-slate-100 hover:border-slate-200"}`}>
                   <div className="text-left">
-                    <p className={`text-sm font-bold ${best ? "text-emerald-800" : "text-slate-800"}`}>{label}</p>
-                    {best && <span className="text-[9px] font-bold text-emerald-600 bg-emerald-100 px-1.5 py-0.5 rounded-full">TERBAIK</span>}
+                    <p className={`text-sm font-bold ${pkg.isBestValue ? "text-emerald-800" : "text-slate-800"}`}>{pkg.label}</p>
+                    {pkg.isBestValue && <span className="text-[9px] font-bold text-emerald-600 bg-emerald-100 px-1.5 py-0.5 rounded-full">TERBAIK</span>}
                   </div>
-                  <p className={`text-sm font-bold ${best ? "text-emerald-700" : "text-slate-600"}`}>{price}</p>
+                  <p className={`text-sm font-bold ${pkg.isBestValue ? "text-emerald-700" : "text-slate-600"}`}>RM {pkg.priceMyr}/bln</p>
                 </button>
               ))}
             </div>
-            <p className="text-[10px] text-slate-400 text-center">Storan tambahan aktif serta-merta selepas HQ mengesahkan pembayaran.</p>
+            <p className="text-[10px] text-slate-400 text-center">Storan tambahan aktif selepas pembayaran disahkan (Chip Asia serta-merta, slip manual selepas semakan HQ).</p>
+          </div>
+        </div>
+      )}
+
+      {/* AI/OCR Credit Top-Up Modal */}
+      {showCreditModal && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 backdrop-blur-sm">
+          <div className="bg-white rounded-t-3xl sm:rounded-2xl w-full max-w-sm shadow-2xl p-5 space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="font-bold text-slate-900">Tambah Kredit {showCreditModal === "AI" ? "AI" : "OCR"}</h3>
+              <button onClick={() => setShowCreditModal(null)} className="p-1.5 rounded-xl hover:bg-slate-100 cursor-pointer">
+                <X className="w-4 h-4 text-slate-400" />
+              </button>
+            </div>
+            <p className="text-[11px] text-slate-500">Pilih pakej kredit tambahan. Kredit ditambah ke wallet selepas pembayaran disahkan.</p>
+            <div className="space-y-2">
+              {(showCreditModal === "AI" ? aiCreditPackages : ocrCreditPackages).length === 0 ? (
+                <p className="text-xs text-slate-400 text-center py-3">Tiada pakej tersedia.</p>
+              ) : (showCreditModal === "AI" ? aiCreditPackages : ocrCreditPackages).map((pkg) => (
+                <button key={pkg.id}
+                  onClick={() => {
+                    const creditType = showCreditModal;
+                    setShowCreditModal(null);
+                    openAddonPurchaseModal(creditType, pkg.amount, `Tambahan Kredit ${creditType === "AI" ? "AI" : "OCR"} ${pkg.label}`, pkg.priceMyr);
+                  }}
+                  className={`w-full flex items-center justify-between p-4 rounded-xl border-2 transition cursor-pointer ${pkg.isBestValue ? "border-emerald-500 bg-emerald-50" : "border-slate-100 hover:border-slate-200"}`}>
+                  <div className="text-left">
+                    <p className={`text-sm font-bold ${pkg.isBestValue ? "text-emerald-800" : "text-slate-800"}`}>{pkg.label}</p>
+                    {pkg.isBestValue && <span className="text-[9px] font-bold text-emerald-600 bg-emerald-100 px-1.5 py-0.5 rounded-full">TERBAIK</span>}
+                  </div>
+                  <p className={`text-sm font-bold ${pkg.isBestValue ? "text-emerald-700" : "text-slate-600"}`}>RM {pkg.priceMyr}</p>
+                </button>
+              ))}
+            </div>
+            <p className="text-[10px] text-slate-400 text-center">Kredit tambahan aktif selepas pembayaran disahkan (Chip Asia serta-merta, slip manual selepas semakan HQ).</p>
+          </div>
+        </div>
+      )}
+
+      {/* Promo Code Redemption Modal */}
+      {showPromoModal && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 backdrop-blur-sm">
+          <div className="bg-white rounded-t-3xl sm:rounded-2xl w-full max-w-sm shadow-2xl p-5 space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="font-bold text-slate-900">Tebus Kod Promosi</h3>
+              <button onClick={() => setShowPromoModal(false)} className="p-1.5 rounded-xl hover:bg-slate-100 cursor-pointer">
+                <X className="w-4 h-4 text-slate-400" />
+              </button>
+            </div>
+            <p className="text-[11px] text-slate-500">Masukkan kod promosi untuk menebus kredit dompet percuma atau lanjutan tempoh percubaan.</p>
+            <input
+              value={promoCode}
+              onChange={(e) => setPromoCode(e.target.value)}
+              placeholder="Kod promosi"
+              className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-emerald-400"
+            />
+            {promoResult && (
+              <div className={`rounded-xl p-3 text-xs font-semibold ${promoResult.startsWith("Berjaya") ? "bg-emerald-50 text-emerald-700 border border-emerald-100" : "bg-red-50 text-red-700 border border-red-100"}`}>
+                {promoResult}
+              </div>
+            )}
+            <button
+              disabled={promoBusy || !promoCode.trim()}
+              onClick={submitPromoRedeem}
+              className="w-full py-2.5 bg-emerald-600 text-white rounded-xl text-sm font-bold cursor-pointer hover:bg-emerald-700 transition disabled:opacity-50"
+            >
+              {promoBusy ? "Menebus..." : "Tebus Sekarang"}
+            </button>
           </div>
         </div>
       )}

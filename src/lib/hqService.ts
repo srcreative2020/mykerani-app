@@ -432,14 +432,16 @@ export interface PendingPaymentApproval {
   id: string;
   tenantId: string;
   tenantName: string;
-  planId: string;
-  planName: string;
+  planId: string | null;
+  planName: string | null;
   amountMyr: number;
   method: "chip_asia" | "manual";
   slipPath: string | null;
   submittedByName: string;
   submittedByEmail: string;
   createdAt: string;
+  kind: "plan_subscription" | "addon";
+  addonLabel: string | null;
 }
 
 export async function getPendingPaymentApprovals(): Promise<PendingPaymentApproval[]> {
@@ -458,6 +460,8 @@ export async function getPendingPaymentApprovals(): Promise<PendingPaymentApprov
     submittedByName: row.submitted_by_name || "",
     submittedByEmail: row.submitted_by_email || "",
     createdAt: row.created_at,
+    kind: row.kind,
+    addonLabel: row.addon_label,
   }));
 }
 
@@ -1263,6 +1267,54 @@ export async function getMyHqStaffNotifications(): Promise<HqStaffNotification[]
   }));
 }
 
+// --- Addon Package Catalog ---
+// HQ-configurable storage/AI/OCR add-on tiers shown to tenants when buying
+// top-ups. Reads are direct (non-sensitive pricing data); writes always go
+// through the pending_hq_actions dual-approval inbox — never a direct table
+// write — per the Commercial Governance Principle (no literal pricing in
+// code, no single-approver changes to global commercial config).
+
+export type AddonCreditType = "AI" | "OCR" | "STORAGE" | "NOTIFICATION";
+
+export interface AddonPackage {
+  id: string;
+  creditType: AddonCreditType;
+  amount: number;
+  priceMyr: number;
+  label: string;
+  sortOrder: number;
+  isBestValue: boolean;
+}
+
+export async function getAddonPackages(creditType?: AddonCreditType): Promise<AddonPackage[]> {
+  if (!isSupabaseConfigured() || !supabase) return [];
+  const { data, error } = await supabase.rpc("get_addon_packages", { p_credit_type: creditType ?? null });
+  if (error || !data) return [];
+  return data.map((row: any) => ({
+    id: row.id,
+    creditType: row.credit_type,
+    amount: Number(row.amount),
+    priceMyr: Number(row.price_myr),
+    label: row.label,
+    sortOrder: row.sort_order,
+    isBestValue: row.is_best_value,
+  }));
+}
+
+export async function submitAddonPackageUpsert(pkg: {
+  id?: string; creditType: AddonCreditType; amount: number; priceMyr: number;
+  label: string; sortOrder?: number; isBestValue?: boolean;
+}): Promise<string | null> {
+  return submitPendingHqAction("addon_package_upsert", "addon_packages", pkg.id ?? null, {
+    id: pkg.id, credit_type: pkg.creditType, amount: pkg.amount, price_myr: pkg.priceMyr,
+    label: pkg.label, sort_order: pkg.sortOrder ?? 0, is_best_value: pkg.isBestValue ?? false,
+  });
+}
+
+export async function submitAddonPackageDeactivate(id: string): Promise<string | null> {
+  return submitPendingHqAction("addon_package_deactivate", "addon_packages", id, {});
+}
+
 export async function markHqStaffNotificationRead(id: string): Promise<boolean> {
   if (!isSupabaseConfigured() || !supabase) return false;
   const { error } = await supabase.rpc("mark_hq_staff_notification_read", { p_id: id });
@@ -1570,4 +1622,237 @@ export async function checkPermission(userId: string, permission: string): Promi
   const { data, error } = await supabase.rpc("check_permission", { p_user_id: userId, p_permission: permission });
   if (error) return false;
   return !!data;
+}
+
+// --- Commercial Analytics (Module 12) ---
+
+export interface CommercialEvent {
+  id: string;
+  eventType: string;
+  tenantId: string | null;
+  tenantName: string | null;
+  workspaceId: string | null;
+  payload: Record<string, unknown>;
+  occurredAt: string;
+}
+
+export async function getCommercialEvents(eventType?: string, limit = 200): Promise<CommercialEvent[]> {
+  if (!isSupabaseConfigured() || !supabase) return [];
+  const { data, error } = await supabase.rpc("get_commercial_events", { p_event_type: eventType ?? null, p_limit: limit });
+  if (error || !data) return [];
+  return data.map((row: any) => ({
+    id: row.id,
+    eventType: row.event_type,
+    tenantId: row.tenant_id,
+    tenantName: row.tenant_name,
+    workspaceId: row.workspace_id,
+    payload: row.payload || {},
+    occurredAt: row.occurred_at,
+  }));
+}
+
+export interface PlanDistributionRow {
+  planName: string;
+  tenantCount: number;
+  mrrMyr: number;
+}
+
+export async function getPlanDistribution(): Promise<PlanDistributionRow[]> {
+  if (!isSupabaseConfigured() || !supabase) return [];
+  const { data, error } = await supabase.rpc("get_plan_distribution");
+  if (error || !data) return [];
+  return data.map((row: any) => ({
+    planName: row.plan_name,
+    tenantCount: Number(row.tenant_count) || 0,
+    mrrMyr: Number(row.mrr_myr) || 0,
+  }));
+}
+
+// --- Commercial Governance (Module 10) ---
+// Generic versioned key/value config (pricing/quotas/credit packages) — no
+// hardcoded values elsewhere should be added once a setting lives here.
+// All writes route through pending_hq_actions (dual-approval for global/plan
+// scope), never a direct table write.
+
+export interface CommercialConfigItem {
+  id: string;
+  configKey: string;
+  scope: "global" | "plan" | "tenant";
+  scopeId: string | null;
+  value: unknown;
+  isActive: boolean;
+  createdAt: string;
+}
+
+export async function getCommercialConfigItems(): Promise<CommercialConfigItem[]> {
+  if (!isSupabaseConfigured() || !supabase) return [];
+  const { data, error } = await supabase.rpc("get_commercial_config_items");
+  if (error || !data) return [];
+  return data.map((row: any) => ({
+    id: row.id,
+    configKey: row.config_key,
+    scope: row.scope,
+    scopeId: row.scope_id,
+    value: row.value,
+    isActive: row.is_active,
+    createdAt: row.created_at,
+  }));
+}
+
+export async function getConfigValue(key: string, scope: "global" | "plan" | "tenant" = "global", scopeId?: string): Promise<unknown | null> {
+  if (!isSupabaseConfigured() || !supabase) return null;
+  const { data, error } = await supabase.rpc("get_config_value", { p_key: key, p_scope: scope, p_scope_id: scopeId ?? null });
+  if (error) return null;
+  return data;
+}
+
+export async function submitCommercialConfigUpsert(
+  configKey: string, scope: "global" | "plan" | "tenant", value: unknown, scopeId?: string
+): Promise<string | null> {
+  return submitPendingHqAction("commercial_config_upsert", "commercial_config_items", null, {
+    config_key: configKey, scope, scope_id: scopeId ?? null, value,
+  });
+}
+
+export interface CommercialApprovalThreshold {
+  actionType: string;
+  valueThresholdMyr: number;
+  requiresDualApproval: boolean;
+}
+
+export async function getCommercialApprovalThresholds(): Promise<CommercialApprovalThreshold[]> {
+  if (!isSupabaseConfigured() || !supabase) return [];
+  const { data, error } = await supabase.rpc("get_commercial_approval_thresholds");
+  if (error || !data) return [];
+  return data.map((row: any) => ({
+    actionType: row.action_type,
+    valueThresholdMyr: Number(row.value_threshold_myr) || 0,
+    requiresDualApproval: Boolean(row.requires_dual_approval),
+  }));
+}
+
+export async function submitApprovalThresholdUpsert(
+  actionType: string, valueThresholdMyr: number, requiresDualApproval: boolean
+): Promise<string | null> {
+  return submitPendingHqAction("approval_threshold_upsert", "commercial_approval_thresholds", null, {
+    action_type: actionType, value_threshold_myr: valueThresholdMyr, requires_dual_approval: requiresDualApproval,
+  });
+}
+
+// --- Promotions ---
+// wallet_credit and trial_extension_days only — discount kinds (% / fixed
+// MYR off a bill) are deliberately out of scope until a billing line-item
+// engine exists; adding them now would be a cosmetic, non-functional kind.
+
+export type PromotionKind = "wallet_credit" | "trial_extension_days";
+
+export interface Promotion {
+  id: string;
+  code: string;
+  kind: PromotionKind;
+  creditType: AddonCreditType | null;
+  amount: number;
+  maxRedemptions: number | null;
+  redemptionsCount: number;
+  startsAt: string | null;
+  expiresAt: string | null;
+  isActive: boolean;
+}
+
+export async function getActivePromotions(): Promise<Promotion[]> {
+  if (!isSupabaseConfigured() || !supabase) return [];
+  const { data, error } = await supabase.rpc("get_active_promotions");
+  if (error || !data) return [];
+  return data.map((row: any) => ({
+    id: row.id,
+    code: row.code,
+    kind: row.kind,
+    creditType: row.credit_type,
+    amount: Number(row.amount) || 0,
+    maxRedemptions: row.max_redemptions === null ? null : Number(row.max_redemptions),
+    redemptionsCount: Number(row.redemptions_count) || 0,
+    startsAt: row.starts_at,
+    expiresAt: row.expires_at,
+    isActive: row.is_active,
+  }));
+}
+
+export async function submitPromotionUpsert(promo: {
+  id?: string; code: string; kind: PromotionKind; creditType?: AddonCreditType;
+  amount: number; maxRedemptions?: number; startsAt?: string; expiresAt?: string;
+}): Promise<string | null> {
+  return submitPendingHqAction("promotion_upsert", "promotions", promo.id ?? null, {
+    id: promo.id, code: promo.code, kind: promo.kind, credit_type: promo.creditType ?? null,
+    amount: promo.amount, max_redemptions: promo.maxRedemptions ?? null,
+    starts_at: promo.startsAt ?? null, expires_at: promo.expiresAt ?? null,
+  });
+}
+
+export async function submitPromotionDeactivate(id: string): Promise<string | null> {
+  return submitPendingHqAction("promotion_deactivate", "promotions", id, {});
+}
+
+export async function redeemPromotion(
+  code: string, tenantId: string, workspaceId: string
+): Promise<{ ok: boolean; kind?: PromotionKind; amount?: number; message: string }> {
+  if (!isSupabaseConfigured() || !supabase) return { ok: false, message: "Supabase not configured" };
+  const { data, error } = await supabase.rpc("redeem_promotion", {
+    p_code: code, p_tenant_id: tenantId, p_workspace_id: workspaceId,
+  });
+  if (error) return { ok: false, message: error.message };
+  const result = data as { ok?: boolean; kind?: PromotionKind; amount?: number } | null;
+  return { ok: Boolean(result?.ok), kind: result?.kind, amount: result?.amount, message: "" };
+}
+
+// --- Production Governance (Module 11) ---
+
+export interface ScheduledJobRun {
+  jobName: string;
+  startedAt: string;
+  finishedAt: string | null;
+  status: string;
+  error: string | null;
+}
+
+export async function getScheduledJobRuns(limit = 50): Promise<ScheduledJobRun[]> {
+  if (!isSupabaseConfigured() || !supabase) return [];
+  const { data, error } = await supabase.rpc("get_scheduled_job_runs", { p_limit: limit });
+  if (error || !data) return [];
+  return data.map((row: any) => ({
+    jobName: row.job_name,
+    startedAt: row.started_at,
+    finishedAt: row.finished_at,
+    status: row.status,
+    error: row.error,
+  }));
+}
+
+// --- Customer Success Center (Module 8) ---
+
+export interface RecommendedAction {
+  tenantId: string;
+  tenantName: string;
+  healthScore: number;
+  playbookName: string;
+  recommendedAction: string;
+}
+
+export async function getRecommendedActions(): Promise<RecommendedAction[]> {
+  if (!isSupabaseConfigured() || !supabase) return [];
+  const { data, error } = await supabase.rpc("get_recommended_actions");
+  if (error || !data) return [];
+  return data.map((row: any) => ({
+    tenantId: row.tenant_id,
+    tenantName: row.tenant_name,
+    healthScore: Number(row.health_score ?? row.score) || 0,
+    playbookName: row.playbook_name,
+    recommendedAction: row.recommended_action,
+  }));
+}
+
+export async function getCustomer360(tenantId: string): Promise<Record<string, unknown> | null> {
+  if (!isSupabaseConfigured() || !supabase) return null;
+  const { data, error } = await supabase.rpc("get_customer_360", { p_tenant_id: tenantId });
+  if (error) return null;
+  return data;
 }

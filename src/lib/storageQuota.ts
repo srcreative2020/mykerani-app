@@ -38,7 +38,6 @@ export interface StorageQuotaHook extends StorageQuotaState {
   isLoading: boolean;
   refresh: () => void;
   setQuota: (bytes: number) => void;
-  applyAddon: (bytes: number) => void;
   freeze: (reason?: StorageQuotaState["frozenReason"]) => void;
   unfreeze: () => void;
   setInactiveDaysLimit: (days: number) => void;
@@ -196,14 +195,6 @@ export function useStorageQuota(tenantId: string, workspaceId?: string): Storage
     setState(prev => ({ ...prev, quotaBytes: bytes }));
   }, []);
 
-  const applyAddon = useCallback((bytes: number) => {
-    setState(prev => ({
-      ...prev,
-      quotaBytes: prev.quotaBytes + bytes,
-      addOns: [...prev.addOns, { bytes, addedAt: new Date().toISOString() }],
-    }));
-  }, []);
-
   const freeze = useCallback((reason: StorageQuotaState["frozenReason"] = "hq_manual") => {
     setState(prev => ({ ...prev, isFrozen: true, frozenReason: reason }));
   }, []);
@@ -226,7 +217,7 @@ export function useStorageQuota(tenantId: string, workspaceId?: string): Storage
     isFrozen, frozenReason,
     pctUsed, usedGB, quotaGB, canUpload, warnLevel,
     fileCount, isLoading, refresh,
-    setQuota, applyAddon, freeze, unfreeze, setInactiveDaysLimit, touchActive,
+    setQuota, freeze, unfreeze, setInactiveDaysLimit, touchActive,
   };
 }
 
