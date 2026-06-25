@@ -81,3 +81,71 @@ export function computeFinancialCompleteness(input: FinancialCompletenessInput):
 
   return { financialRecordsPct, evidenceCoveragePct, bankCoveragePct, historicalCoveragePct, overallCompletenessPct };
 }
+
+// ═════════════════════════════════════════════════════════════════════════════
+// Financial Profile Enhancement — Profile Completeness Engine
+// Blueprint: docs/superpowers/specs/2026-06-26-financial-profile-enhancement-design.md
+// Additive: does NOT modify the existing computeFinancialCompleteness function.
+// ═════════════════════════════════════════════════════════════════════════════
+
+export interface ProfileCompletenessInput {
+  personalProfile: { fullName?: string } | null;
+  businesses: { isActive?: boolean }[];
+  bankAccounts: { is_active?: boolean }[];
+  vehicles: { isActive?: boolean }[];
+  customers: { isActive?: boolean }[];
+  suppliers: { isActive?: boolean }[];
+  properties: { isActive?: boolean }[];
+  insurancePolicies: { isActive?: boolean }[];
+  investments: { isActive?: boolean }[];
+}
+
+export interface ProfileCompletenessResult {
+  personalProfilePct: number;
+  businessPct: number;
+  bankAccountPct: number;
+  customerPct: number;
+  supplierPct: number;
+  assetDiversificationPct: number;
+  overallProfileCompletenessPct: number;
+  missingRepos: string[];
+}
+
+export function computeProfileCompleteness(input: ProfileCompletenessInput): ProfileCompletenessResult {
+  const activeBusinesses = input.businesses.filter(b => b.isActive !== false);
+  const activeBankAccounts = input.bankAccounts.filter(a => (a as any).is_active !== false);
+  const activeCustomers = input.customers.filter(c => c.isActive !== false);
+  const activeSuppliers = input.suppliers.filter(s => s.isActive !== false);
+  const activeProperties = input.properties.filter(p => p.isActive !== false);
+  const activeInsurance = input.insurancePolicies.filter(i => i.isActive !== false);
+  const activeInvestments = input.investments.filter(i => i.isActive !== false);
+
+  const personalProfilePct = input.personalProfile?.fullName ? 100 : 0;
+  const businessPct = activeBusinesses.length > 0 ? 100 : 0;
+  const bankAccountPct = activeBankAccounts.length > 0 ? 100 : 0;
+  const customerPct = activeCustomers.length > 0 ? 100 : 0;
+  const supplierPct = activeSuppliers.length > 0 ? 100 : 0;
+  const assetDiversificationPct = Math.min(100, ((activeProperties.length > 0 ? 1 : 0) + (activeInsurance.length > 0 ? 1 : 0) + (activeInvestments.length > 0 ? 1 : 0)) / 3 * 100);
+
+  const overallProfileCompletenessPct = Math.round(
+    (personalProfilePct + businessPct + bankAccountPct + customerPct + supplierPct + assetDiversificationPct) / 6
+  );
+
+  const missingRepos: string[] = [];
+  if (personalProfilePct === 0) missingRepos.push("Profil Peribadi");
+  if (businessPct === 0) missingRepos.push("Perniagaan");
+  if (bankAccountPct === 0) missingRepos.push("Akaun Bank");
+  if (customerPct === 0) missingRepos.push("Pelanggan");
+  if (supplierPct === 0) missingRepos.push("Pembekal");
+  if (assetDiversificationPct < 100) {
+    if (activeProperties.length === 0) missingRepos.push("Hartanah");
+    if (activeInsurance.length === 0) missingRepos.push("Insurans");
+    if (activeInvestments.length === 0) missingRepos.push("Pelaburan");
+  }
+
+  return {
+    personalProfilePct, businessPct, bankAccountPct,
+    customerPct, supplierPct, assetDiversificationPct,
+    overallProfileCompletenessPct, missingRepos,
+  };
+}
