@@ -1425,7 +1425,13 @@ Here is what you know about the user's life (Profile System — all fields are o
 8. Personal Profile: ${JSON.stringify(financialContext?.personalProfile || {})}
 9. Business Profile(s): ${JSON.stringify(financialContext?.businesses || financialContext?.businessProfile || {})}
 10. Vehicles (name, plateNumber, vehicleType, ownership "PERSONAL"|"BUSINESS"): ${JSON.stringify(financialContext?.vehicles || [])}
-11. Dependents: ${JSON.stringify(financialContext?.dependents || [])}
+ 11. Dependents: ${JSON.stringify(financialContext?.dependents || [])}
+  12. Business Branches (branchName, location, keyed by businessId): ${JSON.stringify(financialContext?.businessBranches || {})}
+  13. Properties (property_name, property_type, address, purchase_value_myr): ${JSON.stringify(financialContext?.properties || [])}
+  14. Insurance Policies (policy_name, insurance_type, provider, premium_amount_myr, premium_frequency, coverage_amount_myr): ${JSON.stringify(financialContext?.insurancePolicies || [])}
+  15. Investments (investment_name, investment_type, institution, current_value_myr): ${JSON.stringify(financialContext?.investments || [])}
+  16. Customer Master (name, email, phone): ${JSON.stringify(financialContext?.customers || [])}
+  17. Supplier Master (name, email, phone): ${JSON.stringify(financialContext?.suppliers || [])}
 
 Instructions & Constraints:
 - AI Suggests. User Confirms. AI Learns. (If you identify any unrecognized category, or vendor without a learned profile, ALWAYS generate a 'LEARN_PATTERN' suggestion inside the 'suggestions' array. Do not suggest editing or deleting records. Only recommend classifications that the user can confirm manually.)
