@@ -263,28 +263,30 @@ export const PermissionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     if (!isSupabaseConfigured() || isMockUser) {
       // --- MOCK FLOW ---
       const localRolesKey = `mykerani_user_roles_${activeTenant.id}`;
-      const existing = [...userRoles];
-      const matchIndex = existing.findIndex(asm => asm.email === email);
+      setUserRoles(prev => {
+        const existing = [...prev];
+        const matchIndex = existing.findIndex(asm => asm.email === email);
 
-      if (matchIndex !== -1) {
-        existing[matchIndex] = {
-          ...existing[matchIndex],
-          fullName,
-          role
-        };
-      } else {
-        existing.push({
-          id: `role-asm-${Date.now()}`,
-          userId: `user-mock-${Date.now()}`,
-          fullName,
-          email,
-          role,
-          tenantId: activeTenant.id
-        });
-      }
+        if (matchIndex !== -1) {
+          existing[matchIndex] = {
+            ...existing[matchIndex],
+            fullName,
+            role
+          };
+        } else {
+          existing.push({
+            id: `role-asm-${Date.now()}`,
+            userId: `user-mock-${Date.now()}`,
+            fullName,
+            email,
+            role,
+            tenantId: activeTenant.id
+          });
+        }
 
-      localStorage.setItem(localRolesKey, JSON.stringify(existing));
-      setUserRoles(existing);
+        localStorage.setItem(localRolesKey, JSON.stringify(existing));
+        return existing;
+      });
     } else {
       // --- SUPABASE FLOW ---
       if (!supabase) return;
@@ -331,9 +333,11 @@ export const PermissionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 
     if (!isSupabaseConfigured() || isMockUser) {
       const localRolesKey = `mykerani_user_roles_${activeTenant.id}`;
-      const filtered = userRoles.filter(item => item.id !== id);
-      localStorage.setItem(localRolesKey, JSON.stringify(filtered));
-      setUserRoles(filtered);
+      setUserRoles(prev => {
+        const filtered = prev.filter(item => item.id !== id);
+        localStorage.setItem(localRolesKey, JSON.stringify(filtered));
+        return filtered;
+      });
     } else {
       if (!supabase) return;
 

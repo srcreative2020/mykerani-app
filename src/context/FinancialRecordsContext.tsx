@@ -974,9 +974,9 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
       sourceSystem: event.sourceSystem || sourceSystem || "MANUAL",
     };
 
-    // Update locally optimistically
-    const updated = [newEvent, ...financialEvents];
-    setFinancialEvents(updated);
+    // Update locally optimistically (functional updater avoids stale closure)
+    let updated: FinancialEvent[] = [];
+    setFinancialEvents(prev => { updated = [newEvent, ...prev]; return updated; });
 
     let updatedCash = [...cashAccounts];
     let updatedBank = [...bankAccounts];
@@ -987,19 +987,23 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
       const amt = newEvent.amountMyr * factor;
 
       if (newEvent.cashAccountId) {
-        updatedCash = cashAccounts.map((acct) =>
-          acct.id === newEvent.cashAccountId
-            ? { ...acct, currentBalanceMyr: acct.currentBalanceMyr + amt }
-            : acct
-        );
-        setCashAccounts(updatedCash);
+        setCashAccounts(prev => {
+          updatedCash = prev.map((acct) =>
+            acct.id === newEvent.cashAccountId
+              ? { ...acct, currentBalanceMyr: acct.currentBalanceMyr + amt }
+              : acct
+          );
+          return updatedCash;
+        });
       } else if (newEvent.bankAccountId) {
-        updatedBank = bankAccounts.map((acct) =>
-          acct.id === newEvent.bankAccountId
-            ? { ...acct, currentBalanceMyr: acct.currentBalanceMyr + amt }
-            : acct
-        );
-        setBankAccounts(updatedBank);
+        setBankAccounts(prev => {
+          updatedBank = prev.map((acct) =>
+            acct.id === newEvent.bankAccountId
+              ? { ...acct, currentBalanceMyr: acct.currentBalanceMyr + amt }
+              : acct
+          );
+          return updatedBank;
+        });
       }
     }
 
@@ -1046,8 +1050,8 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
       sourceSystem: event.sourceSystem || sourceSystem || "MANUAL",
     };
 
-    const updated = [newEvent, ...financialEvents];
-    setFinancialEvents(updated);
+    let updated: FinancialEvent[] = [];
+    setFinancialEvents(prev => { updated = [newEvent, ...prev]; return updated; });
 
     let updatedCash = [...cashAccounts];
     let updatedBank = [...bankAccounts];
@@ -1058,19 +1062,23 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
       const amt = newEvent.amountMyr * factor;
 
       if (newEvent.cashAccountId) {
-        updatedCash = cashAccounts.map((acct) =>
-          acct.id === newEvent.cashAccountId
-            ? { ...acct, currentBalanceMyr: acct.currentBalanceMyr + amt }
-            : acct
-        );
-        setCashAccounts(updatedCash);
+        setCashAccounts(prev => {
+          updatedCash = prev.map((acct) =>
+            acct.id === newEvent.cashAccountId
+              ? { ...acct, currentBalanceMyr: acct.currentBalanceMyr + amt }
+              : acct
+          );
+          return updatedCash;
+        });
       } else if (newEvent.bankAccountId) {
-        updatedBank = bankAccounts.map((acct) =>
-          acct.id === newEvent.bankAccountId
-            ? { ...acct, currentBalanceMyr: acct.currentBalanceMyr + amt }
-            : acct
-        );
-        setBankAccounts(updatedBank);
+        setBankAccounts(prev => {
+          updatedBank = prev.map((acct) =>
+            acct.id === newEvent.bankAccountId
+              ? { ...acct, currentBalanceMyr: acct.currentBalanceMyr + amt }
+              : acct
+          );
+          return updatedBank;
+        });
       }
     }
 
@@ -1123,9 +1131,9 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
       sourceSystem: event.sourceSystem || sourceSystem || "MANUAL",
     }));
 
-    // Single optimistic local state update for the whole batch.
-    const updated = [...newEvents, ...financialEvents];
-    setFinancialEvents(updated);
+    // Single optimistic local state update for the whole batch (functional updater).
+    let updated: FinancialEvent[] = [];
+    setFinancialEvents(prev => { updated = [...newEvents, ...prev]; return updated; });
 
     let updatedCash = [...cashAccounts];
     let updatedBank = [...bankAccounts];
@@ -1144,8 +1152,8 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
         );
       }
     }
-    setCashAccounts(updatedCash);
-    setBankAccounts(updatedBank);
+    setCashAccounts(prev => prev === cashAccounts ? updatedCash : prev);
+    setBankAccounts(prev => prev === bankAccounts ? updatedBank : prev);
 
     // Single localStorage write for the whole batch, instead of one per line.
     persistCurrentState(updated, updatedCash, updatedBank);
@@ -1208,10 +1216,13 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
 
   const editFinancialEvent = (id: string, updated: Partial<FinancialEvent>) => {
     const originalEvent = financialEvents.find((item) => item.id === id);
-    const nextList = financialEvents.map((item) =>
-      item.id === id ? ({ ...item, ...updated } as FinancialEvent) : item
-    );
-    setFinancialEvents(nextList);
+    let nextList: FinancialEvent[] = [];
+    setFinancialEvents(prev => {
+      nextList = prev.map((item) =>
+        item.id === id ? ({ ...item, ...updated } as FinancialEvent) : item
+      );
+      return nextList;
+    });
     persistCurrentState(nextList);
 
     if (activeWorkspace && originalEvent) {
@@ -1298,8 +1309,11 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
 
   const deleteFinancialEvent = (id: string) => {
     const originalEvent = financialEvents.find((item) => item.id === id);
-    const nextList = financialEvents.filter((item) => item.id !== id);
-    setFinancialEvents(nextList);
+    let nextList: FinancialEvent[] = [];
+    setFinancialEvents(prev => {
+      nextList = prev.filter((item) => item.id !== id);
+      return nextList;
+    });
     persistCurrentState(nextList);
 
     if (activeWorkspace && originalEvent) {
@@ -1339,8 +1353,8 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
   const addCashAccount = (account: Omit<CashAccount, "id">): CashAccount => {
     const newId = generateUUID();
     const newAccount: CashAccount = { ...account, id: newId };
-    const updated = [...cashAccounts, newAccount];
-    setCashAccounts(updated);
+    let updated: CashAccount[] = [];
+    setCashAccounts(prev => { updated = [...prev, newAccount]; return updated; });
     persistCurrentState(financialEvents, updated);
 
     if (isSupabaseConfigured() && !isMockUser && supabase && activeWorkspace && !isDemoWorkspace(activeWorkspace.id)) {
@@ -1364,11 +1378,14 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
   };
 
   const editCashAccount = (id: string, updated: Partial<CashAccount>) => {
-    const nextList = cashAccounts.map((item) =>
-      item.id === id ? ({ ...item, ...updated } as CashAccount) : item
-    );
-    setCashAccounts(nextList);
-    persistCurrentState(financialEvents, cashAccounts, nextList);
+    let nextList: CashAccount[] = [];
+    setCashAccounts(prev => {
+      nextList = prev.map((item) =>
+        item.id === id ? ({ ...item, ...updated } as CashAccount) : item
+      );
+      return nextList;
+    });
+    persistCurrentState(financialEvents, undefined, nextList);
 
     if (isSupabaseConfigured() && !isMockUser && supabase && activeWorkspace && !isDemoWorkspace(activeWorkspace.id)) {
       (async () => {
@@ -1390,8 +1407,11 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
   };
 
   const deleteCashAccount = (id: string) => {
-    const nextList = cashAccounts.filter((item) => item.id !== id);
-    setCashAccounts(nextList);
+    let nextList: CashAccount[] = [];
+    setCashAccounts(prev => {
+      nextList = prev.filter((item) => item.id !== id);
+      return nextList;
+    });
     persistCurrentState(financialEvents, nextList);
 
     if (isSupabaseConfigured() && !isMockUser && supabase && activeWorkspace && !isDemoWorkspace(activeWorkspace.id)) {
@@ -1409,8 +1429,8 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
   const addBankAccount = (account: Omit<BankAccount, "id">): BankAccount => {
     const newId = generateUUID();
     const newAccount: BankAccount = { ...account, id: newId };
-    const updated = [...bankAccounts, newAccount];
-    setBankAccounts(updated);
+    let updated: BankAccount[] = [];
+    setBankAccounts(prev => { updated = [...prev, newAccount]; return updated; });
     persistCurrentState(financialEvents, cashAccounts, updated);
 
     if (isSupabaseConfigured() && !isMockUser && supabase && activeWorkspace && !isDemoWorkspace(activeWorkspace.id)) {
@@ -1437,11 +1457,14 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
   };
 
   const editBankAccount = (id: string, updated: Partial<BankAccount>) => {
-    const nextList = bankAccounts.map((item) =>
-      item.id === id ? ({ ...item, ...updated } as BankAccount) : item
-    );
-    setBankAccounts(nextList);
-    persistCurrentState(financialEvents, cashAccounts, bankAccounts, nextList);
+    let nextList: BankAccount[] = [];
+    setBankAccounts(prev => {
+      nextList = prev.map((item) =>
+        item.id === id ? ({ ...item, ...updated } as BankAccount) : item
+      );
+      return nextList;
+    });
+    persistCurrentState(financialEvents, cashAccounts, nextList);
 
     if (isSupabaseConfigured() && !isMockUser && supabase && activeWorkspace && !isDemoWorkspace(activeWorkspace.id)) {
       (async () => {
@@ -1465,8 +1488,11 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
   };
 
   const deleteBankAccount = (id: string) => {
-    const nextList = bankAccounts.filter((item) => item.id !== id);
-    setBankAccounts(nextList);
+    let nextList: BankAccount[] = [];
+    setBankAccounts(prev => {
+      nextList = prev.filter((item) => item.id !== id);
+      return nextList;
+    });
     persistCurrentState(financialEvents, cashAccounts, nextList);
 
     if (isSupabaseConfigured() && !isMockUser && supabase && activeWorkspace && !isDemoWorkspace(activeWorkspace.id)) {
@@ -1484,8 +1510,8 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
   const addDebtRecord = (debt: Omit<DebtRecord, "id">): DebtRecord => {
     const newId = generateUUID();
     const newDebt: DebtRecord = { ...debt, id: newId };
-    const updated = [...debtRecords, newDebt];
-    setDebtRecords(updated);
+    let updated: DebtRecord[] = [];
+    setDebtRecords(prev => { updated = [...prev, newDebt]; return updated; });
     persistCurrentState(financialEvents, cashAccounts, bankAccounts, updated);
 
     if (isSupabaseConfigured() && !isMockUser && supabase && activeWorkspace && !isDemoWorkspace(activeWorkspace.id)) {
@@ -1530,8 +1556,8 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
   const addDebtRecordAwaited = async (debt: Omit<DebtRecord, "id">): Promise<DebtRecord> => {
     const newId = generateUUID();
     const newDebt: DebtRecord = { ...debt, id: newId };
-    const updated = [...debtRecords, newDebt];
-    setDebtRecords(updated);
+    let updated: DebtRecord[] = [];
+    setDebtRecords(prev => { updated = [...prev, newDebt]; return updated; });
     persistCurrentState(financialEvents, cashAccounts, bankAccounts, updated);
 
     if (activeWorkspace) {
@@ -1567,10 +1593,13 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
 
   const editDebtRecord = (id: string, updated: Partial<DebtRecord>) => {
     const originalDebt = debtRecords.find((item) => item.id === id);
-    const nextList = debtRecords.map((item) =>
-      item.id === id ? ({ ...item, ...updated } as DebtRecord) : item
-    );
-    setDebtRecords(nextList);
+    let nextList: DebtRecord[] = [];
+    setDebtRecords(prev => {
+      nextList = prev.map((item) =>
+        item.id === id ? ({ ...item, ...updated } as DebtRecord) : item
+      );
+      return nextList;
+    });
     persistCurrentState(financialEvents, cashAccounts, bankAccounts, nextList);
 
     if (activeWorkspace && originalDebt) {
@@ -1614,8 +1643,11 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
 
   const deleteDebtRecord = (id: string) => {
     const originalDebt = debtRecords.find((item) => item.id === id);
-    const nextList = debtRecords.filter((item) => item.id !== id);
-    setDebtRecords(nextList);
+    let nextList: DebtRecord[] = [];
+    setDebtRecords(prev => {
+      nextList = prev.filter((item) => item.id !== id);
+      return nextList;
+    });
     persistCurrentState(financialEvents, cashAccounts, bankAccounts, nextList);
 
     if (isSupabaseConfigured() && !isMockUser && supabase && activeWorkspace && !isDemoWorkspace(activeWorkspace.id)) {
@@ -1643,8 +1675,8 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
   const addFinancialCommitment = (commitment: Omit<FinancialCommitment, "id">): FinancialCommitment => {
     const newId = generateUUID();
     const newCommitment: FinancialCommitment = { ...commitment, id: newId };
-    const updated = [...financialCommitments, newCommitment];
-    setFinancialCommitments(updated);
+    let updated: FinancialCommitment[] = [];
+    setFinancialCommitments(prev => { updated = [...prev, newCommitment]; return updated; });
     persistCurrentState(financialEvents, cashAccounts, bankAccounts, debtRecords, updated);
 
     if (activeWorkspace) {
@@ -1693,8 +1725,8 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
   const addFinancialCommitmentAwaited = async (commitment: Omit<FinancialCommitment, "id">): Promise<FinancialCommitment> => {
     const newId = generateUUID();
     const newCommitment: FinancialCommitment = { ...commitment, id: newId };
-    const updated = [...financialCommitments, newCommitment];
-    setFinancialCommitments(updated);
+    let updated: FinancialCommitment[] = [];
+    setFinancialCommitments(prev => { updated = [...prev, newCommitment]; return updated; });
     persistCurrentState(financialEvents, cashAccounts, bankAccounts, debtRecords, updated);
 
     if (activeWorkspace) {
@@ -1733,10 +1765,13 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
 
   const editFinancialCommitment = (id: string, updated: Partial<FinancialCommitment>) => {
     const original = financialCommitments.find((item) => item.id === id);
-    const nextList = financialCommitments.map((item) =>
-      item.id === id ? ({ ...item, ...updated } as FinancialCommitment) : item
-    );
-    setFinancialCommitments(nextList);
+    let nextList: FinancialCommitment[] = [];
+    setFinancialCommitments(prev => {
+      nextList = prev.map((item) =>
+        item.id === id ? ({ ...item, ...updated } as FinancialCommitment) : item
+      );
+      return nextList;
+    });
     persistCurrentState(financialEvents, cashAccounts, bankAccounts, debtRecords, nextList);
 
     if (activeWorkspace && original) {
@@ -1793,8 +1828,11 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
 
   const deleteFinancialCommitment = (id: string) => {
     const original = financialCommitments.find((item) => item.id === id);
-    const nextList = financialCommitments.filter((item) => item.id !== id);
-    setFinancialCommitments(nextList);
+    let nextList: FinancialCommitment[] = [];
+    setFinancialCommitments(prev => {
+      nextList = prev.filter((item) => item.id !== id);
+      return nextList;
+    });
     persistCurrentState(financialEvents, cashAccounts, bankAccounts, debtRecords, nextList);
 
     if (activeWorkspace && original) {
@@ -1822,8 +1860,8 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
   const addFinancialEvidencePackage = (pkg: Omit<FinancialEvidencePackage, "id">): FinancialEvidencePackage => {
     const newId = generateUUID();
     const newPkg: FinancialEvidencePackage = { ...pkg, id: newId };
-    const updated = [newPkg, ...financialEvidencePackages];
-    setFinancialEvidencePackages(updated);
+    let updated: FinancialEvidencePackage[] = [];
+    setFinancialEvidencePackages(prev => { updated = [newPkg, ...prev]; return updated; });
     persistCurrentState(financialEvents, cashAccounts, bankAccounts, debtRecords, financialCommitments, updated);
 
     if (activeWorkspace) {
@@ -1881,10 +1919,13 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
 
   const editFinancialEvidencePackage = (id: string, updatedFields: Partial<FinancialEvidencePackage>) => {
     const original = financialEvidencePackages.find((item) => item.id === id);
-    const nextList = financialEvidencePackages.map((item) =>
-      item.id === id ? ({ ...item, ...updatedFields } as FinancialEvidencePackage) : item
-    );
-    setFinancialEvidencePackages(nextList);
+    let nextList: FinancialEvidencePackage[] = [];
+    setFinancialEvidencePackages(prev => {
+      nextList = prev.map((item) =>
+        item.id === id ? ({ ...item, ...updatedFields } as FinancialEvidencePackage) : item
+      );
+      return nextList;
+    });
     persistCurrentState(financialEvents, cashAccounts, bankAccounts, debtRecords, financialCommitments, nextList);
 
     if (activeWorkspace && original) {
@@ -1932,8 +1973,11 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
 
   const deleteFinancialEvidencePackage = (id: string) => {
     const original = financialEvidencePackages.find((item) => item.id === id);
-    const nextList = financialEvidencePackages.filter((item) => item.id !== id);
-    setFinancialEvidencePackages(nextList);
+    let nextList: FinancialEvidencePackage[] = [];
+    setFinancialEvidencePackages(prev => {
+      nextList = prev.filter((item) => item.id !== id);
+      return nextList;
+    });
     persistCurrentState(financialEvents, cashAccounts, bankAccounts, debtRecords, financialCommitments, nextList);
 
     if (activeWorkspace && original) {
@@ -1990,70 +2034,71 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
     // drift) so e.g. "Tenaga Nasional Bhd" and "TENAGA NASIONAL BERHAD" merge into
     // one learned pattern instead of fragmenting into duplicates. Restricted to the
     // same hierarchy tier (Phase 2B).
-    let existingIndex = ocrLearnedPatterns.findIndex(
-      (p) => p.vendorName.toLowerCase() === vendorLower && p.workspaceId === activeWorkspace.id && sameTier(p, businessId, branchId)
-    );
-    if (existingIndex === -1) {
-      existingIndex = ocrLearnedPatterns.findIndex(
-        (p) => p.workspaceId === activeWorkspace.id && sameTier(p, businessId, branchId) && isFuzzyVendorMatch(vendorKey, vendorMatchKey(p.vendorName))
-      );
-    }
-
-    let updatedPatterns = [...ocrLearnedPatterns];
     let action: "CREATE" | "UPDATE" = "CREATE";
     let oldValue: OcrLearnedPattern | null = null;
     let newValue: OcrLearnedPattern;
+    let updatedPatterns: OcrLearnedPattern[] = [];
 
     const timestamp = new Date().toISOString();
 
-    if (existingIndex !== -1) {
-      action = "UPDATE";
-      const oldElement = ocrLearnedPatterns[existingIndex];
-      oldValue = { ...oldElement };
-
-      const newOccurrence = oldElement.occurrenceCount + 1;
-      // Formula for rolling average confidence score (unchanged — Phase 2B
-      // explicitly keeps this formula as-is, no decay):
-      const newConfidence = parseFloat(
-        ((oldElement.confidenceScore * oldElement.occurrenceCount + pattern.confidenceScore) / newOccurrence).toFixed(4)
+    setOcrLearnedPatterns(prev => {
+      let existingIndex = prev.findIndex(
+        (p) => p.vendorName.toLowerCase() === vendorLower && p.workspaceId === activeWorkspace.id && sameTier(p, businessId, branchId)
       );
+      if (existingIndex === -1) {
+        existingIndex = prev.findIndex(
+          (p) => p.workspaceId === activeWorkspace.id && sameTier(p, businessId, branchId) && isFuzzyVendorMatch(vendorKey, vendorMatchKey(p.vendorName))
+        );
+      }
 
-      newValue = {
-        ...oldElement,
-        vendorName: normalizedVendorInput, // Retain/freshen spelling capitalization
-        category: pattern.category,
-        recordType: pattern.recordType,
-        confidenceScore: newConfidence,
-        occurrenceCount: newOccurrence,
-        lastUpdated: timestamp,
-        isActive: true, // re-learning a confirmed match reactivates a previously disabled pattern
-        metadata: pattern.metadata ?? oldElement.metadata,
-      };
+      if (existingIndex !== -1) {
+        action = "UPDATE";
+        const oldElement = prev[existingIndex];
+        oldValue = { ...oldElement };
 
-      updatedPatterns[existingIndex] = newValue;
-    } else {
-      action = "CREATE";
-      const newId = generateUUID();
-      newValue = {
-        id: newId,
-        workspaceId: activeWorkspace.id,
-        vendorName: normalizedVendorInput,
-        category: pattern.category,
-        recordType: pattern.recordType,
-        confidenceScore: pattern.confidenceScore,
-        occurrenceCount: 1,
-        lastUpdated: timestamp,
-        patternType: "VENDOR_CATEGORY",
-        businessId,
-        branchId,
-        metadata: pattern.metadata ?? {},
-        isActive: true,
-      };
+        const newOccurrence = oldElement.occurrenceCount + 1;
+        const newConfidence = parseFloat(
+          ((oldElement.confidenceScore * oldElement.occurrenceCount + pattern.confidenceScore) / newOccurrence).toFixed(4)
+        );
 
-      updatedPatterns = [newValue, ...updatedPatterns];
-    }
+        newValue = {
+          ...oldElement,
+          vendorName: normalizedVendorInput,
+          category: pattern.category,
+          recordType: pattern.recordType,
+          confidenceScore: newConfidence,
+          occurrenceCount: newOccurrence,
+          lastUpdated: timestamp,
+          isActive: true,
+          metadata: pattern.metadata ?? oldElement.metadata,
+        };
 
-    setOcrLearnedPatterns(updatedPatterns);
+        updatedPatterns = [...prev];
+        updatedPatterns[existingIndex] = newValue;
+      } else {
+        action = "CREATE";
+        const newId = generateUUID();
+        newValue = {
+          id: newId,
+          workspaceId: activeWorkspace.id,
+          vendorName: normalizedVendorInput,
+          category: pattern.category,
+          recordType: pattern.recordType,
+          confidenceScore: pattern.confidenceScore,
+          occurrenceCount: 1,
+          lastUpdated: timestamp,
+          patternType: "VENDOR_CATEGORY",
+          businessId,
+          branchId,
+          metadata: pattern.metadata ?? {},
+          isActive: true,
+        };
+
+        updatedPatterns = [newValue, ...prev];
+      }
+      return updatedPatterns;
+    });
+
     persistCurrentState(
       financialEvents,
       cashAccounts,
@@ -2122,7 +2167,11 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
   ) => {
     if (!activeWorkspace || patterns.length === 0) return;
 
-    let workingPatterns = [...ocrLearnedPatterns];
+    let workingPatterns: OcrLearnedPattern[] = [];
+    setOcrLearnedPatterns(prev => {
+      workingPatterns = [...prev];
+      return workingPatterns; // will be set again after mutation below
+    });
     const dirty: OcrLearnedPattern[] = [];
     const timestamp = new Date().toISOString();
 
@@ -2182,7 +2231,7 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
       dirty.push(newValue);
     }
 
-    setOcrLearnedPatterns(workingPatterns);
+    setOcrLearnedPatterns(prev => workingPatterns);
     persistCurrentState(
       financialEvents,
       cashAccounts,
@@ -2247,8 +2296,11 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
     const original = ocrLearnedPatterns.find((item) => item.id === id);
     if (!original) return;
     const updated: OcrLearnedPattern = { ...original, isActive };
-    const nextList = ocrLearnedPatterns.map((item) => (item.id === id ? updated : item));
-    setOcrLearnedPatterns(nextList);
+    let nextList: OcrLearnedPattern[] = [];
+    setOcrLearnedPatterns(prev => {
+      nextList = prev.map((item) => (item.id === id ? updated : item));
+      return nextList;
+    });
     persistCurrentState(
       financialEvents,
       cashAccounts,
@@ -2340,14 +2392,15 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
 
     // Index existing flags by pair key so we know which ones are already
     // user-reviewed and must not be overwritten.
-    const existingByKey = new Map<string, DuplicateFlag>();
-    for (const flag of duplicateFlags) {
-      existingByKey.set(`${flag.recordAType}::${flag.recordAId}::${flag.recordBType}::${flag.recordBId}`, flag);
-    }
-
     const REVIEWED_STATES: DuplicateClassification[] = ["CONFIRMED_DUPLICATE", "REVIEWED_NOT_DUPLICATE"];
     const rowsToUpsert: any[] = [];
-    const localFlags: DuplicateFlag[] = [...duplicateFlags];
+    // Capture current state via functional updater to avoid stale closure
+    let localFlags: DuplicateFlag[] = [];
+    setDuplicateFlags(prev => { localFlags = [...prev]; return prev; });
+    const existingByKey = new Map<string, DuplicateFlag>();
+    for (const flag of localFlags) {
+      existingByKey.set(`${flag.recordAType}::${flag.recordAId}::${flag.recordBType}::${flag.recordBId}`, flag);
+    }
 
     for (const candidate of candidates) {
       const [first, second] = candidate.recordA.id < candidate.recordB.id
@@ -2409,7 +2462,7 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
         const mergedById = new Map(localFlags.map((f) => [f.id, f]));
         for (const flag of mapped) mergedById.set(flag.id, flag);
         const merged = Array.from(mergedById.values());
-        setDuplicateFlags(merged);
+        setDuplicateFlags(prev => merged);
         return merged;
       } catch (ex: any) {
         console.warn("scanForDuplicates: exception during upsert:", ex.message);
@@ -2433,7 +2486,9 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
     const updatedLocal = duplicateFlags.map((flag) =>
       flag.id === id ? { ...flag, classification: decision, reviewedByUserId, reviewedAt } : flag
     );
-    setDuplicateFlags(updatedLocal);
+    setDuplicateFlags(prev => prev.map((flag) =>
+      flag.id === id ? { ...flag, classification: decision, reviewedByUserId, reviewedAt } : flag
+    ));
 
     if (isSupabaseConfigured() && !isMockUser && supabase && !isDemoWorkspace(activeWorkspace.id)) {
       const { error: updateError } = await supabase

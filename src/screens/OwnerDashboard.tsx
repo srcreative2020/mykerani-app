@@ -1346,7 +1346,7 @@ export function OwnerDashboard() {
       const suggestions: ChatSuggestion[] = Array.isArray(data.suggestions)
         ? data.suggestions
             .filter((s: ChatSuggestion) => s.actionType === "CONFIRM_TRANSACTION")
-            .map((s: ChatSuggestion, idx: number) => enrichChatSuggestionPayload(s, { cashAccounts, bankAccounts, businesses, vehicles, dependents, personalProfile }))
+            .map((s: ChatSuggestion, idx: number) => ({ ...enrichChatSuggestionPayload(s, { cashAccounts, bankAccounts, businesses, vehicles, dependents, personalProfile }), id: `${aiMsgId}-sugg-${idx}` }))
         : [];
       setChatMessages(prev => [...prev, { id: aiMsgId, sender: "ai", text: reply, suggestions, createdAt: new Date().toISOString() }]);
       saveChatMessage(wsId, user?.id, isMockUser, { sender: "ai", text: reply, suggestions }, activeSessionId ?? undefined);

@@ -185,10 +185,11 @@ export const AuditProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     if (!isSupabaseConfigured() || isMockUser || activeTenant.category === "DEMO") {
       // --- MOCK STORAGE ---
       const localAuditKey = `mykerani_audit_logs_${activeTenant.id}`;
-      const currentLogs = [...auditLogs];
-      currentLogs.unshift(newLogEntry);
-      localStorage.setItem(localAuditKey, JSON.stringify(currentLogs));
-      setAuditLogs(currentLogs);
+      setAuditLogs(prev => {
+        const currentLogs = [newLogEntry, ...prev];
+        localStorage.setItem(localAuditKey, JSON.stringify(currentLogs));
+        return currentLogs;
+      });
     } else {
       // --- SUPABASE STORAGE ---
       if (!supabase) return;
@@ -217,10 +218,11 @@ export const AuditProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         console.error("Critical audit log write error to Postgres ledger: ", err.message);
         // Fallback to local storage
         const localAuditKey = `mykerani_audit_logs_${activeTenant.id}`;
-        const currentLogs = [...auditLogs];
-        currentLogs.unshift(newLogEntry);
-        localStorage.setItem(localAuditKey, JSON.stringify(currentLogs));
-        setAuditLogs(currentLogs);
+        setAuditLogs(prev => {
+          const currentLogs = [newLogEntry, ...prev];
+          localStorage.setItem(localAuditKey, JSON.stringify(currentLogs));
+          return currentLogs;
+        });
       }
     }
   }, [user, activeTenant, isMockUser, auditLogs]);
