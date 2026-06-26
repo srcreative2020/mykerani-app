@@ -799,13 +799,13 @@ export function StaffHomeScreen() {
         description: categoryName,
       });
     } else {
-      // INCOME / EXPENSE / RECEIVABLE / PAYABLE all live in financialEvents.
-      editFinancialEvent(current.recordId, {
-        amountMyr,
-        categoryName,
-        partyName,
-        date,
-      });
+      // INCOME / EXPENSE / RECEIVABLE / PAYABLE / TRANSFER all live in financialEvents.
+      const editFields: any = { amountMyr, categoryName, partyName, date };
+      if (edited.transactionType === "INCOME" || edited.transactionType === "EXPENSE" ||
+          edited.transactionType === "RECEIVABLE" || edited.transactionType === "PAYABLE") {
+        editFields.type = edited.transactionType;
+      }
+      editFinancialEvent(current.recordId, editFields);
     }
 
     markChatSuggestionStatus(s.id, {

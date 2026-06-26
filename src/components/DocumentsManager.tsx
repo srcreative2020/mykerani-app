@@ -134,6 +134,7 @@ export function DocumentsManager({
   // the same pattern used by OCREngineConsole/chat suggestions elsewhere in the app.
   const [docAnalyzing, setDocAnalyzing] = useState(false);
   const [docOcrJob, setDocOcrJob] = useState<OcrJobState | null>(null);
+  const docCancelRef = useRef<{ cancelled: boolean }>({ cancelled: false });
   const [docReviewError, setDocReviewError] = useState<string | null>(null);
   const [importProgress, setImportProgress] = useState<null | {
     submitted: number; inserted: number; failed: number; batchNumber: number; totalBatches: number;
@@ -327,7 +328,8 @@ export function DocumentsManager({
       // means a page refresh mid-processing can re-attach to the SAME job
       // and resume polling instead of losing all progress.
       persistActiveDoc({ jobId, doc });
-      const finalJob = await pollOcrJob(jobId, setDocOcrJob);
+      docCancelRef.current = { cancelled: false };
+      const finalJob = await pollOcrJob(jobId, setDocOcrJob, 800, docCancelRef.current);
 
       if (finalJob.status === "FAILED") {
         const baseMsg = finalJob.error || "AI tidak dapat membaca dokumen ini. Cuba lagi.";
@@ -806,6 +808,15 @@ export function DocumentsManager({
 
         {docAnalyzing && docOcrJob && (
           <DocumentProcessingProgressPanel job={docOcrJob} />
+        )}
+        {docAnalyzing && docOcrJob && docOcrJob.status === "PROCESSING" && (
+          <button
+            type="button"
+            onClick={() => { docCancelRef.current.cancelled = true; }}
+            className="w-full mt-2 px-3 py-2 rounded-xl bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-700 text-xs font-semibold transition cursor-pointer"
+          >
+            ✕ Batal & Hentikan OCR
+          </button>
         )}
         {docAnalyzing && !docOcrJob && (
           <div className="bg-indigo-50 border border-indigo-200 rounded-xl px-4 py-3 flex items-center gap-2">
