@@ -42,7 +42,7 @@ export interface ConfirmChatSuggestionResult {
 export const useConfirmChatSuggestion = () => {
   const { user } = useAuth();
   const { activeWorkspace } = useWorkspace();
-  const { addFinancialEventAwaited, addDebtRecordAwaited, addFinancialCommitmentAwaited, linkEvidenceToRecord, learnOcrPattern } = useFinancials();
+  const { addFinancialEventAwaited, addDebtRecordAwaited, addFinancialCommitmentAwaited, linkEvidenceToRecord, learnOcrPattern, scanForDuplicates } = useFinancials();
 
   const confirmChatSuggestion = async (
     s: ChatSuggestion,
@@ -69,6 +69,20 @@ export const useConfirmChatSuggestion = () => {
     const date = (edited ? edited.date : s.payload?.date) || new Date().toISOString().slice(0, 10);
     const confidenceScore = s.payload?.confidenceScore ?? 0.7;
     const description = `Direkodkan melalui pengesahan cadangan Kerani AI: ${s.title}`;
+
+    // Global duplicate detection — scan existing financialEvents for amount+date+vendor match
+    if (transactionType !== "TRANSFER" && amount > 0 && relatedParty !== "Tidak Dinyatakan") {
+      try {
+        const existingDuplicates = await scanForDuplicates();
+        const match = existingDuplicates.find((d: any) =>
+          d.classification !== "REVIEWED_NOT_DUPLICATE" &&
+          Math.abs((d.score ?? 0) - 1) < 0.01
+        );
+        if (match) {
+          return { ok: false, error: `Rekod pendua dikesan. Sila semak rekod sedia ada sebelum meneruskan.` };
+        }
+      } catch (e) { /* duplicate check is non-blocking */ }
+    }
 
     let newRecordId: string | undefined;
     let newRecordType: ChatSuggestionRecordType | undefined;

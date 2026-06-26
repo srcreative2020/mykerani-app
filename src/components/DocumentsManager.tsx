@@ -47,6 +47,7 @@ type DocReviewLine = {
 type DocReview = {
   doc: UploadedDoc;
   merchantName: string;
+  customerName: string;
   amount: string;
   date: string;
   category: string;
@@ -221,6 +222,7 @@ export function DocumentsManager({
       return {
         doc,
         merchantName: payload.merchantName || "",
+        customerName: payload.customerName || "",
         amount: "0",
         date: payload.date || todayLocalIso(),
         category: "",
@@ -284,10 +286,12 @@ export function DocumentsManager({
     }
     const matchedPattern = ocrLearnedPatterns.find(p => p.vendorName.toLowerCase() === (payload.merchantName || "").toLowerCase());
     const merchantName = matchedPattern?.vendorName || payload.merchantName || "";
+    const customerName = payload.customerName || "";
     const ocrBranchMatch = matchOwnBusinessAndBranch(merchantName, businesses.filter(b => b.isActive), businessBranches);
     return {
       doc,
       merchantName,
+      customerName,
       amount: String(payload.amount || 0),
       date: payload.date || todayLocalIso(),
       category: matchedPattern?.category || payload.suggestedCategory || "Lain-lain",
@@ -1047,11 +1051,20 @@ export function DocumentsManager({
                 </>
               ) : (
                 <>
-                  {/* Original document preview — always shown so user can verify before confirming */}
-                  {docOcrJob?.result?.fileUrl && docOcrJob.result.fileUrl.startsWith("data:image") && (
+                  {/* Original document preview — supports image, PDF, and text files */}
+                  {docOcrJob?.result?.fileUrl && (
                     <div className="bg-slate-50 border border-slate-200 rounded-xl p-2 mb-2">
                       <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Dokumen Asal</p>
-                      <img src={docOcrJob.result.fileUrl} alt="Dokumen asal" className="w-full max-h-64 object-contain rounded-lg" />
+                      {docOcrJob.result.fileUrl.startsWith("data:image") ? (
+                        <img src={docOcrJob.result.fileUrl} alt="Dokumen asal" className="w-full max-h-96 object-contain rounded-lg cursor-zoom-in" onClick={() => window.open(docOcrJob.result.fileUrl, "_blank")} />
+                      ) : docOcrJob.result.fileUrl.startsWith("data:application/pdf") || docOcrJob.result.mimeType === "application/pdf" ? (
+                        <iframe src={docOcrJob.result.fileUrl} className="w-full h-96 rounded-lg border border-slate-200" title="Dokumen PDF" />
+                      ) : (
+                        <div className="bg-white border border-slate-200 rounded-lg p-4 text-xs text-slate-600">
+                          <p className="font-semibold mb-1">Pratonton dokumen tidak tersedia</p>
+                          <p>Jenis fail: {docOcrJob.result.mimeType || "Tidak diketahui"}. Fail asal kekal tidak diubah.</p>
+                        </div>
+                      )}
                     </div>
                   )}
                   <p className="text-[11px] text-slate-500">Sahkan atau betulkan apa yang AI kenal pasti daripada dokumen ini sebelum direkodkan.</p>
