@@ -3,6 +3,7 @@ import { useWorkspace } from "../context/WorkspaceContext";
 import { useFinancials } from "../context/FinancialRecordsContext";
 import { addAssetPurchase, addOwnerTransaction } from "../lib/assetOwnerData";
 import { logEvent } from "../lib/eventLog";
+import { logTenantActivity } from "../lib/hqService";
 import type { ChatSuggestion, ChatSuggestionExtra, ChatSuggestionRecordType, PendingChatEvidence } from "../lib/chatSuggestionTypes";
 
 export interface ConfirmChatSuggestionDraft {
@@ -145,6 +146,19 @@ export const useConfirmChatSuggestion = () => {
       userEmail: user?.email, userRole: user?.role, eventType: "RECORD_CREATION",
       description: `Financial record created from AI chat suggestion: ${s.title}`,
       metadata: { recordId: newRecordId, recordType: newRecordType, amount, category, relatedParty, date },
+    });
+
+    // Tenant Activity Center: log the confirmation for Owner visibility
+    logTenantActivity({
+      workspaceId: activeWorkspace.id,
+      actorId: user?.id || "unknown",
+      actorEmail: user?.email || "unknown",
+      actorRole: user?.role || "TENANT_STAFF",
+      actorName: user?.fullName,
+      actionType: "RECORD_CONFIRMED",
+      module: "Financial Records",
+      description: `AI suggestion confirmed: ${transactionType} RM${amount} (${category})`,
+      metadata: { recordId: newRecordId, recordType: newRecordType, amount, category, relatedParty, date, transactionType },
     });
 
     // Evidence Linking: the one shared engine -- if a receipt/invoice was

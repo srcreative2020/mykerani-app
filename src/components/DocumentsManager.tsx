@@ -1047,6 +1047,13 @@ export function DocumentsManager({
                 </>
               ) : (
                 <>
+                  {/* Original document preview — always shown so user can verify before confirming */}
+                  {docOcrJob?.result?.fileUrl && docOcrJob.result.fileUrl.startsWith("data:image") && (
+                    <div className="bg-slate-50 border border-slate-200 rounded-xl p-2 mb-2">
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Dokumen Asal</p>
+                      <img src={docOcrJob.result.fileUrl} alt="Dokumen asal" className="w-full max-h-64 object-contain rounded-lg" />
+                    </div>
+                  )}
                   <p className="text-[11px] text-slate-500">Sahkan atau betulkan apa yang AI kenal pasti daripada dokumen ini sebelum direkodkan.</p>
                   <div>
                     <label className="text-[11px] font-semibold text-slate-500">Pihak Berkaitan / Vendor</label>
