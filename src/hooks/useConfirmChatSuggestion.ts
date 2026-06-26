@@ -80,6 +80,18 @@ export const useConfirmChatSuggestion = () => {
           referenceNumber: `AI-${s.id}`, description, isCompleted: true, sourceSystem: "AI_CHAT",
         }, "AI_CHAT");
         newRecordId = ev.id; newRecordType = transactionType;
+      } else if (transactionType === "TRANSFER") {
+        // Internal Transfer — recorded as EXPENSE with a clear "Pemindahan Dalaman" category
+        // so it appears in records but is NOT counted as real income/expense.
+        // The category makes it identifiable for filtering and reporting.
+        const transferCategory = category || "Pemindahan Dalaman";
+        const ev = await addFinancialEventAwaited({
+          workspaceId: activeWorkspace.id, businessId: businessId || undefined, branchId: branchId || undefined,
+          type: "EXPENSE", categoryName: transferCategory, amountMyr: amount, partyName: relatedParty, date,
+          referenceNumber: `AI-TRANSFER-${s.id}`, description: `PEMINDAHAN DALAMAN: ${description}`,
+          isCompleted: true, sourceSystem: "AI_CHAT",
+        }, "AI_CHAT");
+        newRecordId = ev.id; newRecordType = "TRANSFER";
       } else if (transactionType === "DEBT") {
         const debt = await addDebtRecordAwaited({
           workspaceId: activeWorkspace.id, businessId: businessId || undefined, creditorName: relatedParty,

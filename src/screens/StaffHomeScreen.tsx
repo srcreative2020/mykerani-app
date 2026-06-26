@@ -546,7 +546,7 @@ export function StaffHomeScreen() {
         headers: { "Content-Type": "application/json", ...(await getAuthHeader()) },
         body: JSON.stringify({
           query: q,
-          financialContext: { activeTenant, activeWorkspace, financialEvents, personalProfile, businessProfile, businesses, businessBranches, vehicles, dependents },
+          financialContext: { activeTenant, activeWorkspace, financialEvents, cashAccounts, bankAccounts, personalProfile, businessProfile, businesses, businessBranches, vehicles, dependents },
           userId: user?.id,
         }),
       });

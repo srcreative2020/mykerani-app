@@ -1329,7 +1329,7 @@ export function OwnerDashboard() {
         headers: { "Content-Type": "application/json", ...(await getAuthHeader()) },
         body: JSON.stringify({
           query: q,
-          financialContext: { activeTenant, activeWorkspace, financialEvents, personalProfile, businesses, businessBranches, vehicles, dependents, assetPurchases, ownerTransactions },
+          financialContext: { activeTenant, activeWorkspace, financialEvents, cashAccounts, bankAccounts, personalProfile, businesses, businessBranches, vehicles, dependents, assetPurchases, ownerTransactions },
           userId: user?.id,
         }),
       });

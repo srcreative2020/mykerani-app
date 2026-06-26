@@ -9,7 +9,7 @@ export interface ChatSuggestion {
   description: string;
   actionType: string;
   payload: {
-    transactionType?: "INCOME" | "EXPENSE" | "DEBT" | "RECEIVABLE" | "PAYABLE" | "COMMITMENT" | "ASSET_PURCHASE" | "OWNER_TRANSACTION";
+    transactionType?: "INCOME" | "EXPENSE" | "DEBT" | "RECEIVABLE" | "PAYABLE" | "COMMITMENT" | "ASSET_PURCHASE" | "OWNER_TRANSACTION" | "TRANSFER";
     ownerTransactionSubtype?: "CAPITAL_INJECTION" | "DRAWING";
     category?: string;
     amount?: number;
@@ -32,7 +32,7 @@ export interface ChatSuggestion {
   accountingConfidence?: number;
 }
 
-export type ChatSuggestionRecordType = "INCOME" | "EXPENSE" | "RECEIVABLE" | "PAYABLE" | "DEBT" | "COMMITMENT";
+export type ChatSuggestionRecordType = "INCOME" | "EXPENSE" | "TRANSFER" | "RECEIVABLE" | "PAYABLE" | "DEBT" | "COMMITMENT";
 export type ChatSuggestionStatusValue = "pending" | "confirmed" | "rejected";
 
 export interface ChatSuggestionStatus {
