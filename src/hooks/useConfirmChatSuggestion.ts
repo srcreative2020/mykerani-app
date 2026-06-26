@@ -12,6 +12,7 @@ export interface ConfirmChatSuggestionDraft {
   category: string;
   relatedParty: string;
   date: string;
+  transactionType?: string;
 }
 
 export interface ConfirmChatSuggestionResult {
@@ -56,7 +57,7 @@ export const useConfirmChatSuggestion = () => {
 
     const businessId = extra.businessId;
     const branchId = extra.branchId;
-    const transactionType = s.payload?.transactionType;
+    const transactionType = (edited && edited.transactionType ? edited.transactionType : s.payload?.transactionType) as ConfirmInput["transactionType"] | undefined;
     const amount = Number(edited ? edited.amount : s.payload?.amount) || 0;
     const category = (edited ? edited.category : s.payload?.category) || "Lain-lain";
     const relatedParty = (edited ? edited.relatedParty : s.payload?.relatedParty) || "Tidak Dinyatakan";
