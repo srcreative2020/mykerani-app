@@ -187,26 +187,15 @@ export const FinancialRecordsConsole: React.FC<FinancialRecordsConsoleProps> = (
     const fetchDashboardSummary = async () => {
       setBoardAiLoading(true);
       try {
-        const { getAuthHeader } = await import("../lib/supabase");
-        const financialContext = await buildFinancialContext({
-          activeTenant,
+        const financialContext = {
           activeWorkspace,
           financialEvents,
           cashAccounts,
           bankAccounts,
           debtRecords,
-          financialCommitments,
-          financialEvidencePackages,
-          ocrLearnedPatterns,
-          personalProfile: null,
-          businesses: [],
-          vehicles: [],
-          dependents: [],
-          assetPurchases: [],
-          ownerTransactions: [],
-          workspaceId: activeWorkspace?.id || "",
-          isMockUser: !!isMockUser,
-        });
+          financialCommitments
+        };
+        const { getAuthHeader } = await import("../lib/supabase");
         const res = await fetch("/api/ai/assistant", {
           method: "POST",
           headers: { "Content-Type": "application/json", ...(await getAuthHeader()) },

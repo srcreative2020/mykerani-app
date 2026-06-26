@@ -151,8 +151,7 @@ export const AIFinancialAssistant: React.FC<AIFinancialAssistantProps> = ({ onTr
     setLoading(true);
     setError(null);
     try {
-      const { getAuthHeader } = await import("../lib/supabase");
-      const financialContext = await buildFinancialContext({
+      const financialContext = {
         activeTenant,
         activeWorkspace,
         financialEvents,
@@ -161,17 +160,10 @@ export const AIFinancialAssistant: React.FC<AIFinancialAssistantProps> = ({ onTr
         debtRecords,
         financialCommitments,
         financialEvidencePackages,
-        ocrLearnedPatterns,
-        personalProfile: null,
-        businesses,
-        vehicles: [],
-        dependents: [],
-        assetPurchases: [],
-        ownerTransactions: [],
-        workspaceId: activeWorkspace?.id || "",
-        isMockUser,
-      });
+        ocrLearnedPatterns
+      };
 
+      const { getAuthHeader } = await import("../lib/supabase");
       const res = await fetch("/api/ai/assistant", {
         method: "POST",
         headers: { "Content-Type": "application/json", ...(await getAuthHeader()) },

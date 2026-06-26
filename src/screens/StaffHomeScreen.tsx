@@ -503,18 +503,10 @@ export function StaffHomeScreen() {
     setSupportLoading(true);
     try {
       const { getAuthHeader } = await import("../lib/supabase");
-      const financialContext = await buildFinancialContext({
-        activeTenant, activeWorkspace,
-        financialEvents, cashAccounts, bankAccounts, debtRecords,
-        financialCommitments, financialEvidencePackages, ocrLearnedPatterns,
-        personalProfile, businesses, vehicles, dependents,
-        assetPurchases: [], ownerTransactions: [],
-        workspaceId: wsId, isMockUser,
-      });
       const res = await fetch("/api/ai/assistant", {
         method: "POST",
         headers: { "Content-Type": "application/json", ...(await getAuthHeader()) },
-        body: JSON.stringify({ query: `[SOKONGAN MYKERANI] ${q}`, financialContext, userId: user?.id }),
+        body: JSON.stringify({ query: `[SOKONGAN MYKERANI] ${q}`, financialContext: { activeTenant, activeWorkspace, financialEvents }, userId: user?.id }),
       });
       const data = await res.json() as any;
       setSupportMessages(prev => [...prev, { id: `a-${Date.now()}`, sender: "ai", text: data.text || data.error || "Saya sedang menyemak soalan anda." }]);
@@ -549,20 +541,12 @@ export function StaffHomeScreen() {
     setChatLoading(true);
     try {
       const { getAuthHeader } = await import("../lib/supabase");
-      const financialContext = await buildFinancialContext({
-        activeTenant, activeWorkspace,
-        financialEvents, cashAccounts, bankAccounts, debtRecords,
-        financialCommitments, financialEvidencePackages, ocrLearnedPatterns,
-        personalProfile, businesses, vehicles, dependents,
-        assetPurchases: [], ownerTransactions: [],
-        workspaceId: wsId, isMockUser,
-      });
       const res = await fetch("/api/ai/assistant", {
         method: "POST",
         headers: { "Content-Type": "application/json", ...(await getAuthHeader()) },
         body: JSON.stringify({
           query: q,
-          financialContext,
+          financialContext: { activeTenant, activeWorkspace, financialEvents, personalProfile, businessProfile, businesses, vehicles, dependents },
           userId: user?.id,
         }),
       });

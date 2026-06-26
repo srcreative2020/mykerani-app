@@ -1314,20 +1314,12 @@ export function OwnerDashboard() {
     setChatLoading(true);
     try {
       const { getAuthHeader } = await import("../lib/supabase");
-      const financialContext = await buildFinancialContext({
-        activeTenant, activeWorkspace,
-        financialEvents, cashAccounts, bankAccounts, debtRecords,
-        financialCommitments, financialEvidencePackages, ocrLearnedPatterns,
-        personalProfile, businesses, vehicles, dependents,
-        assetPurchases, ownerTransactions,
-        workspaceId: wsId, isMockUser,
-      });
       const res = await fetch("/api/ai/assistant", {
         method: "POST",
         headers: { "Content-Type": "application/json", ...(await getAuthHeader()) },
         body: JSON.stringify({
           query: q,
-          financialContext,
+          financialContext: { activeTenant, activeWorkspace, financialEvents, personalProfile, businesses, vehicles, dependents },
           userId: user?.id,
         }),
       });
@@ -1740,20 +1732,12 @@ export function OwnerDashboard() {
     setSupportLoading(true);
     try {
       const { getAuthHeader } = await import("../lib/supabase");
-      const financialContext = await buildFinancialContext({
-        activeTenant, activeWorkspace,
-        financialEvents, cashAccounts, bankAccounts, debtRecords,
-        financialCommitments, financialEvidencePackages, ocrLearnedPatterns,
-        personalProfile, businesses, vehicles, dependents,
-        assetPurchases, ownerTransactions,
-        workspaceId: wsId, isMockUser,
-      });
       const res = await fetch("/api/ai/assistant", {
         method: "POST",
         headers: { "Content-Type": "application/json", ...(await getAuthHeader()) },
         body: JSON.stringify({
           query: `[SOKONGAN MYKERANI] ${q}`,
-          financialContext,
+          financialContext: { activeTenant, activeWorkspace, financialEvents },
           userId: user?.id,
         }),
       });
