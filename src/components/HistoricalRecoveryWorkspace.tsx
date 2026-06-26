@@ -24,6 +24,7 @@ import { usePermission } from "../context/PermissionContext";
 import { useAudit } from "../context/AuditContext";
 import { useTenant } from "../context/TenantContext";
 import { logEvent } from "../lib/eventLog";
+import { confirmFinancialRecord, type ConfirmInput } from "../lib/financialRecordConfirmation";
 import { parseCsvBankStatement, detectBankFromHeader, csvTextToRows, type ImportedBankTransaction, type SupportedBank } from "../lib/bankStatementImport";
 import { suggestCategoriesForTransactions, type RecoverySuggestion } from "../lib/transactionRecoveryEngine";
 import { detectInternalTransfers, getInternalTransferTransactionSet } from "../lib/internalTransferDetection";
@@ -110,7 +111,7 @@ export const HistoricalRecoveryWorkspace: React.FC = () => {
     }
   };
 
-  const handleConfirmRow = (index: number) => {
+  const handleConfirmRow = async (index: number) => {
     if (!activeWorkspace || confirmedIndexes.has(index) || rejectedIndexes.has(index)) return;
     if (!hasPermission("Financial Records", "create")) {
       setImportError("Policy Restriction: Your active user role lacks permission to write records.");
@@ -124,7 +125,56 @@ export const HistoricalRecoveryWorkspace: React.FC = () => {
     const recordType: FinancialRecordType = isTransfer ? "INCOME" : suggestion.suggestedRecordType;
     const categoryName = isTransfer ? "Internal Transfer" : suggestion.suggestedCategoryName;
 
-    const freshEvent = addFinancialEvent({
+    const input: ConfirmInput = {
+      workspaceId: activeWorkspace.id,
+      tenantId: activeTenant?.id || activeWorkspace.tenantId,
+      userId: user?.id,
+      userEmail: user?.email,
+      userRole: user?.role,
+      transactionType: recordType as any,
+      amount: txn.amountMyr,
+      category: categoryName,
+      relatedParty: txn.description,
+      date: txn.date,
+      confidenceScore: suggestion.confidenceScore,
+      referenceNumber: txn.referenceNumber || `RECOVERY-${txn.sourceRowIndex}`,
+      description: `Recovered from historical ${txn.sourceBank} statement (${txn.account}): ${txn.description}`,
+      pendingEvidence: {
+        documentType: "STATEMENT",
+        fileName: `historical_${txn.sourceBank}_${txn.account}.csv`,
+        fileUrl: "",
+      },
+      evidenceAttached: true,
+      source: "BANK_STATEMENT",
+      sourceTitle: `historical recovery transaction: ${txn.description}`,
+      auditDestination: "NONE",
+      skipOcrLearning: isTransfer,
+      precheckDuplicate: false,
+    };
+
+    const result = await confirmFinancialRecord(input, {
+      addFinancialEventAwaited: addFinancialEvent as any,
+      addFinancialEvent,
+      addDebtRecordAwaited: async () => ({ id: "" } as any),
+      addDebtRecord: () => ({ id: "" } as any),
+      addFinancialCommitmentAwaited: async () => ({ id: "" } as any),
+      addFinancialCommitment: () => ({ id: "" } as any),
+      addAssetPurchase: async () => undefined,
+      addOwnerTransaction: async () => undefined,
+      linkEvidenceToRecord: () => undefined,
+      learnOcrPattern,
+      scanForDuplicates: async () => [],
+      logEvent: () => undefined,
+      logTenantActivity: () => undefined,
+    });
+
+    if (!result.ok) {
+      setImportError(result.error || "Gagal menyimpan rekod.");
+      return;
+    }
+
+    const freshEvent = {
+      id: result.recordId || "",
       workspaceId: activeWorkspace.id,
       type: recordType,
       categoryName,
@@ -135,7 +185,7 @@ export const HistoricalRecoveryWorkspace: React.FC = () => {
       description: `Recovered from historical ${txn.sourceBank} statement (${txn.account}): ${txn.description}`,
       isCompleted: true,
       sourceSystem: "BANK_STATEMENT",
-    }, undefined, "BANK_STATEMENT");
+    };
 
     const freshEvidencePackage = addFinancialEvidencePackage({
       workspaceId: activeWorkspace.id,
@@ -155,16 +205,6 @@ export const HistoricalRecoveryWorkspace: React.FC = () => {
       oldValue: null,
       newValue: freshEvent,
     });
-
-    if (!isTransfer) {
-      learnOcrPattern({
-        workspaceId: activeWorkspace.id,
-        vendorName: txn.description,
-        category: suggestion.suggestedCategoryName,
-        recordType: suggestion.suggestedRecordType,
-        confidenceScore: suggestion.confidenceScore,
-      });
-    }
 
     if (user && activeTenant) {
       logEvent({

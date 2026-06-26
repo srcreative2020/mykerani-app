@@ -5,6 +5,8 @@ import { useAuth } from "../context/AuthContext";
 import { usePermission } from "../context/PermissionContext";
 import { useAudit } from "../context/AuditContext";
 import { logEvent } from "../lib/eventLog";
+import { logTenantActivity } from "../lib/hqService";
+import { confirmFinancialRecord, type ConfirmInput } from "../lib/financialRecordConfirmation";
 import { pollOcrJob, type OcrJobState } from "../lib/ocrJobTypes";
 import DocumentProcessingProgressPanel from "./DocumentProcessingProgressPanel";
 import { 
@@ -273,7 +275,7 @@ export const OCREngineConsole: React.FC = () => {
   };
 
   // Create Financial Evidence Package AND Financial Record
-  const handleConfirmAndLog = () => {
+  const handleConfirmAndLog = async () => {
     if (!activeWorkspace) return;
 
     // Check create privileges under our existing Permission System
@@ -286,6 +288,9 @@ export const OCREngineConsole: React.FC = () => {
     }
 
     try {
+      const targetCashId = offsetAccountType === "CASH" ? selectedAccountId : undefined;
+      const targetBankId = offsetAccountType === "BANK" ? selectedAccountId : undefined;
+
       // 1. ADD EVIDENCE PACKAGE RECORD
       const freshEvidencePackage = addFinancialEvidencePackage({
         workspaceId: activeWorkspace.id,
@@ -296,11 +301,57 @@ export const OCREngineConsole: React.FC = () => {
         notes: uploadNotes.trim() ? uploadNotes.trim() : `Auto-logged via AI OCR Studio. System confidence: ${(extractedData?.confidenceScore || 0 * 100).toFixed(0)}%`
       });
 
-      // 2. ADD FINANCIAL RECORD LINKED TO IT
-      const targetCashId = offsetAccountType === "CASH" ? selectedAccountId : undefined;
-      const targetBankId = offsetAccountType === "BANK" ? selectedAccountId : undefined;
+      const input: ConfirmInput = {
+        workspaceId: activeWorkspace.id,
+        tenantId: user?.tenantId || activeWorkspace.tenantId,
+        userId: user?.id,
+        userEmail: user?.email,
+        userRole: user?.role,
+        transactionType: selectedRecordType as any,
+        amount: reviewedAmount,
+        category: reviewedCategory,
+        relatedParty: reviewedMerchantName,
+        date: reviewedDate,
+        confidenceScore: extractedData ? extractedData.confidenceScore : 0.85,
+        referenceNumber: reviewedDocumentNumber,
+        description: `Linked automated OCR upload for ${reviewedMerchantName} (${documentType})`,
+        pendingEvidence: {
+          documentType,
+          fileName: file?.name || "ocr_extract_doc.png",
+          fileUrl: fileDataUrl,
+        },
+        evidenceAttached: true,
+        source: "OCR",
+        sourceTitle: `${reviewedMerchantName} (${documentType})`,
+        auditDestination: "NONE",
+        cashAccountId: targetCashId,
+        bankAccountId: targetBankId,
+        precheckDuplicate: false,
+      };
 
-      const freshEvent = addFinancialEvent({
+      const result = await confirmFinancialRecord(input, {
+        addFinancialEventAwaited: addFinancialEvent as any,
+        addFinancialEvent,
+        addDebtRecordAwaited: async () => ({ id: "" } as any),
+        addDebtRecord: () => ({ id: "" } as any),
+        addFinancialCommitmentAwaited: async () => ({ id: "" } as any),
+        addFinancialCommitment: () => ({ id: "" } as any),
+        addAssetPurchase: async () => undefined,
+        addOwnerTransaction: async () => undefined,
+        linkEvidenceToRecord: () => undefined,
+        learnOcrPattern,
+        scanForDuplicates: async () => [],
+        logEvent: () => undefined,
+        logTenantActivity: () => undefined,
+      });
+
+      if (!result.ok) {
+        setErrorText("Failed to persist financial documents internally. Please check storage credentials.");
+        return;
+      }
+
+      const freshEvent = {
+        id: result.recordId || "",
         workspaceId: activeWorkspace.id,
         type: selectedRecordType,
         categoryName: reviewedCategory,
@@ -309,26 +360,23 @@ export const OCREngineConsole: React.FC = () => {
         date: reviewedDate,
         referenceNumber: reviewedDocumentNumber,
         description: `Linked automated OCR upload for ${reviewedMerchantName} (${documentType})`,
-        isCompleted: true, // Assume complete since document represents evidence of transfer
+        isCompleted: true,
         cashAccountId: targetCashId,
         bankAccountId: targetBankId,
-        sourceSystem: "OCR"
-      }, undefined, "OCR");
+        sourceSystem: "OCR",
+      };
 
       // 3. SECURELY ASSOCIATE BOTH ENTITIES
-      // Under MyKerani structure, we can link them using the newly assigned record id!
-      // This maps directly to the relatedRecordId and type fields of the evidence package!
       freshEvidencePackage.relatedRecordId = freshEvent.id;
       freshEvidencePackage.relatedRecordType = selectedRecordType;
 
-      // 4. WRITE EXPLICIT AUDIT TRAILS
-      // We log audit trail tracking for both the new Evidence package and the custom Ledger Event
+      // 4. WRITE EXPLICIT AUDIT TRAILS (preserved from original code)
       writeAuditLog({
         workspaceId: activeWorkspace.id,
         module: "Financial Evidence Package",
         action: "CREATE",
         oldValue: null,
-         newValue: {
+        newValue: {
           id: freshEvidencePackage.id,
           fileName: freshEvidencePackage.fileName,
           documentType: freshEvidencePackage.documentType,
@@ -353,17 +401,8 @@ export const OCREngineConsole: React.FC = () => {
         });
       }
 
-      // 5. TRIGGER OCR LEARNING CORE OBJECTIVE
-      learnOcrPattern({
-        workspaceId: activeWorkspace.id,
-        vendorName: reviewedMerchantName,
-        category: reviewedCategory,
-        recordType: selectedRecordType,
-        confidenceScore: extractedData ? extractedData.confidenceScore : 0.85
-      });
-
       setSuccessText(`Ledger transaction successfully synchronized! Evidence packet #${freshEvidencePackage.id.substring(0,6)} and Financial Record are now fully linked for audits. AI Learning Layer updated Vendor "${reviewedMerchantName}" -> Category "${reviewedCategory}".`);
-      
+
       // Wipe current upload state
       setFile(null);
       setFileDataUrl("");
@@ -380,7 +419,7 @@ export const OCREngineConsole: React.FC = () => {
 
   // Module 10 (OCR Bank Statement Engine): confirm a single extracted transaction
   // row from a multi-transaction statement. CREDIT -> income_records, DEBIT -> expense_records.
-  const handleConfirmStatementTransaction = (index: number) => {
+  const handleConfirmStatementTransaction = async (index: number) => {
     if (!activeWorkspace || !extractedData?.transactions) return;
     const txn = extractedData.transactions[index];
     if (!txn || statementTxnStatus[index]) return;
@@ -403,7 +442,56 @@ export const OCREngineConsole: React.FC = () => {
       });
 
       const recordType: FinancialRecordType = txn.type === "CREDIT" ? "INCOME" : "EXPENSE";
-      const freshEvent = addFinancialEvent({
+
+      const input: ConfirmInput = {
+        workspaceId: activeWorkspace.id,
+        tenantId: user?.tenantId || activeWorkspace.tenantId,
+        userId: user?.id,
+        userEmail: user?.email,
+        userRole: user?.role,
+        transactionType: recordType as any,
+        amount: txn.amount,
+        category: txn.suggestedCategory || "Lain-lain",
+        relatedParty: txn.description,
+        date: txn.date,
+        confidenceScore: txn.confidenceScore ?? 0.8,
+        referenceNumber: `STMT-${index}`,
+        description: `Linked automated OCR bank statement line item: ${txn.description}`,
+        pendingEvidence: {
+          documentType: "STATEMENT",
+          fileName: file?.name || "bank_statement.pdf",
+          fileUrl: fileDataUrl,
+        },
+        evidenceAttached: true,
+        source: "BANK_STATEMENT",
+        sourceTitle: `bank statement transaction: ${txn.description}`,
+        auditDestination: "NONE",
+        precheckDuplicate: false,
+      };
+
+      const result = await confirmFinancialRecord(input, {
+        addFinancialEventAwaited: addFinancialEvent as any,
+        addFinancialEvent,
+        addDebtRecordAwaited: async () => ({ id: "" } as any),
+        addDebtRecord: () => ({ id: "" } as any),
+        addFinancialCommitmentAwaited: async () => ({ id: "" } as any),
+        addFinancialCommitment: () => ({ id: "" } as any),
+        addAssetPurchase: async () => undefined,
+        addOwnerTransaction: async () => undefined,
+        linkEvidenceToRecord: () => undefined,
+        learnOcrPattern,
+        scanForDuplicates: async () => [],
+        logEvent: () => undefined,
+        logTenantActivity: () => undefined,
+      });
+
+      if (!result.ok) {
+        setErrorText("Failed to persist this statement transaction.");
+        return;
+      }
+
+      const freshEvent = {
+        id: result.recordId || "",
         workspaceId: activeWorkspace.id,
         type: recordType,
         categoryName: txn.suggestedCategory || "Lain-lain",
@@ -413,8 +501,8 @@ export const OCREngineConsole: React.FC = () => {
         referenceNumber: `STMT-${index}`,
         description: `Linked automated OCR bank statement line item: ${txn.description}`,
         isCompleted: true,
-        sourceSystem: "BANK_STATEMENT"
-      }, undefined, "BANK_STATEMENT");
+        sourceSystem: "BANK_STATEMENT",
+      };
 
       freshEvidencePackage.relatedRecordId = freshEvent.id;
       freshEvidencePackage.relatedRecordType = recordType;
@@ -442,14 +530,6 @@ export const OCREngineConsole: React.FC = () => {
           metadata: { documentType: "STATEMENT", amountMyr: txn.amount, type: txn.type },
         });
       }
-
-      learnOcrPattern({
-        workspaceId: activeWorkspace.id,
-        vendorName: txn.description,
-        category: txn.suggestedCategory || "Lain-lain",
-        recordType,
-        confidenceScore: txn.confidenceScore ?? 0.8
-      });
 
       setStatementTxnStatus(prev => ({ ...prev, [index]: "confirmed" }));
     } catch (ex) {

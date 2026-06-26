@@ -12,6 +12,8 @@ import { type StorageQuotaHook } from "../lib/storageQuota";
 import { StorageBar } from "./StorageBar";
 import DocumentProcessingProgressPanel from "./DocumentProcessingProgressPanel";
 import { logEvent } from "../lib/eventLog";
+import { logTenantActivity } from "../lib/hqService";
+import { confirmFinancialRecord, type ConfirmInput } from "../lib/financialRecordConfirmation";
 import { pollOcrJob, type OcrJobState } from "../lib/ocrJobTypes";
 import { detectInternalTransfers } from "../lib/internalTransferDetection";
 import { matchOwnBusinessAndBranch } from "../lib/businessMatching";
@@ -507,27 +509,65 @@ export function DocumentsManager({
       // docReview.businessId/branchId is the single source of truth -- whatever
       // the user sees/edits in the selector on the review screen is exactly
       // what gets saved here, no separate recomputation.
-      let ev;
-      try {
-        ev = await addFinancialEventAwaited({
-          workspaceId,
-          businessId: docReview.businessId || undefined,
-          branchId: docReview.branchId || undefined,
-          type: docReview.recordType,
-          categoryName: docReview.category,
-          amountMyr: Number(docReview.amount) || 0,
-          partyName: merchantName || "Tidak dinyatakan",
-          date: docReview.date,
-          referenceNumber: `DOC-${doc.id.substring(0, 8)}`,
-          description: `Daripada dokumen dimuat naik: ${doc.file_name}`,
-          isCompleted: !isOutstanding,
-        });
-      } catch (err: any) {
-        setUploadError(`Gagal menyimpan rekod ke pangkalan data: ${err?.message || "ralat tidak diketahui"}. Rekod TIDAK disahkan.`);
+      const input: ConfirmInput = {
+        workspaceId,
+        tenantId,
+        userId: currentUserId,
+        userEmail: currentUserEmail,
+        userRole: currentUserRole,
+        businessId: docReview.businessId,
+        branchId: docReview.branchId,
+        transactionType: docReview.recordType as any,
+        amount: Number(docReview.amount) || 0,
+        category: docReview.category,
+        relatedParty: merchantName || "Tidak dinyatakan",
+        date: docReview.date,
+        confidenceScore: docReview.confidenceScore,
+        referenceNumber: `DOC-${doc.id.substring(0, 8)}`,
+        description: `Daripada dokumen dimuat naik: ${doc.file_name}`,
+        pendingEvidence: {
+          documentType: "SUPPORTING_DOC",
+          fileName: doc.file_name,
+          fileUrl: doc.file_path_supabase,
+        },
+        evidenceAttached: true,
+        source: "AI_CHAT",
+        sourceTitle: doc.file_name,
+        auditDestination: "NONE",
+        precheckDuplicate: false,
+      };
+
+      const result = await confirmFinancialRecord(input, {
+        addFinancialEventAwaited,
+        addFinancialEvent: addFinancialEventAwaited as any,
+        addDebtRecordAwaited: async () => ({ id: "" } as any),
+        addDebtRecord: () => ({ id: "" } as any),
+        addFinancialCommitmentAwaited: async () => ({ id: "" } as any),
+        addFinancialCommitment: () => ({ id: "" } as any),
+        addAssetPurchase: async () => undefined,
+        addOwnerTransaction: async () => undefined,
+        linkEvidenceToRecord: (link: any) => addFinancialEvidencePackage({
+          workspaceId: link.workspaceId,
+          documentType: link.documentType,
+          uploadDate: todayLocalIso(),
+          fileName: link.fileName,
+          fileUrl: link.fileUrl,
+          relatedRecordType: link.relatedRecordType,
+          relatedRecordId: link.relatedRecordId,
+        }),
+        learnOcrPattern,
+        scanForDuplicates: async () => [],
+        logEvent: () => undefined,
+        logTenantActivity: () => undefined,
+      });
+
+      if (!result.ok) {
+        setUploadError(result.error || `Gagal menyimpan rekod ke pangkalan data. Rekod TIDAK disahkan.`);
         return;
       }
+
+      const ev = { id: result.recordId || "" };
       createdEvents.push(ev);
-      linkDocEvidence([ev]);
       if (merchantName.trim()) {
         learnOcrPattern({ workspaceId, vendorName: merchantName.trim(), category: docReview.category, recordType: docReview.recordType, confidenceScore: docReview.confidenceScore });
       }

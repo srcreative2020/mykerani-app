@@ -8,6 +8,8 @@ import { motion } from "../lib/motionCompat";
 import { loadBusinesses, type Business } from "../lib/profileData";
 import { buildFinancialContext } from "../lib/buildFinancialContext";
 import { enrichChatSuggestionPayload } from "../lib/chatSuggestionMapper";
+import { confirmFinancialRecord, type ConfirmInput } from "../lib/financialRecordConfirmation";
+import { logTenantActivity } from "../lib/hqService";
 import { isSupabaseConfigured, supabase } from "../lib/supabase";
 import {
   Brain,
@@ -362,108 +364,64 @@ export const AIFinancialAssistant: React.FC<AIFinancialAssistantProps> = ({ onTr
     const businessId = s.businessId || undefined;
 
     try {
-      let newRecordId: string | undefined;
-      let evidenceRelatedType: string | undefined;
+      const pendingEvidence = pendingEvidenceBySuggestionRef.current[s.id];
 
-      if (transactionType === "INCOME" || transactionType === "EXPENSE") {
-        const rec = await addFinancialEventAwaited({
-          workspaceId: activeWorkspace.id,
-          type: transactionType,
-          categoryName: category,
-          amountMyr: amount,
-          partyName: relatedParty,
-          date,
-          referenceNumber: `AI-${s.id}`,
-          description: `Direkodkan melalui pengesahan cadangan Kerani AI: ${s.title}`,
-          isCompleted: true,
-          businessId
-        });
-        newRecordId = rec.id;
-        evidenceRelatedType = transactionType;
-      } else if (transactionType === "DEBT") {
-        const rec = addDebtRecord({
-          workspaceId: activeWorkspace.id,
-          creditorName: relatedParty,
-          borrowedDate: date,
-          totalAmountMyr: amount,
-          repaidAmountMyr: 0,
-          status: "ACTIVE",
-          description: `Direkodkan melalui pengesahan cadangan Kerani AI: ${s.title}`,
-          businessId
-        });
-        newRecordId = rec.id;
-        evidenceRelatedType = "DEBT";
-      } else if (transactionType === "RECEIVABLE") {
-        const rec = await addFinancialEventAwaited({
-          workspaceId: activeWorkspace.id,
-          type: "RECEIVABLE",
-          categoryName: category,
-          amountMyr: amount,
-          partyName: relatedParty,
-          date,
-          referenceNumber: `AI-${s.id}`,
-          description: `Direkodkan melalui pengesahan cadangan Kerani AI: ${s.title}`,
-          isCompleted: false,
-          businessId
-        });
-        newRecordId = rec.id;
-        evidenceRelatedType = "RECEIVABLE";
-      } else if (transactionType === "COMMITMENT") {
-        const rec = addFinancialCommitment({
-          workspaceId: activeWorkspace.id,
-          description: `Direkodkan melalui pengesahan cadangan Kerani AI: ${s.title}`,
-          obligeeName: relatedParty,
-          amountPerIntervalMyr: amount,
-          recurrence: "MONTHLY",
-          startDate: date,
-          isActive: true,
-          status: "ACTIVE",
-          businessId
-        });
-        newRecordId = rec.id;
-        evidenceRelatedType = "COMMITMENT";
-      } else {
+      const input: ConfirmInput = {
+        workspaceId: activeWorkspace.id,
+        tenantId: activeTenant?.id || activeWorkspace.tenantId,
+        userId: user?.id,
+        userEmail: user?.email,
+        userRole: user?.role,
+        businessId,
+        transactionType: (transactionType as ConfirmInput["transactionType"]) || "EXPENSE",
+        amount,
+        category,
+        relatedParty,
+        date,
+        confidenceScore,
+        referenceNumber: `AI-${s.id}`,
+        description: `Direkodkan melalui pengesahan cadangan Kerani AI: ${s.title}`,
+        pendingEvidence: pendingEvidence
+          ? { documentType: pendingEvidence.documentType, fileName: pendingEvidence.fileName, fileUrl: pendingEvidence.fileUrl }
+          : null,
+        evidenceAttached: s.evidenceStatus === "ATTACHED",
+        source: "AI_CHAT",
+        sourceTitle: `AI chat suggestion: ${s.title}`,
+        auditDestination: activeTenant?.id && user?.id ? "EVENT_LOG" : "NONE",
+      };
+
+      const result = await confirmFinancialRecord(input, {
+        addFinancialEventAwaited,
+        addFinancialEvent: addFinancialEventAwaited as any,
+        addDebtRecordAwaited: addDebtRecord as any,
+        addDebtRecord,
+        addFinancialCommitmentAwaited: addFinancialCommitment as any,
+        addFinancialCommitment,
+        addAssetPurchase: async () => undefined,
+        addOwnerTransaction: async () => undefined,
+        linkEvidenceToRecord: (link: any) => addFinancialEvidencePackage({
+          workspaceId: link.workspaceId,
+          documentType: link.documentType,
+          uploadDate: new Date().toISOString().split("T")[0],
+          fileName: link.fileName,
+          fileUrl: link.fileUrl,
+          relatedRecordType: link.relatedRecordType,
+          relatedRecordId: link.relatedRecordId,
+        }),
+        learnOcrPattern,
+        scanForDuplicates: async () => [],
+        logEvent: (e: any) => { void import("../lib/eventLog").then(m => m.logEvent(e)); },
+        logTenantActivity,
+      });
+
+      if (!result.ok) {
+        console.error("Failed to confirm AI suggestion:", result.error);
+        setError(result.error || "Gagal menyimpan rekod.");
         return;
       }
 
-      // If the user attached a receipt/invoice before pressing Sahkan, link it to
-      // the record that just got created. If evidence was skipped, no mapping row
-      // is created at all.
-      const pendingEvidence = pendingEvidenceBySuggestionRef.current[s.id];
-      if (s.evidenceStatus === "ATTACHED" && pendingEvidence && newRecordId) {
-        addFinancialEvidencePackage({
-          workspaceId: activeWorkspace.id,
-          documentType: pendingEvidence.documentType,
-          uploadDate: new Date().toISOString().split("T")[0],
-          fileName: pendingEvidence.fileName,
-          fileUrl: pendingEvidence.fileUrl,
-          relatedRecordType: evidenceRelatedType,
-          relatedRecordId: newRecordId,
-        });
+      if (pendingEvidence && result.ok) {
         delete pendingEvidenceBySuggestionRef.current[s.id];
-      }
-
-      // Module 5: improve future suggestions for this party/category — never creates a record.
-      learnOcrPattern({
-        workspaceId: activeWorkspace.id,
-        vendorName: relatedParty,
-        category,
-        recordType: transactionType === "COMMITMENT" ? "EXPENSE" : transactionType,
-        confidenceScore
-      });
-
-      if (activeTenant?.id && user?.id) {
-        const { logEvent } = await import("../lib/eventLog");
-        logEvent({
-          tenantId: activeTenant.id,
-          workspaceId: activeWorkspace.id,
-          userId: user.id,
-          userEmail: user.email,
-          userRole: user.role,
-          eventType: "AI_ANALYSIS",
-          description: `User confirmed AI-suggested ${transactionType} transaction: ${s.title}`,
-          metadata: { suggestionId: s.id, transactionType, amount, category, relatedParty, businessId: businessId || null, businessName: s.businessName || "Personal", confidenceScore, evidenceStatus: s.evidenceStatus || "NONE" }
-        });
       }
 
       setSuggestionStatus(prev => ({ ...prev, [s.id]: "confirmed" }));

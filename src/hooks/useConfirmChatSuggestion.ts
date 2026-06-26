@@ -5,6 +5,7 @@ import { addAssetPurchase, addOwnerTransaction } from "../lib/assetOwnerData";
 import { logEvent } from "../lib/eventLog";
 import { logTenantActivity } from "../lib/hqService";
 import type { ChatSuggestion, ChatSuggestionExtra, ChatSuggestionRecordType, PendingChatEvidence } from "../lib/chatSuggestionTypes";
+import { confirmFinancialRecord, type ConfirmInput } from "../lib/financialRecordConfirmation";
 
 export interface ConfirmChatSuggestionDraft {
   amount: string;
@@ -53,13 +54,6 @@ export const useConfirmChatSuggestion = () => {
     if (!activeWorkspace) return { ok: false, error: "Tiada ruang kerja aktif." };
     if (!extra || !extra.businessPicked) return { ok: false, error: "Sila pilih bisnes terlebih dahulu." };
 
-    logEvent({
-      tenantId: activeWorkspace.tenantId, workspaceId: activeWorkspace.id, userId: user?.id,
-      userEmail: user?.email, userRole: user?.role, eventType: "CONFIRMATION",
-      description: `User confirmed AI chat suggestion: ${s.title}`,
-      metadata: { suggestionId: s.id, transactionType: s.payload?.transactionType },
-    });
-
     const businessId = extra.businessId;
     const branchId = extra.branchId;
     const transactionType = s.payload?.transactionType;
@@ -70,142 +64,49 @@ export const useConfirmChatSuggestion = () => {
     const confidenceScore = s.payload?.confidenceScore ?? 0.7;
     const description = `Direkodkan melalui pengesahan cadangan Kerani AI: ${s.title}`;
 
-    // Global duplicate detection — scan existing financialEvents for amount+date+vendor match
-    if (transactionType !== "TRANSFER" && amount > 0 && relatedParty !== "Tidak Dinyatakan") {
-      try {
-        const existingDuplicates = await scanForDuplicates();
-        const match = existingDuplicates.find((d: any) =>
-          d.classification !== "REVIEWED_NOT_DUPLICATE" &&
-          Math.abs((d.score ?? 0) - 1) < 0.01
-        );
-        if (match) {
-          return { ok: false, error: `Rekod pendua dikesan. Sila semak rekod sedia ada sebelum meneruskan.` };
-        }
-      } catch (e) { /* duplicate check is non-blocking */ }
-    }
-
-    let newRecordId: string | undefined;
-    let newRecordType: ChatSuggestionRecordType | undefined;
-
-    try {
-      if (transactionType === "INCOME" || transactionType === "EXPENSE") {
-        const ev = await addFinancialEventAwaited({
-          workspaceId: activeWorkspace.id, businessId: businessId || undefined, branchId: branchId || undefined,
-          type: transactionType, categoryName: category, amountMyr: amount, partyName: relatedParty, date,
-          referenceNumber: `AI-${s.id}`, description, isCompleted: true, sourceSystem: "AI_CHAT",
-        }, "AI_CHAT");
-        newRecordId = ev.id; newRecordType = transactionType;
-      } else if (transactionType === "TRANSFER") {
-        // Internal Transfer — MUST NOT be recorded as Income or Expense.
-        // Internal transfers only move money between own accounts and must
-        // NOT affect Profit & Loss. They are logged in audit_logs and
-        // event_logs only. No financial_events row is created.
-        // Balance updates require a dedicated transfers table (future work).
-        logEvent({
-          tenantId: activeWorkspace.tenantId, workspaceId: activeWorkspace.id, userId: user?.id,
-          userEmail: user?.email, userRole: user?.role, eventType: "AI_ANALYSIS",
-          description: `Internal Transfer (no P&L impact): ${relatedParty} RM ${amount}`,
-          metadata: { suggestionId: s.id, amount, fromAccount: relatedParty, category, date, source: "AI_CHAT" },
-        });
-        newRecordId = undefined; newRecordType = "TRANSFER";
-        // Transfer recorded successfully (no financial event created)
-        // Skip evidence linking and OCR learning for transfers
-        return {
-          ok: true, recordType: "TRANSFER", amount, category: relatedParty, relatedParty, date, confidenceScore, transactionType,
-        };
-      } else if (transactionType === "DEBT") {
-        const debt = await addDebtRecordAwaited({
-          workspaceId: activeWorkspace.id, businessId: businessId || undefined, creditorName: relatedParty,
-          borrowedDate: date, totalAmountMyr: amount, repaidAmountMyr: 0, status: "ACTIVE", description,
-        });
-        newRecordId = debt.id; newRecordType = "DEBT";
-      } else if (transactionType === "RECEIVABLE") {
-        const ev = await addFinancialEventAwaited({
-          workspaceId: activeWorkspace.id, businessId: businessId || undefined, branchId: branchId || undefined,
-          type: "RECEIVABLE", categoryName: category, amountMyr: amount, partyName: relatedParty, date,
-          referenceNumber: `AI-${s.id}`, description, isCompleted: false, sourceSystem: "AI_CHAT",
-        }, "AI_CHAT");
-        newRecordId = ev.id; newRecordType = "RECEIVABLE";
-      } else if (transactionType === "PAYABLE") {
-        const ev = await addFinancialEventAwaited({
-          workspaceId: activeWorkspace.id, businessId: businessId || undefined, branchId: branchId || undefined,
-          type: "PAYABLE", categoryName: category, amountMyr: amount, partyName: relatedParty, date,
-          referenceNumber: `AI-${s.id}`, description, isCompleted: false, sourceSystem: "AI_CHAT",
-        }, "AI_CHAT");
-        newRecordId = ev.id; newRecordType = "PAYABLE";
-      } else if (transactionType === "COMMITMENT") {
-        const cmt = await addFinancialCommitmentAwaited({
-          workspaceId: activeWorkspace.id, businessId: businessId || undefined, description, obligeeName: relatedParty,
-          amountPerIntervalMyr: amount, recurrence: "MONTHLY", startDate: date, isActive: true, status: "ACTIVE",
-        });
-        newRecordId = cmt.id; newRecordType = "COMMITMENT";
-      } else if (transactionType === "ASSET_PURCHASE") {
-        await addAssetPurchase(activeWorkspace.id, {
-          assetName: category, category, purchaseAmountMyr: amount, purchaseDate: date, vendorName: relatedParty, notes: description,
-        });
-      } else if (transactionType === "OWNER_TRANSACTION") {
-        await addOwnerTransaction(activeWorkspace.id, {
-          type: s.payload?.ownerTransactionSubtype || (category.toUpperCase().includes("DRAWING") ? "DRAWING" : "CAPITAL_INJECTION"),
-          amountMyr: amount, transactionDate: date, description,
-        });
-      } else {
-        return { ok: false, error: "Jenis transaksi tidak disokong." };
-      }
-    } catch (err: any) {
-      return { ok: false, error: `Gagal menyimpan rekod ke pangkalan data: ${err?.message || "ralat tidak diketahui"}. Cadangan TIDAK disahkan, sila cuba lagi.` };
-    }
-
-    logEvent({
-      tenantId: activeWorkspace.tenantId, workspaceId: activeWorkspace.id, userId: user?.id,
-      userEmail: user?.email, userRole: user?.role, eventType: "RECORD_CREATION",
-      description: `Financial record created from AI chat suggestion: ${s.title}`,
-      metadata: { recordId: newRecordId, recordType: newRecordType, amount, category, relatedParty, date },
-    });
-
-    // Tenant Activity Center: log the confirmation for Owner visibility
-    logTenantActivity({
+    const input: ConfirmInput = {
       workspaceId: activeWorkspace.id,
-      actorId: user?.id || "unknown",
-      actorEmail: user?.email || "unknown",
-      actorRole: user?.role || "TENANT_STAFF",
-      actorName: user?.fullName,
-      actionType: "RECORD_CONFIRMED",
-      module: "Financial Records",
-      description: `AI suggestion confirmed: ${transactionType} RM${amount} (${category})`,
-      metadata: { recordId: newRecordId, recordType: newRecordType, amount, category, relatedParty, date, transactionType },
+      tenantId: activeWorkspace.tenantId,
+      userId: user?.id,
+      userEmail: user?.email,
+      userRole: user?.role,
+      businessId,
+      branchId,
+      transactionType: (transactionType as ConfirmInput["transactionType"]) ?? "EXPENSE",
+      amount,
+      category,
+      relatedParty,
+      date,
+      confidenceScore,
+      referenceNumber: `AI-${s.id}`,
+      description,
+      pendingEvidence: pendingEvidence
+        ? { documentType: pendingEvidence.documentType, fileName: pendingEvidence.fileName, fileUrl: pendingEvidence.fileUrl }
+        : null,
+      evidenceAttached: extra.evidenceStatus === "ATTACHED",
+      ownerTransactionSubtype: s.payload?.ownerTransactionSubtype,
+      source: "AI_CHAT",
+      sourceTitle: `AI chat suggestion: ${s.title}`,
+      auditDestination: "EVENT_LOG",
+    };
+
+    const result = await confirmFinancialRecord(input, {
+      addFinancialEventAwaited,
+      addFinancialEvent: addFinancialEventAwaited as any,
+      addDebtRecordAwaited,
+      addDebtRecord: addDebtRecordAwaited as any,
+      addFinancialCommitmentAwaited,
+      addFinancialCommitment: addFinancialCommitmentAwaited as any,
+      addAssetPurchase,
+      addOwnerTransaction,
+      linkEvidenceToRecord,
+      learnOcrPattern,
+      scanForDuplicates,
+      logEvent,
+      logTenantActivity,
     });
 
-    // Evidence Linking: the one shared engine -- if a receipt/invoice was
-    // attached (explicitly, or automatically because this suggestion came
-    // from an OCR/image/PDF/voice-note upload), link it to the record that
-    // was just created. Skipped evidence never creates a row.
-    if (extra.evidenceStatus === "ATTACHED" && pendingEvidence && newRecordId && newRecordType) {
-      linkEvidenceToRecord({
-        workspaceId: activeWorkspace.id,
-        documentType: pendingEvidence.documentType,
-        fileName: pendingEvidence.fileName,
-        fileUrl: pendingEvidence.fileUrl,
-        relatedRecordType: newRecordType,
-        relatedRecordId: newRecordId,
-      });
-    }
-
-    // AI Learns: feed the confirmed vendor/category back into the shared
-    // OCR Learning Memory for every record type except the two that aren't
-    // vendor-category transactions.
-    if (transactionType !== "ASSET_PURCHASE" && transactionType !== "OWNER_TRANSACTION") {
-      learnOcrPattern({
-        workspaceId: activeWorkspace.id,
-        vendorName: relatedParty,
-        category,
-        recordType: (transactionType === "COMMITMENT" ? "EXPENSE" : transactionType) as "INCOME" | "EXPENSE" | "RECEIVABLE" | "PAYABLE" | "DEBT",
-        confidenceScore,
-        businessId: businessId || null,
-        branchId: branchId || null,
-      });
-    }
-
-    return { ok: true, recordId: newRecordId, recordType: newRecordType, amount, category, relatedParty, date, confidenceScore, transactionType };
+    return result as ConfirmChatSuggestionResult;
   };
 
   return { confirmChatSuggestion };
