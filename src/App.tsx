@@ -2,7 +2,7 @@ import React, { useState, useEffect, lazy, Suspense } from "react";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import { TenantProvider, useTenant } from "./context/TenantContext";
 import { WorkspaceProvider, useWorkspace } from "./context/WorkspaceContext";
-import { PermissionProvider } from "./context/PermissionContext";
+import { PermissionProvider, usePermission } from "./context/PermissionContext";
 import { AuditProvider, useAudit } from "./context/AuditContext";
 import { StorageProvider } from "./context/StorageContext";
 import { NotificationProvider } from "./context/NotificationContext";
@@ -1126,6 +1126,14 @@ function MainDashboardContent() {
 function RoleRouter() {
   const { user, isMockUser, signOut } = useAuth();
   const { activeTenant } = useTenant();
+  const { loading: workspaceLoading } = useWorkspace();
+  const { loading: permissionLoading } = usePermission();
+
+  // Do not mount any dashboard until ALL required contexts finish loading.
+  // This prevents the Staff-seeing-Owner-Dashboard flicker: previously, the
+  // router would fall through to <OwnerDashboard/> while user.role was
+  // still unresolved or while tenant/workspace data hadn't loaded.
+  const allContextsReady = !workspaceLoading && !permissionLoading;
 
   const content = (() => {
     // V1.0 Role Authority routing
@@ -1140,6 +1148,12 @@ function RoleRouter() {
     // TENANT_OWNER → Owner Business Dashboard
     return <Suspense fallback={<LazyFallback />}><OwnerDashboard /></Suspense>;
   })();
+
+  // Show loading screen until all contexts are ready — prevents premature
+  // mounting of OwnerDashboard/StaffHomeScreen with stale or missing data.
+  if (!allContextsReady) {
+    return <LazyFallback />;
+  }
 
   if (!isMockUser) return content;
 

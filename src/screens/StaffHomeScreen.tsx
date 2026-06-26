@@ -1663,26 +1663,18 @@ export function StaffHomeScreen() {
           <div className="flex-1 overflow-y-auto p-4 pb-24 max-w-lg mx-auto w-full space-y-4" id="staff_profile_pane">
             <h2 className="text-lg font-bold text-slate-900">Profil Saya</h2>
 
-            {/* L-01: Personal Profile Summary */}
-            {(personalProfile.fullName || personalProfile.occupation || personalProfile.monthlyIncomeMyr) && (
-              <div style={{ background: '#fff', border: '1px solid #eee', borderRadius: 12, padding: '12px 16px', marginBottom: 12 }}>
-                <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 8 }}>Maklumat Peribadi</div>
-                <div style={{ fontSize: 13, color: '#555' }}>Nama: {personalProfile.fullName || user?.fullName || '-'}</div>
-                {personalProfile.occupation && <div style={{ fontSize: 13, color: '#555' }}>Pekerjaan: {personalProfile.occupation}</div>}
-                {personalProfile.monthlyIncomeMyr && <div style={{ fontSize: 13, color: '#555' }}>Pendapatan Bulanan: RM {Number(personalProfile.monthlyIncomeMyr).toLocaleString()}</div>}
-              </div>
-            )}
-
-            <div className="bg-white border border-slate-200 rounded-2xl p-6 space-y-5 shadow-sm">
-              <div className="flex items-center space-x-4">
-                <div className="w-14 h-14 rounded-2xl bg-slate-800 text-white flex items-center justify-center text-2xl font-bold shadow shrink-0">
+            {/* Hero Profile Card — unified card replacing the old two-block layout */}
+            <div className="bg-white border border-slate-200 rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] overflow-hidden">
+              {/* Header section with avatar + identity */}
+              <div className="px-6 pt-6 pb-4 flex items-center space-x-4">
+                <div className="w-16 h-16 rounded-2xl bg-slate-800 text-white flex items-center justify-center text-2xl font-bold shadow shrink-0">
                   {firstName.charAt(0).toUpperCase()}
                 </div>
                 {!editingAccount ? (
-                  <div className="min-w-0">
-                    <p className="font-bold text-slate-900 truncate">{user?.fullName || "Kakitangan"}</p>
-                    <p className="text-xs text-slate-500 truncate">{user?.email}</p>
-                    <span className="text-[10px] bg-slate-100 text-slate-600 font-bold px-2 py-0.5 rounded-full mt-1 inline-block">Kakitangan Syarikat</span>
+                  <div className="min-w-0 flex-1">
+                    <p className="font-bold text-slate-900 truncate text-base">{user?.fullName || "Kakitangan"}</p>
+                    <p className="text-xs text-slate-500 truncate mt-0.5">{user?.email}</p>
+                    <span className="text-[10px] bg-indigo-50 text-indigo-700 font-bold px-2.5 py-1 rounded-full mt-1.5 inline-block">Kakitangan Syarikat</span>
                   </div>
                 ) : (
                   <div className="min-w-0 flex-1 space-y-1.5">
@@ -1692,94 +1684,111 @@ export function StaffHomeScreen() {
                 )}
               </div>
 
-              {accountMsg && (
-                <p className={`text-xs ${accountMsg.startsWith("Profil") || accountMsg.startsWith("Nama") ? "text-emerald-600" : "text-rose-500"}`}>{accountMsg}</p>
-              )}
-
-              {!editingAccount ? (
-                <button onClick={startEditAccount} className="w-full py-2.5 border border-slate-200 text-slate-700 rounded-xl text-sm font-semibold hover:bg-slate-50 transition cursor-pointer">
-                  Edit Profil
-                </button>
-              ) : (
-                <div className="flex gap-2">
-                  <button onClick={saveAccount} disabled={accountSaving} className="flex-1 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-semibold disabled:opacity-50 cursor-pointer">
-                    {accountSaving ? "Menyimpan..." : "Simpan"}
-                  </button>
-                  <button onClick={() => setEditingAccount(false)} className="flex-1 py-2.5 bg-slate-200 hover:bg-slate-300 text-slate-800 rounded-xl text-sm font-semibold cursor-pointer">
-                    Batal
-                  </button>
+              {/* Personal info merged inline (no separate Maklumat Peribadi block) */}
+              {!editingAccount && (personalProfile.occupation || personalProfile.monthlyIncomeMyr) && (
+                <div className="px-6 pb-3 flex flex-wrap gap-x-6 gap-y-1 text-xs text-slate-500">
+                  {personalProfile.occupation && <span><span className="font-semibold text-slate-700">Pekerjaan:</span> {personalProfile.occupation}</span>}
+                  {personalProfile.monthlyIncomeMyr && <span><span className="font-semibold text-slate-700">Pendapatan:</span> RM {Number(personalProfile.monthlyIncomeMyr).toLocaleString()}</span>}
                 </div>
               )}
+
+              {/* Edit / Save buttons */}
+              <div className="px-6 pb-4">
+                {accountMsg && (
+                  <p className={`text-xs mb-3 ${accountMsg.startsWith("Profil") || accountMsg.startsWith("Nama") ? "text-emerald-600" : "text-rose-500"}`}>{accountMsg}</p>
+                )}
+                {!editingAccount ? (
+                  <button onClick={startEditAccount} className="w-full py-2.5 border border-slate-200 text-slate-700 rounded-xl text-sm font-semibold hover:bg-slate-50 transition cursor-pointer">
+                    Edit Profil
+                  </button>
+                ) : (
+                  <div className="flex gap-2">
+                    <button onClick={saveAccount} disabled={accountSaving} className="flex-1 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-semibold disabled:opacity-50 cursor-pointer">
+                      {accountSaving ? "Menyimpan..." : "Simpan"}
+                    </button>
+                    <button onClick={() => setEditingAccount(false)} className="flex-1 py-2.5 bg-slate-200 hover:bg-slate-300 text-slate-800 rounded-xl text-sm font-semibold cursor-pointer">
+                      Batal
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* Divider + workspace info */}
               {activeWorkspace && (
-                <div className="border-t border-slate-100 pt-4 space-y-2">
+                <div className="border-t border-slate-100 px-6 py-4 space-y-1">
                   <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Syarikat Aktif</p>
                   <p className="text-sm font-semibold text-slate-800">{activeWorkspace.name}</p>
                 </div>
               )}
-              <div className="border-t border-slate-100 pt-4 text-[11px] text-slate-400 space-y-1">
+              <div className="border-t border-slate-100 px-6 py-3 text-[11px] text-slate-400 space-y-1">
                 <p>Anda log masuk sebagai <span className="font-semibold text-slate-600">TENANT_STAFF</span></p>
                 <p>Untuk tukar tetapan syarikat, hubungi Pemilik.</p>
               </div>
 
-              {/* Support Center button */}
-              <button onClick={() => setShowSupport(true)}
-                className="w-full py-3 border border-indigo-200 text-indigo-600 rounded-xl text-sm font-semibold hover:bg-indigo-50 transition cursor-pointer flex items-center justify-center space-x-2">
-                <HelpCircle className="w-4 h-4" /><span>Pusat Sokongan</span>
-              </button>
+              {/* Support + Appeal buttons */}
+              <div className="border-t border-slate-100 px-6 py-4 space-y-2">
+                <button onClick={() => setShowSupport(true)}
+                  className="w-full py-3 border border-indigo-200 text-indigo-600 rounded-xl text-sm font-semibold hover:bg-indigo-50 transition cursor-pointer flex items-center justify-center space-x-2">
+                  <HelpCircle className="w-4 h-4" /><span>Pusat Sokongan</span>
+                </button>
 
-              <button onClick={() => { setShowAppeal(v => !v); setAppealResult(null); }}
-                className="w-full py-3 border border-amber-200 text-amber-600 rounded-xl text-sm font-semibold hover:bg-amber-50 transition cursor-pointer flex items-center justify-center space-x-2">
-                <AlertCircle className="w-4 h-4" /><span>Hantar Rayuan ke HQ</span>
-              </button>
-              {showAppeal && (
-                <div className="space-y-2 border border-amber-100 bg-amber-50 rounded-xl p-3">
-                  <p className="text-xs text-slate-500">Jika akaun syarikat anda digantung atau dibekukan dan ini silap, hantar rayuan untuk semakan HQ.</p>
-                  <textarea value={appealReason} onChange={e => setAppealReason(e.target.value)}
-                    placeholder="Terangkan sebab rayuan anda..." rows={3}
-                    className="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-400 bg-white" />
-                  <button onClick={handleSubmitAppeal} disabled={appealLoading || !appealReason.trim()}
-                    className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 text-white rounded-xl text-xs font-bold cursor-pointer transition">
-                    {appealLoading ? "Menghantar..." : "Hantar Rayuan"}
-                  </button>
-                  {appealResult && (
-                    <div className={`rounded-xl p-3 text-xs ${appealResult.success ? "bg-emerald-50 border border-emerald-200" : "bg-rose-50 border border-rose-200"}`}>
-                      <p className={appealResult.success ? "text-emerald-600" : "text-rose-600"}>{appealResult.message}</p>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              <button onClick={() => setShowChatArchive(true)}
-                className="w-full py-3 border border-slate-200 text-slate-600 rounded-xl text-sm font-semibold hover:bg-slate-50 transition cursor-pointer flex items-center justify-center space-x-2">
-                <MessageCircle className="w-4 h-4" /><span>Arkib Perbualan</span>
-              </button>
-
-              {/* Gap C-03, L-05: Resource Status — Staff visibility of AI/OCR credits and storage */}
-              <div className="border border-slate-200 rounded-2xl p-4 space-y-3 bg-slate-50">
-                <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Status Sumber</p>
-                <div className="flex gap-4">
-                  <div className="flex-1">
-                    <p className="text-[11px] text-slate-500 mb-0.5">Kredit AI</p>
-                    <p className={`text-sm font-bold ${aiCredits.used < aiCredits.total ? "text-emerald-600" : "text-red-500"}`}>
-                      {Math.max(0, aiCredits.total - aiCredits.used).toLocaleString()}
-                      <span className="text-[10px] font-normal text-slate-400"> berbaki</span>
-                    </p>
+                <button onClick={() => { setShowAppeal(v => !v); setAppealResult(null); }}
+                  className="w-full py-3 border border-amber-200 text-amber-600 rounded-xl text-sm font-semibold hover:bg-amber-50 transition cursor-pointer flex items-center justify-center space-x-2">
+                  <AlertCircle className="w-4 h-4" /><span>Hantar Rayuan ke HQ</span>
+                </button>
+                {showAppeal && (
+                  <div className="space-y-2 border border-amber-100 bg-amber-50 rounded-xl p-3">
+                    <p className="text-xs text-slate-500">Jika akaun syarikat anda digantung atau dibekukan dan ini silap, hantar rayuan untuk semakan HQ.</p>
+                    <textarea value={appealReason} onChange={e => setAppealReason(e.target.value)}
+                      placeholder="Terangkan sebab rayuan anda..." rows={3}
+                      className="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-400 bg-white" />
+                    <button onClick={handleSubmitAppeal} disabled={appealLoading || !appealReason.trim()}
+                      className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 text-white rounded-xl text-xs font-bold cursor-pointer transition">
+                      {appealLoading ? "Menghantar..." : "Hantar Rayuan"}
+                    </button>
+                    {appealResult && (
+                      <div className={`rounded-xl p-3 text-xs ${appealResult.success ? "bg-emerald-50 border border-emerald-200" : "bg-rose-50 border border-rose-200"}`}>
+                        <p className={appealResult.success ? "text-emerald-600" : "text-rose-600"}>{appealResult.message}</p>
+                      </div>
+                    )}
                   </div>
-                  <div className="flex-1">
-                    <p className="text-[11px] text-slate-500 mb-0.5">Kredit OCR</p>
-                    <p className={`text-sm font-bold ${ocrCredits.used < ocrCredits.total ? "text-emerald-600" : "text-red-500"}`}>
-                      {Math.max(0, ocrCredits.total - ocrCredits.used).toLocaleString()}
-                      <span className="text-[10px] font-normal text-slate-400"> berbaki</span>
-                    </p>
-                  </div>
-                </div>
-                <StorageBar quota={storageQuota} compact={true} />
+                )}
               </div>
 
-              <button onClick={() => signOut()}
-                className="w-full py-3 border border-rose-200 text-rose-500 rounded-xl text-sm font-semibold hover:bg-rose-50 transition cursor-pointer">
-                Log Keluar
-              </button>
+              {/* Chat Archive + Resource Status + Sign Out */}
+              <div className="border-t border-slate-100 px-6 py-4 space-y-3">
+                <button onClick={() => setShowChatArchive(true)}
+                  className="w-full py-3 border border-slate-200 text-slate-600 rounded-xl text-sm font-semibold hover:bg-slate-50 transition cursor-pointer flex items-center justify-center space-x-2">
+                  <MessageCircle className="w-4 h-4" /><span>Arkib Perbualan</span>
+                </button>
+
+                {/* Gap C-03, L-05: Resource Status — Staff visibility of AI/OCR credits and storage */}
+                <div className="border border-slate-200 rounded-2xl p-4 space-y-3 bg-slate-50">
+                  <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Status Sumber</p>
+                  <div className="flex gap-4">
+                    <div className="flex-1">
+                      <p className="text-[11px] text-slate-500 mb-0.5">Kredit AI</p>
+                      <p className={`text-sm font-bold ${aiCredits.used < aiCredits.total ? "text-emerald-600" : "text-red-500"}`}>
+                        {Math.max(0, aiCredits.total - aiCredits.used).toLocaleString()}
+                        <span className="text-[10px] font-normal text-slate-400"> berbaki</span>
+                      </p>
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-[11px] text-slate-500 mb-0.5">Kredit OCR</p>
+                      <p className={`text-sm font-bold ${ocrCredits.used < ocrCredits.total ? "text-emerald-600" : "text-red-500"}`}>
+                        {Math.max(0, ocrCredits.total - ocrCredits.used).toLocaleString()}
+                        <span className="text-[10px] font-normal text-slate-400"> berbaki</span>
+                      </p>
+                    </div>
+                  </div>
+                  <StorageBar quota={storageQuota} compact={true} />
+                </div>
+
+                <button onClick={() => signOut()}
+                  className="w-full py-3 border border-rose-200 text-rose-500 rounded-xl text-sm font-semibold hover:bg-rose-50 transition cursor-pointer">
+                  Log Keluar
+                </button>
+              </div>
             </div>
           </div>
         )}

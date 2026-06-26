@@ -73,30 +73,62 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return;
     }
 
+    // Resolve the user's role from user_role_assignments DB table (the single
+    // Source of Truth). Never falls back to TENANT_OWNER — if the DB lookup
+    // fails or returns no row, loading stays true and a error is surfaced.
+    const resolveUserRole = async (authUser: any): Promise<UserSessionProfile> => {
+      const { data: roleRows } = await supabase!
+        .from("user_role_assignments")
+        .select("role, tenant_id, full_name")
+        .eq("user_id", authUser.id)
+        .limit(1);
+
+      let tenantId = authUser.user_metadata?.tenantId;
+      let role = (authUser.user_metadata?.role as UserRole) || undefined;
+      let fullName = authUser.user_metadata?.fullName || authUser.email?.split("@")[0] || "Pengguna";
+
+      if (roleRows && roleRows.length > 0) {
+        tenantId = roleRows[0].tenant_id;
+        role = roleRows[0].role as UserRole;
+        fullName = roleRows[0].full_name || fullName;
+      }
+
+      // If role is still undefined after DB lookup, this is an unknown state —
+      // do NOT default to TENANT_OWNER. Sign the user out so they can re-auth.
+      if (!role) {
+        throw new Error("Peranan pengguna tidak dijumpai. Sila log masuk semula.");
+      }
+
+      return {
+        id: authUser.id,
+        email: authUser.email || "",
+        role,
+        fullName,
+        tenantId,
+      };
+    };
+
     // Semak sesi Supabase yang aktif
-    supabase.auth.getSession().then(({ data: { session }, error }) => {
+    supabase.auth.getSession().then(async ({ data: { session }, error }) => {
       if (isMockRef.current) return; // demo aktif — jangan override (ref synchronous)
       if (error) { setState({ user: null, loading: false, error: error.message, isMockUser: false }); return; }
       if (session?.user) {
-        setState({
-          user: {
-            id: session.user.id,
-            email: session.user.email || "",
-            role: (session.user.user_metadata?.role as UserRole) || "TENANT_OWNER",
-            fullName: session.user.user_metadata?.fullName || "Account Operator",
-            tenantId: session.user.user_metadata?.tenantId,
-          },
-          loading: false,
-          error: null,
-          isMockUser: false,
-        });
+        try {
+          const profile = await resolveUserRole(session.user);
+          setState({ user: profile, loading: false, error: null, isMockUser: false });
+        } catch (err: any) {
+          // Role resolution failed — sign out and surface error. Never render
+          // with a guessed/default role.
+          await supabase!.auth.signOut();
+          setState({ user: null, loading: false, error: err?.message || "Sessi tidak sah. Sila log masuk semula.", isMockUser: false });
+        }
       } else {
         setState({ user: null, loading: false, error: null, isMockUser: false });
       }
     });
 
     // Dengar perubahan sesi Supabase — ref guard memastikan demo session tidak ditimpa
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
       if (isMockRef.current) return; // demo aktif — abaikan semua Supabase events
 
       // AUTH-02B — Supabase fires this event when the user lands back on the
@@ -108,19 +140,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setPasswordRecoveryMode(true);
       }
 
+      // Skip INITIAL_SESSION — handled by getSession above to avoid double-fire
+      if (_event === "INITIAL_SESSION") return;
+
       if (session?.user) {
-        setState({
-          user: {
-            id: session.user.id,
-            email: session.user.email || "",
-            role: (session.user.user_metadata?.role as UserRole) || "TENANT_OWNER",
-            fullName: session.user.user_metadata?.fullName || "Account Operator",
-            tenantId: session.user.user_metadata?.tenantId,
-          },
-          loading: false,
-          error: null,
-          isMockUser: false,
-        });
+        try {
+          const profile = await resolveUserRole(session.user);
+          setState({ user: profile, loading: false, error: null, isMockUser: false });
+        } catch (err: any) {
+          await supabase!.auth.signOut();
+          setState({ user: null, loading: false, error: err?.message || "Sessi tidak sah. Sila log masuk semula.", isMockUser: false });
+        }
       } else {
         setState({ user: null, loading: false, error: null, isMockUser: false });
       }
@@ -224,7 +254,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           .limit(1);
 
         let tenantId   = data.user.user_metadata?.tenantId;
-        let role       = (data.user.user_metadata?.role as UserRole) || "TENANT_OWNER";
+        let role       = (data.user.user_metadata?.role as UserRole) || undefined;
         let fullName   = data.user.user_metadata?.fullName || data.user.email?.split("@")[0] || "Pengguna";
 
         if (roleRows && roleRows.length > 0) {
@@ -262,10 +292,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const profile: UserSessionProfile = {
           id: data.user.id,
           email: data.user.email || "",
-          role,
+          role: role as UserRole,
           fullName,
           tenantId,
         };
+        // Safety net: if role is still undefined after all resolution paths,
+        // refuse to sign in rather than defaulting to TENANT_OWNER.
+        if (!profile.role) {
+          setState(prev => ({ ...prev, loading: false, error: "Peranan pengguna tidak dapat ditentukan. Sila hubungi pentadbir." }));
+          return;
+        }
         // Every explicit login starts a brand-new chat session — archives
         // whatever was active in this browser before, per product requirement
         // (refresh resumes a session, login never does).
