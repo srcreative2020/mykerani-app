@@ -197,7 +197,7 @@ export function StaffHomeScreen() {
   // once, purely to switch the status line wording to "Dikemaskini." — not persisted, ephemeral UI only.
   const [chatSuggestionJustUpdated, setChatSuggestionJustUpdated] = useState<Record<string, boolean>>({});
   const [editingChatSuggestionId, setEditingChatSuggestionId] = useState<string | null>(null);
-  const [chatEditDraft, setChatEditDraft] = useState({ amount: "", category: "", relatedParty: "", date: "" });
+  const [chatEditDraft, setChatEditDraft] = useState({ amount: "", category: "", relatedParty: "", date: "", transactionType: "" });
   const [chatLoading, setChatLoading] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
   // Per-suggestion business pick + evidence step, layered on top of the AI suggestion before final Sahkan.
@@ -546,7 +546,7 @@ export function StaffHomeScreen() {
         headers: { "Content-Type": "application/json", ...(await getAuthHeader()) },
         body: JSON.stringify({
           query: q,
-          financialContext: { activeTenant, activeWorkspace, financialEvents, personalProfile, businessProfile, businesses, vehicles, dependents },
+          financialContext: { activeTenant, activeWorkspace, financialEvents, personalProfile, businessProfile, businesses, businessBranches, vehicles, dependents },
           userId: user?.id,
         }),
       });
@@ -639,6 +639,7 @@ export function StaffHomeScreen() {
       category: s.payload?.category || "",
       relatedParty: s.payload?.relatedParty || "",
       date: s.payload?.date || new Date().toISOString().split("T")[0],
+      transactionType: s.payload?.transactionType || "",
     });
   };
 
@@ -653,6 +654,7 @@ export function StaffHomeScreen() {
       category: s.accountingRecommendation || s.payload?.category || "",
       relatedParty: s.payload?.relatedParty || "",
       date: s.payload?.date || new Date().toISOString().split("T")[0],
+      transactionType: s.payload?.transactionType || "",
     });
   };
 
@@ -1151,9 +1153,9 @@ export function StaffHomeScreen() {
                             <audio controls src={msg.attachmentUrl} className="mb-2 max-w-full" />
                           )}
                           {msg.attachmentUrl && msg.attachmentType === "pdf" && (
-                            <a href={msg.attachmentUrl} target="_blank" rel="noopener noreferrer"
-                              className={`flex items-center gap-2 mb-2 px-3 py-2 rounded-xl text-xs font-semibold ${isUser ? "bg-slate-600" : "bg-slate-100 text-slate-700"}`}>
-                              <FileIcon className="w-4 h-4" /> {msg.attachmentName || "Dokumen"}
+                            <a href={msg.attachmentUrl} target="_blank" rel="noopener noreferrer" title={msg.attachmentName}
+                              className={`flex items-center gap-2 mb-2 px-3 py-2 rounded-xl text-xs font-semibold max-w-[220px] truncate ${isUser ? "bg-slate-600" : "bg-slate-100 text-slate-700"}`}>
+                              <FileIcon className="w-4 h-4 shrink-0" /> <span className="truncate">{msg.attachmentName ? (msg.attachmentName.length > 20 ? msg.attachmentName.substring(0, 12) + "..." + msg.attachmentName.substring(msg.attachmentName.length - 5) : msg.attachmentName) : "Dokumen"}</span>
                             </a>
                           )}
                           {msg.text}
@@ -1329,6 +1331,18 @@ export function StaffHomeScreen() {
                             )}
                             {(status === "pending" || status === "confirmed") && editingChatSuggestionId === s.id && (
                               <div className="space-y-1.5 pt-1">
+                                <select value={chatEditDraft.transactionType} onChange={e => setChatEditDraft(d => ({ ...d, transactionType: e.target.value }))} className="w-full px-2 py-1 rounded border border-slate-300 text-xs bg-white">
+                                  <option value="">Jenis Transaksi...</option>
+                                  <option value="INCOME">Pendapatan (Income)</option>
+                                  <option value="EXPENSE">Perbelanjaan (Expense)</option>
+                                  <option value="TRANSFER">Pemindahan (Transfer)</option>
+                                  <option value="OWNER_TRANSACTION">Modal Pemilik (Owner Capital)</option>
+                                  <option value="ASSET_PURCHASE">Belian Aset (Asset Purchase)</option>
+                                  <option value="RECEIVABLE">Belum Terima (Receivable)</option>
+                                  <option value="PAYABLE">Belum Bayar (Payable)</option>
+                                  <option value="DEBT">Liabiliti (Liability)</option>
+                                  <option value="COMMITMENT">Komitmen (Commitment)</option>
+                                </select>
                                 <input value={chatEditDraft.amount} onChange={e => setChatEditDraft(d => ({ ...d, amount: e.target.value }))} placeholder="Amount (RM)" className="w-full px-2 py-1 rounded border border-slate-300 text-xs" />
                                 <input value={chatEditDraft.category} onChange={e => setChatEditDraft(d => ({ ...d, category: e.target.value }))} placeholder="Category" className="w-full px-2 py-1 rounded border border-slate-300 text-xs" />
                                 <input value={chatEditDraft.relatedParty} onChange={e => setChatEditDraft(d => ({ ...d, relatedParty: e.target.value }))} placeholder="Related Party" className="w-full px-2 py-1 rounded border border-slate-300 text-xs" />

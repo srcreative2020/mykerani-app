@@ -1295,6 +1295,18 @@ Provide your output precisely formatted as raw JSON matching exactly this shape,
     return res.json(job);
   });
 
+  // OCR cancel — allows the client to stop a running OCR job
+  app.post("/api/ocr/analyze/cancel/:jobId", (req, res) => {
+    const job = ocrJobs.get(req.params.jobId);
+    if (!job) {
+      return res.status(404).json({ error: "Job not found or expired." });
+    }
+    job.status = "CANCELLED" as any;
+    job.stage = "CANCELLED" as any;
+    job.updatedTime = Date.now();
+    return res.json({ ok: true, message: "Job cancelled." });
+  });
+
 
   // Voice note transcription (Whisper) — lets a chat-attached audio recording
   // actually be understood instead of the assistant just saying it can't listen.
@@ -1429,6 +1441,7 @@ Here is what you know about the user's life (Profile System — all fields are o
 
 Instructions & Constraints:
 - AI Suggests. User Confirms. AI Learns. (If you identify any unrecognized category, or vendor without a learned profile, ALWAYS generate a 'LEARN_PATTERN' suggestion inside the 'suggestions' array. Do not suggest editing or deleting records. Only recommend classifications that the user can confirm manually.)
+- PROFILE-FIRST CLASSIFICATION (LOCKED): Before deciding Income or Expense, you MUST check the Financial Profile (sections 8-11). If the merchant/relatedParty matches a known Business (section 9) or known customer/supplier name, determine the transaction DIRECTION first: (a) Incoming money (customer paying, loan disbursement, capital injection) = INCOME or OWNER_TRANSACTION(CAPITAL_INJECTION); (b) Outgoing money (paying supplier, loan repayment, owner drawing) = EXPENSE or OWNER_TRANSACTION(DRAWING) or PAYABLE or DEBT; (c) Transfer between own bank accounts or own businesses = TRANSFER (set transactionType to "TRANSFER", not INCOME or EXPENSE). Only after determining direction, assign the category. Never default to EXPENSE just because money left an account — it may be an internal transfer or owner transaction.
 - SUGGEST-FIRST (LOCKED BEHAVIOR): you are a financial clerk, not an interrogation chatbot. The objective is to minimize user effort, not maximize certainty. When the user states a transaction (amount + what it was for), your default action is to ALWAYS attempt a CONFIRM_TRANSACTION suggestion immediately — even when details like the vendor/customer name are missing — by inferring the most likely classification in this priority order: (1) User Profile, (2) Workspace/Tenant context (the single active workspace given above — do not guess at OTHER workspaces you cannot see), (3) Financial History (financialEvents), (4) OCR Learned Vendor Patterns (section 7 — this tenant's own confirmed history, highest trust), (5) Financial Knowledge Bank matched scenarios given above (cross-tenant curated reference, use when no learned pattern exists), (6) general world knowledge of the stated item/keyword (e.g. "ayam" implies raw-material/food-related expense). If the vendor/customer name was not stated, leave "relatedParty" null/empty in the payload and proceed anyway — do NOT block the suggestion or ask "beli dekat mana/dari siapa" just to fill in a party name; the user can add it later by editing the suggestion before confirming. Never respond with a refusal like "saya tidak dapat mengesahkan maklumat" — always give your best suggested classification with an honest confidenceScore instead. Only fall back to asking a clarifying question (and skipping the suggestion) when the AMBIGUITY IS STRUCTURAL and a wrong guess would misclassify the record in a way editing-after-the-fact can't cleanly fix — i.e. the vehicle-disambiguation and owner/business-ambiguity cases described below. A missing vendor name alone is never sufficient reason to ask instead of suggesting.
 - AI is strictly advisory. Your recommendations should prioritize safety, financial health, liquidity, and double-entry accuracy.
 - Return references ('linkedRecordIds' and 'linkedEvidenceIds') when queries touch specific events, bills, invoices, receipts, or attachments.

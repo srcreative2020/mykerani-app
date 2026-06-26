@@ -78,3 +78,50 @@ export function getInternalTransferTransactionSet(matches: InternalTransferMatch
   }
   return set;
 }
+
+// ─── Profile-aware transfer classification ────────────────────────────────────
+// FIX 4: Classifies detected internal transfers by relationship type.
+// Uses bank account → business mapping to determine transfer category.
+
+export type TransferCategory = "INTRA_BUSINESS" | "INTER_BUSINESS" | "OWNER_BUSINESS" | "UNKNOWN";
+
+export interface ClassifiedTransfer extends InternalTransferMatch {
+  category: TransferCategory;
+  description: string;
+}
+
+export function classifyTransfer(
+  match: InternalTransferMatch,
+  bankAccountBusinesses?: Record<string, string[]>, // bankAccountId → businessIds[]
+  ownerBankAccountIds?: string[]
+): ClassifiedTransfer {
+  const debitAccount = match.debitTransaction.account || "";
+  const creditAccount = match.creditTransaction.account || "";
+
+  const debitBusinesses = bankAccountBusinesses?.[debitAccount] || [];
+  const creditBusinesses = bankAccountBusinesses?.[creditAccount] || [];
+  const debitIsOwner = ownerBankAccountIds?.includes(debitAccount) ?? false;
+  const creditIsOwner = ownerBankAccountIds?.includes(creditAccount) ?? false;
+
+  let category: TransferCategory = "UNKNOWN";
+  let description = "Pemindahan antara akaun";
+
+  if (debitBusinesses.length > 0 && creditBusinesses.length > 0) {
+    const sharedBusiness = debitBusinesses.find(b => creditBusinesses.includes(b));
+    if (sharedBusiness) {
+      category = "INTRA_BUSINESS";
+      description = "Pemindahan dalam perniagaan yang sama";
+    } else {
+      category = "INTER_BUSINESS";
+      description = "Pemindahan antara perniagaan berbeza";
+    }
+  } else if ((debitIsOwner || debitBusinesses.length === 0) && creditBusinesses.length > 0) {
+    category = "OWNER_BUSINESS";
+    description = "Pemindahan pemilik ke perniagaan (modal)";
+  } else if (debitBusinesses.length > 0 && (creditIsOwner || creditBusinesses.length === 0)) {
+    category = "OWNER_BUSINESS";
+    description = "Pemindahan perniagaan ke pemilik (drawing)";
+  }
+
+  return { ...match, category, description };
+}

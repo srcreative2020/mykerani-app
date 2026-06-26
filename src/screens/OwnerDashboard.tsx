@@ -198,7 +198,7 @@ export function OwnerDashboard() {
   // once, purely to switch the status line wording to "Dikemaskini." — not persisted, ephemeral UI only.
   const [chatSuggestionJustUpdated, setChatSuggestionJustUpdated] = useState<Record<string, boolean>>({});
   const [editingChatSuggestionId, setEditingChatSuggestionId] = useState<string | null>(null);
-  const [chatEditDraft, setChatEditDraft] = useState({ amount: "", category: "", relatedParty: "", date: "" });
+  const [chatEditDraft, setChatEditDraft] = useState({ amount: "", category: "", relatedParty: "", date: "", transactionType: "" });
   // Per-suggestion business pick + evidence step, layered on top of the AI suggestion before final Sahkan.
   const [chatSuggestionExtra, setChatSuggestionExtra] = useState<Record<string, ChatSuggestionExtra>>({});
   const chatEvidenceFilesRef = useRef<Record<string, File>>({});
@@ -1170,7 +1170,17 @@ export function OwnerDashboard() {
 
   const saveProfiles = async () => {
     setProfileSaving(true);
+    // Save personal profile
     await savePersonalProfile(wsId, isMockUser, personalProfile);
+    // Save company master data if the function exists
+    if (typeof saveCompanyMaster === 'function') {
+      await saveCompanyMaster();
+    }
+    // Save account info if editing
+    if (editingAccount) {
+      await updateProfile(accountDraft.fullName, accountDraft.email);
+      setEditingAccount(false);
+    }
     setProfileSaving(false);
     setProfileSavedAt(Date.now());
   };
@@ -1319,7 +1329,7 @@ export function OwnerDashboard() {
         headers: { "Content-Type": "application/json", ...(await getAuthHeader()) },
         body: JSON.stringify({
           query: q,
-          financialContext: { activeTenant, activeWorkspace, financialEvents, personalProfile, businesses, vehicles, dependents },
+          financialContext: { activeTenant, activeWorkspace, financialEvents, personalProfile, businesses, businessBranches, vehicles, dependents, assetPurchases, ownerTransactions },
           userId: user?.id,
         }),
       });
@@ -1558,6 +1568,7 @@ export function OwnerDashboard() {
       category: s.payload?.category || "",
       relatedParty: s.payload?.relatedParty || "",
       date: s.payload?.date || todayLocalIso(),
+      transactionType: s.payload?.transactionType || "",
     });
   };
 
@@ -1572,6 +1583,7 @@ export function OwnerDashboard() {
       category: s.accountingRecommendation || s.payload?.category || "",
       relatedParty: s.payload?.relatedParty || "",
       date: s.payload?.date || todayLocalIso(),
+      transactionType: s.payload?.transactionType || "",
     });
   };
 
@@ -2132,8 +2144,8 @@ export function OwnerDashboard() {
                               ) : msg.attachmentType === "audio" ? (
                                 <audio controls src={msg.attachmentUrl} className="w-full" />
                               ) : (
-                                <a href={msg.attachmentUrl} target="_blank" rel="noreferrer" className="flex items-center gap-2 px-3 py-2 bg-white text-xs font-semibold text-indigo-700 hover:underline">
-                                  <FileIcon className="w-4 h-4 shrink-0" /> {msg.attachmentName || "Dokumen"}
+                                <a href={msg.attachmentUrl} target="_blank" rel="noreferrer" className="flex items-center gap-2 px-3 py-2 bg-white text-xs font-semibold text-indigo-700 hover:underline max-w-[220px] truncate" title={msg.attachmentName}>
+                                  <FileIcon className="w-4 h-4 shrink-0" /> <span className="truncate">{msg.attachmentName ? (msg.attachmentName.length > 20 ? msg.attachmentName.substring(0, 12) + "..." + msg.attachmentName.substring(msg.attachmentName.length - 5) : msg.attachmentName) : "Dokumen"}</span>
                                 </a>
                               )}
                             </div>
@@ -2336,6 +2348,18 @@ export function OwnerDashboard() {
                             )}
                             {(status === "pending" || status === "confirmed") && editingChatSuggestionId === s.id && (
                               <div className="space-y-1.5 pt-1">
+                                <select value={chatEditDraft.transactionType} onChange={e => setChatEditDraft(d => ({ ...d, transactionType: e.target.value }))} className="w-full px-2 py-1 rounded border border-slate-300 text-xs bg-white">
+                                  <option value="">Jenis Transaksi...</option>
+                                  <option value="INCOME">Pendapatan (Income)</option>
+                                  <option value="EXPENSE">Perbelanjaan (Expense)</option>
+                                  <option value="TRANSFER">Pemindahan (Transfer)</option>
+                                  <option value="OWNER_TRANSACTION">Modal Pemilik (Owner Capital)</option>
+                                  <option value="ASSET_PURCHASE">Belian Aset (Asset Purchase)</option>
+                                  <option value="RECEIVABLE">Belum Terima (Receivable)</option>
+                                  <option value="PAYABLE">Belum Bayar (Payable)</option>
+                                  <option value="DEBT">Liabiliti (Liability)</option>
+                                  <option value="COMMITMENT">Komitmen (Commitment)</option>
+                                </select>
                                 <input value={chatEditDraft.amount} onChange={e => setChatEditDraft(d => ({ ...d, amount: e.target.value }))} placeholder="Amount (RM)" className="w-full px-2 py-1 rounded border border-slate-300 text-xs" />
                                 <input value={chatEditDraft.category} onChange={e => setChatEditDraft(d => ({ ...d, category: e.target.value }))} placeholder="Category" className="w-full px-2 py-1 rounded border border-slate-300 text-xs" />
                                 <input value={chatEditDraft.relatedParty} onChange={e => setChatEditDraft(d => ({ ...d, relatedParty: e.target.value }))} placeholder="Related Party" className="w-full px-2 py-1 rounded border border-slate-300 text-xs" />

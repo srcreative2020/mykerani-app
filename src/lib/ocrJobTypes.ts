@@ -4,7 +4,7 @@
 export type OcrStage =
   | "UPLOAD_COMPLETE" | "FILE_RETRIEVED" | "PDF_EXTRACTED" | "OCR_PROCESSING"
   | "AI_ANALYSIS" | "CLASSIFICATION" | "TRANSACTION_EXTRACTION" | "REVIEW_GENERATION"
-  | "COMPLETED" | "FAILED";
+  | "COMPLETED" | "FAILED" | "CANCELLED";
 
 export interface OcrJobState {
   jobId: string;
@@ -14,7 +14,7 @@ export interface OcrJobState {
   startTime: number;
   updatedTime: number;
   stage: OcrStage;
-  status: "PROCESSING" | "COMPLETED" | "FAILED";
+  status: "PROCESSING" | "COMPLETED" | "FAILED" | "CANCELLED";
   overallProgress: number;
   pagesFound: number | null;
   pagesProcessed: number | null;
@@ -53,23 +53,61 @@ export const OCR_STAGE_LABELS: Record<OcrStage, string> = {
   REVIEW_GENERATION: "Review Generation",
   COMPLETED: "Completed",
   FAILED: "Failed",
+  CANCELLED: "Cancelled",
 };
 
 // Polls a started OCR job until it reaches a terminal state, calling
 // onUpdate after every poll. Returns the final job state.
+// Supports cancellation via the cancelSignal flag.
 export async function pollOcrJob(
   jobId: string,
   onUpdate: (job: OcrJobState) => void,
-  intervalMs: number = 800
+  intervalMs: number = 800,
+  cancelSignal?: { cancelled: boolean }
 ): Promise<OcrJobState> {
   while (true) {
+    if (cancelSignal?.cancelled) {
+      // Attempt to cancel on the server
+      try {
+        await fetch(`/api/ocr/analyze/cancel/${jobId}`, { method: "POST" });
+      } catch {}
+      return {
+        jobId,
+        fileName: "",
+        fileSize: 0,
+        documentType: "",
+        startTime: 0,
+        updatedTime: Date.now(),
+        stage: "CANCELLED",
+        status: "CANCELLED",
+        overallProgress: 0,
+        pagesFound: null,
+        pagesProcessed: null,
+        chunksTotal: null,
+        chunksCompleted: 0,
+        chunksFailed: 0,
+        transactionsFound: 0,
+        transactionsExtracted: 0,
+        providerUsed: null,
+        modelUsed: null,
+        estimatedInputTokens: 0,
+        estimatedOutputTokens: 0,
+        estimatedCostUsd: null,
+        estimatedRemainingMs: null,
+        error: null,
+        errorDetail: null,
+        errorCode: null,
+        errorStage: null,
+        result: null,
+      };
+    }
     const res = await fetch(`/api/ocr/analyze/progress/${jobId}`);
     if (!res.ok) {
       throw new Error(`Failed to fetch OCR job progress (HTTP ${res.status})`);
     }
     const job: OcrJobState = await res.json();
     onUpdate(job);
-    if (job.status === "COMPLETED" || job.status === "FAILED") {
+    if (job.status === "COMPLETED" || job.status === "FAILED" || job.status === "CANCELLED") {
       return job;
     }
     await new Promise((resolve) => setTimeout(resolve, intervalMs));
