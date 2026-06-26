@@ -44,6 +44,7 @@ export interface ChatSuggestionStatus {
   editedCategory?: string;
   editedRelatedParty?: string;
   editedDate?: string;
+  editedTransactionType?: string;
   confirmedByName?: string;
   confirmedByUserId?: string;
 }
