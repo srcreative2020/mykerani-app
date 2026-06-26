@@ -81,17 +81,23 @@ export const useConfirmChatSuggestion = () => {
         }, "AI_CHAT");
         newRecordId = ev.id; newRecordType = transactionType;
       } else if (transactionType === "TRANSFER") {
-        // Internal Transfer — recorded as EXPENSE with a clear "Pemindahan Dalaman" category
-        // so it appears in records but is NOT counted as real income/expense.
-        // The category makes it identifiable for filtering and reporting.
-        const transferCategory = category || "Pemindahan Dalaman";
-        const ev = await addFinancialEventAwaited({
-          workspaceId: activeWorkspace.id, businessId: businessId || undefined, branchId: branchId || undefined,
-          type: "EXPENSE", categoryName: transferCategory, amountMyr: amount, partyName: relatedParty, date,
-          referenceNumber: `AI-TRANSFER-${s.id}`, description: `PEMINDAHAN DALAMAN: ${description}`,
-          isCompleted: true, sourceSystem: "AI_CHAT",
-        }, "AI_CHAT");
-        newRecordId = ev.id; newRecordType = "TRANSFER";
+        // Internal Transfer — MUST NOT be recorded as Income or Expense.
+        // Internal transfers only move money between own accounts and must
+        // NOT affect Profit & Loss. They are logged in audit_logs and
+        // event_logs only. No financial_events row is created.
+        // Balance updates require a dedicated transfers table (future work).
+        logEvent({
+          tenantId: activeWorkspace.tenantId, workspaceId: activeWorkspace.id, userId: user?.id,
+          userEmail: user?.email, userRole: user?.role, eventType: "AI_ANALYSIS",
+          description: `Internal Transfer (no P&L impact): ${relatedParty} RM ${amount}`,
+          metadata: { suggestionId: s.id, amount, fromAccount: relatedParty, category, date, source: "AI_CHAT" },
+        });
+        newRecordId = undefined; newRecordType = "TRANSFER";
+        // Transfer recorded successfully (no financial event created)
+        // Skip evidence linking and OCR learning for transfers
+        return {
+          ok: true, recordType: "TRANSFER", amount, category: relatedParty, relatedParty, date, confidenceScore, transactionType,
+        };
       } else if (transactionType === "DEBT") {
         const debt = await addDebtRecordAwaited({
           workspaceId: activeWorkspace.id, businessId: businessId || undefined, creditorName: relatedParty,
