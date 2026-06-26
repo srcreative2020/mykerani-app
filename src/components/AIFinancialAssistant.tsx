@@ -7,6 +7,7 @@ import { useAuth } from "../context/AuthContext";
 import { motion } from "../lib/motionCompat";
 import { loadBusinesses, type Business } from "../lib/profileData";
 import { buildFinancialContext } from "../lib/buildFinancialContext";
+import { enrichChatSuggestionPayload } from "../lib/chatSuggestionMapper";
 import { isSupabaseConfigured, supabase } from "../lib/supabase";
 import {
   Brain,
@@ -213,7 +214,7 @@ export const AIFinancialAssistant: React.FC<AIFinancialAssistantProps> = ({ onTr
         ? data.suggestions
             .filter((s: AISuggestion) => s.actionType === "CONFIRM_TRANSACTION")
             .map((s: AISuggestion, idx: number) => ({
-              ...s,
+              ...enrichChatSuggestionPayload(s, { cashAccounts, bankAccounts, businesses }),
               id: `${systemMessageId}-sugg-${idx}`,
               // No active businesses configured: silently default to Personal, skip the picker.
               businessId: activeBusinesses.length > 0 ? undefined : null,

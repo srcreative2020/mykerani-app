@@ -29,6 +29,7 @@ import { getImportFailures } from "../lib/importFailureLog";
 import { useConfirmChatSuggestion } from "../hooks/useConfirmChatSuggestion";
 import { useCrossWorkspacePattern } from "../hooks/useCrossWorkspacePattern";
 import type { ChatSuggestion, ChatSuggestionExtra, ChatSuggestionRecordType, ChatSuggestionStatus, ChatSuggestionStatusValue, PendingChatEvidence } from "../lib/chatSuggestionTypes";
+import { enrichChatSuggestionPayload } from "../lib/chatSuggestionMapper";
 import {
   Home, Plus, Upload, Search, Bell, User as UserIcon,
   Send, Brain, RefreshCw, Receipt, FileSpreadsheet, Landmark,
@@ -562,7 +563,7 @@ export function StaffHomeScreen() {
       const suggestions: ChatSuggestion[] = Array.isArray(data.suggestions)
         ? data.suggestions
             .filter((s: ChatSuggestion) => s.actionType === "CONFIRM_TRANSACTION")
-            .map((s: ChatSuggestion, idx: number) => ({ ...s, id: `${aiMsgId}-sugg-${idx}` }))
+            .map((s: ChatSuggestion, idx: number) => enrichChatSuggestionPayload(s, { cashAccounts, bankAccounts, businesses, vehicles, dependents, personalProfile }))
         : [];
       setChatMessages(prev => [...prev, { id: aiMsgId, sender: "ai", text: reply, suggestions, createdAt: new Date().toISOString() }]);
       saveChatMessage(wsId, user?.id, isMockUser, { sender: "ai", text: reply, suggestions }, activeSessionId ?? undefined);
