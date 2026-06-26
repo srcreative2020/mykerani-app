@@ -1563,13 +1563,19 @@ export function OwnerDashboard() {
   };
 
   const handleChatStartEdit = (s: ChatSuggestion) => {
+    const statusObj = chatSuggestionStatus[s.id];
+    const savedAmount = statusObj?.editedAmount ?? s.payload?.amount;
+    const savedCategory = statusObj?.editedCategory ?? s.payload?.category;
+    const savedRelatedParty = statusObj?.editedRelatedParty ?? s.payload?.relatedParty;
+    const savedDate = statusObj?.editedDate ?? s.payload?.date;
+    const savedTransactionType = statusObj?.editedTransactionType ?? s.payload?.transactionType;
     setEditingChatSuggestionId(s.id);
     setChatEditDraft({
-      amount: String(s.payload?.amount ?? ""),
-      category: s.payload?.category || "",
-      relatedParty: s.payload?.relatedParty || "",
-      date: s.payload?.date || todayLocalIso(),
-      transactionType: s.payload?.transactionType || "",
+      amount: String(savedAmount ?? ""),
+      category: savedCategory || "",
+      relatedParty: savedRelatedParty || "",
+      date: savedDate || todayLocalIso(),
+      transactionType: savedTransactionType || "",
     });
   };
 
@@ -2186,6 +2192,8 @@ export function OwnerDashboard() {
                             <div className="font-mono text-slate-800 space-y-0.5">
                               <div>Jenis: {TRANSACTION_TYPE_LABEL_MS[statusObj.editedTransactionType ?? s.payload?.transactionType ?? ""] || statusObj.editedTransactionType || s.payload?.transactionType || "-"}</div>
                               <div>Kategori: {statusObj.editedCategory ?? s.payload?.category ?? "-"}</div>
+                              <div>Pihak Berkaitan: {statusObj.editedRelatedParty ?? s.payload?.relatedParty ?? "-"}</div>
+                              <div>Tarikh: {statusObj.editedDate ?? s.payload?.date ?? "-"}</div>
                               <div>Jumlah: RM{Number(statusObj.editedAmount ?? s.payload?.amount ?? 0).toFixed(2)}</div>
                               <div>Confidence: <span className={`font-bold ${confidenceClass}`}>{confidencePct}%</span></div>
                             </div>

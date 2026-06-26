@@ -184,7 +184,7 @@ export const OCREngineConsole: React.FC = () => {
         headers: { "Content-Type": "application/json", ...(await getAuthHeader()) },
         body: JSON.stringify({
           fileDataUrl,
-          fileName: file.name,
+          fileName: file?.name || "ocr_extract_doc.png",
           documentType,
           tenantId: activeWorkspace?.tenantId,
           workspaceId: activeWorkspace?.id,
@@ -291,12 +291,20 @@ export const OCREngineConsole: React.FC = () => {
       const targetCashId = offsetAccountType === "CASH" ? selectedAccountId : undefined;
       const targetBankId = offsetAccountType === "BANK" ? selectedAccountId : undefined;
 
+      // Meaningful filename: <date>_<sanitizedMerchantLabel>_RM<amount>.<ext>
+      // Replaces raw upload names (e.g. IMG_20250624_123456.jpg from phone camera)
+      // with searchable, human-readable identifiers on the persisted record.
+      const ocrExt = (file?.name || "ocr_extract_doc.png").split(".").pop() || "png";
+      const ocrLabel = (reviewedMerchantName || "OCR").replace(/[^a-zA-Z0-9 ]/g, "").trim().replace(/\s+/g, "_") || "OCR";
+      const ocrReviewedDate = reviewedDate || new Date().toISOString().slice(0, 10);
+      const ocrRenamedFileName = `${ocrReviewedDate}_${ocrLabel}_RM${(reviewedAmount || 0).toFixed(2)}.${ocrExt}`;
+
       // 1. ADD EVIDENCE PACKAGE RECORD
       const freshEvidencePackage = addFinancialEvidencePackage({
         workspaceId: activeWorkspace.id,
         documentType,
         uploadDate: new Date().toISOString().split("T")[0],
-        fileName: file?.name || "ocr_extract_doc.png",
+        fileName: ocrRenamedFileName,
         fileUrl: fileDataUrl, // Store dataURL or uploaded reference directly
         notes: uploadNotes.trim() ? uploadNotes.trim() : `Auto-logged via AI OCR Studio. System confidence: ${(extractedData?.confidenceScore || 0 * 100).toFixed(0)}%`
       });
@@ -432,11 +440,16 @@ export const OCREngineConsole: React.FC = () => {
     }
 
     try {
+      // Meaningful filename per statement line: <date>_<description>_RM<amount>.<ext>
+      const stmtExt = (file?.name || "bank_statement.pdf").split(".").pop() || "pdf";
+      const stmtLabel = (txn.description || "BankStmt").replace(/[^a-zA-Z0-9 ]/g, "").trim().replace(/\s+/g, "_").substring(0, 40) || "BankStmt";
+      const stmtRenamedFileName = `${txn.date}_${stmtLabel}_RM${(txn.amount || 0).toFixed(2)}.${stmtExt}`;
+
       const freshEvidencePackage = addFinancialEvidencePackage({
         workspaceId: activeWorkspace.id,
         documentType: "STATEMENT",
         uploadDate: new Date().toISOString().split("T")[0],
-        fileName: file?.name || "bank_statement.pdf",
+        fileName: stmtRenamedFileName,
         fileUrl: fileDataUrl,
         notes: `Auto-logged via AI OCR Studio bank statement line item: ${txn.description}`
       });
