@@ -823,6 +823,7 @@ export function StaffHomeScreen() {
       editedCategory: categoryName,
       editedRelatedParty: partyName,
       editedDate: date,
+      editedTransactionType: edited.transactionType || current.editedTransactionType,
     });
     setChatSuggestionJustUpdated(prev => ({ ...prev, [s.id]: true }));
     setEditingChatSuggestionId(null);
