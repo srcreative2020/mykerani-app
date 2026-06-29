@@ -9,6 +9,7 @@ import {
   type UploadedDoc, type DocType,
 } from "../lib/documentStorage";
 import { type StorageQuotaHook } from "../lib/storageQuota";
+import { usePermission } from "../context/PermissionContext";
 import { StorageBar } from "./StorageBar";
 import DocumentProcessingProgressPanel from "./DocumentProcessingProgressPanel";
 import { logEvent } from "../lib/eventLog";
@@ -118,6 +119,7 @@ export function DocumentsManager({
   const [docsLoading, setDocsLoading] = useState(false);
   const [uploadingDoc, setUploadingDoc] = useState<DocType | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const { hasPermission } = usePermission();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [pendingDocType, setPendingDocType] = useState<DocType>("SUPPORTING_DOC");
   const [docTypeFilter, setDocTypeFilter] = useState<"ALL" | DocType>("ALL");
@@ -146,8 +148,18 @@ export function DocumentsManager({
 
   useEffect(() => {
     if (!workspaceId) return;
+    let active = true;
     setDocsLoading(true);
-    listDocuments(workspaceId).then(d => { setDocs(() => d); setDocsLoading(false); });
+    listDocuments(workspaceId).then(d => {
+      if (!active) return;
+      setDocs(() => d);
+      setDocsLoading(false);
+    }).catch(e => {
+      if (!active) return;
+      setUploadError("Gagal memuatkan dokumen.");
+      setDocsLoading(false);
+    });
+    return () => { active = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [workspaceId]);
 
@@ -413,6 +425,10 @@ export function DocumentsManager({
 
   const confirmDocReview = async () => {
     if (!docReview || !workspaceId) return;
+    // DUP-06: prevent re-entry while any confirm is in progress.
+    if (importProgress) return;
+    // PB-2: permission check before creating a record.
+    if (!hasPermission('Financial Records', 'create')) { setUploadError("Tiada kebenaran untuk mencipta rekod."); return; }
     const { doc, merchantName, lines } = docReview;
     let createdEvents: { id: string }[] = [];
 
@@ -502,6 +518,10 @@ export function DocumentsManager({
         setImportProgress(null);
       }
     } else {
+      // DUP-06: set importProgress for the single-invoice path too so the
+      // confirm button stays disabled and re-entry is prevented.
+      setImportProgress({ submitted: 1, inserted: 0, failed: 0, batchNumber: 0, totalBatches: 0 });
+      try {
       // Invois/bil yang baru disahkan masih TERTUNGGAK (belum dibayar/dikutip)
       // melainkan ia direkodkan terus sebagai Pendapatan/Perbelanjaan sebenar —
       // supaya "Perlu Dibayar"/"Perlu Dikutip" di Dashboard betul-betul tepat.
@@ -563,6 +583,7 @@ export function DocumentsManager({
 
       if (!result.ok) {
         setUploadError(result.error || `Gagal menyimpan rekod ke pangkalan data. Rekod TIDAK disahkan.`);
+        setImportProgress(null);
         return;
       }
 
@@ -570,6 +591,9 @@ export function DocumentsManager({
       createdEvents.push(ev);
       if (merchantName.trim()) {
         learnOcrPattern({ workspaceId, vendorName: merchantName.trim(), category: docReview.category, recordType: docReview.recordType, confidenceScore: docReview.confidenceScore });
+      }
+      } finally {
+        setImportProgress(null);
       }
     }
 

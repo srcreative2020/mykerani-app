@@ -239,7 +239,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
   }, [fetchNotificationSettings]);
 
   // Action: Mark single notification as Read
-  const markAsRead = async (id: string) => {
+  const markAsRead = useCallback(async (id: string) => {
     if (!activeWorkspace || !activeTenant || !user) return;
 
     const targetNotif = notifications.find(n => n.id === id);
@@ -288,10 +288,10 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
         console.error("Database markAsRead failed:", err.message);
       }
     }
-  };
+  }, [activeWorkspace, activeTenant, user, notifications, isMockUser, writeAuditLog]);
 
   // Action: Mark single notification as Archived
-  const markAsArchived = async (id: string) => {
+  const markAsArchived = useCallback(async (id: string) => {
     if (!activeWorkspace || !activeTenant || !user) return;
 
     const targetNotif = notifications.find(n => n.id === id);
@@ -340,10 +340,10 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
         console.error("Database markAsArchived failed:", err.message);
       }
     }
-  };
+  }, [activeWorkspace, activeTenant, user, notifications, isMockUser, writeAuditLog]);
 
   // Action: Mark all notifications as Read
-  const markAllAsRead = async () => {
+  const markAllAsRead = useCallback(async () => {
     if (!activeWorkspace || !activeTenant || !user) return;
 
     const unread = notifications.filter(n => n.status === "UNREAD");
@@ -396,10 +396,10 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
         console.error("Database markAllAsRead failed:", err.message);
       }
     }
-  };
+  }, [activeWorkspace, activeTenant, user, notifications, isMockUser, writeAuditLog]);
 
   // Action: Modify Preferences with strict permission checks
-  const updatePreferencesSetting = async (enableInApp: boolean, enableEmail: boolean, enablePush: boolean) => {
+  const updatePreferencesSetting = useCallback(async (enableInApp: boolean, enableEmail: boolean, enablePush: boolean) => {
     if (!activeWorkspace || !activeTenant || !user) return;
 
     if (!isOwnerOrAdmin) {
@@ -487,10 +487,10 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
         throw new Error(`Failed to update settings in DB: ${err.message}`);
       }
     }
-  };
+  }, [activeWorkspace, activeTenant, user, isOwnerOrAdmin, preferences, isMockUser, writeAuditLog]);
 
   // dynamic detector engine: Checks active data matrices and alerts
-  const generateDynamicAdvisoryAlerts = async () => {
+  const generateDynamicAdvisoryAlerts = useCallback(async () => {
     if (!activeWorkspace || !activeTenant || !user) return;
 
     // If in-app notifications are disabled, skip advisory alerts entirely
@@ -909,7 +909,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
         console.error("Failed storing dynamic notifications in DB:", err.message);
       }
     }
-  };
+  }, [activeWorkspace, activeTenant, user, preferences, isMockUser, financialEvents, financialCommitments, financialEvidencePackages, cashAccounts, bankAccounts, debtRecords, activeProvider, notifications, writeAuditLog]);
 
   // Run dynamic analysis whenever workspace data shifts
   useEffect(() => {

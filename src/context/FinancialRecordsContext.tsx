@@ -803,17 +803,23 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
           setLoading(false);
         } catch (dbError: any) {
           console.warn("Database Loader Error (table may need setup):", dbError.message);
-          // Real user: tables tak wujud lagi — data kosong, JANGAN load demo data
           if (cancelled) return;
-          setFinancialEvents([]);
-          setCashAccounts([]);
-          setBankAccounts([]);
-          setDebtRecords([]);
-          setFinancialCommitments([]);
-          setFinancialEvidencePackages([]);
-          setOcrLearnedPatterns([]);
-          setDuplicateFlags([]);
-          setError(null);
+          // Only clear in-memory state when the DB tables genuinely don't
+          // exist yet (fresh workspace that hasn't been migrated). For any
+          // other failure (network, RLS, permissions...) keep the previous
+          // state so a transient DB error doesn't wipe the user's screen.
+          const isMissingTable = /relation.*does not exist/i.test(dbError?.message || "");
+          if (isMissingTable) {
+            setFinancialEvents([]);
+            setCashAccounts([]);
+            setBankAccounts([]);
+            setDebtRecords([]);
+            setFinancialCommitments([]);
+            setFinancialEvidencePackages([]);
+            setOcrLearnedPatterns([]);
+            setDuplicateFlags([]);
+          }
+          setError(dbError.message);
           setLoading(false);
         }
       }
@@ -888,7 +894,7 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
     // AI-confirmed records (and bank-statement imports, which share the same
     // idempotency need) carry a deterministic reference number so re-confirming
     // the same suggestion/import upserts idempotently instead of duplicating.
-    const isAiConfirmed = (newEvent.referenceNumber || "").startsWith("AI-") || (newEvent.referenceNumber || "").startsWith("STMT-");
+    const isAiConfirmed = (newEvent.referenceNumber || "").startsWith("AI-") || (newEvent.referenceNumber || "").startsWith("STMT-") || (newEvent.referenceNumber || "").startsWith("DOC-");
 
     // supabase-js does not throw on a failed insert/upsert -- it resolves
     // with { error }. Every branch below must check it and throw, otherwise
@@ -1035,6 +1041,9 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
           await persistEventToSupabase(newEvent, catId);
         } catch (err: any) {
           console.error("DB persistence insert record failed:", err.message);
+          setFinancialEvents(prev => prev.filter(item => item.id !== newId));
+          persistCurrentState(financialEvents.filter(item => item.id !== newId));
+          setError("Gagal menyimpan rekod ke pangkalan data. Sila cuba lagi.");
           onDbError?.(err instanceof Error ? err : new Error(String(err?.message || err)));
         }
       })();
@@ -1226,13 +1235,10 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
 
   const editFinancialEvent = (id: string, updated: Partial<FinancialEvent>) => {
     const originalEvent = financialEvents.find((item) => item.id === id);
-    let nextList: FinancialEvent[] = [];
-    setFinancialEvents(prev => {
-      nextList = prev.map((item) =>
-        item.id === id ? ({ ...item, ...updated } as FinancialEvent) : item
-      );
-      return nextList;
-    });
+    const nextList = financialEvents.map((item) =>
+      item.id === id ? ({ ...item, ...updated } as FinancialEvent) : item
+    );
+    setFinancialEvents(nextList);
     persistCurrentState(nextList);
 
     if (activeWorkspace && originalEvent) {
@@ -1253,66 +1259,115 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
         try {
           if (!item) return;
 
-          const recordType = item.type;
-          if (recordType === "INCOME") {
-            await supabase
-              .from("income_records")
-              .update({
-                payer_name: updated.partyName,
-                amount_myr: updated.amountMyr,
-                transaction_date: updated.date,
-                reference_number: updated.referenceNumber,
-                description: updated.description,
-                source_bank_account_id: updated.bankAccountId || null,
-                source_cash_account_id: updated.cashAccountId || null,
-              })
-              .eq("id", id)
-              .eq("workspace_id", wsId);
-          } else if (recordType === "EXPENSE" || recordType === "DEBT") {
-            await supabase
-              .from("expense_records")
-              .update({
-                recipient_vendor_name: updated.partyName,
-                amount_myr: updated.amountMyr,
-                transaction_date: updated.date,
-                reference_number: updated.referenceNumber,
-                description: recordType === "DEBT" ? `[DEBT] ${updated.description}` : updated.description,
-                payment_bank_account_id: updated.bankAccountId || null,
-                payment_cash_account_id: updated.cashAccountId || null,
-              })
-              .eq("id", id)
-              .eq("workspace_id", wsId);
-          } else if (recordType === "RECEIVABLE") {
-            await supabase
-              .from("receivables")
-              .update({
-                customer_name: updated.partyName,
-                invoice_number: updated.referenceNumber,
-                invoice_date: updated.date,
-                due_date: updated.dueDate || updated.date,
-                total_amount_myr: updated.amountMyr,
-                paid_amount_myr: updated.isCompleted ? updated.amountMyr : 0,
-                status: updated.isCompleted ? "PAID" : "UNPAID",
-              })
-              .eq("id", id)
-              .eq("workspace_id", wsId);
-          } else if (recordType === "PAYABLE") {
-            await supabase
-              .from("payables")
-              .update({
-                vendor_name: updated.partyName,
-                bill_number: updated.referenceNumber,
-                bill_date: updated.date,
-                due_date: updated.dueDate || updated.date,
-                total_amount_myr: updated.amountMyr,
-                paid_amount_myr: updated.isCompleted ? updated.amountMyr : 0,
-                status: updated.isCompleted ? "PAID" : "UNPAID",
-              })
-              .eq("id", id)
-              .eq("workspace_id", wsId);
+          const oldRecordType = item.type;
+          const newRecordType = updated.type ?? oldRecordType;
+          const typeChanged = updated.type !== undefined && updated.type !== oldRecordType;
+          const oldTableName =
+            oldRecordType === "INCOME" ? "income_records"
+            : (oldRecordType === "EXPENSE" || oldRecordType === "DEBT") ? "expense_records"
+            : oldRecordType === "RECEIVABLE" ? "receivables"
+            : oldRecordType === "PAYABLE" ? "payables" : null;
+
+          const mergedEvent: FinancialEvent = { ...item, ...updated };
+
+          if (typeChanged) {
+            // FR-1: cross-table migration. Delete from the old table, then
+            // insert the merged record into the new table (chosen by the
+            // new type). persistEventToSupabase picks the table from
+            // newEvent.type, so passing the merged event writes to the
+            // correct destination.
+            if (oldTableName) {
+              await supabase.from(oldTableName).delete().eq("id", id).eq("workspace_id", wsId);
+            }
+            const catId = await getOrCreateCategoryId(wsId, mergedEvent.categoryName, mergedEvent.type);
+            await persistEventToSupabase(mergedEvent, catId);
+          } else {
+            const recordType = oldRecordType;
+            if (recordType === "INCOME") {
+              await supabase
+                .from("income_records")
+                .update({
+                  payer_name: updated.partyName,
+                  amount_myr: updated.amountMyr,
+                  transaction_date: updated.date,
+                  reference_number: updated.referenceNumber,
+                  description: updated.description,
+                  source_bank_account_id: updated.bankAccountId || null,
+                  source_cash_account_id: updated.cashAccountId || null,
+                })
+                .eq("id", id)
+                .eq("workspace_id", wsId);
+            } else if (recordType === "EXPENSE" || recordType === "DEBT") {
+              await supabase
+                .from("expense_records")
+                .update({
+                  recipient_vendor_name: updated.partyName,
+                  amount_myr: updated.amountMyr,
+                  transaction_date: updated.date,
+                  reference_number: updated.referenceNumber,
+                  description: recordType === "DEBT" ? `[DEBT] ${updated.description}` : updated.description,
+                  payment_bank_account_id: updated.bankAccountId || null,
+                  payment_cash_account_id: updated.cashAccountId || null,
+                })
+                .eq("id", id)
+                .eq("workspace_id", wsId);
+            } else if (recordType === "RECEIVABLE") {
+              await supabase
+                .from("receivables")
+                .update({
+                  customer_name: updated.partyName,
+                  invoice_number: updated.referenceNumber,
+                  invoice_date: updated.date,
+                  due_date: updated.dueDate || updated.date,
+                  total_amount_myr: updated.amountMyr,
+                  paid_amount_myr: updated.isCompleted ? updated.amountMyr : 0,
+                  status: updated.isCompleted ? "PAID" : "UNPAID",
+                })
+                .eq("id", id)
+                .eq("workspace_id", wsId);
+            } else if (recordType === "PAYABLE") {
+              await supabase
+                .from("payables")
+                .update({
+                  vendor_name: updated.partyName,
+                  bill_number: updated.referenceNumber,
+                  bill_date: updated.date,
+                  due_date: updated.dueDate || updated.date,
+                  total_amount_myr: updated.amountMyr,
+                  paid_amount_myr: updated.isCompleted ? updated.amountMyr : 0,
+                  status: updated.isCompleted ? "PAID" : "UNPAID",
+                })
+                .eq("id", id)
+                .eq("workspace_id", wsId);
+            }
+          }
+
+          // FR-2: when isCompleted is toggled, adjust the linked account
+          // balance by the same delta addFinancialEvent would have applied
+          // (reversed when toggling back to not-completed).
+          if (updated.isCompleted !== undefined && updated.isCompleted !== item.isCompleted) {
+            const isIngress = mergedEvent.type === "INCOME" || mergedEvent.type === "RECEIVABLE";
+            const factor = isIngress ? 1 : -1;
+            const direction = updated.isCompleted ? 1 : -1;
+            const amt = mergedEvent.amountMyr * factor * direction;
+            if (item.cashAccountId) {
+              setCashAccounts(prev => prev.map(acct =>
+                acct.id === item.cashAccountId ? { ...acct, currentBalanceMyr: acct.currentBalanceMyr + amt } : acct
+              ));
+            } else if (item.bankAccountId) {
+              setBankAccounts(prev => prev.map(acct =>
+                acct.id === item.bankAccountId ? { ...acct, currentBalanceMyr: acct.currentBalanceMyr + amt } : acct
+              ));
+            }
           }
         } catch (err: any) {
           console.error("DB persistence update record failed:", err.message);
+          // DL-03: roll back the optimistic local update on DB failure.
+          if (item) {
+            setFinancialEvents(prev => prev.map(it => it.id === id ? item : it));
+            persistCurrentState(financialEvents.map(it => it.id === id ? item : it));
+          }
+          setError("Gagal menyimpan rekod ke pangkalan data. Sila cuba lagi.");
         }
       })();
     }
@@ -1320,11 +1375,8 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
 
   const deleteFinancialEvent = (id: string) => {
     const originalEvent = financialEvents.find((item) => item.id === id);
-    let nextList: FinancialEvent[] = [];
-    setFinancialEvents(prev => {
-      nextList = prev.filter((item) => item.id !== id);
-      return nextList;
-    });
+    const nextList = financialEvents.filter((item) => item.id !== id);
+    setFinancialEvents(nextList);
     persistCurrentState(nextList);
 
     if (activeWorkspace && originalEvent) {
@@ -1356,6 +1408,11 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
           }
         } catch (err: any) {
           console.error("DB persistence delete record failed:", err.message);
+          if (item) {
+            setFinancialEvents(prev => [item, ...prev]);
+            persistCurrentState([item, ...financialEvents]);
+          }
+          setError("Gagal menyimpan rekod ke pangkalan data. Sila cuba lagi.");
         }
       })();
     }
@@ -1383,6 +1440,9 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
           });
         } catch (err: any) {
           console.error("DB persistence insert cash failed:", err.message);
+          setCashAccounts(prev => prev.filter(item => item.id !== newId));
+          persistCurrentState(financialEvents, cashAccounts.filter(item => item.id !== newId));
+          setError("Gagal menyimpan rekod ke pangkalan data. Sila cuba lagi.");
         }
       })();
     }
@@ -1391,14 +1451,12 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
   };
 
   const editCashAccount = (id: string, updated: Partial<CashAccount>) => {
-    let nextList: CashAccount[] = [];
-    setCashAccounts(prev => {
-      nextList = prev.map((item) =>
-        item.id === id ? ({ ...item, ...updated } as CashAccount) : item
-      );
-      return nextList;
-    });
-    persistCurrentState(financialEvents, undefined, nextList);
+    const original = cashAccounts.find((item) => item.id === id);
+    const nextList = cashAccounts.map((item) =>
+      item.id === id ? ({ ...item, ...updated } as CashAccount) : item
+    );
+    setCashAccounts(nextList);
+    persistCurrentState(financialEvents, nextList);
 
     if (isSupabaseConfigured() && !isMockUser && supabase && activeWorkspace && !isDemoWorkspace(activeWorkspace.id)) {
       const wsId = activeWorkspace.id;
@@ -1415,17 +1473,20 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
             .eq("workspace_id", wsId);
         } catch (err: any) {
           console.error("DB persistence update cash failed:", err.message);
+          if (original) {
+            setCashAccounts(prev => prev.map(item => item.id === id ? original : item));
+            persistCurrentState(financialEvents, cashAccounts.map(item => item.id === id ? original : item));
+          }
+          setError("Gagal menyimpan rekod ke pangkalan data. Sila cuba lagi.");
         }
       })();
     }
   };
 
   const deleteCashAccount = (id: string) => {
-    let nextList: CashAccount[] = [];
-    setCashAccounts(prev => {
-      nextList = prev.filter((item) => item.id !== id);
-      return nextList;
-    });
+    const original = cashAccounts.find((item) => item.id === id);
+    const nextList = cashAccounts.filter((item) => item.id !== id);
+    setCashAccounts(nextList);
     persistCurrentState(financialEvents, nextList);
 
     if (isSupabaseConfigured() && !isMockUser && supabase && activeWorkspace && !isDemoWorkspace(activeWorkspace.id)) {
@@ -1435,6 +1496,11 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
           await supabase.from("cash_accounts").delete().eq("id", id).eq("workspace_id", wsId);
         } catch (err: any) {
           console.error("DB persistence delete cash failed:", err.message);
+          if (original) {
+            setCashAccounts(prev => [original, ...prev]);
+            persistCurrentState(financialEvents, [original, ...cashAccounts]);
+          }
+          setError("Gagal menyimpan rekod ke pangkalan data. Sila cuba lagi.");
         }
       })();
     }
@@ -1465,6 +1531,9 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
           });
         } catch (err: any) {
           console.error("DB persistence insert bank failed:", err.message);
+          setBankAccounts(prev => prev.filter(item => item.id !== newId));
+          persistCurrentState(financialEvents, cashAccounts, bankAccounts.filter(item => item.id !== newId));
+          setError("Gagal menyimpan rekod ke pangkalan data. Sila cuba lagi.");
         }
       })();
     }
@@ -1473,13 +1542,11 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
   };
 
   const editBankAccount = (id: string, updated: Partial<BankAccount>) => {
-    let nextList: BankAccount[] = [];
-    setBankAccounts(prev => {
-      nextList = prev.map((item) =>
-        item.id === id ? ({ ...item, ...updated } as BankAccount) : item
-      );
-      return nextList;
-    });
+    const original = bankAccounts.find((item) => item.id === id);
+    const nextList = bankAccounts.map((item) =>
+      item.id === id ? ({ ...item, ...updated } as BankAccount) : item
+    );
+    setBankAccounts(nextList);
     persistCurrentState(financialEvents, cashAccounts, nextList);
 
     if (isSupabaseConfigured() && !isMockUser && supabase && activeWorkspace && !isDemoWorkspace(activeWorkspace.id)) {
@@ -1499,17 +1566,20 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
             .eq("workspace_id", wsId);
         } catch (err: any) {
           console.error("DB persistence update bank failed:", err.message);
+          if (original) {
+            setBankAccounts(prev => prev.map(item => item.id === id ? original : item));
+            persistCurrentState(financialEvents, cashAccounts, bankAccounts.map(item => item.id === id ? original : item));
+          }
+          setError("Gagal menyimpan rekod ke pangkalan data. Sila cuba lagi.");
         }
       })();
     }
   };
 
   const deleteBankAccount = (id: string) => {
-    let nextList: BankAccount[] = [];
-    setBankAccounts(prev => {
-      nextList = prev.filter((item) => item.id !== id);
-      return nextList;
-    });
+    const original = bankAccounts.find((item) => item.id === id);
+    const nextList = bankAccounts.filter((item) => item.id !== id);
+    setBankAccounts(nextList);
     persistCurrentState(financialEvents, cashAccounts, nextList);
 
     if (isSupabaseConfigured() && !isMockUser && supabase && activeWorkspace && !isDemoWorkspace(activeWorkspace.id)) {
@@ -1519,6 +1589,11 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
           await supabase.from("bank_accounts").delete().eq("id", id).eq("workspace_id", wsId);
         } catch (err: any) {
           console.error("DB persistence delete bank failed:", err.message);
+          if (original) {
+            setBankAccounts(prev => [original, ...prev]);
+            persistCurrentState(financialEvents, cashAccounts, [original, ...bankAccounts]);
+          }
+          setError("Gagal menyimpan rekod ke pangkalan data. Sila cuba lagi.");
         }
       })();
     }
@@ -1552,6 +1627,9 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
           });
         } catch (err: any) {
           console.error("DB persistence insert debt failed:", err.message);
+          setDebtRecords(prev => prev.filter(item => item.id !== newId));
+          persistCurrentState(financialEvents, cashAccounts, bankAccounts, debtRecords.filter(item => item.id !== newId));
+          setError("Gagal menyimpan rekod ke pangkalan data. Sila cuba lagi.");
         }
       })();
     }
@@ -1613,13 +1691,10 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
 
   const editDebtRecord = (id: string, updated: Partial<DebtRecord>) => {
     const originalDebt = debtRecords.find((item) => item.id === id);
-    let nextList: DebtRecord[] = [];
-    setDebtRecords(prev => {
-      nextList = prev.map((item) =>
-        item.id === id ? ({ ...item, ...updated } as DebtRecord) : item
-      );
-      return nextList;
-    });
+    const nextList = debtRecords.map((item) =>
+      item.id === id ? ({ ...item, ...updated } as DebtRecord) : item
+    );
+    setDebtRecords(nextList);
     persistCurrentState(financialEvents, cashAccounts, bankAccounts, nextList);
 
     if (activeWorkspace && originalDebt) {
@@ -1657,6 +1732,11 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
             .eq("workspace_id", wsId);
         } catch (err: any) {
           console.error("DB persistence update debt failed:", err.message);
+          if (current) {
+            setDebtRecords(prev => prev.map(item => item.id === id ? current : item));
+            persistCurrentState(financialEvents, cashAccounts, bankAccounts, debtRecords.map(item => item.id === id ? current : item));
+          }
+          setError("Gagal menyimpan rekod ke pangkalan data. Sila cuba lagi.");
         }
       })();
     }
@@ -1664,11 +1744,8 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
 
   const deleteDebtRecord = (id: string) => {
     const originalDebt = debtRecords.find((item) => item.id === id);
-    let nextList: DebtRecord[] = [];
-    setDebtRecords(prev => {
-      nextList = prev.filter((item) => item.id !== id);
-      return nextList;
-    });
+    const nextList = debtRecords.filter((item) => item.id !== id);
+    setDebtRecords(nextList);
     persistCurrentState(financialEvents, cashAccounts, bankAccounts, nextList);
 
     if (isSupabaseConfigured() && !isMockUser && supabase && activeWorkspace && !isDemoWorkspace(activeWorkspace.id)) {
@@ -1678,6 +1755,11 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
           await supabase.from("debts").delete().eq("id", id).eq("workspace_id", wsId);
         } catch (err: any) {
           console.error("DB persistence delete debt failed:", err.message);
+          if (originalDebt) {
+            setDebtRecords(prev => [originalDebt, ...prev]);
+            persistCurrentState(financialEvents, cashAccounts, bankAccounts, [originalDebt, ...debtRecords]);
+          }
+          setError("Gagal menyimpan rekod ke pangkalan data. Sila cuba lagi.");
         }
       })();
     }
@@ -1735,6 +1817,9 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
           });
         } catch (err: any) {
           console.error("DB persistence insert commitment failed:", err.message);
+          setFinancialCommitments(prev => prev.filter(item => item.id !== newId));
+          persistCurrentState(financialEvents, cashAccounts, bankAccounts, debtRecords, financialCommitments.filter(item => item.id !== newId));
+          setError("Gagal menyimpan rekod ke pangkalan data. Sila cuba lagi.");
         }
       })();
     }
@@ -1789,13 +1874,10 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
 
   const editFinancialCommitment = (id: string, updated: Partial<FinancialCommitment>) => {
     const original = financialCommitments.find((item) => item.id === id);
-    let nextList: FinancialCommitment[] = [];
-    setFinancialCommitments(prev => {
-      nextList = prev.map((item) =>
-        item.id === id ? ({ ...item, ...updated } as FinancialCommitment) : item
-      );
-      return nextList;
-    });
+    const nextList = financialCommitments.map((item) =>
+      item.id === id ? ({ ...item, ...updated } as FinancialCommitment) : item
+    );
+    setFinancialCommitments(nextList);
     persistCurrentState(financialEvents, cashAccounts, bankAccounts, debtRecords, nextList);
 
     if (activeWorkspace && original) {
@@ -1846,6 +1928,11 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
             .eq("workspace_id", wsId);
         } catch (err: any) {
           console.error("DB persistence update commitment failed:", err.message);
+          if (current) {
+            setFinancialCommitments(prev => prev.map(item => item.id === id ? current : item));
+            persistCurrentState(financialEvents, cashAccounts, bankAccounts, debtRecords, financialCommitments.map(item => item.id === id ? current : item));
+          }
+          setError("Gagal menyimpan rekod ke pangkalan data. Sila cuba lagi.");
         }
       })();
     }
@@ -1853,11 +1940,8 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
 
   const deleteFinancialCommitment = (id: string) => {
     const original = financialCommitments.find((item) => item.id === id);
-    let nextList: FinancialCommitment[] = [];
-    setFinancialCommitments(prev => {
-      nextList = prev.filter((item) => item.id !== id);
-      return nextList;
-    });
+    const nextList = financialCommitments.filter((item) => item.id !== id);
+    setFinancialCommitments(nextList);
     persistCurrentState(financialEvents, cashAccounts, bankAccounts, debtRecords, nextList);
 
     if (activeWorkspace && original) {
@@ -1877,6 +1961,11 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
           await supabase.from("financial_commitments").delete().eq("id", id).eq("workspace_id", wsId);
         } catch (err: any) {
           console.error("DB persistence delete commitment failed:", err.message);
+          if (original) {
+            setFinancialCommitments(prev => [original, ...prev]);
+            persistCurrentState(financialEvents, cashAccounts, bankAccounts, debtRecords, [original, ...financialCommitments]);
+          }
+          setError("Gagal menyimpan rekod ke pangkalan data. Sila cuba lagi.");
         }
       })();
     }
@@ -1904,6 +1993,18 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
       const wsId = activeWorkspace.id;
       (async () => {
         try {
+          // DUP-03 idempotency: skip the insert if a package already exists
+          // for the same (workspace, related_record_id, related_record_type)
+          // triple, so a double-fire of linkEvidenceToRecord (e.g. a user
+          // double-click) can't create two identical evidence rows.
+          const { data: existing } = await supabase.from("financial_evidence_packages")
+            .select("id")
+            .eq("workspace_id", wsId)
+            .eq("related_record_id", newPkg.relatedRecordId || "")
+            .eq("related_record_type", newPkg.relatedRecordType || "")
+            .limit(1);
+          if (existing && existing.length > 0) return;
+
           await supabase.from("financial_evidence_packages").insert({
             id: newId,
             workspace_id: wsId,
@@ -1917,6 +2018,9 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
           });
         } catch (err: any) {
           console.error("DB persistence insert evidence package failed:", err.message);
+          setFinancialEvidencePackages(prev => prev.filter(item => item.id !== newId));
+          persistCurrentState(financialEvents, cashAccounts, bankAccounts, debtRecords, financialCommitments, financialEvidencePackages.filter(item => item.id !== newId));
+          setError("Gagal menyimpan rekod ke pangkalan data. Sila cuba lagi.");
         }
       })();
     }
@@ -1946,13 +2050,10 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
 
   const editFinancialEvidencePackage = (id: string, updatedFields: Partial<FinancialEvidencePackage>) => {
     const original = financialEvidencePackages.find((item) => item.id === id);
-    let nextList: FinancialEvidencePackage[] = [];
-    setFinancialEvidencePackages(prev => {
-      nextList = prev.map((item) =>
-        item.id === id ? ({ ...item, ...updatedFields } as FinancialEvidencePackage) : item
-      );
-      return nextList;
-    });
+    const nextList = financialEvidencePackages.map((item) =>
+      item.id === id ? ({ ...item, ...updatedFields } as FinancialEvidencePackage) : item
+    );
+    setFinancialEvidencePackages(nextList);
     persistCurrentState(financialEvents, cashAccounts, bankAccounts, debtRecords, financialCommitments, nextList);
 
     if (activeWorkspace && original) {
@@ -1994,6 +2095,11 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
             .eq("workspace_id", wsId);
         } catch (err: any) {
           console.error("DB persistence update evidence package failed:", err.message);
+          if (current) {
+            setFinancialEvidencePackages(prev => prev.map(item => item.id === id ? current : item));
+            persistCurrentState(financialEvents, cashAccounts, bankAccounts, debtRecords, financialCommitments, financialEvidencePackages.map(item => item.id === id ? current : item));
+          }
+          setError("Gagal menyimpan rekod ke pangkalan data. Sila cuba lagi.");
         }
       })();
     }
@@ -2001,11 +2107,8 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
 
   const deleteFinancialEvidencePackage = (id: string) => {
     const original = financialEvidencePackages.find((item) => item.id === id);
-    let nextList: FinancialEvidencePackage[] = [];
-    setFinancialEvidencePackages(prev => {
-      nextList = prev.filter((item) => item.id !== id);
-      return nextList;
-    });
+    const nextList = financialEvidencePackages.filter((item) => item.id !== id);
+    setFinancialEvidencePackages(nextList);
     persistCurrentState(financialEvents, cashAccounts, bankAccounts, debtRecords, financialCommitments, nextList);
 
     if (activeWorkspace && original) {
@@ -2035,6 +2138,11 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
           await supabase.from("financial_evidence_packages").delete().eq("id", id).eq("workspace_id", wsId);
         } catch (err: any) {
           console.error("DB persistence delete evidence package failed:", err.message);
+          if (itemToDelete) {
+            setFinancialEvidencePackages(prev => [itemToDelete, ...prev]);
+            persistCurrentState(financialEvents, cashAccounts, bankAccounts, debtRecords, financialCommitments, [itemToDelete, ...financialEvidencePackages]);
+          }
+          setError("Gagal menyimpan rekod ke pangkalan data. Sila cuba lagi.");
         }
       })();
     }
@@ -2325,11 +2433,8 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
     const original = ocrLearnedPatterns.find((item) => item.id === id);
     if (!original) return;
     const updated: OcrLearnedPattern = { ...original, isActive };
-    let nextList: OcrLearnedPattern[] = [];
-    setOcrLearnedPatterns(prev => {
-      nextList = prev.map((item) => (item.id === id ? updated : item));
-      return nextList;
-    });
+    const nextList = ocrLearnedPatterns.map((item) => (item.id === id ? updated : item));
+    setOcrLearnedPatterns(nextList);
     persistCurrentState(
       financialEvents,
       cashAccounts,
@@ -2423,9 +2528,8 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
     // user-reviewed and must not be overwritten.
     const REVIEWED_STATES: DuplicateClassification[] = ["CONFIRMED_DUPLICATE", "REVIEWED_NOT_DUPLICATE"];
     const rowsToUpsert: any[] = [];
-    // Capture current state via functional updater to avoid stale closure
-    let localFlags: DuplicateFlag[] = [];
-    setDuplicateFlags(prev => { localFlags = [...prev]; return prev; });
+    // Read current state directly from the closure (no setState needed just to read).
+    const localFlags = [...duplicateFlags];
     const existingByKey = new Map<string, DuplicateFlag>();
     for (const flag of localFlags) {
       existingByKey.set(`${flag.recordAType}::${flag.recordAId}::${flag.recordBType}::${flag.recordBId}`, flag);
@@ -2820,6 +2924,7 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
 
   return (
     <FinancialRecordsContext.Provider
+      // eslint-disable-next-line react-hooks/exhaustive-deps
       value={useMemo(() => ({
         financialEvents,
         cashAccounts,
@@ -2863,7 +2968,7 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
         reviewDuplicateFlag,
         resetWorkspaceData,
         restoreWorkspaceData,
-      }), [financialEvents, cashAccounts, bankAccounts, debtRecords, financialCommitments, financialEvidencePackages, ocrLearnedPatterns, duplicateFlags, loading, error, addFinancialEvent, addFinancialEventAwaited, addFinancialEventsBatch, editFinancialEvent, deleteFinancialEvent, addCashAccount, editCashAccount, deleteCashAccount, addBankAccount, editBankAccount, deleteBankAccount, addDebtRecord, addDebtRecordAwaited, editDebtRecord, deleteDebtRecord, addFinancialCommitment, addFinancialCommitmentAwaited, editFinancialCommitment, deleteFinancialCommitment, addFinancialEvidencePackage, linkEvidenceToRecord, editFinancialEvidencePackage, deleteFinancialEvidencePackage, learnOcrPattern, learnOcrPatternsBatch, deleteOcrLearnedPattern, reactivateOcrLearnedPattern, findLearnedPattern, scanForDuplicates, reviewDuplicateFlag, resetWorkspaceData, restoreWorkspaceData])}
+      }), [financialEvents, cashAccounts, bankAccounts, debtRecords, financialCommitments, financialEvidencePackages, ocrLearnedPatterns, duplicateFlags, loading, error])}
     >
       {children}
     </FinancialRecordsContext.Provider>

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { supabase, isSupabaseConfigured } from "./supabase";
 
 export interface AiCreditsState {
@@ -15,7 +15,7 @@ const uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 function useResourceCredits(tenantId: string, workspaceId: string | undefined, balanceCol: string, allowanceCol: string): AiCreditsState {
   const [state, setState] = useState<AiCreditsState>({ used: 0, total: 500, planName: "Starter", isLoading: false });
 
-  useEffect(() => {
+  const refresh = useCallback(() => {
     if (!isSupabaseConfigured() || !supabase || !tenantId || !uuidRe.test(tenantId) || !workspaceId || !uuidRe.test(workspaceId)) {
       return;
     }
@@ -42,7 +42,23 @@ function useResourceCredits(tenantId: string, workspaceId: string | undefined, b
     });
 
     return () => { cancelled = true; };
-  }, [tenantId, workspaceId]);
+  }, [tenantId, workspaceId, balanceCol, allowanceCol]);
+
+  useEffect(() => {
+    const cleanup = refresh();
+    return () => { if (typeof cleanup === "function") cleanup(); };
+  }, [refresh]);
+
+  // CS-6: Subscribe to realtime changes on resource_wallets so the wallet
+  // balance refreshes immediately after a top-up (or any other write) instead
+  // of waiting for the next workspace/tenant change to re-run the effect above.
+  useEffect(() => {
+    if (!supabase || !tenantId || !workspaceId) return;
+    const channel = supabase.channel(`resource_wallets_${workspaceId}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'resource_wallets', filter: `workspace_id=eq.${workspaceId}` }, () => { refresh(); })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [tenantId, workspaceId, refresh]);
 
   return state;
 }

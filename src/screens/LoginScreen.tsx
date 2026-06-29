@@ -1,4 +1,4 @@
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { useAuth } from "../context/AuthContext";
 import { supabase } from "../lib/supabase";
 import { type UserRole } from "../types";
@@ -132,6 +132,10 @@ export default function LoginScreen({ initialMode = "login", onBack, forceHQ = f
       });
     }, 1000);
   };
+
+  // M-02: Clear the resend interval on unmount so it doesn't keep firing after
+  // the screen is gone.
+  useEffect(() => () => { if (resendTimerRef.current) clearInterval(resendTimerRef.current); }, []);
 
   const handleResendVerification = async () => {
     if (!pendingVerificationEmail || resendCooldown > 0 || !supabase) return;

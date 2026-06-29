@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useMemo } from "react";
+import React, { createContext, useContext, useState, useEffect, useMemo, useCallback } from "react";
 import { supabase, isSupabaseConfigured } from "../lib/supabase";
 import { useAuth } from "./AuthContext";
 import { useTenant } from "./TenantContext";
@@ -198,7 +198,7 @@ export const StorageProvider: React.FC<{ children: React.ReactNode }> = ({ child
   }, [activeWorkspace?.id, activeTenant?.id, user?.id, isMockUser]);
 
   // Action: Modify Storage Setting with strict permission guard
-  const updateProviderSetting = async (provider: "HQ_MANAGED" | "GOOGLE_DRIVE" | "ONEDRIVE" | "DROPBOX") => {
+  const updateProviderSetting = useCallback(async (provider: "HQ_MANAGED" | "GOOGLE_DRIVE" | "ONEDRIVE" | "DROPBOX") => {
     if (!activeWorkspace || !activeTenant || !user) return;
 
     if (!isOwnerOrAdmin) {
@@ -285,10 +285,10 @@ export const StorageProvider: React.FC<{ children: React.ReactNode }> = ({ child
         throw new Error(`Failed to save storage configuration: ${err.message}`);
       }
     }
-  };
+  }, [activeWorkspace, activeTenant, user, isOwnerOrAdmin, activeProvider, isMockUser, writeAuditLog]);
 
   // Connects or disconnects the simulated cloud service provider (Prepares byos architecture)
-  const toggleConnectionStatus = async () => {
+  const toggleConnectionStatus = useCallback(async () => {
     if (!activeWorkspace || !activeProvider || !user) return;
 
     if (!isOwnerOrAdmin) {
@@ -361,7 +361,7 @@ export const StorageProvider: React.FC<{ children: React.ReactNode }> = ({ child
         throw new Error(`Failed to toggle connection state: ${err.message}`);
       }
     }
-  };
+  }, [activeWorkspace, activeProvider, user, isOwnerOrAdmin, isMockUser, writeAuditLog]);
 
   return (
     <StorageContext.Provider

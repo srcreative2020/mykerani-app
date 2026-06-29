@@ -102,6 +102,7 @@ export const AIFinancialAssistant: React.FC<AIFinancialAssistantProps> = ({ onTr
   const [error, setError] = useState<string | null>(null);
   const [suggestionStatus, setSuggestionStatus] = useState<Record<string, SuggestionStatus>>({});
   const [editingSuggestionId, setEditingSuggestionId] = useState<string | null>(null);
+  const [confirmingId, setConfirmingId] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState<{ amount: string; category: string; relatedParty: string; date: string }>({
     amount: "", category: "", relatedParty: "", date: ""
   });
@@ -355,6 +356,7 @@ export const AIFinancialAssistant: React.FC<AIFinancialAssistantProps> = ({ onTr
 
   const handleConfirmSuggestion = async (s: AISuggestion, edited?: typeof editDraft) => {
     if (!activeWorkspace || suggestionStatus[s.id] === "confirmed") return;
+    setConfirmingId(s.id);
     const transactionType = s.payload?.transactionType;
     const amount = Number(edited ? edited.amount : s.payload?.amount) || 0;
     const category = (edited ? edited.category : s.payload?.category) || "Lain-lain";
@@ -429,6 +431,8 @@ export const AIFinancialAssistant: React.FC<AIFinancialAssistantProps> = ({ onTr
     } catch (err: any) {
       console.error("Failed to confirm AI suggestion:", err);
       setError(`Gagal menyimpan rekod ke pangkalan data: ${err?.message || "ralat tidak diketahui"}. Cadangan TIDAK disahkan, sila cuba lagi.`);
+    } finally {
+      setConfirmingId(null);
     }
   };
 
@@ -577,7 +581,7 @@ export const AIFinancialAssistant: React.FC<AIFinancialAssistantProps> = ({ onTr
 
                   {status === "pending" && editingSuggestionId !== s.id && (
                     <div className="flex gap-2 pt-1">
-                      <button type="button" onClick={() => handleConfirmSuggestion(s)} className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-semibold">Sahkan</button>
+                      <button type="button" onClick={() => handleConfirmSuggestion(s)} disabled={confirmingId === s.id} className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-semibold disabled:opacity-50 disabled:cursor-not-allowed">Sahkan</button>
                       <button type="button" onClick={() => handleStartEdit(s)} className="px-3 py-1.5 rounded-lg bg-slate-200 hover:bg-slate-300 text-slate-800 font-semibold">Edit</button>
                       <button type="button" onClick={() => handleRejectSuggestion(s.id)} className="px-3 py-1.5 rounded-lg bg-rose-100 hover:bg-rose-200 text-rose-700 font-semibold">Tolak</button>
                     </div>
@@ -590,7 +594,7 @@ export const AIFinancialAssistant: React.FC<AIFinancialAssistantProps> = ({ onTr
                       <input value={editDraft.relatedParty} onChange={e => setEditDraft(d => ({ ...d, relatedParty: e.target.value }))} placeholder="Related Party" className="w-full px-2 py-1 rounded border border-amber-300 text-xs" />
                       <input value={editDraft.date} onChange={e => setEditDraft(d => ({ ...d, date: e.target.value }))} type="date" className="w-full px-2 py-1 rounded border border-amber-300 text-xs" />
                       <div className="flex gap-2 pt-1">
-                        <button type="button" onClick={() => handleConfirmSuggestion(s, editDraft)} className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-semibold">Sahkan Perubahan</button>
+                        <button type="button" onClick={() => handleConfirmSuggestion(s, editDraft)} disabled={confirmingId === s.id} className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-semibold disabled:opacity-50 disabled:cursor-not-allowed">Sahkan Perubahan</button>
                         <button type="button" onClick={() => setEditingSuggestionId(null)} className="px-3 py-1.5 rounded-lg bg-slate-200 hover:bg-slate-300 text-slate-800 font-semibold">Batal</button>
                       </div>
                     </div>

@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useMemo } from "react";
+import React, { createContext, useContext, useState, useEffect, useMemo, useCallback } from "react";
 import { supabase, isSupabaseConfigured } from "../lib/supabase";
 import { useAuth } from "./AuthContext";
 import { type Tenant, type TenantState, type TenantCategory } from "../types";
@@ -29,7 +29,7 @@ export const TenantProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     error: null,
   });
 
-  const clearTenantError = () => setState(prev => ({ ...prev, error: null }));
+  const clearTenantError = useCallback(() => setState(prev => ({ ...prev, error: null })), []);
 
   // Load Tenants list
   useEffect(() => {
@@ -195,7 +195,7 @@ export const TenantProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   }, [user, isMockUser]);
 
   // Create a new Tenant
-  const createTenant = async (name: string, category: TenantCategory): Promise<Tenant> => {
+  const createTenant = useCallback(async (name: string, category: TenantCategory): Promise<Tenant> => {
     if (!user) {
       throw new Error("User session is required to initialize organizational tenants.");
     }
@@ -248,10 +248,10 @@ export const TenantProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
       return tenant;
     }
-  };
+  }, [user, isMockUser, state.tenants]);
 
   // Switch Active Tenant
-  const selectTenant = (tenantId: string) => {
+  const selectTenant = useCallback((tenantId: string) => {
     if (!user) return;
 
     const target = state.tenants.find(t => t.id === tenantId);
@@ -259,7 +259,7 @@ export const TenantProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       localStorage.setItem(`mykerani_active_tenant_${user.id}`, tenantId);
       setState(prev => ({ ...prev, activeTenant: target }));
     }
-  };
+  }, [user, state.tenants]);
 
   return (
     <TenantContext.Provider

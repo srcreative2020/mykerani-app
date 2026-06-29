@@ -229,6 +229,7 @@ export async function confirmFinancialRecord(
       newRecordType = "TRANSFER";
       return {
         ok: true,
+        recordId: undefined,
         recordType: "TRANSFER",
         amount,
         category: relatedParty,
@@ -303,7 +304,7 @@ export async function confirmFinancialRecord(
       newRecordId = cmt.id;
       newRecordType = "COMMITMENT";
     } else if (transactionType === "ASSET_PURCHASE") {
-      await deps.addAssetPurchase(input.workspaceId, {
+      const asset = await deps.addAssetPurchase(input.workspaceId, {
         assetName: category,
         category,
         purchaseAmountMyr: amount,
@@ -311,16 +312,20 @@ export async function confirmFinancialRecord(
         vendorName: relatedParty,
         notes: description,
       });
+      newRecordId = asset?.id;
+      newRecordType = "ASSET_PURCHASE" as any;
     } else if (transactionType === "OWNER_TRANSACTION") {
       const subtype: "CAPITAL_INJECTION" | "DRAWING" =
         input.ownerTransactionSubtype ||
         (category.toUpperCase().includes("DRAWING") ? "DRAWING" : "CAPITAL_INJECTION");
-      await deps.addOwnerTransaction(input.workspaceId, {
+      const ot = await deps.addOwnerTransaction(input.workspaceId, {
         type: subtype,
         amountMyr: amount,
         transactionDate: date,
         description,
       });
+      newRecordId = ot?.id;
+      newRecordType = "OWNER_TRANSACTION" as any;
     } else {
       // Rule 5 — Confirmation Validation (unsupported type)
       return { ok: false, error: "Jenis transaksi tidak disokong." };
@@ -389,7 +394,7 @@ export async function confirmFinancialRecord(
       workspaceId: input.workspaceId,
       vendorName: relatedParty,
       category,
-      recordType: (transactionType === "COMMITMENT" ? "EXPENSE" : transactionType) as any,
+      recordType: transactionType as any,
       confidenceScore,
       businessId: businessId || null,
       branchId: branchId || null,

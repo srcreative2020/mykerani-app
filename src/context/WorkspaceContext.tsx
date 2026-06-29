@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useMemo } from "react";
+import React, { createContext, useContext, useState, useEffect, useMemo, useCallback } from "react";
 import { supabase, isSupabaseConfigured } from "../lib/supabase";
 import { useAuth } from "./AuthContext";
 import { useTenant } from "./TenantContext";
@@ -39,10 +39,10 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     error: null,
   });
 
-  const clearWorkspaceError = () => setState(prev => ({ ...prev, error: null }));
+  const clearWorkspaceError = useCallback(() => setState(prev => ({ ...prev, error: null })), []);
 
   // Dynamic Workspace switching & contextual headers (X-Workspace-Id foundation)
-  const getWorkspaceHeaders = (): Record<string, string> => {
+  const getWorkspaceHeaders = useCallback((): Record<string, string> => {
     if (state.activeWorkspace) {
       return {
         "X-Workspace-Id": state.activeWorkspace.id,
@@ -50,10 +50,10 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       };
     }
     return {};
-  };
+  }, [state.activeWorkspace, activeTenant]);
 
   // Switch Workspace action
-  const selectWorkspace = (workspaceId: string) => {
+  const selectWorkspace = useCallback((workspaceId: string) => {
     if (!user || !activeTenant) return;
 
     const target = state.workspaces.find(ws => ws.id === workspaceId);
@@ -65,7 +65,7 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       localStorage.setItem(`mykerani_active_ws_${user.id}_${activeTenant.id}`, workspaceId);
       setState(prev => ({ ...prev, activeWorkspace: target }));
     }
-  };
+  }, [user, activeTenant, state.workspaces, state.activeWorkspace, isMockUser]);
 
   // Load Workspaces list based on selected Active Tenant
   useEffect(() => {
@@ -230,7 +230,7 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   }, [user, activeTenant, isMockUser]);
 
   // Create a new Workspace
-  const createWorkspace = async (name: string, slug?: string, workspaceType?: string): Promise<Workspace> => {
+  const createWorkspace = useCallback(async (name: string, slug?: string, workspaceType?: string): Promise<Workspace> => {
     if (!user || !activeTenant) {
       throw new Error("Active Tenant session is required to initialize client workspaces.");
     }
@@ -304,7 +304,7 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
       return ws;
     }
-  };
+  }, [user, activeTenant, isMockUser, state.workspaces]);
 
   return (
     <WorkspaceContext.Provider

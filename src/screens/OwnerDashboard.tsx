@@ -175,7 +175,7 @@ export function OwnerDashboard() {
   const { user, signOut, isMockUser, updateProfile } = useAuth();
   const { activeWorkspace, workspaces, selectWorkspace } = useWorkspace();
   const { activeTenant } = useTenant();
-  const { userRoles } = usePermission();
+  const { userRoles, hasPermission } = usePermission();
   const userNameById = useMemo(() => {
     const map: Record<string, string> = {};
     userRoles.forEach(r => { map[r.userId] = r.fullName; });
@@ -198,11 +198,15 @@ export function OwnerDashboard() {
   // Tracks which already-confirmed suggestions have had their saved record edited at least
   // once, purely to switch the status line wording to "Dikemaskini." — not persisted, ephemeral UI only.
   const [chatSuggestionJustUpdated, setChatSuggestionJustUpdated] = useState<Record<string, boolean>>({});
+  const [confirmingChatId, setConfirmingChatId] = useState<string | null>(null);
   const [editingChatSuggestionId, setEditingChatSuggestionId] = useState<string | null>(null);
   const [chatEditDraft, setChatEditDraft] = useState({ amount: "", category: "", relatedParty: "", date: "", transactionType: "" });
   // Per-suggestion business pick + evidence step, layered on top of the AI suggestion before final Sahkan.
   const [chatSuggestionExtra, setChatSuggestionExtra] = useState<Record<string, ChatSuggestionExtra>>({});
   const chatEvidenceFilesRef = useRef<Record<string, File>>({});
+  // M-01: object URLs for evidence previews, tracked so they can be revoked
+  // on detach/unmount instead of leaking indefinitely.
+  const [evidencePreviewUrls, setEvidencePreviewUrls] = useState<Record<string, string>>({});
   const pendingChatEvidenceRef = useRef<Record<string, PendingChatEvidence>>({});
   const chatEvidenceInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
   // Accounting Knowledge Base V1: per-suggestion dismissal of the "Cadangan Semakan" review banner.
@@ -352,8 +356,8 @@ export function OwnerDashboard() {
   const disconnectStorage = () => { setStorageConn(null); setResStorage("mykerani"); };
 
   const wsId = activeWorkspace?.id || "";
-  const now = new Date();
-  const thisMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  const nowIso = new Date().toISOString().slice(0, 10);
+  const thisMonth = nowIso.slice(0, 7);
   const firstName = user?.fullName?.split(" ")[0] || "Anda";
   const greeting = getGreeting();
 
@@ -407,7 +411,8 @@ export function OwnerDashboard() {
   const periodRange = useMemo(() => {
     const pad = (n: number) => String(n).padStart(2, "0");
     const toIso = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const [y, m, d] = nowIso.split("-").map(Number);
+    const today = new Date(y, (m || 1) - 1, d || 1);
     if (dashboardPeriod === "day") {
       const iso = toIso(today);
       return { from: iso, to: iso, label: today.toLocaleDateString("ms-MY", { day: "numeric", month: "long", year: "numeric" }) };
@@ -425,7 +430,7 @@ export function OwnerDashboard() {
     }
     const lastDay = new Date(today.getFullYear(), today.getMonth() + 1, 0);
     return { from: toIso(new Date(today.getFullYear(), today.getMonth(), 1)), to: toIso(lastDay), label: today.toLocaleDateString("ms-MY", { month: "long", year: "numeric" }) };
-  }, [dashboardPeriod, now]);
+  }, [dashboardPeriod, nowIso]);
   const periodEvents = useMemo(
     () => myEvents.filter(e => e.date >= periodRange.from && e.date <= periodRange.to),
     [myEvents, periodRange]
@@ -716,9 +721,18 @@ export function OwnerDashboard() {
   const [aiCreditPackages, setAiCreditPackages] = useState<AddonPackage[]>([]);
   const [ocrCreditPackages, setOcrCreditPackages] = useState<AddonPackage[]>([]);
   useEffect(() => {
-    getAddonPackages("STORAGE").then(setStoragePackages);
-    getAddonPackages("AI").then(setAiCreditPackages);
-    getAddonPackages("OCR").then(setOcrCreditPackages);
+    let active = true;
+    Promise.all([
+      getAddonPackages("STORAGE"),
+      getAddonPackages("AI"),
+      getAddonPackages("OCR"),
+    ]).then(([s, a, o]) => {
+      if (!active) return;
+      setStoragePackages(s);
+      setAiCreditPackages(a);
+      setOcrCreditPackages(o);
+    });
+    return () => { active = false; };
   }, []);
   const [showPromoModal, setShowPromoModal] = useState(false);
   const [promoCode, setPromoCode] = useState("");
@@ -765,16 +779,18 @@ export function OwnerDashboard() {
 
   useEffect(() => {
     if (!isSupabaseConfigured() || !supabase || !activeTenant?.id) return;
+    let active = true;
     supabase.from("subscription_plans").select("id,name,monthly_price_myr,features").order("monthly_price_myr", { ascending: true })
-      .then(({ data }) => setAvailablePlans((data || []).map((p: any) => ({
+      .then(({ data }) => { if (active) setAvailablePlans((data || []).map((p: any) => ({
         id: p.id, name: p.name, price: Number(p.monthly_price_myr) || 0,
         features: p.features?.featureList ?? [], limitations: p.features?.limitations ?? [],
         isTrial: p.features?.isTrial ?? false, isCustomPricing: p.features?.isCustomPricing ?? false,
-      }))));
+      }))); });
     supabase.from("payment_gateway_settings").select("chip_asia_enabled,manual_payment_enabled").eq("id", "global").maybeSingle()
-      .then(({ data }) => { if (data) setPaymentMethods({ chipAsiaEnabled: Boolean(data.chip_asia_enabled), manualPaymentEnabled: Boolean(data.manual_payment_enabled) }); });
+      .then(({ data }) => { if (active && data) setPaymentMethods({ chipAsiaEnabled: Boolean(data.chip_asia_enabled), manualPaymentEnabled: Boolean(data.manual_payment_enabled) }); });
     supabase.from("tenant_subscriptions").select("plan_id,status,current_period_end,subscription_plans(name,monthly_price_myr)").eq("tenant_id", activeTenant.id).maybeSingle()
       .then(({ data }: any) => {
+        if (!active) return;
         if (data) {
           setCurrentSub({
             planId: data.plan_id,
@@ -785,8 +801,9 @@ export function OwnerDashboard() {
           });
         }
       });
-    getTenantPaymentTransactions(activeTenant.id).then(setPaymentTxs);
-    getMyPromotionRedemptions(activeTenant.id).then(setPromoHistory);
+    getTenantPaymentTransactions(activeTenant.id).then(t => { if (active) setPaymentTxs(t); });
+    getMyPromotionRedemptions(activeTenant.id).then(t => { if (active) setPromoHistory(t); });
+    return () => { active = false; };
   }, [activeTenant?.id, paymentTxRefresh]);
 
   const openPaymentModal = (planId?: string) => {
@@ -892,8 +909,11 @@ export function OwnerDashboard() {
   // Load documents when workspace ready
   useEffect(() => {
     if (!wsId) return;
+    let active = true;
     setDocsLoading(true);
-    listDocuments(wsId).then(d => { setDocs(d); setDocsLoading(false); });
+    listDocuments(wsId).then(d => { if (active) { setDocs(d); setDocsLoading(false); } })
+      .catch(e => { if (active) { setUploadError("Gagal memuatkan dokumen."); setDocsLoading(false); } });
+    return () => { active = false; };
   }, [wsId]);
 
   const fileToDataUrl = (file: File): Promise<string> => new Promise((resolve, reject) => {
@@ -915,6 +935,11 @@ export function OwnerDashboard() {
   // â"€â"€ Notifications â"€â"€
   const notif = useNotifications(user?.id || "guest");
   const [showNotifPanel, setShowNotifPanel] = useState(false);
+
+  // M-01: revoke all tracked evidence preview object URLs on unmount.
+  useEffect(() => () => { Object.values(evidencePreviewUrls).forEach(url => URL.revokeObjectURL(url)); }, [evidencePreviewUrls]);
+  // M-03: stop the MediaRecorder on unmount so it doesn't keep the mic busy.
+  useEffect(() => () => { if (chatMediaRecorderRef.current && chatMediaRecorderRef.current.state !== "inactive") chatMediaRecorderRef.current.stop(); }, []);
 
   // Auto-generate notifications from app state
   useEffect(() => {
@@ -943,6 +968,17 @@ export function OwnerDashboard() {
   }, [myEvents, docs, cashAccounts, bankAccounts, debtRecords, financialCommitments, wsId]);
 
   useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [chatMessages, chatLoading]);
+  // R-01/R-02: persist per-suggestion extra state, pending evidence, and
+  // accounting-banner dismissal so a refresh mid-confirmation restores them.
+  useEffect(() => {
+    if (!wsId) return;
+    try { localStorage.setItem(`mykerani_chat_suggestion_extra_${wsId}`, JSON.stringify(chatSuggestionExtra)); } catch { /* best-effort */ }
+    try { localStorage.setItem(`mykerani_chat_suggestion_evidence_${wsId}`, JSON.stringify(pendingChatEvidenceRef.current)); } catch { /* best-effort */ }
+  }, [wsId, chatSuggestionExtra]);
+  useEffect(() => {
+    if (!wsId) return;
+    try { localStorage.setItem(`mykerani_accounting_banner_dismissed_${wsId}`, JSON.stringify(accountingBannerDismissed)); } catch { /* best-effort */ }
+  }, [wsId, accountingBannerDismissed]);
   useEffect(() => { supportEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [supportMessages, supportLoading]);
   const refreshMyTickets = useCallback(() => {
     if (isMockUser) return;
@@ -957,7 +993,9 @@ export function OwnerDashboard() {
   }, [morePage, supportView, isMockUser]);
   useEffect(() => {
     if (isMockUser) return;
-    getTenantMyHealthScore().then(setMyHealthScore);
+    let active = true;
+    getTenantMyHealthScore().then(s => { if (active) setMyHealthScore(s); });
+    return () => { active = false; };
   }, [isMockUser]);
   useEffect(() => {
     if (isMockUser || morePage !== "resources") return;
@@ -969,26 +1007,33 @@ export function OwnerDashboard() {
   }, [isMockUser, showDataAccessLog, tenantId]);
   useEffect(() => {
     if (morePage !== 'activity' || !isSupabaseConfigured() || isMockUser) return;
+    let active = true;
     setActivityLoading(true);
     getTenantActivityFeed(activeWorkspace?.id).then(data => {
+      if (!active) return;
       setTenantActivity(data);
       setActivityLoading(false);
-    }).catch(() => setActivityLoading(false));
+    }).catch(() => { if (active) setActivityLoading(false); });
+    return () => { active = false; };
   }, [morePage, activeWorkspace?.id]);
 
   useEffect(() => {
     if (!wsId || !user) return;
+    let active = true;
     // A fresh login already archived the previous session and cleared the
     // local pointer (see AuthContext signIn/endActiveSession), so this either
     // resumes the same session across a page refresh or starts a new one —
     // older conversations stay reachable via Arkib Perbualan either way.
     getOrCreateActiveSession(user.id, wsId, isMockUser).then(sessionId => {
+      if (!active) return;
       setActiveSessionId(sessionId);
       loadActiveSessionMessages(sessionId, isMockUser, wsId).then(history => {
+        if (!active) return;
         setChatMessages(history.map(h => ({ id: h.id, sender: h.sender, text: h.text, suggestions: h.suggestions, createdAt: h.createdAt, attachmentUrl: h.attachmentUrl, attachmentName: h.attachmentName, attachmentType: h.attachmentType })));
       });
     });
     loadChatHistory(wsId, isMockUser).then(history => {
+      if (!active) return;
       setChatHistoryAll(history.map(h => ({ id: h.id, sender: h.sender, text: h.text, suggestions: h.suggestions, createdAt: h.createdAt, attachmentUrl: h.attachmentUrl, attachmentName: h.attachmentName, attachmentType: h.attachmentType })));
     });
     try {
@@ -1005,20 +1050,41 @@ export function OwnerDashboard() {
           normalized[id] = { status: v as ChatSuggestionStatusValue };
         }
       });
-      setChatSuggestionStatus(normalized);
+      if (active) setChatSuggestionStatus(normalized);
     } catch {
-      setChatSuggestionStatus({});
+      if (active) setChatSuggestionStatus({});
     }
+    // R-01: restore per-suggestion business/branch/evidence picks so a refresh
+    // mid-confirmation doesn't lose the user's selections.
+    try {
+      const extraStored = localStorage.getItem(`mykerani_chat_suggestion_extra_${wsId}`);
+      if (extraStored && active) setChatSuggestionExtra(JSON.parse(extraStored));
+      const evidenceStored = localStorage.getItem(`mykerani_chat_suggestion_evidence_${wsId}`);
+      if (evidenceStored && active) {
+        pendingChatEvidenceRef.current = JSON.parse(evidenceStored);
+      }
+    } catch {
+      // best-effort only
+    }
+    // R-02: restore accounting-banner dismissal state.
+    try {
+      const bannerStored = localStorage.getItem(`mykerani_accounting_banner_dismissed_${wsId}`);
+      if (bannerStored && active) setAccountingBannerDismissed(JSON.parse(bannerStored));
+    } catch {
+      // best-effort only
+    }
+    return () => { active = false; };
   }, [wsId, isMockUser, user]);
 
   // Persist confirmed/rejected suggestion status to localStorage so refresh/remount cannot
   // forget it and re-trigger a duplicate database insert via handleChatConfirmSuggestion.
-  const markChatSuggestionStatus = (id: string, status: ChatSuggestionStatus) => {
+  const markChatSuggestionStatus = (id: string, status: ChatSuggestionStatus, wsIdArg?: string) => {
+    const scopeWsId = wsIdArg || wsId;
     setChatSuggestionStatus(prev => {
       const next = { ...prev, [id]: status };
-      if (wsId) {
+      if (scopeWsId) {
         try {
-          localStorage.setItem(chatSuggestionStatusKey(wsId), JSON.stringify(next));
+          localStorage.setItem(chatSuggestionStatusKey(scopeWsId), JSON.stringify(next));
         } catch {
           // best-effort only
         }
@@ -1132,6 +1198,9 @@ export function OwnerDashboard() {
 
   const refreshProfileData = () => {
     if (!wsId) return;
+    // S-03: clear branches accumulated from the previous workspace so they
+    // don't bleed into the new workspace's branch-matching results.
+    setBusinessBranches({});
     setProfileLoading(true);
     Promise.all([
       loadPersonalProfile(wsId, isMockUser).then(setPersonalProfile),
@@ -1593,6 +1662,15 @@ export function OwnerDashboard() {
 
   const handleChatEvidenceAttach = async (suggestionId: string, file: File) => {
     chatEvidenceFilesRef.current[suggestionId] = file;
+    // M-01: create a tracked preview URL for image evidence so it can be revoked.
+    if (file.type.startsWith("image/")) {
+      const previewUrl = URL.createObjectURL(file);
+      setEvidencePreviewUrls(prev => {
+        const old = prev[suggestionId];
+        if (old) URL.revokeObjectURL(old);
+        return { ...prev, [suggestionId]: previewUrl };
+      });
+    }
     let fileUrl = "";
     const canPersistDoc = activeWorkspace && isSupabaseConfigured() && !isMockUser && supabase && !isDemoWorkspace(activeWorkspace.id) && user;
     if (canPersistDoc) {
@@ -1619,10 +1697,15 @@ export function OwnerDashboard() {
 
   const handleChatConfirmSuggestion = async (s: ChatSuggestion, edited?: typeof chatEditDraft) => {
     if (!activeWorkspace || chatSuggestionStatus[s.id]?.status === "confirmed") return;
+    // S-01: capture the workspace id at call time so a switch mid-flight
+    // doesn't persist this suggestion's status under the wrong workspace key.
+    const wsIdAtCall = wsId;
+    setConfirmingChatId(s.id);
     setChatActionErrors(prev => { const next = { ...prev }; delete next[s.id]; return next; });
     const extra = chatSuggestionExtra[s.id];
     if (!extra || !extra.businessPicked) return;
 
+    try {
     const result = await confirmChatSuggestion(s, extra, edited, pendingChatEvidenceRef.current[s.id]);
     if (!result.ok) {
       setChatActionErrors(prev => ({ ...prev, [s.id]: result.error || "Ralat tidak diketahui." }));
@@ -1643,7 +1726,7 @@ export function OwnerDashboard() {
       editedTransactionType: result.transactionType as string | undefined,
       confirmedByName: user?.fullName || undefined,
       confirmedByUserId: user?.id || undefined,
-    });
+    }, wsIdAtCall);
 
     // C-02: Log owner financial record action for activity feed
     if (isSupabaseConfigured() && !isMockUser && user && activeWorkspace) {
@@ -1661,11 +1744,16 @@ export function OwnerDashboard() {
     }
 
     setEditingChatSuggestionId(null);
+    } finally {
+      setConfirmingChatId(null);
+    }
   };
 
   // Save an edit to an ALREADY-confirmed chat suggestion: update the saved record in place
   // (instead of inserting a new one) using the recordId/recordType captured at confirm time.
   const handleChatSaveConfirmedEdit = (s: ChatSuggestion, edited: typeof chatEditDraft) => {
+    // PB-1: permission check (documents intent; owner has all permissions).
+    if (!hasPermission('Financial Records', 'update')) { setChatActionErrors(prev => ({ ...prev, [s.id]: "Tiada kebenaran untuk mengubah rekod." })); return; }
     const current = chatSuggestionStatus[s.id];
     if (!current?.recordId || !current.recordType) return;
     const amountMyr = Number(edited.amount) || 0;
@@ -2018,7 +2106,7 @@ export function OwnerDashboard() {
                     </div>
                     <div>
                       <h2 className="text-base font-bold text-slate-900">{greeting}, {firstName}</h2>
-                      <p className="text-xs text-slate-400">{now.toLocaleDateString("ms-MY", { weekday:"long", day:"numeric", month:"long" })}</p>
+                      <p className="text-xs text-slate-400">{new Date(nowIso).toLocaleDateString("ms-MY", { weekday:"long", day:"numeric", month:"long" })}</p>
                     </div>
                   </div>
 
@@ -2238,7 +2326,8 @@ export function OwnerDashboard() {
                                 )}
                                 <div className="flex gap-1.5">
                                   <button type="button" onClick={() => handleChatStartEdit(s)}
-                                    className="px-3 py-1.5 rounded-lg bg-slate-200 hover:bg-slate-300 text-slate-800 font-semibold text-xs">
+                                    disabled={statusObj.recordType === "TRANSFER" || !statusObj.recordId}
+                                    className="px-3 py-1.5 rounded-lg bg-slate-200 hover:bg-slate-300 text-slate-800 font-semibold text-xs disabled:opacity-50 disabled:cursor-not-allowed">
                                     Edit
                                   </button>
                                   <button type="button" onClick={() => handleChatDeleteConfirmed(s)}
@@ -2322,7 +2411,7 @@ export function OwnerDashboard() {
                                         : <span className="font-semibold text-slate-600">Tiada resit</span>}
                                     </div>
                                     {extra.evidenceStatus === "ATTACHED" && chatEvidenceFilesRef.current[s.id]?.type.startsWith("image/") && (
-                                      <img src={URL.createObjectURL(chatEvidenceFilesRef.current[s.id])} alt="Pratonton resit" className="max-h-32 rounded-lg border border-slate-200" />
+                                      <img src={evidencePreviewUrls[s.id]} alt="Pratonton resit" className="max-h-32 rounded-lg border border-slate-200" />
                                     )}
                                   </div>
                                 )}
@@ -2330,7 +2419,7 @@ export function OwnerDashboard() {
                             )}
                             {status === "pending" && editingChatSuggestionId !== s.id && extra.businessPicked && !!extra.branchPicked && extra.evidenceStatus !== "NONE" && (
                               <div className="flex gap-2 pt-1">
-                                <button type="button" onClick={() => handleChatConfirmSuggestion(s)} className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-semibold">Sahkan</button>
+                                <button type="button" onClick={() => handleChatConfirmSuggestion(s)} disabled={confirmingChatId === s.id} className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-semibold disabled:opacity-50 disabled:cursor-not-allowed">Sahkan</button>
                                 <button type="button" onClick={() => handleChatStartEdit(s)} className="px-3 py-1.5 rounded-lg bg-slate-200 hover:bg-slate-300 text-slate-800 font-semibold">Edit</button>
                                 <button type="button" onClick={() => handleChatRejectSuggestion(s.id)} className="px-3 py-1.5 rounded-lg bg-rose-100 hover:bg-rose-200 text-rose-700 font-semibold">Tolak</button>
                               </div>

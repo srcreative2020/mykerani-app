@@ -197,6 +197,7 @@ export function StaffHomeScreen() {
   // Tracks which already-confirmed suggestions have had their saved record edited at least
   // once, purely to switch the status line wording to "Dikemaskini." — not persisted, ephemeral UI only.
   const [chatSuggestionJustUpdated, setChatSuggestionJustUpdated] = useState<Record<string, boolean>>({});
+  const [confirmingChatId, setConfirmingChatId] = useState<string | null>(null);
   const [editingChatSuggestionId, setEditingChatSuggestionId] = useState<string | null>(null);
   const [chatEditDraft, setChatEditDraft] = useState({ amount: "", category: "", relatedParty: "", date: "", transactionType: "" });
   const [chatLoading, setChatLoading] = useState(false);
@@ -206,6 +207,8 @@ export function StaffHomeScreen() {
   // Accounting Knowledge Base V1: per-suggestion dismissal of the "Cadangan Semakan" review banner.
   const [accountingBannerDismissed, setAccountingBannerDismissed] = useState<Record<string, boolean>>({});
   const chatEvidenceFilesRef = useRef<Record<string, File>>({});
+  // M-01: object URLs for evidence previews, tracked so they can be revoked.
+  const [evidencePreviewUrls, setEvidencePreviewUrls] = useState<Record<string, string>>({});
   // Holds uploaded-but-not-yet-linked evidence metadata per suggestion id, until
   // Sahkan creates the underlying financial record and we know its id to link to.
   const pendingChatEvidenceRef = useRef<Record<string, PendingChatEvidence>>({});
@@ -353,11 +356,12 @@ export function StaffHomeScreen() {
   // the same window — previously Staff summed all-time while Owner summed
   // only the selected period, making the two screens' totals diverge.
   const [dashboardPeriod, setDashboardPeriod] = useState<"day" | "week" | "month" | "year">("month");
-  const now = new Date();
+  const nowIso = new Date().toISOString().slice(0, 10);
   const periodRange = useMemo(() => {
     const pad = (n: number) => String(n).padStart(2, "0");
     const toIso = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const [y, m, d] = nowIso.split("-").map(Number);
+    const today = new Date(y, (m || 1) - 1, d || 1);
     if (dashboardPeriod === "day") {
       const iso = toIso(today);
       return { from: iso, to: iso, label: today.toLocaleDateString("ms-MY", { day: "numeric", month: "long", year: "numeric" }) };
@@ -375,7 +379,7 @@ export function StaffHomeScreen() {
     }
     const lastDay = new Date(today.getFullYear(), today.getMonth() + 1, 0);
     return { from: toIso(new Date(today.getFullYear(), today.getMonth(), 1)), to: toIso(lastDay), label: today.toLocaleDateString("ms-MY", { month: "long", year: "numeric" }) };
-  }, [dashboardPeriod, now]);
+  }, [dashboardPeriod, nowIso]);
   const filteredRecords = useMemo(() => {
     if (healthFilterRecordIds) {
       const idSet = new Set(healthFilterRecordIds);
@@ -396,20 +400,28 @@ export function StaffHomeScreen() {
     [activeWorkspace, importFailureRefresh]
   );
   useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [chatMessages, chatLoading]);
+  // M-01: revoke all tracked evidence preview object URLs on unmount.
+  useEffect(() => () => { Object.values(evidencePreviewUrls).forEach(url => URL.revokeObjectURL(url)); }, [evidencePreviewUrls]);
+  // M-03: stop the MediaRecorder on unmount so it doesn't keep the mic busy.
+  useEffect(() => () => { if (chatMediaRecorderRef.current && chatMediaRecorderRef.current.state !== "inactive") chatMediaRecorderRef.current.stop(); }, []);
 
   useEffect(() => {
     if (!wsId || !user) return;
+    let active = true;
     // A fresh login already archived the previous session and cleared the
     // local pointer (see AuthContext signIn/endActiveSession), so this either
     // resumes the same session across a page refresh or starts a new one —
     // older conversations stay reachable via Arkib Perbualan either way.
     getOrCreateActiveSession(user.id, wsId, isMockUser).then(sessionId => {
+      if (!active) return;
       setActiveSessionId(sessionId);
       loadActiveSessionMessages(sessionId, isMockUser, wsId).then(history => {
+        if (!active) return;
         setChatMessages(history.map(h => ({ id: h.id, sender: h.sender, text: h.text, suggestions: h.suggestions, createdAt: h.createdAt, attachmentUrl: h.attachmentUrl, attachmentName: h.attachmentName, attachmentType: h.attachmentType })));
       });
     });
     loadChatHistory(wsId, isMockUser).then(history => {
+      if (!active) return;
       setChatHistoryAll(history.map(h => ({ id: h.id, sender: h.sender, text: h.text, suggestions: h.suggestions, createdAt: h.createdAt, attachmentUrl: h.attachmentUrl, attachmentName: h.attachmentName, attachmentType: h.attachmentType })));
     });
     try {
@@ -426,20 +438,42 @@ export function StaffHomeScreen() {
           normalized[id] = { status: v as ChatSuggestionStatusValue };
         }
       });
-      setChatSuggestionStatus(normalized);
+      if (active) setChatSuggestionStatus(normalized);
     } catch {
-      setChatSuggestionStatus({});
+      if (active) setChatSuggestionStatus({});
     }
+    // R-01: restore per-suggestion business/branch/evidence picks so a refresh
+    // mid-confirmation doesn't lose the user's selections.
+    try {
+      const extraStored = localStorage.getItem(`mykerani_chat_suggestion_extra_${wsId}`);
+      if (extraStored && active) setChatSuggestionExtra(JSON.parse(extraStored));
+      const evidenceStored = localStorage.getItem(`mykerani_chat_suggestion_evidence_${wsId}`);
+      if (evidenceStored && active) {
+        const parsedEvidence = JSON.parse(evidenceStored);
+        pendingChatEvidenceRef.current = parsedEvidence;
+      }
+    } catch {
+      // best-effort only
+    }
+    // R-02: restore accounting-banner dismissal state.
+    try {
+      const bannerStored = localStorage.getItem(`mykerani_accounting_banner_dismissed_${wsId}`);
+      if (bannerStored && active) setAccountingBannerDismissed(JSON.parse(bannerStored));
+    } catch {
+      // best-effort only
+    }
+    return () => { active = false; };
   }, [wsId, isMockUser, user]);
 
   // Persist confirmed/rejected suggestion status to localStorage so refresh/remount cannot
   // forget it and re-trigger a duplicate database insert via handleChatConfirmSuggestion.
-  const markChatSuggestionStatus = (id: string, status: ChatSuggestionStatus) => {
+  const markChatSuggestionStatus = (id: string, status: ChatSuggestionStatus, wsIdArg?: string) => {
+    const scopeWsId = wsIdArg || wsId;
     setChatSuggestionStatus(prev => {
       const next = { ...prev, [id]: status };
-      if (wsId) {
+      if (scopeWsId) {
         try {
-          localStorage.setItem(chatSuggestionStatusKey(wsId), JSON.stringify(next));
+          localStorage.setItem(chatSuggestionStatusKey(scopeWsId), JSON.stringify(next));
         } catch {
           // best-effort only
         }
@@ -448,6 +482,17 @@ export function StaffHomeScreen() {
     });
   };
   useEffect(() => { supportEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [supportMessages, supportLoading]);
+  // R-01/R-02: persist per-suggestion extra state, pending evidence, and
+  // accounting-banner dismissal so a refresh mid-confirmation restores them.
+  useEffect(() => {
+    if (!wsId) return;
+    try { localStorage.setItem(`mykerani_chat_suggestion_extra_${wsId}`, JSON.stringify(chatSuggestionExtra)); } catch { /* best-effort */ }
+    try { localStorage.setItem(`mykerani_chat_suggestion_evidence_${wsId}`, JSON.stringify(pendingChatEvidenceRef.current)); } catch { /* best-effort */ }
+  }, [wsId, chatSuggestionExtra]);
+  useEffect(() => {
+    if (!wsId) return;
+    try { localStorage.setItem(`mykerani_accounting_banner_dismissed_${wsId}`, JSON.stringify(accountingBannerDismissed)); } catch { /* best-effort */ }
+  }, [wsId, accountingBannerDismissed]);
   useEffect(() => {
     if (supportView !== "ticket_status" || isMockUser) return;
     let active = true;
@@ -687,6 +732,15 @@ export function StaffHomeScreen() {
 
   const handleChatEvidenceAttach = async (suggestionId: string, file: File) => {
     chatEvidenceFilesRef.current[suggestionId] = file;
+    // M-01: create a tracked preview URL for image evidence so it can be revoked.
+    if (file.type.startsWith("image/")) {
+      const previewUrl = URL.createObjectURL(file);
+      setEvidencePreviewUrls(prev => {
+        const old = prev[suggestionId];
+        if (old) URL.revokeObjectURL(old);
+        return { ...prev, [suggestionId]: previewUrl };
+      });
+    }
     if (!activeWorkspace) return;
 
     let finalUrl: string | null = null;
@@ -731,10 +785,15 @@ export function StaffHomeScreen() {
       setChatMessages(prev => [...prev, { id: `e-${Date.now()}`, sender: "ai", text: "Anda tidak mempunyai kebenaran untuk menyimpan rekod kewangan." }]);
       return;
     }
+    // S-01: capture the workspace id at call time so a switch mid-flight
+    // doesn't persist this suggestion's status under the wrong workspace key.
+    const wsIdAtCall = wsId;
+    setConfirmingChatId(s.id);
     setChatActionErrors(prev => { const next = { ...prev }; delete next[s.id]; return next; });
     const extra = chatSuggestionExtra[s.id];
     if (!extra || !extra.businessPicked) return;
 
+    try {
     const result = await confirmChatSuggestion(s, extra, edited, pendingChatEvidenceRef.current[s.id]);
     if (!result.ok) {
       setChatActionErrors(prev => ({ ...prev, [s.id]: result.error || "Ralat tidak diketahui." }));
@@ -756,7 +815,7 @@ export function StaffHomeScreen() {
       editedTransactionType: result.transactionType as string | undefined,
       confirmedByName: user?.fullName || undefined,
       confirmedByUserId: user?.id || undefined,
-    });
+    }, wsIdAtCall);
 
     // C-02: Log staff financial record action for owner review
     if (isSupabaseConfigured() && !isMockUser && user && activeWorkspace) {
@@ -780,11 +839,16 @@ export function StaffHomeScreen() {
     }
 
     setEditingChatSuggestionId(null);
+    } finally {
+      setConfirmingChatId(null);
+    }
   };
 
   // Save an edit to an ALREADY-confirmed chat suggestion: update the saved record in place
   // (instead of inserting a new one) using the recordId/recordType captured at confirm time.
   const handleChatSaveConfirmedEdit = (s: ChatSuggestion, edited: typeof chatEditDraft) => {
+    // PB-1: staff must have update permission to edit an already-confirmed record.
+    if (!hasPermission('Financial Records', 'update')) { setChatActionErrors(prev => ({ ...prev, [s.id]: "Tiada kebenaran untuk mengubah rekod." })); return; }
     const current = chatSuggestionStatus[s.id];
     if (!current?.recordId || !current.recordType) return;
     const amountMyr = Number(edited.amount) || 0;
@@ -1248,7 +1312,8 @@ export function StaffHomeScreen() {
                                   </div>
                                 )}
                                 <button type="button" onClick={() => handleChatStartEdit(s)}
-                                  className="px-3 py-1.5 rounded-lg bg-slate-200 hover:bg-slate-300 text-slate-800 font-semibold text-xs">
+                                  disabled={statusObj.recordType === "TRANSFER" || !statusObj.recordId}
+                                  className="px-3 py-1.5 rounded-lg bg-slate-200 hover:bg-slate-300 text-slate-800 font-semibold text-xs disabled:opacity-50 disabled:cursor-not-allowed">
                                   Edit
                                 </button>
                               </div>
@@ -1335,7 +1400,7 @@ export function StaffHomeScreen() {
                             )}
                             {status === "pending" && editingChatSuggestionId !== s.id && extra.businessPicked && !!extra.branchPicked && extra.evidenceStatus !== "NONE" && (
                               <div className="flex gap-2 pt-1">
-                                <button type="button" onClick={() => handleChatConfirmSuggestion(s)} className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-semibold">Sahkan</button>
+                                <button type="button" onClick={() => handleChatConfirmSuggestion(s)} disabled={confirmingChatId === s.id} className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-semibold disabled:opacity-50 disabled:cursor-not-allowed">Sahkan</button>
                                 <button type="button" onClick={() => handleChatStartEdit(s)} className="px-3 py-1.5 rounded-lg bg-slate-200 hover:bg-slate-300 text-slate-800 font-semibold">Edit</button>
                                 <button type="button" onClick={() => handleChatRejectSuggestion(s.id)} className="px-3 py-1.5 rounded-lg bg-rose-100 hover:bg-rose-200 text-rose-700 font-semibold">Tolak</button>
                               </div>

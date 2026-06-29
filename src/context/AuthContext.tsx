@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useRef, useMemo } from "react";
+import React, { createContext, useContext, useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { supabase, isSupabaseConfigured } from "../lib/supabase";
 import { type UserSessionProfile, type AuthState, type UserRole } from "../types";
 import { logEvent } from "../lib/eventLog";
@@ -49,13 +49,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // this is true, regardless of whatever `user` session state exists.
   const [passwordRecoveryMode, setPasswordRecoveryMode] = useState(false);
 
-  const clearError = () => setState(prev => ({ ...prev, error: null }));
+  const clearError = useCallback(() => setState(prev => ({ ...prev, error: null })), []);
 
   // toggleBypassAuth dikekalkan untuk keserasian komponen lain
   // tetapi tidak lagi melakukan apa-apa dalam production
-  const toggleBypassAuth = (_enabled: boolean) => {
+  const toggleBypassAuth = useCallback((_enabled: boolean) => {
     // Disabled — tiada bypass mode dalam production
-  };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -202,7 +202,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return { tenantId: newTenantId, role: "TENANT_OWNER" };
   };
 
-  const signIn = async (email: string, password: string) => {
+  const signIn = useCallback(async (email: string, password: string) => {
     setState(prev => ({ ...prev, loading: true, error: null }));
 
     const cleanEmail = email.trim().toLowerCase();
@@ -326,9 +326,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         error: "Ralat sambungan. Sila periksa internet anda dan cuba lagi.",
       }));
     }
-  };
+  }, []);
 
-  const signUp = async (
+  const signUp = useCallback(async (
     email: string,
     password: string,
     fullName: string,
@@ -403,9 +403,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }));
       return { pendingConfirmation: false };
     }
-  };
+  }, []);
 
-  const resetPassword = async (email: string): Promise<{ success: boolean; message: string }> => {
+  const resetPassword = useCallback(async (email: string): Promise<{ success: boolean; message: string }> => {
     const cleanEmail = email.trim().toLowerCase();
 
     // Demo accounts tidak boleh reset password
@@ -428,13 +428,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch {
       return { success: false, message: "Ralat sambungan. Sila cuba lagi." };
     }
-  };
+  }, []);
 
   // AUTH-02B — called from the "Set New Password" screen shown while
   // passwordRecoveryMode is true. Uses the transient recovery session
   // Supabase already created when the user clicked the e-mail link, so no
   // separate token handling is needed here.
-  const setNewPasswordAfterRecovery = async (newPassword: string): Promise<{ success: boolean; message: string }> => {
+  const setNewPasswordAfterRecovery = useCallback(async (newPassword: string): Promise<{ success: boolean; message: string }> => {
     if (!isSupabaseConfigured() || !supabase) {
       return { success: false, message: "Sistem tidak dikonfigurasi. Sila hubungi pentadbir." };
     }
@@ -451,19 +451,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch {
       return { success: false, message: "Ralat sambungan. Sila cuba lagi." };
     }
-  };
+  }, []);
 
   // Lets the user back out of the recovery screen (e.g. opened the link by
   // mistake) without setting a new password — falls back to a normal
   // sign-out so they land on the regular login screen.
-  const cancelPasswordRecovery = () => {
+  const cancelPasswordRecovery = useCallback(() => {
     setPasswordRecoveryMode(false);
     if (supabase) {
       supabase.auth.signOut().catch(() => {});
     }
-  };
+  }, []);
 
-  const updateProfile = async (fullName: string, email: string): Promise<{ success: boolean; message: string }> => {
+  const updateProfile = useCallback(async (fullName: string, email: string): Promise<{ success: boolean; message: string }> => {
     if (!state.user) return { success: false, message: "Tiada sesi aktif." };
     const cleanName = fullName.trim();
     const cleanEmail = email.trim().toLowerCase();
@@ -499,9 +499,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch (err: any) {
       return { success: false, message: "Ralat sambungan. Sila cuba lagi." };
     }
-  };
+  }, [state.user, state.isMockUser]);
 
-  const signOut = async () => {
+  const signOut = useCallback(async () => {
     isMockRef.current = false; // reset ref dulu supaya onAuthStateChange boleh fire
     setState(prev => ({ ...prev, loading: true }));
 
@@ -520,7 +520,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     setState({ user: null, loading: false, error: null, isMockUser: false });
-  };
+  }, [state.user, state.isMockUser]);
 
   return (
     <AuthContext.Provider

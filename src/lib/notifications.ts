@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 export type NotifSeverity = "info" | "warn" | "critical";
@@ -54,7 +54,7 @@ export function useNotifications(scopeId: string) {
 
   const clearAll = useCallback(() => setNotifs([]), []);
 
-  return { notifs, unreadCount, push, markRead, markAllRead, dismiss, clearAll };
+  return useMemo(() => ({ notifs, unreadCount, push, markRead, markAllRead, dismiss, clearAll }), [notifs, unreadCount, push, markRead, markAllRead, dismiss, clearAll]);
 }
 
 // ── Auto-notification generators ───────────────────────────────────────────

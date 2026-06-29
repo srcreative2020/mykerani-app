@@ -225,6 +225,7 @@ export const FinancialRecordsConsole: React.FC<FinancialRecordsConsoleProps> = (
 
   // Form toggle states
   const [showAddForm, setShowAddForm] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Form inputs states
   // Financial Event States (Income, Expense, Receivable, Payable)
@@ -302,7 +303,9 @@ export const FinancialRecordsConsole: React.FC<FinancialRecordsConsoleProps> = (
   // Handle addition form submissions
   const handleAddEventSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmitting) return;
     if (!eventCategoryName || !eventAmount || !eventPartyName) return;
+    setIsSubmitting(true);
 
     let targetType: FinancialRecordType = "INCOME";
     if (activeModule === "expense") targetType = "EXPENSE";
@@ -335,6 +338,7 @@ export const FinancialRecordsConsole: React.FC<FinancialRecordsConsoleProps> = (
     setEventSelectedBank("");
     setEventIsCompleted(true);
     setShowAddForm(false);
+    setIsSubmitting(false);
   };
 
   const handleAddCashSubmit = (e: React.FormEvent) => {
@@ -1024,7 +1028,8 @@ export const FinancialRecordsConsole: React.FC<FinancialRecordsConsoleProps> = (
                   </button>
                   <button
                     type="submit"
-                    className="px-4 py-1.5 text-xs font-semibold text-white bg-slate-900 hover:bg-slate-800 rounded-lg"
+                    disabled={isSubmitting}
+                    className="px-4 py-1.5 text-xs font-semibold text-white bg-slate-900 hover:bg-slate-800 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     Save Operational Event
                   </button>

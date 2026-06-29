@@ -829,6 +829,8 @@ async function startServer() {
     fileName: string;
     fileSize: number;
     documentType: string;
+    tenantId: string | null;
+    workspaceId: string | null;
     startTime: number;
     updatedTime: number;
     stage: OcrStage;
@@ -1257,6 +1259,7 @@ Provide your output precisely formatted as raw JSON matching exactly this shape,
     const now = Date.now();
     const job: OcrJobState = {
       jobId, fileName: fileName || "document", fileSize, documentType,
+      tenantId: tenantId || null, workspaceId: workspaceId || null,
       startTime: now, updatedTime: now,
       stage: "UPLOAD_COMPLETE", status: "PROCESSING", overallProgress: 0,
       pagesFound: null, pagesProcessed: null,
@@ -1287,19 +1290,27 @@ Provide your output precisely formatted as raw JSON matching exactly this shape,
     });
   });
 
-  app.get("/api/ocr/analyze/progress/:jobId", (req, res) => {
+  app.get("/api/ocr/analyze/progress/:jobId", async (req, res) => {
     const job = ocrJobs.get(req.params.jobId);
     if (!job) {
       return res.status(404).json({ error: "Job not found or expired." });
+    }
+    const access = await verifyTenantAccess(req, job.tenantId, job.workspaceId);
+    if (!access.ok) {
+      return res.status(403).json({ error: "Sesi tidak sah atau tidak mempunyai akses kepada syarikat ini." });
     }
     return res.json(job);
   });
 
   // OCR cancel — allows the client to stop a running OCR job
-  app.post("/api/ocr/analyze/cancel/:jobId", (req, res) => {
+  app.post("/api/ocr/analyze/cancel/:jobId", async (req, res) => {
     const job = ocrJobs.get(req.params.jobId);
     if (!job) {
       return res.status(404).json({ error: "Job not found or expired." });
+    }
+    const access = await verifyTenantAccess(req, job.tenantId, job.workspaceId);
+    if (!access.ok) {
+      return res.status(403).json({ error: "Sesi tidak sah atau tidak mempunyai akses kepada syarikat ini." });
     }
     job.status = "CANCELLED" as any;
     job.stage = "CANCELLED" as any;
@@ -1344,17 +1355,25 @@ Provide your output precisely formatted as raw JSON matching exactly this shape,
       form.append("file", new Blob([audioBuffer], { type: mimeType }), fileName || "nota-suara.webm");
       form.append("model", "whisper-1");
 
-      const whisperRes = await fetch("https://api.openai.com/v1/audio/transcriptions", {
-        method: "POST",
-        headers: { Authorization: `Bearer ${openaiCandidate.apiKey}` },
-        body: form,
-      });
-      if (!whisperRes.ok) {
-        const errBody = await whisperRes.json().catch(() => ({}));
-        return res.status(400).json({ error: errBody?.error?.message || "Gagal transkripsi nota suara." });
+      const whisperController = new AbortController();
+      const whisperTimeoutId = setTimeout(() => whisperController.abort(), 90000);
+      let whisperRes: Response;
+      try {
+        whisperRes = await fetch("https://api.openai.com/v1/audio/transcriptions", {
+          method: "POST",
+          headers: { Authorization: `Bearer ${openaiCandidate.apiKey}` },
+          body: form,
+          signal: whisperController.signal,
+        });
+        if (!whisperRes.ok) {
+          const errBody = await whisperRes.json().catch(() => ({}));
+          return res.status(400).json({ error: errBody?.error?.message || "Gagal transkripsi nota suara." });
+        }
+        const result = await whisperRes.json() as any;
+        return res.json({ text: result.text || "" });
+      } finally {
+        clearTimeout(whisperTimeoutId);
       }
-      const result = await whisperRes.json() as any;
-      return res.json({ text: result.text || "" });
     } catch (error: any) {
       console.error("Voice transcription failed:", error?.message || error);
       return res.status(500).json({ error: "Ralat sistem transkripsi nota suara." });
@@ -1371,9 +1390,6 @@ Provide your output precisely formatted as raw JSON matching exactly this shape,
       }
       if (await isUserSuspended(userId)) {
         return res.status(403).json({ error: "Akaun anda telah disekat oleh pentadbir HQ. Sila hubungi sokongan." });
-      }
-      if (!(await consumeResourceCredit(financialContext?.activeTenant?.id, financialContext?.activeWorkspace?.id, "AI", "AI assistant query"))) {
-        return res.status(402).json({ error: "Kredit AI anda telah habis. Sila beli tambahan kredit atau naik taraf pelan anda." });
       }
 
       candidates = await getAiProviderCandidates();
@@ -1402,14 +1418,6 @@ Provide your output precisely formatted as raw JSON matching exactly this shape,
       const access = await verifyTenantAccess(req, tenantId, workspaceId);
       if (!access.ok) {
         return res.status(403).json({ error: "Sesi tidak sah atau tidak mempunyai akses kepada syarikat ini." });
-      }
-
-      const hasCredit = await consumeResourceCredit(tenantId, workspaceId, "AI", `AI assistant query: ${String(query).slice(0, 80)}`);
-      if (!hasCredit) {
-        return res.status(402).json({
-          error: "Kredit AI syarikat anda telah digunakan sepenuhnya untuk tempoh semasa. Sila naik taraf pelan atau tunggu pembaharuan bulanan.",
-          code: "AI_CREDITS_EXHAUSTED",
-        });
       }
 
       const knowledgeBankMatches = await fetchKnowledgeBankMatches(String(query));
@@ -1508,6 +1516,14 @@ Only include a "CONFIRM_TRANSACTION" suggestion entry when financialIntent.detec
         console.info("[AI_ROUTER_DEBUG] fallbackTriggerReason=ALL_CANDIDATES_FAILED", lastErr?.message || lastErr);
         (lastErr as any).attemptErrors = attemptErrors;
         throw lastErr || new Error("All configured AI providers failed");
+      }
+
+      const hasCredit = await consumeResourceCredit(tenantId, workspaceId, "AI", `AI assistant query: ${String(query).slice(0, 80)}`);
+      if (!hasCredit) {
+        return res.status(402).json({
+          error: "Kredit AI syarikat anda telah digunakan sepenuhnya untuk tempoh semasa. Sila naik taraf pelan atau tunggu pembaharuan bulanan.",
+          code: "AI_CREDITS_EXHAUSTED",
+        });
       }
 
       console.info("[AI_ROUTER_DEBUG]", JSON.stringify({
@@ -1848,34 +1864,6 @@ Only include a "CONFIRM_TRANSACTION" suggestion entry when financialIntent.detec
     }).catch(err => console.error("Failed to log AI fallback diagnostic:", err));
   }
 
-  // Resource Governance Layer enforcement: debits one credit from the tenant's
-  // workspace wallet (resource_wallets, via consume_resource_credit RPC) before
-  // an AI/OCR call is allowed to proceed. Internal HQ tenants are exempt inside
-  // the RPC itself. Returns false if the wallet has insufficient balance.
-  async function consumeResourceCredit(tenantId: string | undefined | null, workspaceId: string | undefined | null, creditType: "AI" | "OCR", description: string): Promise<boolean> {
-    if (!tenantId || !workspaceId) return true;
-    const supabaseUrl = process.env.VITE_SUPABASE_URL;
-    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-    if (!supabaseUrl || !serviceRoleKey) return true;
-    try {
-      const resp = await fetch(`${supabaseUrl}/rest/v1/rpc/consume_resource_credit`, {
-        method: "POST",
-        headers: {
-          apikey: serviceRoleKey,
-          Authorization: `Bearer ${serviceRoleKey}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ p_tenant_id: tenantId, p_workspace_id: workspaceId, p_credit_type: creditType, p_amount: 1, p_description: description }),
-      });
-      if (!resp.ok) return true;
-      const result = await resp.json();
-      return result === true;
-    } catch (err) {
-      console.error(`Failed to consume ${creditType} resource credit:`, err);
-      return true;
-    }
-  }
-
   // HQ can suspend an individual user's access to AI features (see
   // set_user_suspended RPC). Checked server-side so a suspended user can't
   // bypass it by calling the API directly.
@@ -2020,11 +2008,11 @@ Only include a "CONFIRM_TRANSACTION" suggestion entry when financialIntent.detec
           p_description: description,
         }),
       });
-      if (!resp.ok) return true;
+      if (!resp.ok) return false;
       return Boolean(await resp.json());
     } catch (err) {
       console.error("Failed to check/consume resource credit:", err);
-      return true;
+      return false;
     }
   }
 
@@ -2332,90 +2320,111 @@ Only include a "CONFIRM_TRANSACTION" suggestion entry when financialIntent.detec
       apiKey,
       httpOptions: { headers: { 'User-Agent': 'aistudio-build' } }
     });
-    const response = await ai.models.generateContent({
-      model,
-      contents: [
-        { inlineData: { mimeType, data: base64Data } },
-        ocrPrompt
-      ],
-      config: {
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            merchantName: { type: Type.STRING },
-            documentNumber: { type: Type.STRING },
-            date: { type: Type.STRING },
-            amount: { type: Type.NUMBER },
-            currency: { type: Type.STRING },
-            suggestedCategory: { type: Type.STRING },
-            confidenceScore: { type: Type.NUMBER },
-            rawExtractedText: { type: Type.STRING }
-          },
-          required: ["merchantName", "amount", "currency", "confidenceScore"]
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 90000);
+    try {
+      const response = await ai.models.generateContent({
+        model,
+        contents: [
+          { inlineData: { mimeType, data: base64Data } },
+          ocrPrompt
+        ],
+        config: {
+          abortSignal: controller.signal,
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              merchantName: { type: Type.STRING },
+              documentNumber: { type: Type.STRING },
+              date: { type: Type.STRING },
+              amount: { type: Type.NUMBER },
+              currency: { type: Type.STRING },
+              suggestedCategory: { type: Type.STRING },
+              confidenceScore: { type: Type.NUMBER },
+              rawExtractedText: { type: Type.STRING }
+            },
+            required: ["merchantName", "amount", "currency", "confidenceScore"]
+          }
         }
-      }
-    });
-    const responseText = response.text;
-    if (!responseText) throw new Error("No response text returned from Gemini API");
-    return JSON.parse(responseText);
+      });
+      const responseText = response.text;
+      if (!responseText) throw new Error("No response text returned from Gemini API");
+      return JSON.parse(responseText);
+    } finally {
+      clearTimeout(timeoutId);
+    }
   }
 
   async function callOpenAiCompatibleOcr(baseUrl: string, apiKey: string, model: string, mimeType: string, base64Data: string, ocrPrompt: string) {
-    const resp = await fetch(`${baseUrl}/chat/completions`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${apiKey}` },
-      body: JSON.stringify({
-        model,
-        messages: [{
-          role: "user",
-          content: [
-            { type: "text", text: ocrPrompt },
-            { type: "image_url", image_url: { url: `data:${mimeType};base64,${base64Data}` } }
-          ]
-        }],
-        response_format: { type: "json_object" },
-        temperature: 0.2,
-      }),
-    });
-    if (!resp.ok) {
-      const errBody = await resp.text();
-      throw new Error(`AI provider OCR API error ${resp.status}: ${errBody}`);
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 90000);
+    try {
+      const resp = await fetch(`${baseUrl}/chat/completions`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${apiKey}` },
+        body: JSON.stringify({
+          model,
+          messages: [{
+            role: "user",
+            content: [
+              { type: "text", text: ocrPrompt },
+              { type: "image_url", image_url: { url: `data:${mimeType};base64,${base64Data}` } }
+            ]
+          }],
+          response_format: { type: "json_object" },
+          temperature: 0.2,
+        }),
+        signal: controller.signal,
+      });
+      if (!resp.ok) {
+        const errBody = await resp.text();
+        throw new Error(`AI provider OCR API error ${resp.status}: ${errBody}`);
+      }
+      const data: any = await resp.json();
+      const content = data.choices?.[0]?.message?.content;
+      if (!content) throw new Error("No response content returned from AI provider OCR API");
+      return parseJsonLoose(content);
+    } finally {
+      clearTimeout(timeoutId);
     }
-    const data: any = await resp.json();
-    const content = data.choices?.[0]?.message?.content;
-    if (!content) throw new Error("No response content returned from AI provider OCR API");
-    return parseJsonLoose(content);
   }
 
   async function callAnthropicOcr(apiKey: string, model: string, mimeType: string, base64Data: string, ocrPrompt: string) {
-    const resp = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": apiKey,
-        "anthropic-version": "2023-06-01",
-      },
-      body: JSON.stringify({
-        model,
-        max_tokens: 2048,
-        messages: [{
-          role: "user",
-          content: [
-            { type: "image", source: { type: "base64", media_type: mimeType, data: base64Data } },
-            { type: "text", text: ocrPrompt }
-          ]
-        }],
-      }),
-    });
-    if (!resp.ok) {
-      const errBody = await resp.text();
-      throw new Error(`Anthropic OCR API error ${resp.status}: ${errBody}`);
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 90000);
+    try {
+      const resp = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": apiKey,
+          "anthropic-version": "2023-06-01",
+        },
+        body: JSON.stringify({
+          model,
+          max_tokens: 2048,
+          messages: [{
+            role: "user",
+            content: [
+              { type: "image", source: { type: "base64", media_type: mimeType, data: base64Data } },
+              { type: "text", text: ocrPrompt }
+            ]
+          }],
+        }),
+        signal: controller.signal,
+      });
+      if (!resp.ok) {
+        const errBody = await resp.text();
+        throw new Error(`Anthropic OCR API error ${resp.status}: ${errBody}`);
+      }
+      const data: any = await resp.json();
+      const content = data.content?.[0]?.text;
+      if (!content) throw new Error("No response content returned from Anthropic OCR API");
+      return parseJsonLoose(content);
+    } finally {
+      clearTimeout(timeoutId);
     }
-    const data: any = await resp.json();
-    const content = data.content?.[0]?.text;
-    if (!content) throw new Error("No response content returned from Anthropic OCR API");
-    return parseJsonLoose(content);
   }
 
   // Text-based extraction path for PDF bank statements. AI provider chat-completion
@@ -2498,11 +2507,15 @@ Only include a "CONFIRM_TRANSACTION" suggestion entry when financialIntent.detec
       apiKey,
       httpOptions: { headers: { 'User-Agent': 'aistudio-build' } }
     });
-    const response = await ai.models.generateContent({
-      model,
-      contents: systemPrompt,
-      config: {
-        responseMimeType: "application/json",
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 90000);
+    try {
+      const response = await ai.models.generateContent({
+        model,
+        contents: systemPrompt,
+        config: {
+          abortSignal: controller.signal,
+          responseMimeType: "application/json",
         responseSchema: {
           type: Type.OBJECT,
           properties: {
@@ -2547,54 +2560,71 @@ Only include a "CONFIRM_TRANSACTION" suggestion entry when financialIntent.detec
         }
       }
     });
-    const responseText = response.text;
-    if (!responseText) throw new Error("No response string returned from Gemini API");
-    return JSON.parse(responseText);
+      const responseText = response.text;
+      if (!responseText) throw new Error("No response string returned from Gemini API");
+      return JSON.parse(responseText);
+    } finally {
+      clearTimeout(timeoutId);
+    }
   }
 
   async function callOpenAiCompatibleAssistant(baseUrl: string, apiKey: string, model: string, systemPrompt: string) {
-    const resp = await fetch(`${baseUrl}/chat/completions`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${apiKey}` },
-      body: JSON.stringify({
-        model,
-        messages: [{ role: "user", content: systemPrompt }],
-        response_format: { type: "json_object" },
-        temperature: 0.4,
-      }),
-    });
-    if (!resp.ok) {
-      const errBody = await resp.text();
-      throw new Error(`AI provider API error ${resp.status}: ${errBody}`);
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 90000);
+    try {
+      const resp = await fetch(`${baseUrl}/chat/completions`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${apiKey}` },
+        body: JSON.stringify({
+          model,
+          messages: [{ role: "user", content: systemPrompt }],
+          response_format: { type: "json_object" },
+          temperature: 0.4,
+        }),
+        signal: controller.signal,
+      });
+      if (!resp.ok) {
+        const errBody = await resp.text();
+        throw new Error(`AI provider API error ${resp.status}: ${errBody}`);
+      }
+      const data: any = await resp.json();
+      const content = data.choices?.[0]?.message?.content;
+      if (!content) throw new Error("No response content returned from AI provider API");
+      return parseJsonLoose(content);
+    } finally {
+      clearTimeout(timeoutId);
     }
-    const data: any = await resp.json();
-    const content = data.choices?.[0]?.message?.content;
-    if (!content) throw new Error("No response content returned from AI provider API");
-    return parseJsonLoose(content);
   }
 
   async function callAnthropicAssistant(apiKey: string, model: string, systemPrompt: string) {
-    const resp = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": apiKey,
-        "anthropic-version": "2023-06-01",
-      },
-      body: JSON.stringify({
-        model,
-        max_tokens: 2048,
-        messages: [{ role: "user", content: systemPrompt }],
-      }),
-    });
-    if (!resp.ok) {
-      const errBody = await resp.text();
-      throw new Error(`Anthropic API error ${resp.status}: ${errBody}`);
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 90000);
+    try {
+      const resp = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": apiKey,
+          "anthropic-version": "2023-06-01",
+        },
+        body: JSON.stringify({
+          model,
+          max_tokens: 2048,
+          messages: [{ role: "user", content: systemPrompt }],
+        }),
+        signal: controller.signal,
+      });
+      if (!resp.ok) {
+        const errBody = await resp.text();
+        throw new Error(`Anthropic API error ${resp.status}: ${errBody}`);
+      }
+      const data: any = await resp.json();
+      const content = data.content?.[0]?.text;
+      if (!content) throw new Error("No response content returned from Anthropic API");
+      return parseJsonLoose(content);
+    } finally {
+      clearTimeout(timeoutId);
     }
-    const data: any = await resp.json();
-    const content = data.content?.[0]?.text;
-    if (!content) throw new Error("No response content returned from Anthropic API");
-    return parseJsonLoose(content);
   }
 
   // ANALYTICAL WORKSPACE COGNITIVE SIMULATOR FALLBACK

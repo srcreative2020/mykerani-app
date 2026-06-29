@@ -65,7 +65,11 @@ export async function pollOcrJob(
   intervalMs: number = 800,
   cancelSignal?: { cancelled: boolean }
 ): Promise<OcrJobState> {
+  const startTime = Date.now();
   while (true) {
+    if (Date.now() - startTime > 900000) { // 15 minutes
+      throw new Error("OCR processing timed out after 15 minutes.");
+    }
     if (cancelSignal?.cancelled) {
       // Attempt to cancel on the server
       try {

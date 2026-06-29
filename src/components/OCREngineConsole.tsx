@@ -42,6 +42,7 @@ export const OCREngineConsole: React.FC = () => {
     ocrLearnedPatterns,
     addFinancialEvidencePackage,
     addFinancialEvent,
+    addFinancialEventAwaited,
     learnOcrPattern,
     deleteOcrLearnedPattern,
     findLearnedPattern
@@ -67,6 +68,10 @@ export const OCREngineConsole: React.FC = () => {
   const [ocrJob, setOcrJob] = useState<OcrJobState | null>(null);
   const [errorText, setErrorText] = useState<string | null>(null);
   const [successText, setSuccessText] = useState<string | null>(null);
+
+  // Async-button guards so confirm actions can't be fired twice in flight.
+  const [isConfirming, setIsConfirming] = useState(false);
+  const [confirmingIndex, setConfirmingIndex] = useState<number | null>(null);
 
   // Extracted OCR payload Reviewed State
   const [extractedData, setExtractedData] = useState<{
@@ -171,6 +176,7 @@ export const OCREngineConsole: React.FC = () => {
 
   // Perform Server-Side Multi-Modal OCR
   const handlePerformOCR = async () => {
+    if (isAnalyzing) return;
     if (!fileDataUrl || !file) return;
 
     setIsAnalyzing(true);
@@ -216,6 +222,10 @@ export const OCREngineConsole: React.FC = () => {
       }
 
       const payload = finalJob.result;
+
+      if (payload?.extractionIncomplete) {
+        setErrorText("Amaran: Sebahagian transaksi gagal diekstrak. Sila semak baris yang dipaparkan.");
+      }
 
       // Look in OCR Learning Layer memory — shared tier-aware lookup engine
       // (Branch -> Business -> Workspace), same one used by Bank Statement
@@ -276,7 +286,10 @@ export const OCREngineConsole: React.FC = () => {
 
   // Create Financial Evidence Package AND Financial Record
   const handleConfirmAndLog = async () => {
+    if (isConfirming) return;
     if (!activeWorkspace) return;
+
+    setIsConfirming(true);
 
     // Check create privileges under our existing Permission System
     const canCreateEvidence = hasPermission("Financial Evidence Package", "create");
@@ -338,7 +351,7 @@ export const OCREngineConsole: React.FC = () => {
       };
 
       const result = await confirmFinancialRecord(input, {
-        addFinancialEventAwaited: addFinancialEvent as any,
+        addFinancialEventAwaited,
         addFinancialEvent,
         addDebtRecordAwaited: async () => ({ id: "" } as any),
         addDebtRecord: () => ({ id: "" } as any),
@@ -422,20 +435,26 @@ export const OCREngineConsole: React.FC = () => {
     } catch (ex: any) {
       console.error(ex);
       setErrorText("Failed to persist financial documents internally. Please check storage credentials.");
+    } finally {
+      setIsConfirming(false);
     }
   };
 
   // Module 10 (OCR Bank Statement Engine): confirm a single extracted transaction
   // row from a multi-transaction statement. CREDIT -> income_records, DEBIT -> expense_records.
   const handleConfirmStatementTransaction = async (index: number) => {
+    if (confirmingIndex !== null) return;
     if (!activeWorkspace || !extractedData?.transactions) return;
     const txn = extractedData.transactions[index];
     if (!txn || statementTxnStatus[index]) return;
+
+    setConfirmingIndex(index);
 
     const canCreateEvidence = hasPermission("Financial Evidence Package", "create");
     const canCreateRecords = hasPermission("Financial Records", "create");
     if (!canCreateEvidence || !canCreateRecords) {
       setErrorText("Policy Restriction: Your active user role lacks the permission clearance to write records inside this workspace.");
+      setConfirmingIndex(null);
       return;
     }
 
@@ -456,6 +475,8 @@ export const OCREngineConsole: React.FC = () => {
 
       const recordType: FinancialRecordType = txn.type === "CREDIT" ? "INCOME" : "EXPENSE";
 
+      const stmtRefNumber = `STMT-${file?.name || 'stmt'}-${index}`;
+
       const input: ConfirmInput = {
         workspaceId: activeWorkspace.id,
         tenantId: user?.tenantId || activeWorkspace.tenantId,
@@ -468,7 +489,7 @@ export const OCREngineConsole: React.FC = () => {
         relatedParty: txn.description,
         date: txn.date,
         confidenceScore: txn.confidenceScore ?? 0.8,
-        referenceNumber: `STMT-${index}`,
+        referenceNumber: stmtRefNumber,
         description: `Linked automated OCR bank statement line item: ${txn.description}`,
         pendingEvidence: {
           documentType: "STATEMENT",
@@ -483,7 +504,7 @@ export const OCREngineConsole: React.FC = () => {
       };
 
       const result = await confirmFinancialRecord(input, {
-        addFinancialEventAwaited: addFinancialEvent as any,
+        addFinancialEventAwaited,
         addFinancialEvent,
         addDebtRecordAwaited: async () => ({ id: "" } as any),
         addDebtRecord: () => ({ id: "" } as any),
@@ -511,7 +532,7 @@ export const OCREngineConsole: React.FC = () => {
         amountMyr: txn.amount,
         partyName: txn.description,
         date: txn.date,
-        referenceNumber: `STMT-${index}`,
+        referenceNumber: stmtRefNumber,
         description: `Linked automated OCR bank statement line item: ${txn.description}`,
         isCompleted: true,
         sourceSystem: "BANK_STATEMENT",
@@ -548,6 +569,8 @@ export const OCREngineConsole: React.FC = () => {
     } catch (ex) {
       console.error(ex);
       setErrorText("Failed to persist this statement transaction.");
+    } finally {
+      setConfirmingIndex(null);
     }
   };
 
@@ -857,7 +880,7 @@ export const OCREngineConsole: React.FC = () => {
                         </span>
                         {status === "pending" && (
                           <>
-                            <button type="button" onClick={() => handleConfirmStatementTransaction(idx)} className="px-2 py-1 rounded bg-emerald-600 hover:bg-emerald-700 text-white font-bold">Confirm</button>
+                            <button type="button" onClick={() => handleConfirmStatementTransaction(idx)} disabled={confirmingIndex === idx} className="px-2 py-1 rounded bg-emerald-600 hover:bg-emerald-700 text-white font-bold disabled:opacity-50 disabled:cursor-not-allowed">Confirm</button>
                             <button type="button" onClick={() => handleRejectStatementTransaction(idx)} className="px-2 py-1 rounded bg-rose-100 hover:bg-rose-200 text-rose-700 font-bold">Reject</button>
                           </>
                         )}
@@ -1111,7 +1134,8 @@ export const OCREngineConsole: React.FC = () => {
               <button
                 type="button"
                 onClick={handleConfirmAndLog}
-                className="flex-1 py-2.5 rounded-lg text-xs font-bold bg-emerald-900 border-emerald-950 hover:bg-emerald-800 text-white shadow-xs select-none cursor-pointer flex items-center justify-center gap-1.5"
+                disabled={isConfirming}
+                className="flex-1 py-2.5 rounded-lg text-xs font-bold bg-emerald-900 border-emerald-950 hover:bg-emerald-800 text-white shadow-xs select-none cursor-pointer flex items-center justify-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
                 id="btn_confirm_log_record"
               >
                 <CheckCircle className="w-4 h-4" />

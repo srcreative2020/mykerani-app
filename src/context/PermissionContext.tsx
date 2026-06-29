@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useMemo } from "react";
+import React, { createContext, useContext, useState, useEffect, useMemo, useCallback } from "react";
 import { supabase, isSupabaseConfigured } from "../lib/supabase";
 import { useAuth } from "./AuthContext";
 import { useTenant } from "./TenantContext";
@@ -238,32 +238,32 @@ export const PermissionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   }, [user, activeTenant, isMockUser]);
 
   // Access check for a specific role
-  const checkPermission = (role: UserRole, module: ModuleName, action: keyof ModulePermissions): boolean => {
+  const checkPermission = useCallback((role: UserRole, module: ModuleName, action: keyof ModulePermissions): boolean => {
     const roleMap = permissionMatrix[role];
     if (!roleMap) return false;
     const moduleMap = roleMap[module];
     if (!moduleMap) return false;
     return Boolean(moduleMap[action]);
-  };
+  }, [permissionMatrix]);
 
   // Direct active user security context verification
-  const hasPermission = (module: ModuleName, action: keyof ModulePermissions): boolean => {
+  const hasPermission = useCallback((module: ModuleName, action: keyof ModulePermissions): boolean => {
     // HQ Admin holds total absolute override master clearance
     if (user?.role === "HQ_OWNER") return true;
     return checkPermission(user?.role || "TENANT_STAFF", module, action);
-  };
+  }, [user?.role, checkPermission]);
 
-  const canManageWorkspaces = (): boolean => {
+  const canManageWorkspaces = useCallback((): boolean => {
     const role = user?.role || "TENANT_STAFF";
     return ["HQ_OWNER", "TENANT_OWNER"].includes(role);
-  };
+  }, [user?.role]);
 
-  const canManageTenants = (): boolean => {
+  const canManageTenants = useCallback((): boolean => {
     return user?.role === "HQ_OWNER";
-  };
+  }, [user?.role]);
 
   // Assign user roles within active tenant boundary
-  const assignUserRole = async (email: string, fullName: string, role: UserRole): Promise<void> => {
+  const assignUserRole = useCallback(async (email: string, fullName: string, role: UserRole): Promise<void> => {
     if (!user || !activeTenant) {
       throw new Error("Active Tenant session is required to initialize user assignments.");
     }
@@ -333,10 +333,10 @@ export const PermissionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         });
       }
     }
-  };
+  }, [user, activeTenant, isMockUser]);
 
   // Revoke role assignments
-  const removeUserAssignment = async (id: string): Promise<void> => {
+  const removeUserAssignment = useCallback(async (id: string): Promise<void> => {
     if (!user || !activeTenant) return;
 
     if (!isSupabaseConfigured() || isMockUser) {
@@ -361,10 +361,10 @@ export const PermissionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 
       setUserRoles(prev => prev.filter(item => item.id !== id));
     }
-  };
+  }, [user, activeTenant, isMockUser]);
 
   // Dynamically update role permissions in the matrix cells
-  const updateMatrixCell = async (
+  const updateMatrixCell = useCallback(async (
     role: UserRole, 
     module: ModuleName, 
     action: keyof ModulePermissions, 
@@ -397,7 +397,7 @@ export const PermissionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
           onConflict: "role"
         });
     }
-  };
+  }, [permissionMatrix, isMockUser]);
 
   return (
     <PermissionContext.Provider
