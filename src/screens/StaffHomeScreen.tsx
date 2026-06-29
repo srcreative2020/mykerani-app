@@ -13,7 +13,7 @@ import { createTenantSupportTicket, getMyTenantSupportTickets, SupportTicket, SU
 import { usePermission } from "../context/PermissionContext";
 import { useStorageQuota } from "../lib/storageQuota";
 import { useAiCredits, useOcrCredits } from "../lib/aiCredits";
-import { StorageBar } from "../components/StorageBar";
+
 import { DocumentsManager } from "../components/DocumentsManager";
 import {
   loadPersonalProfile, loadBusinessProfile, loadVehicles, loadDependents, loadBusinesses,
@@ -1820,34 +1820,12 @@ export function StaffHomeScreen() {
                 )}
               </div>
 
-              {/* Chat Archive + Resource Status + Sign Out */}
+              {/* Chat Archive + Sign Out */}
               <div className="border-t border-slate-100 px-6 py-4 space-y-3">
                 <button onClick={() => setShowChatArchive(true)}
                   className="w-full py-3 border border-slate-200 text-slate-600 rounded-xl text-sm font-semibold hover:bg-slate-50 transition cursor-pointer flex items-center justify-center space-x-2">
                   <MessageCircle className="w-4 h-4" /><span>Arkib Perbualan</span>
                 </button>
-
-                {/* Gap C-03, L-05: Resource Status — Staff visibility of AI/OCR credits and storage */}
-                <div className="border border-slate-200 rounded-2xl p-4 space-y-3 bg-slate-50">
-                  <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Status Sumber</p>
-                  <div className="flex gap-4">
-                    <div className="flex-1">
-                      <p className="text-[11px] text-slate-500 mb-0.5">Kredit AI</p>
-                      <p className={`text-sm font-bold ${aiCredits.used < aiCredits.total ? "text-emerald-600" : "text-red-500"}`}>
-                        {Math.max(0, aiCredits.total - aiCredits.used).toLocaleString()}
-                        <span className="text-[10px] font-normal text-slate-400"> berbaki</span>
-                      </p>
-                    </div>
-                    <div className="flex-1">
-                      <p className="text-[11px] text-slate-500 mb-0.5">Kredit OCR</p>
-                      <p className={`text-sm font-bold ${ocrCredits.used < ocrCredits.total ? "text-emerald-600" : "text-red-500"}`}>
-                        {Math.max(0, ocrCredits.total - ocrCredits.used).toLocaleString()}
-                        <span className="text-[10px] font-normal text-slate-400"> berbaki</span>
-                      </p>
-                    </div>
-                  </div>
-                  <StorageBar quota={storageQuota} compact={true} />
-                </div>
 
                 <button onClick={() => signOut()}
                   className="w-full py-3 border border-rose-200 text-rose-500 rounded-xl text-sm font-semibold hover:bg-rose-50 transition cursor-pointer">
