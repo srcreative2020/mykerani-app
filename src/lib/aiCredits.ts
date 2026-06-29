@@ -52,13 +52,17 @@ function useResourceCredits(tenantId: string, workspaceId: string | undefined, b
   // CS-6: Subscribe to realtime changes on resource_wallets so the wallet
   // balance refreshes immediately after a top-up (or any other write) instead
   // of waiting for the next workspace/tenant change to re-run the effect above.
+  // Each hook instance gets its own uniquely-named channel (includes balanceCol)
+  // to prevent "cannot add callbacks after subscribe" when useAiCredits and
+  // useOcrCredits both run in the same component (e.g. OwnerDashboard).
   useEffect(() => {
     if (!supabase || !tenantId || !workspaceId) return;
-    const channel = supabase.channel(`resource_wallets_${workspaceId}`);
+    const channelName = `resource_wallets_${workspaceId}_${balanceCol}`;
+    const channel = supabase.channel(channelName);
     channel.on('postgres_changes', { event: '*', schema: 'public', table: 'resource_wallets', filter: `workspace_id=eq.${workspaceId}` }, () => { refresh(); });
     channel.subscribe();
     return () => { supabase.removeChannel(channel); };
-  }, [tenantId, workspaceId, refresh]);
+  }, [tenantId, workspaceId, balanceCol, refresh]);
 
   return state;
 }
