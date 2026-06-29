@@ -219,9 +219,9 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLogin, onRegister })
         </div>
       </section>
 
-      {/* Live demo workspace */}
+      {/* Live demo */}
       <section className="max-w-6xl mx-auto px-5 py-14 border-t border-slate-100 text-center space-y-4">
-        <h2 className="text-xl font-display font-bold">Cuba Ruang Kerja Demo</h2>
+        <h2 className="text-xl font-display font-bold">Cuba Demo</h2>
         <p className="text-xs text-slate-400 max-w-md mx-auto">Jelajahi papan pemuka, transaksi, dokumen, laporan dan pembantu AI tanpa perlu mendaftar — tiada e-mel, tiada kata laluan, tiada akaun dicipta.</p>
         <button onClick={handleTryDemo} disabled={demoLoading} className="px-6 py-3 bg-slate-900 text-white rounded-2xl text-sm font-bold cursor-pointer hover:bg-slate-800 transition disabled:opacity-50">
           {demoLoading ? "Memuatkan..." : "Cuba Demo Sekarang"}

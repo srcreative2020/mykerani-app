@@ -209,7 +209,7 @@ export const StorageSettingsConsole: React.FC = () => {
                 <div className="mt-4">
                   <p className="font-bold text-slate-800 text-sm">HQ Managed Storage</p>
                   <p className="text-slate-500 text-xs mt-1">
-                    Secure local Supabase sandbox buckets with absolute multi-tenant RLS guarantees.
+                    Storan diurus oleh HQ dengan perlindungan data berbilang penyewa.
                   </p>
                 </div>
               </button>

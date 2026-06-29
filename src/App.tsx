@@ -78,7 +78,6 @@ function MainDashboardContent() {
     workspaces,
     activeWorkspace,
     selectWorkspace,
-    createWorkspace,
     error: workspaceError,
     getWorkspaceHeaders,
   } = useWorkspace();
@@ -164,12 +163,6 @@ function MainDashboardContent() {
   const [createLoading, setCreateLoading] = useState(false);
   const [createSuccessMsg, setCreateSuccessMsg] = useState("");
 
-  // Form states to create custom workspaces
-  const [showCreateWSForm, setShowCreateWSForm] = useState(false);
-  const [newWSName, setNewWSName] = useState("");
-  const [createWSLoading, setCreateWSLoading] = useState(false);
-  const [createWSSuccessMsg, setCreateWSSuccessMsg] = useState("");
-
   // --- Task 6 Demo Seeding & Resetting State ---
   const [demoRecords, setDemoRecords] = useState<DemoFinancialRecord[]>([]);
   const [dashboardSummary, setDashboardSummary] = useState<DashboardSummary | null>(null);
@@ -213,7 +206,7 @@ function MainDashboardContent() {
     try {
       const pristine = resetDemoWorkspaceData(activeWorkspace.id);
       setDemoRecords(pristine);
-      setDemoResetMsg(`Successfully reset "${activeWorkspace.name}" simulation data to pristine sales presentation benchmarks!`);
+      setDemoResetMsg(`Data demo untuk "${activeWorkspace.name}" telah dikemaskini.`);
       setTimeout(() => setDemoResetMsg(""), 5000);
     } catch (err: any) {
       console.error(err);
@@ -281,25 +274,6 @@ function MainDashboardContent() {
     }
   };
 
-  const handleCreateWSSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newWSName.trim()) return;
-
-    setCreateWSLoading(true);
-    setCreateWSSuccessMsg("");
-    try {
-      const created = await createWorkspace(newWSName);
-      setNewWSName("");
-      setShowCreateWSForm(false);
-      setCreateWSSuccessMsg(`Successfully generated Workspace "${created.name}" under ${activeTenant?.name}!`);
-      selectWorkspace(created.id);
-    } catch (err: any) {
-      console.error("Failed to register workspace: ", err);
-    } finally {
-      setCreateWSLoading(false);
-    }
-  };
-
   // Determine current active theme or accents based on active tenant category
   const getCategoryBadgeColor = (category?: TenantCategory) => {
     switch (category) {
@@ -353,7 +327,7 @@ function MainDashboardContent() {
         fileName: `${name.replace(/\s+/g, '_').toLowerCase()}.pdf`,
         fileUrl: mockUrl,
         relatedRecordType: recType === "STATEMENT" ? undefined : recType,
-        notes: `Simulated OCR processing on ${vendor} document. Mapped category: ${cat}.`
+        notes: `Diproses melalui demo OCR. Kategori: ${cat}.`
       });
 
       // 2. Also automatically add to standard Financial Ledger Event if it's a receipt or invoice!
@@ -549,43 +523,11 @@ function MainDashboardContent() {
           </div>
         )}
 
-        {/* Tambah Akaun Syarikat Baru */}
-        {showCreateWSForm && (
-          <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-md" id="create_workspace_form_panel">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="font-display font-medium text-lg text-slate-950 flex items-center">
-                <Plus className="w-5 h-5 mr-2 text-indigo-500" />
-                Tambah Akaun Syarikat
-              </h3>
-              <button onClick={() => setShowCreateWSForm(false)} className="text-xs text-slate-400 hover:text-slate-600">Tutup</button>
-            </div>
-            <form onSubmit={handleCreateWSSubmit} className="space-y-4">
-              <div className="space-y-1">
-                <label className="block text-xs font-semibold text-slate-500 uppercase">Nama Syarikat</label>
-                <input
-                  type="text"
-                  value={newWSName}
-                  onChange={(e) => setNewWSName(e.target.value)}
-                  placeholder="cth: LemonTree Bakery Sdn Bhd"
-                  className="w-full px-4 py-2 text-sm bg-slate-50 border border-slate-200 outline-none focus:bg-white focus:border-indigo-600 rounded-xl transition"
-                  required
-                />
-              </div>
-              <div className="flex justify-end space-x-2 pt-2">
-                <button type="button" onClick={() => setShowCreateWSForm(false)} className="px-4 py-2 text-xs font-medium text-slate-600 hover:bg-slate-50 rounded-xl transition cursor-pointer">Batal</button>
-                <button type="submit" disabled={createWSLoading} className="px-4 py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl transition shadow-sm disabled:opacity-50 cursor-pointer" id="submit_create_ws_btn">
-                  {createWSLoading ? "Menyimpan..." : "Simpan"}
-                </button>
-              </div>
-            </form>
-          </div>
-        )}
-
         {/* Success Confirmation alerts */}
-        {(createSuccessMsg || createWSSuccessMsg) && (
+        {createSuccessMsg && (
           <div className="p-4 bg-emerald-50/70 border border-emerald-100 rounded-xl text-xs text-emerald-800 flex items-center space-x-2 font-medium" id="creation_success">
             <Check className="w-4 h-4" />
-            <span>{createSuccessMsg || createWSSuccessMsg}</span>
+            <span>{createSuccessMsg}</span>
           </div>
         )}
         {(user?.role === "HQ_OWNER" || user?.role === "HQ_STAFF" || activeTenant?.category === "HQ") ? (
@@ -1080,30 +1022,6 @@ function MainDashboardContent() {
               <div className="flex-1">
                 <p className="text-slate-400 font-bold mb-1">CONSOLE DIAGNOSTIC LOG:</p>
                 <pre className="whitespace-pre-wrap">{diagnostics.errorMessage}</pre>
-              </div>
-            </div>
-          )}
-
-          {/* Sandbox Toggle Mode Settings Panel */}
-          {isMockUser && (
-            <div className="mt-8 pt-6 border-t border-slate-150 flex flex-col md:flex-row md:items-center justify-between gap-4">
-              <div className="flex items-center space-x-3">
-                <div className="p-2 bg-amber-50 text-amber-700 rounded-xl shrink-0">
-                  <ShieldAlert className="w-5 h-5" />
-                </div>
-                <div>
-                  <p className="text-sm font-semibold text-slate-900">Sandbox Simulation Active</p>
-                  <p className="text-xs text-slate-500">You can trigger real credentials verification mode once keys are loaded.</p>
-                </div>
-              </div>
-              <div className="shrink-0">
-                <button
-                  onClick={() => toggleBypassAuth(false)}
-                  className="w-full md:w-auto inline-flex items-center justify-center px-4.5 py-1.5 text-xs font-semibold text-slate-700 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 border border-slate-200 rounded-lg cursor-pointer transition font-mono uppercase"
-                  id="disable_bypass_btn"
-                >
-                  <Server className="w-4 h-4 mr-1.5" /> Enforce Real Auth
-                </button>
               </div>
             </div>
           )}

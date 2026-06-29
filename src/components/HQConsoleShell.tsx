@@ -2233,7 +2233,7 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
                             <div className="flex items-center gap-2 flex-wrap">
                               <button onClick={() => { setExpandedTicket(isExpanded ? null : t.id); setReplyText(""); setAssignDraft(t.assigned || ""); setResolutionNoteText(t.resolutionNotes || ""); }}
                                 className="px-3 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs font-bold cursor-pointer transition">
-                                {isExpanded ? "Tutup Ruang Kerja" : "Buka Ruang Kerja"}
+                                {isExpanded ? "Tutup" : "Buka Tiket"}
                               </button>
                               {t.status !== "resolved" && t.status !== "closed" ? (
                                 <button onClick={() => resolveTicket(t.id)}

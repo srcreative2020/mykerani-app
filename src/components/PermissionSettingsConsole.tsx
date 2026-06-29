@@ -466,7 +466,7 @@ export const PermissionSettingsConsole: React.FC = () => {
                   Granular Access Control Visualizer
                 </h4>
                 <p className="text-xs text-slate-500 font-sans mt-0.5">
-                  Audit your active token, workspace credentials, and security clearance status directly within the secure sandbox pipeline.
+                  Semak token aktif, kelayakan keselamatan dan status kebenaran anda.
                 </p>
               </div>
 

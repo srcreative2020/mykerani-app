@@ -136,7 +136,7 @@ export const MyKeraniAppTabs: React.FC<MyKeraniAppTabsProps> = ({
         fileName: `${name.replace(/\s+/g, "_").toLowerCase()}.pdf`,
         fileUrl: mockUrl,
         relatedRecordType: docType === "STATEMENT" ? undefined : (recType as any),
-        notes: `Simulated OCR processing on ${vendor} document. Mapped category: ${cat}.`
+        notes: `Diproses melalui demo OCR. Kategori: ${cat}.`
       });
 
       // 2. Also automatically add to standard Financial Ledger Event if it's a receipt or invoice!
@@ -327,56 +327,6 @@ export const MyKeraniAppTabs: React.FC<MyKeraniAppTabsProps> = ({
         {/* TAB 4: ⚙️ MORE */}
         {activeNavTab === "more" && (
           <div className="space-y-8 animate-fade-in" id="more_tab_pane">
-
-            {/* PILIH SYARIKAT */}
-            <div className="bg-white border border-slate-200 rounded-3xl p-6 md:p-8 shadow-sm space-y-6" id="workspace_switcher_module">
-              <div>
-                <h3 className="font-display font-semibold text-xl text-slate-950 tracking-tight">
-                  Syarikat Saya
-                </h3>
-                <p className="text-xs text-slate-500 leading-relaxed max-w-2xl font-sans mt-1">
-                  Pilih syarikat yang ingin anda urus. Semua rekod kewangan akan dipaparkan mengikut syarikat yang dipilih.
-                </p>
-              </div>
-
-              {/* Grid of Workspaces */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4" id="ws_deck_panel">
-                {workspaces.map((ws) => {
-                  const isCurrent = activeWorkspace?.id === ws.id;
-                  return (
-                    <button
-                      key={ws.id}
-                      onClick={() => selectWorkspace(ws.id)}
-                      className={`p-4 rounded-2xl border text-left flex flex-col justify-between h-32 transition duration-200 cursor-pointer ${
-                        isCurrent
-                          ? "bg-indigo-950 border-indigo-950 text-white shadow-md ring-2 ring-indigo-500/10"
-                          : "bg-slate-50 border-slate-200 hover:bg-slate-100/60 text-slate-800"
-                      }`}
-                      id={`workspace_deck_card_${ws.slug}`}
-                    >
-                      <div className="flex justify-between items-start w-full">
-                        <div className={`p-1.5 rounded-xl ${isCurrent ? "bg-indigo-850 text-indigo-300" : "bg-white text-slate-400 border border-slate-200"}`}>
-                          <LayoutGrid className="w-4 h-4" />
-                        </div>
-                        {isCurrent && (
-                          <span className="bg-emerald-500 text-white rounded-full p-0.5 text-xs">
-                            <Check className="w-3.5 h-3.5" />
-                          </span>
-                        )}
-                      </div>
-                      <div>
-                        <p className={`text-[9px] font-sans uppercase tracking-tight ${isCurrent ? "text-indigo-300" : "text-slate-400 font-medium"}`}>
-                          Syarikat
-                        </p>
-                        <h4 className="font-semibold text-xs leading-snug mt-1 truncate max-w-full">
-                          {ws.name}
-                        </h4>
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
 
             {/* REKOD TRANSAKSI */}
             {activeWorkspace && (
