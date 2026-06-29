@@ -54,9 +54,9 @@ function useResourceCredits(tenantId: string, workspaceId: string | undefined, b
   // of waiting for the next workspace/tenant change to re-run the effect above.
   useEffect(() => {
     if (!supabase || !tenantId || !workspaceId) return;
-    const channel = supabase.channel(`resource_wallets_${workspaceId}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'resource_wallets', filter: `workspace_id=eq.${workspaceId}` }, () => { refresh(); })
-      .subscribe();
+    const channel = supabase.channel(`resource_wallets_${workspaceId}`);
+    channel.on('postgres_changes', { event: '*', schema: 'public', table: 'resource_wallets', filter: `workspace_id=eq.${workspaceId}` }, () => { refresh(); });
+    channel.subscribe();
     return () => { supabase.removeChannel(channel); };
   }, [tenantId, workspaceId, refresh]);
 
