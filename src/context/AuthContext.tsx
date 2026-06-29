@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useRef } from "react";
+import React, { createContext, useContext, useState, useEffect, useRef, useMemo } from "react";
 import { supabase, isSupabaseConfigured } from "../lib/supabase";
 import { type UserSessionProfile, type AuthState, type UserRole } from "../types";
 import { logEvent } from "../lib/eventLog";
@@ -58,6 +58,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   useEffect(() => {
+    let cancelled = false;
+
     // Buang semua mock/cache lama dari sesi sebelum fix ini
     localStorage.removeItem("mykerani_mock_user");
     localStorage.removeItem("mykerani_auth_bypass");
@@ -111,18 +113,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // Semak sesi Supabase yang aktif
     supabase.auth.getSession().then(async ({ data: { session }, error }) => {
       if (isMockRef.current) return; // demo aktif — jangan override (ref synchronous)
+      if (cancelled) return;
       if (error) { setState({ user: null, loading: false, error: error.message, isMockUser: false }); return; }
       if (session?.user) {
         try {
           const profile = await resolveUserRole(session.user);
+          if (cancelled) return;
           setState({ user: profile, loading: false, error: null, isMockUser: false });
         } catch (err: any) {
           // Role resolution failed — sign out and surface error. Never render
           // with a guessed/default role.
           await supabase!.auth.signOut();
+          if (cancelled) return;
           setState({ user: null, loading: false, error: err?.message || "Sessi tidak sah. Sila log masuk semula.", isMockUser: false });
         }
       } else {
+        if (cancelled) return;
         setState({ user: null, loading: false, error: null, isMockUser: false });
       }
     });
@@ -146,17 +152,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (session?.user) {
         try {
           const profile = await resolveUserRole(session.user);
+          if (cancelled) return;
           setState({ user: profile, loading: false, error: null, isMockUser: false });
         } catch (err: any) {
           await supabase!.auth.signOut();
+          if (cancelled) return;
           setState({ user: null, loading: false, error: err?.message || "Sessi tidak sah. Sila log masuk semula.", isMockUser: false });
         }
       } else {
+        if (cancelled) return;
         setState({ user: null, loading: false, error: null, isMockUser: false });
       }
     });
 
     return () => {
+      cancelled = true;
       subscription.unsubscribe();
     };
   }, []);
@@ -514,7 +524,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   return (
     <AuthContext.Provider
-      value={{
+      value={useMemo(() => ({
         ...state,
         signIn,
         signUp,
@@ -526,7 +536,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         passwordRecoveryMode,
         setNewPasswordAfterRecovery,
         cancelPasswordRecovery,
-      }}
+      }), [state, signIn, signUp, signOut, resetPassword, updateProfile, clearError, toggleBypassAuth, passwordRecoveryMode, setNewPasswordAfterRecovery, cancelPasswordRecovery])}
     >
       {children}
     </AuthContext.Provider>

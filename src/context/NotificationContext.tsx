@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from "react";
 import { supabase, isSupabaseConfigured } from "../lib/supabase";
 import { useAuth } from "./AuthContext";
 import { useTenant } from "./TenantContext";
@@ -233,7 +233,9 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
   }, [activeWorkspace?.id, activeTenant?.id, user?.id, isMockUser]);
 
   useEffect(() => {
+    let cancelled = false;
     fetchNotificationSettings();
+    return () => { cancelled = true; };
   }, [fetchNotificationSettings]);
 
   // Action: Mark single notification as Read
@@ -922,7 +924,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
   return (
     <NotificationContext.Provider
-      value={{
+      value={useMemo(() => ({
         notifications,
         preferences,
         loading,
@@ -933,7 +935,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
         updatePreferencesSetting,
         isOwnerOrAdmin,
         generateDynamicAdvisoryAlerts,
-      }}
+      }), [notifications, preferences, loading, error, markAsRead, markAsArchived, markAllAsRead, updatePreferencesSetting, isOwnerOrAdmin, generateDynamicAdvisoryAlerts])}
     >
       {children}
     </NotificationContext.Provider>

@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from "react";
+import React, { createContext, useContext, useState, useEffect, useMemo } from "react";
 import { supabase, isSupabaseConfigured } from "../lib/supabase";
 import { useAuth } from "./AuthContext";
 import { useTenant } from "./TenantContext";
@@ -47,6 +47,8 @@ export const StorageProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const isOwnerOrAdmin = !!(user && ["HQ_OWNER", "TENANT_OWNER"].includes(user.role));
 
   useEffect(() => {
+    let cancelled = false;
+
     if (!activeWorkspace || !activeTenant || !user) {
       setActiveProvider(null);
       return;
@@ -105,6 +107,7 @@ export const StorageProvider: React.FC<{ children: React.ReactNode }> = ({ child
             .eq("workspace_id", activeWorkspace.id)
             .maybeSingle();
 
+          if (cancelled) return;
           if (fetchError) {
             // Table belum wujud — guna localStorage sebagai fallback
             console.warn("workspace_storage_providers not ready, using local fallback:", fetchError.message);
@@ -149,6 +152,7 @@ export const StorageProvider: React.FC<{ children: React.ReactNode }> = ({ child
               .select()
               .single();
 
+            if (cancelled) return;
             if (insertError) {
               throw insertError;
             }
@@ -173,20 +177,24 @@ export const StorageProvider: React.FC<{ children: React.ReactNode }> = ({ child
             .eq("workspace_id", activeWorkspace.id)
             .single();
 
+          if (cancelled) return;
           if (walletData) {
             setStorageUsedBytes(walletData.storage_used_bytes || 0);
             setStorageLimitBytes(walletData.storage_limit_bytes || 0);
           }
         } catch (err: any) {
           console.error("Storage Provider Context initialization alert:", err.message);
+          if (cancelled) return;
           setError(err.message);
         } finally {
-          setLoading(false);
+          if (!cancelled) setLoading(false);
         }
       }
     };
 
     loadProviderSetting();
+
+    return () => { cancelled = true; };
   }, [activeWorkspace?.id, activeTenant?.id, user?.id, isMockUser]);
 
   // Action: Modify Storage Setting with strict permission guard
@@ -357,7 +365,7 @@ export const StorageProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
   return (
     <StorageContext.Provider
-      value={{
+      value={useMemo(() => ({
         activeProvider,
         loading,
         error,
@@ -366,7 +374,7 @@ export const StorageProvider: React.FC<{ children: React.ReactNode }> = ({ child
         isOwnerOrAdmin,
         storageUsedBytes,
         storageLimitBytes,
-      }}
+      }), [activeProvider, loading, error, updateProviderSetting, toggleConnectionStatus, isOwnerOrAdmin, storageUsedBytes, storageLimitBytes])}
     >
       {children}
     </StorageContext.Provider>

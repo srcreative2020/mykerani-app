@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from "react";
+import React, { createContext, useContext, useState, useEffect, useMemo } from "react";
 import { supabase, isSupabaseConfigured } from "../lib/supabase";
 import { useAuth } from "./AuthContext";
 import { type Tenant, type TenantState, type TenantCategory } from "../types";
@@ -33,6 +33,8 @@ export const TenantProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
   // Load Tenants list
   useEffect(() => {
+    let cancelled = false;
+
     if (!user) {
       setState({ tenants: [], activeTenant: null, loading: false, error: null });
       return;
@@ -103,6 +105,7 @@ export const TenantProvider: React.FC<{ children: React.ReactNode }> = ({ childr
               name: (user.role === "HQ_OWNER" || user.role === "HQ_STAFF") ? "MYKERANI HQ" : (user.fullName ? `${user.fullName} - Syarikat` : "Syarikat Saya"),
               category,
             };
+            if (cancelled) return;
             setState({ tenants: [realTenant], activeTenant: realTenant, loading: false, error: null });
             return;
           }
@@ -136,6 +139,7 @@ export const TenantProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                 : mappedTenants.find(t => t.category !== "HQ" && t.category !== "DEMO") || mappedTenants[0];
             }
 
+            if (cancelled) return;
             setState({
               tenants: mappedTenants,
               activeTenant: active,
@@ -166,6 +170,7 @@ export const TenantProvider: React.FC<{ children: React.ReactNode }> = ({ childr
               createdAt: newTenant.created_at,
             };
 
+            if (cancelled) return;
             setState({
               tenants: [mapped],
               activeTenant: mapped,
@@ -174,6 +179,7 @@ export const TenantProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             });
           }
         } catch (err: any) {
+          if (cancelled) return;
           setState(prev => ({
             ...prev,
             loading: false,
@@ -184,6 +190,8 @@ export const TenantProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     };
 
     loadTenants();
+
+    return () => { cancelled = true; };
   }, [user, isMockUser]);
 
   // Create a new Tenant
@@ -255,12 +263,12 @@ export const TenantProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
   return (
     <TenantContext.Provider
-      value={{
+      value={useMemo(() => ({
         ...state,
         createTenant,
         selectTenant,
         clearTenantError,
-      }}
+      }), [state, createTenant, selectTenant, clearTenantError])}
     >
       {children}
     </TenantContext.Provider>

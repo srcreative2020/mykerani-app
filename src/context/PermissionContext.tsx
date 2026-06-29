@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from "react";
+import React, { createContext, useContext, useState, useEffect, useMemo } from "react";
 import { supabase, isSupabaseConfigured } from "../lib/supabase";
 import { useAuth } from "./AuthContext";
 import { useTenant } from "./TenantContext";
@@ -73,6 +73,8 @@ export const PermissionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 
   // Sync / Load permissions from database or localStorage
   useEffect(() => {
+    let cancelled = false;
+
     if (!user || !activeTenant) {
       setUserRoles([]);
       setLoading(false);
@@ -143,6 +145,7 @@ export const PermissionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
             .from("permission_matrices")
             .select("*");
 
+          if (cancelled) return;
           if (!mError && matrixData && matrixData.length > 0) {
             const loadedMatrix = { ...DEFAULT_PERMISSION_MATRIX };
             matrixData.forEach(row => {
@@ -161,6 +164,7 @@ export const PermissionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
             .select("*")
             .eq("tenant_id", activeTenant.id);
 
+          if (cancelled) return;
           if (!rError && rolesData) {
             const mapped: UserRoleAssignment[] = rolesData.map(row => ({
               id: row.id,
@@ -186,6 +190,7 @@ export const PermissionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
                 .select()
                 .single();
 
+              if (cancelled) return;
               if (!insertErr && newAsm) {
                 mapped.push({
                   id: newAsm.id,
@@ -217,16 +222,19 @@ export const PermissionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
           }
         } catch (err: any) {
           console.warn("Permission Database loading failed, using local fallback state:", err.message);
+          if (cancelled) return;
           setPermissionMatrix(DEFAULT_PERMISSION_MATRIX);
           const locals = getMockAssignments(activeTenant.id);
           setUserRoles(locals);
         } finally {
-          setLoading(false);
+          if (!cancelled) setLoading(false);
         }
       }
     };
 
     loadData();
+
+    return () => { cancelled = true; };
   }, [user, activeTenant, isMockUser]);
 
   // Access check for a specific role
@@ -393,7 +401,7 @@ export const PermissionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 
   return (
     <PermissionContext.Provider
-      value={{
+      value={useMemo(() => ({
         userRoles,
         permissionMatrix,
         loading,
@@ -405,7 +413,7 @@ export const PermissionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         assignUserRole,
         removeUserAssignment,
         updateMatrixCell
-      }}
+      }), [userRoles, permissionMatrix, loading, error, hasPermission, checkPermission, canManageWorkspaces, canManageTenants, assignUserRole, removeUserAssignment, updateMatrixCell])}
     >
       {children}
     </PermissionContext.Provider>

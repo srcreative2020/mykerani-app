@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from "react";
 import { supabase, isSupabaseConfigured } from "../lib/supabase";
 import { useAuth } from "./AuthContext";
 import { useTenant } from "./TenantContext";
@@ -152,7 +152,9 @@ export const AuditProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   // Load trace log index initially
   useEffect(() => {
+    let cancelled = false;
     fetchAuditLogs();
+    return () => { cancelled = true; };
   }, [fetchAuditLogs]);
 
   // Append new trace lines securely
@@ -229,13 +231,13 @@ export const AuditProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   return (
     <AuditContext.Provider
-      value={{
+      value={useMemo(() => ({
         auditLogs,
         loading,
         error,
         writeAuditLog,
         fetchAuditLogs
-      }}
+      }), [auditLogs, loading, error, writeAuditLog, fetchAuditLogs])}
     >
       {children}
     </AuditContext.Provider>

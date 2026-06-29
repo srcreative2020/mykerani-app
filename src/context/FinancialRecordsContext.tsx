@@ -1,7 +1,7 @@
 // NOTE: This context uses financial_evidence_packages (legacy single-file system).
 // The evidence_bundles/evidence_documents/ledger_evidence_mappings system (migration 1)
 // exists in the DB but is currently not used from client. Planned for Phase 3 evidence upgrade.
-import React, { createContext, useContext, useState, useEffect } from "react";
+import React, { createContext, useContext, useState, useEffect, useMemo } from "react";
 import { type FinancialEvent, type CashAccount, type BankAccount, type DebtRecord, type Workspace, type FinancialRecordType, type FinancialCommitment, type FinancialEvidencePackage, type OcrLearnedPattern, type SourceSystem, type DuplicateFlag, type DuplicateClassification } from "../types";
 import { useAuth } from "./AuthContext";
 import { useWorkspace } from "./WorkspaceContext";
@@ -411,6 +411,8 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
 
   // Load active workspace-scoped models
   useEffect(() => {
+    let cancelled = false;
+
     if (!user || !activeWorkspace) {
       setFinancialEvents([]);
       setCashAccounts([]);
@@ -751,6 +753,7 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
               console.warn("Could not load ocr_learned_patterns from database:", ex);
             }
           }
+          if (cancelled) return;
           setOcrLearnedPatterns(loadedPatterns);
 
           // Load duplicate_flags (Phase 2C Review Queue) for the active
@@ -788,6 +791,7 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
               console.warn("Could not load duplicate_flags from database:", ex);
             }
           }
+          if (cancelled) return;
           setDuplicateFlags(loadedDuplicateFlags);
 
           setFinancialEvents(eventsList);
@@ -800,6 +804,7 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
         } catch (dbError: any) {
           console.warn("Database Loader Error (table may need setup):", dbError.message);
           // Real user: tables tak wujud lagi — data kosong, JANGAN load demo data
+          if (cancelled) return;
           setFinancialEvents([]);
           setCashAccounts([]);
           setBankAccounts([]);
@@ -815,6 +820,8 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
     };
 
     loadData();
+
+    return () => { cancelled = true; };
   }, [user, activeWorkspace, isMockUser]);
 
   const setPresenterPresets = () => {
@@ -1021,9 +1028,10 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
 
     // Save to Database in the background
     if (isSupabaseConfigured() && !isMockUser && supabase && activeWorkspace && !isDemoWorkspace(activeWorkspace.id)) {
+      const wsId = activeWorkspace.id;
       (async () => {
         try {
-          const catId = await getOrCreateCategoryId(activeWorkspace.id, newEvent.categoryName, newEvent.type);
+          const catId = await getOrCreateCategoryId(wsId, newEvent.categoryName, newEvent.type);
           await persistEventToSupabase(newEvent, catId);
         } catch (err: any) {
           console.error("DB persistence insert record failed:", err.message);
@@ -1095,7 +1103,8 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
     }
 
     if (isSupabaseConfigured() && !isMockUser && supabase && activeWorkspace && !isDemoWorkspace(activeWorkspace.id)) {
-      const catId = await getOrCreateCategoryId(activeWorkspace.id, newEvent.categoryName, newEvent.type);
+      const wsId = activeWorkspace.id;
+      const catId = await getOrCreateCategoryId(wsId, newEvent.categoryName, newEvent.type);
       await persistEventToSupabase(newEvent, catId);
     }
 
@@ -1173,6 +1182,7 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
     const failedEvents: { event: FinancialEvent; error: string }[] = [];
 
     if (isSupabaseConfigured() && !isMockUser && supabase && activeWorkspace && !isDemoWorkspace(activeWorkspace.id)) {
+      const wsId = activeWorkspace.id;
       const BATCH_SIZE = 40;
       const totalBatches = Math.max(1, Math.ceil(newEvents.length / BATCH_SIZE));
       const categoryCache = new Map<string, string>();
@@ -1187,7 +1197,7 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
               const cacheKey = `${newEvent.categoryName}::${newEvent.type}`;
               let catId = categoryCache.get(cacheKey);
               if (!catId) {
-                catId = await getOrCreateCategoryId(activeWorkspace.id, newEvent.categoryName, newEvent.type);
+                catId = await getOrCreateCategoryId(wsId, newEvent.categoryName, newEvent.type);
                 categoryCache.set(cacheKey, catId);
               }
               await persistEventToSupabase(newEvent, catId);
@@ -1237,9 +1247,10 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
     }
 
     if (isSupabaseConfigured() && !isMockUser && supabase && activeWorkspace && !isDemoWorkspace(activeWorkspace.id)) {
+      const wsId = activeWorkspace.id;
+      const item = originalEvent;
       (async () => {
         try {
-          const item = financialEvents.find((e) => e.id === id);
           if (!item) return;
 
           const recordType = item.type;
@@ -1256,7 +1267,7 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
                 source_cash_account_id: updated.cashAccountId || null,
               })
               .eq("id", id)
-              .eq("workspace_id", activeWorkspace.id);
+              .eq("workspace_id", wsId);
           } else if (recordType === "EXPENSE" || recordType === "DEBT") {
             await supabase
               .from("expense_records")
@@ -1270,7 +1281,7 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
                 payment_cash_account_id: updated.cashAccountId || null,
               })
               .eq("id", id)
-              .eq("workspace_id", activeWorkspace.id);
+              .eq("workspace_id", wsId);
           } else if (recordType === "RECEIVABLE") {
             await supabase
               .from("receivables")
@@ -1284,7 +1295,7 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
                 status: updated.isCompleted ? "PAID" : "UNPAID",
               })
               .eq("id", id)
-              .eq("workspace_id", activeWorkspace.id);
+              .eq("workspace_id", wsId);
           } else if (recordType === "PAYABLE") {
             await supabase
               .from("payables")
@@ -1298,7 +1309,7 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
                 status: updated.isCompleted ? "PAID" : "UNPAID",
               })
               .eq("id", id)
-              .eq("workspace_id", activeWorkspace.id);
+              .eq("workspace_id", wsId);
           }
         } catch (err: any) {
           console.error("DB persistence update record failed:", err.message);
@@ -1327,20 +1338,21 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
     }
 
     if (isSupabaseConfigured() && !isMockUser && supabase && activeWorkspace && !isDemoWorkspace(activeWorkspace.id)) {
+      const wsId = activeWorkspace.id;
+      const item = originalEvent;
       (async () => {
         try {
-          const item = financialEvents.find((e) => e.id === id);
           if (!item) return;
 
           const recordType = item.type;
           if (recordType === "INCOME") {
-            await supabase.from("income_records").delete().eq("id", id).eq("workspace_id", activeWorkspace.id);
+            await supabase.from("income_records").delete().eq("id", id).eq("workspace_id", wsId);
           } else if (recordType === "EXPENSE" || recordType === "DEBT") {
-            await supabase.from("expense_records").delete().eq("id", id).eq("workspace_id", activeWorkspace.id);
+            await supabase.from("expense_records").delete().eq("id", id).eq("workspace_id", wsId);
           } else if (recordType === "RECEIVABLE") {
-            await supabase.from("receivables").delete().eq("id", id).eq("workspace_id", activeWorkspace.id);
+            await supabase.from("receivables").delete().eq("id", id).eq("workspace_id", wsId);
           } else if (recordType === "PAYABLE") {
-            await supabase.from("payables").delete().eq("id", id).eq("workspace_id", activeWorkspace.id);
+            await supabase.from("payables").delete().eq("id", id).eq("workspace_id", wsId);
           }
         } catch (err: any) {
           console.error("DB persistence delete record failed:", err.message);
@@ -1358,11 +1370,12 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
     persistCurrentState(financialEvents, updated);
 
     if (isSupabaseConfigured() && !isMockUser && supabase && activeWorkspace && !isDemoWorkspace(activeWorkspace.id)) {
+      const wsId = activeWorkspace.id;
       (async () => {
         try {
           await supabase.from("cash_accounts").insert({
             id: newId,
-            workspace_id: activeWorkspace.id,
+            workspace_id: wsId,
             name: newAccount.name,
             physical_location: newAccount.responsiblePerson,
             current_balance_myr: newAccount.currentBalanceMyr,
@@ -1388,6 +1401,7 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
     persistCurrentState(financialEvents, undefined, nextList);
 
     if (isSupabaseConfigured() && !isMockUser && supabase && activeWorkspace && !isDemoWorkspace(activeWorkspace.id)) {
+      const wsId = activeWorkspace.id;
       (async () => {
         try {
           await supabase
@@ -1398,7 +1412,7 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
               current_balance_myr: updated.currentBalanceMyr,
             })
             .eq("id", id)
-            .eq("workspace_id", activeWorkspace.id);
+            .eq("workspace_id", wsId);
         } catch (err: any) {
           console.error("DB persistence update cash failed:", err.message);
         }
@@ -1415,9 +1429,10 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
     persistCurrentState(financialEvents, nextList);
 
     if (isSupabaseConfigured() && !isMockUser && supabase && activeWorkspace && !isDemoWorkspace(activeWorkspace.id)) {
+      const wsId = activeWorkspace.id;
       (async () => {
         try {
-          await supabase.from("cash_accounts").delete().eq("id", id).eq("workspace_id", activeWorkspace.id);
+          await supabase.from("cash_accounts").delete().eq("id", id).eq("workspace_id", wsId);
         } catch (err: any) {
           console.error("DB persistence delete cash failed:", err.message);
         }
@@ -1434,11 +1449,12 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
     persistCurrentState(financialEvents, cashAccounts, updated);
 
     if (isSupabaseConfigured() && !isMockUser && supabase && activeWorkspace && !isDemoWorkspace(activeWorkspace.id)) {
+      const wsId = activeWorkspace.id;
       (async () => {
         try {
           await supabase.from("bank_accounts").insert({
             id: newId,
-            workspace_id: activeWorkspace.id,
+            workspace_id: wsId,
             bank_name: newAccount.bankName,
             account_number: newAccount.accountNumber,
             account_name: newAccount.accountName,
@@ -1467,6 +1483,7 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
     persistCurrentState(financialEvents, cashAccounts, nextList);
 
     if (isSupabaseConfigured() && !isMockUser && supabase && activeWorkspace && !isDemoWorkspace(activeWorkspace.id)) {
+      const wsId = activeWorkspace.id;
       (async () => {
         try {
           await supabase
@@ -1479,7 +1496,7 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
               current_balance_myr: updated.currentBalanceMyr,
             })
             .eq("id", id)
-            .eq("workspace_id", activeWorkspace.id);
+            .eq("workspace_id", wsId);
         } catch (err: any) {
           console.error("DB persistence update bank failed:", err.message);
         }
@@ -1496,9 +1513,10 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
     persistCurrentState(financialEvents, cashAccounts, nextList);
 
     if (isSupabaseConfigured() && !isMockUser && supabase && activeWorkspace && !isDemoWorkspace(activeWorkspace.id)) {
+      const wsId = activeWorkspace.id;
       (async () => {
         try {
-          await supabase.from("bank_accounts").delete().eq("id", id).eq("workspace_id", activeWorkspace.id);
+          await supabase.from("bank_accounts").delete().eq("id", id).eq("workspace_id", wsId);
         } catch (err: any) {
           console.error("DB persistence delete bank failed:", err.message);
         }
@@ -1515,11 +1533,12 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
     persistCurrentState(financialEvents, cashAccounts, bankAccounts, updated);
 
     if (isSupabaseConfigured() && !isMockUser && supabase && activeWorkspace && !isDemoWorkspace(activeWorkspace.id)) {
+      const wsId = activeWorkspace.id;
       (async () => {
         try {
           await supabase.from("debts").insert({
             id: newId,
-            workspace_id: activeWorkspace.id,
+            workspace_id: wsId,
             lender_name: newDebt.creditorName,
             debt_type: "TERM_LOAN",
             principal_amount_myr: newDebt.totalAmountMyr,
@@ -1571,9 +1590,10 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
     }
 
     if (isSupabaseConfigured() && !isMockUser && supabase && activeWorkspace && !isDemoWorkspace(activeWorkspace.id)) {
+      const wsId = activeWorkspace.id;
       const { error: insertError } = await supabase.from("debts").insert({
         id: newId,
-        workspace_id: activeWorkspace.id,
+        workspace_id: wsId,
         lender_name: newDebt.creditorName,
         debt_type: "TERM_LOAN",
         principal_amount_myr: newDebt.totalAmountMyr,
@@ -1613,9 +1633,10 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
     }
 
     if (isSupabaseConfigured() && !isMockUser && supabase && activeWorkspace && !isDemoWorkspace(activeWorkspace.id)) {
+      const wsId = activeWorkspace.id;
+      const current = originalDebt;
       (async () => {
         try {
-          const current = debtRecords.find((d) => d.id === id);
           if (!current) return;
 
           const totalAmt = updated.totalAmountMyr !== undefined ? updated.totalAmountMyr : current.totalAmountMyr;
@@ -1633,7 +1654,7 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
               description: updated.description,
             })
             .eq("id", id)
-            .eq("workspace_id", activeWorkspace.id);
+            .eq("workspace_id", wsId);
         } catch (err: any) {
           console.error("DB persistence update debt failed:", err.message);
         }
@@ -1651,9 +1672,10 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
     persistCurrentState(financialEvents, cashAccounts, bankAccounts, nextList);
 
     if (isSupabaseConfigured() && !isMockUser && supabase && activeWorkspace && !isDemoWorkspace(activeWorkspace.id)) {
+      const wsId = activeWorkspace.id;
       (async () => {
         try {
-          await supabase.from("debts").delete().eq("id", id).eq("workspace_id", activeWorkspace.id);
+          await supabase.from("debts").delete().eq("id", id).eq("workspace_id", wsId);
         } catch (err: any) {
           console.error("DB persistence delete debt failed:", err.message);
         }
@@ -1690,6 +1712,7 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
     }
 
     if (isSupabaseConfigured() && !isMockUser && supabase && activeWorkspace && !isDemoWorkspace(activeWorkspace.id)) {
+      const wsId = activeWorkspace.id;
       (async () => {
         try {
           // postgres enum safe mapping
@@ -1699,7 +1722,7 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
 
           await supabase.from("financial_commitments").insert({
             id: newId,
-            workspace_id: activeWorkspace.id,
+            workspace_id: wsId,
             description: newCommitment.description,
             contract_number: newCommitment.contractNumber || null,
             obligee_name: newCommitment.obligeeName,
@@ -1740,13 +1763,14 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
     }
 
     if (isSupabaseConfigured() && !isMockUser && supabase && activeWorkspace && !isDemoWorkspace(activeWorkspace.id)) {
+      const wsId = activeWorkspace.id;
       let dbRecurrence = newCommitment.recurrence;
       if (dbRecurrence === "DAILY") dbRecurrence = "WEEKLY";
       if (dbRecurrence === "ONE-TIME") dbRecurrence = "MONTHLY";
 
       const { error: insertError } = await supabase.from("financial_commitments").insert({
         id: newId,
-        workspace_id: activeWorkspace.id,
+        workspace_id: wsId,
         description: newCommitment.description,
         contract_number: newCommitment.contractNumber || null,
         obligee_name: newCommitment.obligeeName,
@@ -1786,9 +1810,10 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
     }
 
     if (isSupabaseConfigured() && !isMockUser && supabase && activeWorkspace && !isDemoWorkspace(activeWorkspace.id)) {
+      const wsId = activeWorkspace.id;
+      const current = original;
       (async () => {
         try {
-          const current = financialCommitments.find((e) => e.id === id);
           if (!current) return;
 
           const desc = updated.description !== undefined ? updated.description : current.description;
@@ -1818,7 +1843,7 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
               is_active: active,
             })
             .eq("id", id)
-            .eq("workspace_id", activeWorkspace.id);
+            .eq("workspace_id", wsId);
         } catch (err: any) {
           console.error("DB persistence update commitment failed:", err.message);
         }
@@ -1846,9 +1871,10 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
     }
 
     if (isSupabaseConfigured() && !isMockUser && supabase && activeWorkspace && !isDemoWorkspace(activeWorkspace.id)) {
+      const wsId = activeWorkspace.id;
       (async () => {
         try {
-          await supabase.from("financial_commitments").delete().eq("id", id).eq("workspace_id", activeWorkspace.id);
+          await supabase.from("financial_commitments").delete().eq("id", id).eq("workspace_id", wsId);
         } catch (err: any) {
           console.error("DB persistence delete commitment failed:", err.message);
         }
@@ -1875,11 +1901,12 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
     }
 
     if (isSupabaseConfigured() && !isMockUser && supabase && activeWorkspace && !isDemoWorkspace(activeWorkspace.id)) {
+      const wsId = activeWorkspace.id;
       (async () => {
         try {
           await supabase.from("financial_evidence_packages").insert({
             id: newId,
-            workspace_id: activeWorkspace.id,
+            workspace_id: wsId,
             document_type: newPkg.documentType,
             file_name: newPkg.fileName,
             file_url: newPkg.fileUrl,
@@ -1940,9 +1967,10 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
     }
 
     if (isSupabaseConfigured() && !isMockUser && supabase && activeWorkspace && !isDemoWorkspace(activeWorkspace.id)) {
+      const wsId = activeWorkspace.id;
+      const current = original;
       (async () => {
         try {
-          const current = financialEvidencePackages.find((e) => e.id === id);
           if (!current) return;
 
           const docType = updatedFields.documentType !== undefined ? updatedFields.documentType : current.documentType;
@@ -1963,7 +1991,7 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
               notes: notes || null,
             })
             .eq("id", id)
-            .eq("workspace_id", activeWorkspace.id);
+            .eq("workspace_id", wsId);
         } catch (err: any) {
           console.error("DB persistence update evidence package failed:", err.message);
         }
@@ -1991,10 +2019,11 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
     }
 
     if (isSupabaseConfigured() && !isMockUser && supabase && activeWorkspace && !isDemoWorkspace(activeWorkspace.id)) {
+      const wsId = activeWorkspace.id;
+      const itemToDelete = original;
       (async () => {
         try {
           // Clean up physical file in Supabase Storage if present
-          const itemToDelete = financialEvidencePackages.find((item) => item.id === id);
           if (itemToDelete && itemToDelete.fileUrl && itemToDelete.fileUrl.includes("evidence-packages/")) {
             const searchStr = "evidence-packages/";
             const idx = itemToDelete.fileUrl.indexOf(searchStr);
@@ -2003,7 +2032,7 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
               await supabase.storage.from("evidence-packages").remove([relativePath]);
             }
           }
-          await supabase.from("financial_evidence_packages").delete().eq("id", id).eq("workspace_id", activeWorkspace.id);
+          await supabase.from("financial_evidence_packages").delete().eq("id", id).eq("workspace_id", wsId);
         } catch (err: any) {
           console.error("DB persistence delete evidence package failed:", err.message);
         }
@@ -2148,7 +2177,7 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
               last_updated: newValue.lastUpdated,
               metadata: newValue.metadata ?? {},
               is_active: true
-            }).eq("id", newValue.id).eq("workspace_id", activeWorkspace.id);
+            }).eq("id", newValue.id).eq("workspace_id", newValue.workspaceId);
           }
         } catch (ex: any) {
           console.warn("DB learn update skipped:", ex.message);
@@ -2322,7 +2351,7 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
     if (isSupabaseConfigured() && !isMockUser && supabase) {
       (async () => {
         try {
-          await supabase.from("ocr_learned_patterns").update({ is_active: isActive }).eq("id", id).eq("workspace_id", activeWorkspace.id);
+          await supabase.from("ocr_learned_patterns").update({ is_active: isActive }).eq("id", id).eq("workspace_id", original.workspaceId);
         } catch (ex: any) {
           console.warn("DB pattern active-state update skipped:", ex.message);
         }
@@ -2791,7 +2820,7 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
 
   return (
     <FinancialRecordsContext.Provider
-      value={{
+      value={useMemo(() => ({
         financialEvents,
         cashAccounts,
         bankAccounts,
@@ -2834,7 +2863,7 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
         reviewDuplicateFlag,
         resetWorkspaceData,
         restoreWorkspaceData,
-      }}
+      }), [financialEvents, cashAccounts, bankAccounts, debtRecords, financialCommitments, financialEvidencePackages, ocrLearnedPatterns, duplicateFlags, loading, error, addFinancialEvent, addFinancialEventAwaited, addFinancialEventsBatch, editFinancialEvent, deleteFinancialEvent, addCashAccount, editCashAccount, deleteCashAccount, addBankAccount, editBankAccount, deleteBankAccount, addDebtRecord, addDebtRecordAwaited, editDebtRecord, deleteDebtRecord, addFinancialCommitment, addFinancialCommitmentAwaited, editFinancialCommitment, deleteFinancialCommitment, addFinancialEvidencePackage, linkEvidenceToRecord, editFinancialEvidencePackage, deleteFinancialEvidencePackage, learnOcrPattern, learnOcrPatternsBatch, deleteOcrLearnedPattern, reactivateOcrLearnedPattern, findLearnedPattern, scanForDuplicates, reviewDuplicateFlag, resetWorkspaceData, restoreWorkspaceData])}
     >
       {children}
     </FinancialRecordsContext.Provider>

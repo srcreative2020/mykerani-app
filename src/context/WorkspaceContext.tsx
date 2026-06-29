@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from "react";
+import React, { createContext, useContext, useState, useEffect, useMemo } from "react";
 import { supabase, isSupabaseConfigured } from "../lib/supabase";
 import { useAuth } from "./AuthContext";
 import { useTenant } from "./TenantContext";
@@ -69,6 +69,8 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
   // Load Workspaces list based on selected Active Tenant
   useEffect(() => {
+    let cancelled = false;
+
     if (!user || !activeTenant) {
       setState({ workspaces: [], activeWorkspace: null, loading: false, error: null });
       return;
@@ -144,6 +146,7 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
               isActive: true,
               workspaceType: 'personal',
             };
+            if (cancelled) return;
             setState({ workspaces: [realWS], activeWorkspace: realWS, loading: false, error: null });
             return;
           }
@@ -164,6 +167,7 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
             const lastSelectedWSId = localStorage.getItem(activeWSKey);
             let active = mappedWorkspaces.find(ws => ws.id === lastSelectedWSId) || mappedWorkspaces[0];
 
+            if (cancelled) return;
             setState({
               workspaces: mappedWorkspaces,
               activeWorkspace: active,
@@ -201,6 +205,7 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
               workspaceType: newWS.workspace_type || 'personal',
             };
 
+            if (cancelled) return;
             setState({
               workspaces: [mapped],
               activeWorkspace: mapped,
@@ -209,6 +214,7 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
             });
           }
         } catch (err: any) {
+          if (cancelled) return;
           setState(prev => ({
             ...prev,
             loading: false,
@@ -219,6 +225,8 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     };
 
     loadWorkspaces();
+
+    return () => { cancelled = true; };
   }, [user, activeTenant, isMockUser]);
 
   // Create a new Workspace
@@ -300,13 +308,13 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
   return (
     <WorkspaceContext.Provider
-      value={{
+      value={useMemo(() => ({
         ...state,
         createWorkspace,
         selectWorkspace,
         clearWorkspaceError,
         getWorkspaceHeaders,
-      }}
+      }), [state, createWorkspace, selectWorkspace, clearWorkspaceError, getWorkspaceHeaders])}
     >
       {children}
     </WorkspaceContext.Provider>
