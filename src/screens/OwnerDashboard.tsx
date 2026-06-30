@@ -1371,15 +1371,26 @@ export function OwnerDashboard() {
     setChatLoading(true);
     try {
       const { getAuthHeader } = await import("../lib/supabase");
-      const res = await fetch("/api/ai/assistant", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", ...(await getAuthHeader()) },
-        body: JSON.stringify({
-          query: q,
-          financialContext: { activeTenant, activeWorkspace, financialEvents, cashAccounts, bankAccounts, personalProfile, businesses, businessBranches, vehicles, dependents, assetPurchases, ownerTransactions },
-          userId: user?.id,
-        }),
-      });
+      // Same client-side bound as uploadChatAttachment: the server can try multiple
+      // AI candidates in sequence (each with its own ~90s upstream timeout), so this
+      // must not be allowed to hang indefinitely past a typical gateway timeout.
+      const assistantController = new AbortController();
+      const assistantTimeoutId = setTimeout(() => assistantController.abort(), 110000);
+      let res: Response;
+      try {
+        res = await fetch("/api/ai/assistant", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", ...(await getAuthHeader()) },
+          body: JSON.stringify({
+            query: q,
+            financialContext: { activeTenant, activeWorkspace, financialEvents, cashAccounts, bankAccounts, personalProfile, businesses, businessBranches, vehicles, dependents, assetPurchases, ownerTransactions },
+            userId: user?.id,
+          }),
+          signal: assistantController.signal,
+        });
+      } finally {
+        clearTimeout(assistantTimeoutId);
+      }
       const data = await res.json() as any;
       if (res.status === 403) {
         setChatMessages(prev => [...prev, { id: `a-${Date.now()}`, sender: "ai", text: data.error || "Akaun anda telah disekat." }]);
@@ -1525,33 +1536,47 @@ export function OwnerDashboard() {
       // content to reason about.
       let extractedContext = "";
       try {
-        if (kind === "audio") {
-          const audioDataUrl = await fileToDataUrl(file);
-          const { getAuthHeader } = await import("../lib/supabase");
-          const res = await fetch("/api/ai/transcribe", {
-            method: "POST",
-            headers: { "Content-Type": "application/json", ...(await getAuthHeader()) },
-            body: JSON.stringify({ fileDataUrl: audioDataUrl, fileName: file.name, tenantId: activeWorkspace.tenantId, workspaceId: activeWorkspace.id, userId: user?.id }),
-          });
-          if (res.ok) {
-            const { text } = await res.json();
-            if (text) extractedContext = `Transkripsi nota suara: "${text}"`;
+        // Multiple AI candidates can each be tried in sequence server-side (each with
+        // its own ~90s upstream timeout), so a worst-case multi-candidate run can take
+        // longer than a typical reverse-proxy/gateway timeout — leaving this fetch
+        // neither resolved nor rejected and blocking the `await sendChat(...)` below
+        // forever. Bound it client-side too so the chat ALWAYS gets a reply.
+        const attachmentController = new AbortController();
+        const attachmentTimeoutId = setTimeout(() => attachmentController.abort(), 110000);
+        try {
+          if (kind === "audio") {
+            const audioDataUrl = await fileToDataUrl(file);
+            const { getAuthHeader } = await import("../lib/supabase");
+            const res = await fetch("/api/ai/transcribe", {
+              method: "POST",
+              headers: { "Content-Type": "application/json", ...(await getAuthHeader()) },
+              body: JSON.stringify({ fileDataUrl: audioDataUrl, fileName: file.name, tenantId: activeWorkspace.tenantId, workspaceId: activeWorkspace.id, userId: user?.id }),
+              signal: attachmentController.signal,
+            });
+            if (res.ok) {
+              const { text } = await res.json();
+              if (text) extractedContext = `Transkripsi nota suara: "${text}"`;
+            }
+          } else {
+            const fileDataUrl = await fileToDataUrl(file);
+            const { getAuthHeader } = await import("../lib/supabase");
+            const res = await fetch("/api/ocr/analyze", {
+              method: "POST",
+              headers: { "Content-Type": "application/json", ...(await getAuthHeader()) },
+              body: JSON.stringify({ fileDataUrl, fileName: file.name, documentType: "RECEIPT", tenantId: activeWorkspace.tenantId, workspaceId: activeWorkspace.id, userId: user?.id }),
+              signal: attachmentController.signal,
+            });
+            if (res.ok) {
+              const payload = await res.json();
+              extractedContext = `Maklumat dibaca daripada dokumen: merchant=${payload.merchantName || "-"}, tarikh=${payload.date || "-"}, jumlah=${payload.amount ?? "-"}, kategori cadangan=${payload.suggestedCategory || "-"}.`;
+            }
           }
-        } else {
-          const fileDataUrl = await fileToDataUrl(file);
-          const { getAuthHeader } = await import("../lib/supabase");
-          const res = await fetch("/api/ocr/analyze", {
-            method: "POST",
-            headers: { "Content-Type": "application/json", ...(await getAuthHeader()) },
-            body: JSON.stringify({ fileDataUrl, fileName: file.name, documentType: "RECEIPT", tenantId: activeWorkspace.tenantId, workspaceId: activeWorkspace.id, userId: user?.id }),
-          });
-          if (res.ok) {
-            const payload = await res.json();
-            extractedContext = `Maklumat dibaca daripada dokumen: merchant=${payload.merchantName || "-"}, tarikh=${payload.date || "-"}, jumlah=${payload.amount ?? "-"}, kategori cadangan=${payload.suggestedCategory || "-"}.`;
-          }
+        } finally {
+          clearTimeout(attachmentTimeoutId);
         }
       } catch {
-        // best-effort — fall back to the plain attachment label below
+        // best-effort (including a client-side timeout abort) — fall back to the
+        // plain attachment label below; sendChat() below still always fires.
       }
 
       // Let the AI clerk acknowledge the attachment and continue the conversation.

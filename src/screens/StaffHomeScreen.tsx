@@ -591,15 +591,27 @@ export function StaffHomeScreen() {
     setChatLoading(true);
     try {
       const { getAuthHeader } = await import("../lib/supabase");
-      const res = await fetch("/api/ai/assistant", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", ...(await getAuthHeader()) },
-        body: JSON.stringify({
-          query: q,
-          financialContext: { activeTenant, activeWorkspace, financialEvents, cashAccounts, bankAccounts, personalProfile, businessProfile, businesses, businessBranches, vehicles, dependents },
-          userId: user?.id,
-        }),
-      });
+      // The server can try multiple AI candidates in sequence (each with its own
+      // ~90s upstream timeout), which can exceed a typical gateway timeout and leave
+      // this fetch neither resolved nor rejected. Bound it client-side so chat always
+      // gets a reply. Same engine/fix as OwnerDashboard.tsx's sendChat.
+      const assistantController = new AbortController();
+      const assistantTimeoutId = setTimeout(() => assistantController.abort(), 110000);
+      let res: Response;
+      try {
+        res = await fetch("/api/ai/assistant", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", ...(await getAuthHeader()) },
+          body: JSON.stringify({
+            query: q,
+            financialContext: { activeTenant, activeWorkspace, financialEvents, cashAccounts, bankAccounts, personalProfile, businessProfile, businesses, businessBranches, vehicles, dependents },
+            userId: user?.id,
+          }),
+          signal: assistantController.signal,
+        });
+      } finally {
+        clearTimeout(assistantTimeoutId);
+      }
       const data = await res.json() as any;
       if (res.status === 403) {
         setChatMessages(prev => [...prev, { id: `a-${Date.now()}`, sender: "ai", text: data.error || "Akaun anda telah disekat." }]);
@@ -1006,44 +1018,58 @@ export function StaffHomeScreen() {
       // content to reason about.
       let extractedContext = "";
       try {
-        if (kind === "audio") {
-          const audioDataUrl = await fileToDataUrl(file);
-          const { getAuthHeader } = await import("../lib/supabase");
-          const res = await fetch("/api/ai/transcribe", {
-            method: "POST",
-            headers: { "Content-Type": "application/json", ...(await getAuthHeader()) },
-            body: JSON.stringify({ fileDataUrl: audioDataUrl, fileName: file.name, tenantId: activeWorkspace?.tenantId, workspaceId: wsId, userId: user?.id }),
-          });
-          if (res.ok) {
-            const { text } = await res.json();
-            if (text) extractedContext = `Transkripsi nota suara: "${text}"`;
-          }
-        } else {
-          // Gap H-07: enforce OCR credit quota before consuming credits
-          if (ocrCredits.total > 0 && ocrCredits.used >= ocrCredits.total) {
-            setChatMessages(prev => [...prev, { id: `e-${Date.now()}`, sender: "ai", text: "Kredit OCR habis. Sila hubungi pemilik untuk menambah kredit." }]);
-            return;
-          }
-          const fileDataUrl = await fileToDataUrl(file);
-          const { getAuthHeader } = await import("../lib/supabase");
-          const res = await fetch("/api/ocr/analyze", {
-            method: "POST",
-            headers: { "Content-Type": "application/json", ...(await getAuthHeader()) },
-            body: JSON.stringify({ fileDataUrl, fileName: file.name, documentType: "RECEIPT", tenantId: activeWorkspace?.tenantId, workspaceId: wsId, userId: user?.id }),
-          });
-          if (res.ok) {
-            const payload = await res.json();
-            extractedContext = `Maklumat dibaca daripada dokumen: merchant=${payload.merchantName || "-"}, tarikh=${payload.date || "-"}, jumlah=${payload.amount ?? "-"}, kategori cadangan=${payload.suggestedCategory || "-"}.`;
-            logEvent({
-              tenantId: activeWorkspace?.tenantId || "", workspaceId: wsId, userId: user?.id,
-              userEmail: user?.email, userRole: user?.role, eventType: "OCR_PROCESS",
-              description: `Staff processed document via OCR: ${file.name}`,
-              metadata: { fileName: file.name, merchantName: payload.merchantName, amount: payload.amount, suggestedCategory: payload.suggestedCategory },
+        // Same client-side bound as OwnerDashboard.tsx's uploadChatAttachment: the
+        // server can try multiple AI candidates in sequence (each with its own ~90s
+        // upstream timeout), which can exceed a typical gateway timeout and leave
+        // this fetch neither resolved nor rejected — blocking the sendChat() call
+        // below forever. Bound it client-side so chat always gets a reply.
+        const attachmentController = new AbortController();
+        const attachmentTimeoutId = setTimeout(() => attachmentController.abort(), 110000);
+        try {
+          if (kind === "audio") {
+            const audioDataUrl = await fileToDataUrl(file);
+            const { getAuthHeader } = await import("../lib/supabase");
+            const res = await fetch("/api/ai/transcribe", {
+              method: "POST",
+              headers: { "Content-Type": "application/json", ...(await getAuthHeader()) },
+              body: JSON.stringify({ fileDataUrl: audioDataUrl, fileName: file.name, tenantId: activeWorkspace?.tenantId, workspaceId: wsId, userId: user?.id }),
+              signal: attachmentController.signal,
             });
+            if (res.ok) {
+              const { text } = await res.json();
+              if (text) extractedContext = `Transkripsi nota suara: "${text}"`;
+            }
+          } else {
+            // Gap H-07: enforce OCR credit quota before consuming credits
+            if (ocrCredits.total > 0 && ocrCredits.used >= ocrCredits.total) {
+              setChatMessages(prev => [...prev, { id: `e-${Date.now()}`, sender: "ai", text: "Kredit OCR habis. Sila hubungi pemilik untuk menambah kredit." }]);
+              return;
+            }
+            const fileDataUrl = await fileToDataUrl(file);
+            const { getAuthHeader } = await import("../lib/supabase");
+            const res = await fetch("/api/ocr/analyze", {
+              method: "POST",
+              headers: { "Content-Type": "application/json", ...(await getAuthHeader()) },
+              body: JSON.stringify({ fileDataUrl, fileName: file.name, documentType: "RECEIPT", tenantId: activeWorkspace?.tenantId, workspaceId: wsId, userId: user?.id }),
+              signal: attachmentController.signal,
+            });
+            if (res.ok) {
+              const payload = await res.json();
+              extractedContext = `Maklumat dibaca daripada dokumen: merchant=${payload.merchantName || "-"}, tarikh=${payload.date || "-"}, jumlah=${payload.amount ?? "-"}, kategori cadangan=${payload.suggestedCategory || "-"}.`;
+              logEvent({
+                tenantId: activeWorkspace?.tenantId || "", workspaceId: wsId, userId: user?.id,
+                userEmail: user?.email, userRole: user?.role, eventType: "OCR_PROCESS",
+                description: `Staff processed document via OCR: ${file.name}`,
+                metadata: { fileName: file.name, merchantName: payload.merchantName, amount: payload.amount, suggestedCategory: payload.suggestedCategory },
+              });
+            }
           }
+        } finally {
+          clearTimeout(attachmentTimeoutId);
         }
       } catch {
-        // best-effort — fall back to the plain acknowledgment below
+        // best-effort (including a client-side timeout abort) — fall back to the
+        // plain acknowledgment below; sendChat() below still always fires.
       }
 
       await sendChat(
