@@ -44,6 +44,7 @@ export interface UserRoleAssignment {
   role: UserRole;
   tenantId: string;
   createdAt?: string;
+  isSuspended?: boolean;
 }
 
 export interface AuthState {

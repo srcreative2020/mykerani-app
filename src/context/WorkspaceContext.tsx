@@ -281,6 +281,21 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         activeWorkspace: prev.activeWorkspace || ws,
       }));
 
+      // GAP-H1: new workspaces must be visible to the rest of the tenant
+      // team via the notification closed loop, not just the creator.
+      try {
+        await supabase.from("workspace_notifications").insert({
+          workspace_id: ws.id,
+          tenant_id: activeTenant.id,
+          category: "SYSTEM",
+          title: "Ruang kerja baharu dicipta",
+          message: `${user.fullName || user.email} mencipta ruang kerja baharu "${ws.name}".`,
+          metadata: { workspaceId: ws.id, workspaceName: ws.name }
+        });
+      } catch (err: any) {
+        console.error("Workspace creation notification insert failed:", err.message);
+      }
+
       return ws;
     }
   };

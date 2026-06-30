@@ -21,6 +21,7 @@ export interface PermissionContextType {
   canManageTenants: () => boolean;
   assignUserRole: (email: string, fullName: string, role: UserRole) => Promise<void>;
   removeUserAssignment: (id: string) => Promise<void>;
+  setUserAssignmentSuspended: (id: string, suspended: boolean) => Promise<void>;
   updateMatrixCell: (role: UserRole, module: ModuleName, action: keyof ModulePermissions, val: boolean) => Promise<void>;
 }
 
@@ -138,14 +139,34 @@ export const PermissionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         if (!supabase) return;
 
         try {
-          // 1. Load Custom Permission Matrix Override values
+          // 1. Load Custom Permission Matrix Override values: platform
+          // defaults (the HQ tenant's sentinel row) first, then this
+          // tenant's own overrides layered on top (GAP-C3: tenant-scoped,
+          // not global — see permission_matrices_tenant_id_role_key).
+          const { data: hqTenantRow } = await supabase
+            .from("tenants")
+            .select("id")
+            .eq("category", "HQ")
+            .limit(1)
+            .maybeSingle();
+
+          const matrixTenantFilter = hqTenantRow?.id && hqTenantRow.id !== activeTenant.id
+            ? `tenant_id.eq.${hqTenantRow.id},tenant_id.eq.${activeTenant.id}`
+            : `tenant_id.eq.${activeTenant.id}`;
+
           const { data: matrixData, error: mError } = await supabase
             .from("permission_matrices")
-            .select("*");
+            .select("*")
+            .or(matrixTenantFilter);
 
           if (!mError && matrixData && matrixData.length > 0) {
             const loadedMatrix = { ...DEFAULT_PERMISSION_MATRIX };
-            matrixData.forEach(row => {
+            // Apply platform defaults (HQ sentinel row) first, this
+            // tenant's own overrides last so they take precedence.
+            const sorted = [...matrixData].sort(
+              (a, b) => (a.tenant_id === activeTenant.id ? 1 : 0) - (b.tenant_id === activeTenant.id ? 1 : 0)
+            );
+            sorted.forEach(row => {
               if (row.role in loadedMatrix) {
                 loadedMatrix[row.role as UserRole] = row.permissions as RolePermissions;
               }
@@ -169,7 +190,8 @@ export const PermissionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
               email: row.email,
               role: row.role as UserRole,
               tenantId: row.tenant_id,
-              createdAt: row.created_at
+              createdAt: row.created_at,
+              isSuspended: row.is_suspended ?? false
             }));
 
             // Make sure the active user profile exists in table
@@ -289,6 +311,8 @@ export const PermissionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       // --- SUPABASE FLOW ---
       if (!supabase) return;
 
+      const existingRole = userRoles.find(r => r.email === email)?.role ?? null;
+
       const { data, error: dbErr } = await supabase
         .from("user_role_assignments")
         .upsert({
@@ -321,6 +345,39 @@ export const PermissionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
           const filtered = prev.filter(p => p.email !== email);
           return [...filtered, mappedItem];
         });
+
+        // GAP-H1 (notification) / closed-loop audit for this role editor —
+        // kept as a direct write rather than routed through
+        // tenant_assign_staff_role() because that RPC enforces a different,
+        // incompatible role vocabulary (TENANT_ADMIN/MANAGER/STAFF/VIEWER).
+        await supabase.from("role_change_audit_log").insert({
+          assignment_id: data[0].id,
+          target_user_id: data[0].user_id,
+          target_email: email,
+          tenant_id: activeTenant.id,
+          old_role: existingRole,
+          new_role: role,
+          change_type: existingRole ? "UPDATE" : "GRANT",
+          changed_by: user.id,
+          changed_by_email: user.email
+        });
+
+        const { data: workspaces } = await supabase
+          .from("workspaces")
+          .select("id")
+          .eq("tenant_id", activeTenant.id);
+        if (workspaces && workspaces.length > 0) {
+          await supabase.from("workspace_notifications").insert(
+            workspaces.map(w => ({
+              workspace_id: w.id,
+              tenant_id: activeTenant.id,
+              category: "SECURITY",
+              title: "Peranan ahli pasukan dikemaskini",
+              message: `${fullName} kini mempunyai peranan ${role}.`,
+              metadata: { target_email: email, role }
+            }))
+          );
+        }
       }
     }
   };
@@ -337,6 +394,8 @@ export const PermissionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     } else {
       if (!supabase) return;
 
+      const target = userRoles.find(item => item.id === id);
+
       const { error: dbErr } = await supabase
         .from("user_role_assignments")
         .delete()
@@ -348,7 +407,68 @@ export const PermissionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       }
 
       setUserRoles(prev => prev.filter(item => item.id !== id));
+
+      // GAP-H1/H2: revoke must leave an audit trail and notify the
+      // workspace, matching tenant_revoke_staff_role()'s closed loop.
+      if (target) {
+        await supabase.from("role_change_audit_log").insert({
+          assignment_id: id,
+          target_user_id: target.userId,
+          target_email: target.email,
+          tenant_id: activeTenant.id,
+          old_role: target.role,
+          new_role: null,
+          change_type: "REVOKE",
+          changed_by: user.id,
+          changed_by_email: user.email
+        });
+
+        const { data: workspaces } = await supabase
+          .from("workspaces")
+          .select("id")
+          .eq("tenant_id", activeTenant.id);
+        if (workspaces && workspaces.length > 0) {
+          await supabase.from("workspace_notifications").insert(
+            workspaces.map(w => ({
+              workspace_id: w.id,
+              tenant_id: activeTenant.id,
+              category: "SECURITY",
+              title: "Akses ahli pasukan dibatalkan",
+              message: `${target.fullName} (${target.email}) tidak lagi mempunyai akses kepada workspace ini.`,
+              metadata: { target_email: target.email, old_role: target.role }
+            }))
+          );
+        }
+      }
     }
+  };
+
+  // GAP-C4: tenant-level Owner suspend/reactivate Staff, via the audited +
+  // notified tenant_suspend_staff_role() RPC. Safe to share across both
+  // role vocabularies in this table since the RPC only checks the calling
+  // user's own role (TENANT_OWNER) and that the target isn't TENANT_OWNER.
+  const setUserAssignmentSuspended = async (id: string, suspended: boolean): Promise<void> => {
+    if (!user || !activeTenant) {
+      throw new Error("Active Tenant session is required.");
+    }
+
+    if (!isSupabaseConfigured() || isMockUser) {
+      setUserRoles(prev => prev.map(r => (r.id === id ? { ...r, isSuspended: suspended } : r)));
+      return;
+    }
+
+    if (!supabase) return;
+
+    const { error: rpcErr } = await supabase.rpc("tenant_suspend_staff_role", {
+      p_assignment_id: id,
+      p_suspended: suspended
+    });
+
+    if (rpcErr) {
+      throw new Error(rpcErr.message);
+    }
+
+    setUserRoles(prev => prev.map(r => (r.id === id ? { ...r, isSuspended: suspended } : r)));
   };
 
   // Dynamically update role permissions in the matrix cells
@@ -367,24 +487,36 @@ export const PermissionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       [action]: val
     };
 
-    setPermissionMatrix(updated);
-
     if (!isSupabaseConfigured() || isMockUser) {
+      setPermissionMatrix(updated);
       localStorage.setItem(`mykerani_permission_matrix`, JSON.stringify(updated));
-    } else {
-      if (!supabase) return;
-
-      // Save matrix override state to Supabase
-      await supabase
-        .from("permission_matrices")
-        .upsert({
-          role,
-          permissions: updated[role],
-          updated_at: new Date().toISOString()
-        }, {
-          onConflict: "role"
-        });
+      return;
     }
+
+    if (!supabase || !activeTenant) {
+      throw new Error("Active Tenant session is required to update permissions.");
+    }
+
+    // Save matrix override scoped to this tenant only (GAP-C3/C5): a
+    // Tenant Owner editing their matrix must never mutate another
+    // tenant's permissions, and write failures must surface to the UI
+    // instead of silently reverting on next reload.
+    const { error: writeErr } = await supabase
+      .from("permission_matrices")
+      .upsert({
+        role,
+        tenant_id: activeTenant.id,
+        permissions: updated[role],
+        updated_at: new Date().toISOString()
+      }, {
+        onConflict: "tenant_id,role"
+      });
+
+    if (writeErr) {
+      throw new Error(writeErr.message);
+    }
+
+    setPermissionMatrix(updated);
   };
 
   return (
@@ -400,6 +532,7 @@ export const PermissionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         canManageTenants,
         assignUserRole,
         removeUserAssignment,
+        setUserAssignmentSuspended,
         updateMatrixCell
       }}
     >

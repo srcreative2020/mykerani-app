@@ -350,6 +350,27 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
   const { activeWorkspace } = useWorkspace();
   const { writeAuditLog } = useAudit();
 
+  // GAP-H1: cash/bank account changes affect the shared workspace ledger,
+  // so the rest of the tenant team must see them in the notification
+  // center — same closed-loop pattern as PermissionContext's role changes.
+  const notifyWorkspace = (title: string, message: string, metadata: Record<string, unknown>) => {
+    if (!isSupabaseConfigured() || isMockUser || !supabase || !activeWorkspace || isDemoWorkspace(activeWorkspace.id)) return;
+    (async () => {
+      try {
+        await supabase.from("workspace_notifications").insert({
+          workspace_id: activeWorkspace.id,
+          tenant_id: activeWorkspace.tenantId,
+          category: "FINANCIAL_RECORD",
+          title,
+          message,
+          metadata
+        });
+      } catch (err: any) {
+        console.error("Workspace notification insert failed:", err.message);
+      }
+    })();
+  };
+
   const [financialEvents, setFinancialEvents] = useState<FinancialEvent[]>([]);
   const [cashAccounts, setCashAccounts] = useState<CashAccount[]>([]);
   const [bankAccounts, setBankAccounts] = useState<BankAccount[]>([]);
@@ -1357,10 +1378,26 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
       })();
     }
 
+    if (activeWorkspace) {
+      writeAuditLog({
+        workspaceId: activeWorkspace.id,
+        module: "Financial Records",
+        action: "CREATE",
+        oldValue: null,
+        newValue: newAccount
+      });
+      notifyWorkspace(
+        "Akaun tunai baharu ditambah",
+        `${user?.fullName || "Seorang ahli pasukan"} menambah akaun tunai "${newAccount.name}".`,
+        { accountId: newId, accountName: newAccount.name }
+      );
+    }
+
     return newAccount;
   };
 
   const editCashAccount = (id: string, updated: Partial<CashAccount>) => {
+    const originalAccount = cashAccounts.find((item) => item.id === id);
     const nextList = cashAccounts.map((item) =>
       item.id === id ? ({ ...item, ...updated } as CashAccount) : item
     );
@@ -1384,9 +1421,25 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
         }
       })();
     }
+
+    if (activeWorkspace && originalAccount) {
+      writeAuditLog({
+        workspaceId: activeWorkspace.id,
+        module: "Financial Records",
+        action: "UPDATE",
+        oldValue: originalAccount,
+        newValue: { ...originalAccount, ...updated }
+      });
+      notifyWorkspace(
+        "Akaun tunai dikemaskini",
+        `${user?.fullName || "Seorang ahli pasukan"} mengemaskini akaun tunai "${originalAccount.name}".`,
+        { accountId: id, accountName: originalAccount.name }
+      );
+    }
   };
 
   const deleteCashAccount = (id: string) => {
+    const originalAccount = cashAccounts.find((item) => item.id === id);
     const nextList = cashAccounts.filter((item) => item.id !== id);
     setCashAccounts(nextList);
     persistCurrentState(financialEvents, nextList);
@@ -1399,6 +1452,21 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
           console.error("DB persistence delete cash failed:", err.message);
         }
       })();
+    }
+
+    if (activeWorkspace && originalAccount) {
+      writeAuditLog({
+        workspaceId: activeWorkspace.id,
+        module: "Financial Records",
+        action: "DELETE",
+        oldValue: originalAccount,
+        newValue: null
+      });
+      notifyWorkspace(
+        "Akaun tunai dipadam",
+        `${user?.fullName || "Seorang ahli pasukan"} memadam akaun tunai "${originalAccount.name}".`,
+        { accountId: id, accountName: originalAccount.name }
+      );
     }
   };
 
@@ -1430,10 +1498,26 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
       })();
     }
 
+    if (activeWorkspace) {
+      writeAuditLog({
+        workspaceId: activeWorkspace.id,
+        module: "Financial Records",
+        action: "CREATE",
+        oldValue: null,
+        newValue: newAccount
+      });
+      notifyWorkspace(
+        "Akaun bank baharu ditambah",
+        `${user?.fullName || "Seorang ahli pasukan"} menambah akaun bank "${newAccount.bankName} - ${newAccount.accountName}".`,
+        { accountId: newId, bankName: newAccount.bankName }
+      );
+    }
+
     return newAccount;
   };
 
   const editBankAccount = (id: string, updated: Partial<BankAccount>) => {
+    const originalAccount = bankAccounts.find((item) => item.id === id);
     const nextList = bankAccounts.map((item) =>
       item.id === id ? ({ ...item, ...updated } as BankAccount) : item
     );
@@ -1459,9 +1543,25 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
         }
       })();
     }
+
+    if (activeWorkspace && originalAccount) {
+      writeAuditLog({
+        workspaceId: activeWorkspace.id,
+        module: "Financial Records",
+        action: "UPDATE",
+        oldValue: originalAccount,
+        newValue: { ...originalAccount, ...updated }
+      });
+      notifyWorkspace(
+        "Akaun bank dikemaskini",
+        `${user?.fullName || "Seorang ahli pasukan"} mengemaskini akaun bank "${originalAccount.bankName} - ${originalAccount.accountName}".`,
+        { accountId: id, bankName: originalAccount.bankName }
+      );
+    }
   };
 
   const deleteBankAccount = (id: string) => {
+    const originalAccount = bankAccounts.find((item) => item.id === id);
     const nextList = bankAccounts.filter((item) => item.id !== id);
     setBankAccounts(nextList);
     persistCurrentState(financialEvents, cashAccounts, nextList);
@@ -1474,6 +1574,21 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
           console.error("DB persistence delete bank failed:", err.message);
         }
       })();
+    }
+
+    if (activeWorkspace && originalAccount) {
+      writeAuditLog({
+        workspaceId: activeWorkspace.id,
+        module: "Financial Records",
+        action: "DELETE",
+        oldValue: originalAccount,
+        newValue: null
+      });
+      notifyWorkspace(
+        "Akaun bank dipadam",
+        `${user?.fullName || "Seorang ahli pasukan"} memadam akaun bank "${originalAccount.bankName} - ${originalAccount.accountName}".`,
+        { accountId: id, bankName: originalAccount.bankName }
+      );
     }
   };
 

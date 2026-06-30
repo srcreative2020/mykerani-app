@@ -219,9 +219,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         // Lookup role assignment from DB (source of truth)
         const { data: roleRows } = await supabase
           .from("user_role_assignments")
-          .select("role, tenant_id, full_name")
+          .select("role, tenant_id, full_name, is_suspended")
           .eq("user_id", data.user.id)
           .limit(1);
+
+        // GAP-C4: an Owner-suspended Staff account must be blocked at
+        // sign-in, not merely hidden in the UI — the user has no live
+        // session yet at this point, so revoking access here is immediate.
+        if (roleRows && roleRows.length > 0 && roleRows[0].is_suspended) {
+          await supabase.auth.signOut();
+          setState(prev => ({
+            ...prev,
+            loading: false,
+            error: "Akaun anda telah digantung oleh Pemilik Tenant. Sila hubungi pentadbir anda.",
+          }));
+          return;
+        }
 
         let tenantId   = data.user.user_metadata?.tenantId;
         let role       = (data.user.user_metadata?.role as UserRole) || "TENANT_OWNER";

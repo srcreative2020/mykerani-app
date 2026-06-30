@@ -13,6 +13,7 @@ import { createTenantSupportTicket, getMyTenantSupportTickets, SupportTicket, SU
 import { usePermission } from "../context/PermissionContext";
 import { useStorageQuota } from "../lib/storageQuota";
 import { DocumentsManager } from "../components/DocumentsManager";
+import { NotificationCenterConsole } from "../components/NotificationCenterConsole";
 import {
   loadPersonalProfile, loadBusinessProfile, loadVehicles, loadDependents, loadBusinesses,
   EMPTY_PERSONAL_PROFILE, EMPTY_BUSINESS_PROFILE, type Vehicle, type Dependent, type Business,
@@ -164,6 +165,7 @@ export function StaffHomeScreen() {
 
   const [docs, setDocs] = useState<UploadedDoc[]>([]);
   const [activeTab, setActiveTab] = useState<StaffTab>("home");
+  const [showNotifications, setShowNotifications] = useState(false);
   const [addDefaultType, setAddDefaultType] = useState<"INCOME" | "EXPENSE">("EXPENSE");
   // Issue #1 parity fix — "Tambah Rekod" is reachable as a modal from Home,
   // same access pattern as Owner's QuickAddModal, instead of its own
@@ -1024,12 +1026,35 @@ export function StaffHomeScreen() {
             <span className="text-[10px] text-slate-400 hidden sm:block">·</span>
             <span className="text-[10px] text-slate-500 font-semibold hidden sm:block">Kakitangan</span>
           </div>
+          <button onClick={() => setShowNotifications(true)}
+            className="p-1.5 bg-slate-50 hover:bg-indigo-50 border border-slate-200 hover:border-indigo-200 text-slate-400 hover:text-indigo-500 rounded-xl transition cursor-pointer"
+            title="Notifikasi Ruang Kerja">
+            <Bell className="w-3.5 h-3.5" />
+          </button>
           <button onClick={() => signOut()}
             className="p-1.5 bg-slate-50 hover:bg-rose-50 border border-slate-200 hover:border-rose-200 text-slate-400 hover:text-rose-500 rounded-xl transition cursor-pointer">
             <LogOut className="w-3.5 h-3.5" />
           </button>
         </div>
       </header>
+
+      {/* Notification Center modal — GAP-H3: Staff previously had no
+          access to the workspace_notifications closed loop at all. */}
+      {showNotifications && (
+        <div className="fixed inset-0 bg-slate-900/40 z-50 flex items-start sm:items-center justify-center p-4" onClick={() => setShowNotifications(false)}>
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[85vh] overflow-y-auto mt-12 sm:mt-0" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 sticky top-0 bg-white">
+              <h3 className="font-bold text-slate-900 text-sm">Notifikasi</h3>
+              <button onClick={() => setShowNotifications(false)} className="p-1 text-slate-400 hover:text-slate-700 cursor-pointer">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="p-4">
+              <NotificationCenterConsole />
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* â"€â"€ MAIN â"€â"€ */}
       <div className="flex-1 overflow-hidden flex flex-col" id="staff_main">

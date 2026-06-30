@@ -27,8 +27,9 @@ export const PermissionSettingsConsole: React.FC = () => {
     userRoles, 
     permissionMatrix, 
     loading, 
-    assignUserRole, 
-    removeUserAssignment, 
+    assignUserRole,
+    removeUserAssignment,
+    setUserAssignmentSuspended,
     updateMatrixCell,
     canManageWorkspaces,
     canManageTenants
@@ -326,7 +327,7 @@ export const PermissionSettingsConsole: React.FC = () => {
                           key={asm.id} 
                           className={`p-4 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-50/40 hover:bg-slate-50 ${
                             isCurrentUser ? "border-indigo-200/80 bg-indigo-50/10" : "border-slate-200/60"
-                          }`}
+                          } ${asm.isSuspended ? "opacity-60" : ""}`}
                         >
                           <div className="flex items-center space-x-3.5">
                             <div className="w-8 h-8 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-700 text-xs font-mono font-bold">
@@ -337,6 +338,9 @@ export const PermissionSettingsConsole: React.FC = () => {
                                 <span className="text-xs font-semibold text-slate-950 font-sans">{asm.fullName}</span>
                                 {isCurrentUser && (
                                   <span className="bg-slate-900 text-white text-[8px] font-mono px-1.5 py-0.2 rounded-full uppercase">YOU</span>
+                                )}
+                                {asm.isSuspended && (
+                                  <span className="bg-rose-100 text-rose-700 border border-rose-200 text-[8px] font-mono px-1.5 py-0.2 rounded-full uppercase">SUSPENDED</span>
                                 )}
                               </div>
                               <span className="block text-[10px] text-slate-550 font-mono mt-0.5">{asm.email}</span>
@@ -359,6 +363,21 @@ export const PermissionSettingsConsole: React.FC = () => {
                               <span className="px-2 py-0.5 bg-slate-200 border border-slate-300 rounded text-[9px] font-mono font-bold text-slate-700">
                                 {asm.role}
                               </span>
+                            )}
+
+                            {/* Suspend / Reactivate Option */}
+                            {editRights && !isCurrentUser && asm.role !== "TENANT_OWNER" && (
+                              <button
+                                onClick={() => setUserAssignmentSuspended(asm.id, !asm.isSuspended)}
+                                className={`p-1.5 rounded-lg font-mono text-xs cursor-pointer transition ${
+                                  asm.isSuspended
+                                    ? "text-emerald-500 hover:text-emerald-700 hover:bg-emerald-50"
+                                    : "text-slate-400 hover:text-amber-600 hover:bg-amber-50"
+                                }`}
+                                title={asm.isSuspended ? "Reactivate Access" : "Suspend Access"}
+                              >
+                                {asm.isSuspended ? <Unlock className="w-3.5 h-3.5" /> : <Lock className="w-3.5 h-3.5" />}
+                              </button>
                             )}
 
                             {/* Revoke Option */}
