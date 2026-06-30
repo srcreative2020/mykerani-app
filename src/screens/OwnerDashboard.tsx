@@ -2923,7 +2923,7 @@ export function OwnerDashboard() {
           <DocumentsManager
             workspaceId={wsId}
             workspaceName={activeWorkspace?.name || ""}
-            tenantId={activeTenant?.id}
+            tenantId={activeWorkspace?.tenantId}
             currentUserId={user?.id}
             currentUserEmail={user?.email}
             currentUserRole="TENANT_OWNER"
