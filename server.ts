@@ -1536,6 +1536,33 @@ Only include a "CONFIRM_TRANSACTION" suggestion entry when financialIntent.detec
         confirmTransactionSuggestionPresent: Array.isArray(parsedResponse?.suggestions) && parsedResponse.suggestions.some((s: any) => s.actionType === "CONFIRM_TRANSACTION"),
       }));
 
+      // TEMP RUNTIME VERIFICATION LOGGING (BUG 3 — own-company merchant
+      // misclassified as EXPENSE instead of INCOME) — remove after diagnosis.
+      // Logs exactly what Step 4/5 of the prompt needs to classify correctly:
+      // the businessBranches the AI was given, the merchant/relatedParty it
+      // extracted, and the transactionType it actually returned — so the next
+      // reproduction of this bug shows the real payload instead of a guess.
+      try {
+        const confirmSuggestions = Array.isArray(parsedResponse?.suggestions)
+          ? parsedResponse.suggestions.filter((s: any) => s.actionType === "CONFIRM_TRANSACTION")
+          : [];
+        console.info("[AI_CLASSIFICATION_DEBUG]", JSON.stringify({
+          query: String(query).slice(0, 300),
+          businessNames: (financialContext?.businesses || []).map((b: any) => b.businessName),
+          businessBranchNames: Object.values(financialContext?.businessBranches || {}).flat().map((br: any) => br?.branchName),
+          financialIntentRelatedParty: parsedResponse?.financialIntent?.relatedParty ?? null,
+          financialIntentType: parsedResponse?.financialIntent?.type ?? null,
+          suggestions: confirmSuggestions.map((s: any) => ({
+            relatedParty: s.payload?.relatedParty ?? null,
+            transactionType: s.payload?.transactionType ?? null,
+            category: s.payload?.category ?? null,
+            confidenceScore: s.payload?.confidenceScore ?? null,
+          })),
+        }));
+      } catch (debugErr: any) {
+        console.error("[AI_CLASSIFICATION_DEBUG] logging failed (non-blocking):", debugErr?.message || debugErr);
+      }
+
       logAiUsage(financialContext?.activeTenant?.id, financialContext?.activeWorkspace?.id, userId, "assistant", usedCandidate!.provider, usedCandidate!.model);
 
       if (parsedResponse?.financialIntent?.detected && knowledgeBankMatches.length === 0) {
