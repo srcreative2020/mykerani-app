@@ -1753,6 +1753,17 @@ export function OwnerDashboard() {
       return;
     }
 
+    // The new record's date comes from OCR/LLM extraction (or a manual edit),
+    // not "today" -- if it falls outside the currently-viewed period/range,
+    // the dashboard's date-filtered record list would silently hide a
+    // correctly-saved record. Widen the visible range to include it so the
+    // confirmation is immediately visible, matching what the user just saw
+    // happen ("Disahkan & Direkodkan").
+    if (result.date && !(txnFilterFrom || txnFilterTo) && (result.date < periodRange.from || result.date > periodRange.to)) {
+      setTxnFilterFrom(result.date < periodRange.from ? result.date : periodRange.from);
+      setTxnFilterTo(result.date > periodRange.to ? result.date : periodRange.to);
+    }
+
     // Mark confirmed (and persist) only after the insert succeeded, capturing the new
     // record's id/type so a later post-confirm Edit can UPDATE instead of re-inserting.
     markChatSuggestionStatus(s.id, {
