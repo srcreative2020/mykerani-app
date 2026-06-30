@@ -1444,6 +1444,7 @@ Here is the structured financial database content of the active workspace:
 Here is what you know about the user's life (Profile System — all fields are optional and may be empty; never assume facts beyond what is given here):
 8. Personal Profile: ${JSON.stringify(financialContext?.personalProfile || {})}
 9. Business Profile(s): ${JSON.stringify(financialContext?.businesses || financialContext?.businessProfile || {})}
+9b. Business Branches (nested under each business's own id; a relatedParty/merchant/vendor name matching ANY branchName here means the document was issued BY the user's own business, not by an outside party): ${JSON.stringify(financialContext?.businessBranches || {})}
 10. Vehicles (name, plateNumber, vehicleType, ownership "PERSONAL"|"BUSINESS"): ${JSON.stringify(financialContext?.vehicles || [])}
 11. Dependents: ${JSON.stringify(financialContext?.dependents || [])}
 
@@ -1452,11 +1453,12 @@ Instructions & Constraints:
 - PROFILE-FIRST CLASSIFICATION (LOCKED 8-STEP SEQUENCE): You MUST follow this exact sequence and MUST NOT skip any step:
   Step 1 — DIRECTION DETECTION: Is money coming IN (receiving payment, salary received, loan disbursement, capital injection) or going OUT (paying someone, salary payment, expense, owner drawing)? If both directions cancel out (money moving between own accounts), this is a TRANSFER — STOP and set transactionType to "TRANSFER".
   Step 2 — PROFILE MATCHING: Check the Financial Profile (sections 8-11). Does the relatedParty/merchant match a known Vehicle owner (section 10), Dependent (section 11), or personal context?
-  Step 3 — BUSINESS MATCHING: Does the relatedParty match a known Business name (section 9)? If YES, check if the money is moving between own businesses (TRANSFER) or between owner and business (OWNER_TRANSACTION).
-  Step 4 — BRANCH MATCHING: If a Business is matched, check if the transaction should be attributed to a specific Branch (section 9 branches).
-  Step 5 — RELATIONSHIP MATCHING: Evaluate the relationship between the parties. Is the relatedParty: the Owner themselves? A Staff member? The Business? A Vehicle? A Bank Account? A Customer? A Supplier? This determines the transaction type:
+  Step 3 — BUSINESS MATCHING: Does the relatedParty/merchant/vendor name match a known Business name (section 9)? If YES, check if the money is moving between own businesses (TRANSFER) or between owner and business (OWNER_TRANSACTION).
+  Step 4 — BRANCH MATCHING: Does the relatedParty/merchant/vendor name match a Branch name in section 9b (Business Branches)? A document (invoice/receipt) whose merchant/vendor field is the user's OWN business or branch name means the document was ISSUED BY the user's own business — e.g. an invoice the business billed to its customer. This is the OPPOSITE of a normal purchase receipt from an outside vendor: it means money is/was coming IN, not going out. Treat an own-business/own-branch merchant match as strong evidence for INCOME, not EXPENSE — do NOT default to EXPENSE just because the document looks like an invoice/receipt.
+  Step 5 — RELATIONSHIP MATCHING: Evaluate the relationship between the parties. Is the relatedParty: the Owner themselves? A Staff member? The Business or one of its own Branches (section 9b)? A Vehicle? A Bank Account? A Customer? A Supplier? This determines the transaction type:
     • Money from a Customer TO the Business → INCOME (the business is receiving payment)
-    • Money from the Business TO a Supplier → EXPENSE (the business is paying for goods/services)
+    • The document's merchant/vendor IS the user's own Business/Branch (section 9b match) → INCOME (the business issued this invoice/receipt to a customer; it is not paying an outside party)
+    • Money from the Business TO a Supplier (an outside party, NOT a match in sections 9/9b) → EXPENSE (the business is paying for goods/services)
     • Money the Business pays to an Employee as salary → EXPENSE (the business has a salary obligation)
     • Money an Employee receives as salary INTO their personal account → INCOME (the employee's perspective, only if the employee is the user)
     • Money the Owner puts INTO the Business → OWNER_TRANSACTION with subtype CAPITAL_INJECTION

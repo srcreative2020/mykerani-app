@@ -1527,14 +1527,18 @@ export function StaffHomeScreen() {
                 );
               })}
 
-              {/* Loading */}
-              {chatLoading && (
+              {/* Loading — shown during both the attachment OCR/transcribe phase
+                  (chatAttaching) and the AI assistant phase (chatLoading), so the
+                  thread never goes visually silent while either fetch is in flight. */}
+              {(chatAttaching || chatLoading) && (
                 <div className="flex items-start gap-2.5">
                   <div className="w-7 h-7 rounded-xl bg-slate-900 text-white flex items-center justify-center shrink-0">
                     <RefreshCw className="w-3.5 h-3.5 animate-spin" />
                   </div>
                   <div className="px-4 py-3 bg-white border border-slate-200 rounded-2xl rounded-tl-none text-xs text-slate-400 shadow-sm animate-pulse">
-                    MYKERANI sedang menyemak...
+                    {chatAttaching
+                      ? "MYKERANI sedang membaca dokumen anda... Ini mungkin mengambil masa sehingga 2 minit. Sila jangan refresh halaman."
+                      : "MYKERANI sedang menyemak..."}
                   </div>
                 </div>
               )}
