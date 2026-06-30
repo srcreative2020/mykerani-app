@@ -75,7 +75,7 @@ export const ReportCenterTopActions: React.FC<ReportCenterTopActionsProps> = ({ 
             <button
               key={action.id}
               onClick={() => onNavigate(action)}
-              className={`w-full text-left rounded-2xl border ${meta.border} ${meta.bg} p-3.5 flex items-center justify-between gap-3 hover:shadow-sm transition cursor-pointer`}
+              className={`w-full text-left rounded-2xl border ${meta.border} ${meta.bg} p-3.5 flex items-center justify-between gap-3 hover:shadow-sm transition cursor-pointer active:scale-[0.98]`}
               id={`top_action_${action.id}`}
             >
               <div className="flex items-center gap-2.5 min-w-0">

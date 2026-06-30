@@ -66,7 +66,7 @@ export const FinancialHealthCenter: React.FC<FinancialHealthCenterProps> = ({
             <button
               key={bucket.key}
               onClick={() => handleBucketClick(bucket.key)}
-              className={`text-left p-3 rounded-xl border ${c.border} ${c.bg} hover:shadow-md transition cursor-pointer group`}
+              className={`text-left p-3 rounded-xl border ${c.border} ${c.bg} hover:shadow-md transition cursor-pointer group active:scale-[0.98]`}
               id={`health_card_${bucket.key}`}
             >
               <div className="flex items-center justify-between mb-1">
@@ -89,7 +89,7 @@ export const FinancialHealthCenter: React.FC<FinancialHealthCenterProps> = ({
           <div key={r.key} className={`rounded-xl border ${BAND_CLASSES[r.band]} overflow-hidden`}>
             <button
               onClick={() => setExpandedReadiness((prev) => (prev === r.key ? null : r.key))}
-              className="w-full text-left p-3 cursor-pointer"
+              className="w-full text-left p-3 cursor-pointer transition active:scale-[0.98]"
               id={`readiness_${r.key}`}
             >
               <div className="flex items-center justify-between">
@@ -113,16 +113,16 @@ export const FinancialHealthCenter: React.FC<FinancialHealthCenterProps> = ({
 
       {/* Section 5 — quick actions */}
       <div className="flex flex-wrap gap-2">
-        <button onClick={() => onSelectBucket("pendingConfirmation")} className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-blue-600 text-white hover:bg-blue-700 cursor-pointer">
+        <button onClick={() => onSelectBucket("pendingConfirmation")} className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-blue-600 text-white hover:bg-blue-700 cursor-pointer transition active:scale-[0.98]">
           Review Records
         </button>
-        <button onClick={onOpenDuplicateQueue} className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-rose-600 text-white hover:bg-rose-700 cursor-pointer">
+        <button onClick={onOpenDuplicateQueue} className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-rose-600 text-white hover:bg-rose-700 cursor-pointer transition active:scale-[0.98]">
           Review Duplicates
         </button>
-        <button onClick={() => onSelectBucket("missingEvidence")} className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-orange-500 text-white hover:bg-orange-600 cursor-pointer">
+        <button onClick={() => onSelectBucket("missingEvidence")} className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-orange-500 text-white hover:bg-orange-600 cursor-pointer transition active:scale-[0.98]">
           Attach Evidence
         </button>
-        <button onClick={onOpenImportRecovery} className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 text-white hover:bg-slate-900 cursor-pointer">
+        <button onClick={onOpenImportRecovery} className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 text-white hover:bg-slate-900 cursor-pointer transition active:scale-[0.98]">
           Retry Imports
         </button>
       </div>

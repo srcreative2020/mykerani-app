@@ -1218,10 +1218,10 @@ export function DocumentsManager({
               </div>
             )}
             <div className="px-5 py-4 border-t border-slate-100 flex gap-2 shrink-0">
-              <button onClick={rejectDocReview} disabled={!!importProgress} className="flex-1 py-2.5 rounded-xl border border-rose-200 text-rose-500 text-sm font-bold cursor-pointer hover:bg-rose-50 disabled:opacity-50 disabled:cursor-not-allowed">
+              <button onClick={rejectDocReview} disabled={!!importProgress} className="flex-1 py-2.5 rounded-xl border border-rose-200 text-rose-500 text-sm font-bold cursor-pointer hover:bg-rose-50 transition active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed">
                 Tolak
               </button>
-              <button onClick={confirmDocReview} disabled={!!importProgress} className="flex-1 py-2.5 rounded-xl bg-indigo-600 text-white text-sm font-bold cursor-pointer hover:bg-indigo-700 disabled:opacity-60 disabled:cursor-not-allowed">
+              <button onClick={confirmDocReview} disabled={!!importProgress} className="flex-1 py-2.5 rounded-xl bg-indigo-600 text-white text-sm font-bold cursor-pointer hover:bg-indigo-700 transition active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed">
                 {importProgress ? "Merekod..." : "Sahkan & Rekod"}
               </button>
             </div>

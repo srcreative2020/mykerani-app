@@ -177,7 +177,7 @@ export const ProfitLossReport: React.FC<ProfitLossReportProps> = ({ financialEve
         key={line}
         onClick={() => setSelectedLine(line)}
         id={`pnl_line_${line.toLowerCase()}`}
-        className={`w-full flex items-center justify-between px-4 py-3 rounded-lg border text-left transition hover:bg-slate-50 ${
+        className={`w-full flex items-center justify-between px-4 py-3 rounded-lg border text-left transition active:scale-[0.98] hover:bg-slate-50 ${
           opts.bold ? "border-slate-300 bg-slate-50" : "border-slate-100"
         } ${opts.indent ? "ml-4" : ""}`}
       >
@@ -202,7 +202,7 @@ export const ProfitLossReport: React.FC<ProfitLossReportProps> = ({ financialEve
             id={`pnl_period_${opt.id}`}
             className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition ${
               periodMode === opt.id ? "bg-slate-950 border-slate-950 text-white" : "bg-white border-slate-200 text-slate-600 hover:bg-slate-50"
-            }`}
+            } active:scale-[0.98]`}
           >
             {opt.label}
           </button>
@@ -222,14 +222,14 @@ export const ProfitLossReport: React.FC<ProfitLossReportProps> = ({ financialEve
         <button
           onClick={() => setLayer("human")}
           id="pnl_layer_human"
-          className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition ${layer === "human" ? "bg-white shadow-xs text-slate-950" : "text-slate-500"}`}
+          className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition active:scale-[0.98] ${layer === "human" ? "bg-white shadow-xs text-slate-950" : "text-slate-500"}`}
         >
           Bahasa Mudah
         </button>
         <button
           onClick={() => setLayer("accounting")}
           id="pnl_layer_accounting"
-          className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition ${layer === "accounting" ? "bg-white shadow-xs text-slate-950" : "text-slate-500"}`}
+          className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition active:scale-[0.98] ${layer === "accounting" ? "bg-white shadow-xs text-slate-950" : "text-slate-500"}`}
         >
           Penyata Perakaunan Penuh
         </button>
@@ -298,7 +298,7 @@ export const ProfitLossReport: React.FC<ProfitLossReportProps> = ({ financialEve
                     {layer === "human" ? LAYER_A_LABELS[selectedLine] : LAYER_B_LABELS[selectedLine]}
                   </h4>
                 </div>
-                <button onClick={() => setSelectedLine(null)} id="pnl_drilldown_close" className="p-1.5 hover:bg-slate-100 rounded-lg">
+                <button onClick={() => setSelectedLine(null)} id="pnl_drilldown_close" className="p-1.5 hover:bg-slate-100 rounded-lg transition active:scale-95 cursor-pointer">
                   <X className="w-4 h-4 text-slate-500" />
                 </button>
               </div>

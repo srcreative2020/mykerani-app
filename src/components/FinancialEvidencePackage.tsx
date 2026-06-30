@@ -833,7 +833,7 @@ export const FinancialEvidencePackageManager: React.FC = () => {
             <select
               value={typeFilter}
               onChange={(e) => setTypeFilter(e.target.value)}
-              className="text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 outline-hidden text-slate-700"
+              className="text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 outline-hidden text-slate-700 focus:bg-white focus:border-slate-900 transition"
               id="inp_type_filter_pulldown"
             >
               <option value="ALL">📋 All Classifications</option>
@@ -847,7 +847,7 @@ export const FinancialEvidencePackageManager: React.FC = () => {
             <select
               value={linkFilter}
               onChange={(e) => setLinkFilter(e.target.value)}
-              className="text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 outline-hidden text-slate-700"
+              className="text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 outline-hidden text-slate-700 focus:bg-white focus:border-slate-900 transition"
               id="inp_link_filter_pulldown"
             >
               <option value="ALL">🔗 All Connections</option>
@@ -1022,7 +1022,7 @@ export const FinancialEvidencePackageManager: React.FC = () => {
                     setSelectedPackage(null);
                     setIsLinkingInPreview(false);
                   }}
-                  className="p-1.5 bg-white border border-slate-200 text-slate-500 hover:text-slate-900 rounded-xl cursor-pointer"
+                  className="p-1.5 bg-white border border-slate-200 text-slate-500 hover:text-slate-900 rounded-xl cursor-pointer transition"
                   id="btn_close_drawer"
                 >
                   <X className="w-4 h-4" />
@@ -1234,7 +1234,7 @@ export const FinancialEvidencePackageManager: React.FC = () => {
                           <div className="flex gap-2 justify-end pt-1">
                             <button
                               onClick={() => setIsLinkingInPreview(false)}
-                              className="text-xs font-semibold px-3 py-1.5 border border-slate-200 rounded-lg hover:bg-slate-100 cursor-pointer text-slate-700"
+                              className="text-xs font-semibold px-3 py-1.5 border border-slate-200 rounded-lg hover:bg-slate-100 cursor-pointer text-slate-700 transition"
                             >
                               Cancel
                             </button>

@@ -30,7 +30,7 @@ export const QuickActionsRow: React.FC<QuickActionsRowProps> = ({ onReview, onDu
         <button
           key={label}
           onClick={onClick}
-          className={`flex flex-col items-center justify-center gap-1 rounded-xl border py-2 px-1 cursor-pointer transition ${cls}`}
+          className={`flex flex-col items-center justify-center gap-1 rounded-xl border py-2 px-1 cursor-pointer transition active:scale-[0.98] ${cls}`}
         >
           <Icon className="w-4 h-4" />
           <span className="text-2xs font-semibold">{label}</span>

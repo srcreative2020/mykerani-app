@@ -48,7 +48,7 @@ export const FinancialHealthSummary: React.FC<FinancialHealthSummaryProps> = ({ 
     <button
       onClick={onExpand}
       id="financial_health_summary_card"
-      className={`w-full text-left rounded-2xl border ${meta.border} ${meta.bg} p-3.5 flex items-center justify-between gap-3 hover:shadow-md transition cursor-pointer`}
+      className={`w-full text-left rounded-2xl border ${meta.border} ${meta.bg} p-3.5 flex items-center justify-between gap-3 hover:shadow-md transition cursor-pointer active:scale-[0.98]`}
     >
       <div className="flex items-center gap-3 min-w-0">
         <span className="text-2xl leading-none shrink-0">{meta.emoji}</span>

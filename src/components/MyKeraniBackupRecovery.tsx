@@ -590,20 +590,20 @@ export const MyKeraniBackupRecovery: React.FC = () => {
                       <button
                         onClick={() => handleDownloadBackup(backup)}
                         title="Download backup file"
-                        className="p-2 border border-slate-200 hover:border-slate-300 hover:bg-slate-50 rounded-lg text-slate-600 transition cursor-pointer"
+                        className="p-2 border border-slate-200 hover:border-slate-300 hover:bg-slate-50 rounded-lg text-slate-600 transition cursor-pointer active:scale-95"
                       >
                         <Download className="w-4 h-4" />
                       </button>
                       <button
                         onClick={() => setSelectedBackupForRestore(backup)}
-                        className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-xs font-semibold flex items-center gap-1 transition cursor-pointer"
+                        className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-xs font-semibold flex items-center gap-1 transition cursor-pointer active:scale-[0.98]"
                       >
                         <RefreshCw className="w-3.5 h-3.5" />
                         Restore
                       </button>
                       <button
                         onClick={() => handleDeleteBackup(backup.id)}
-                        className="p-2 border border-rose-100 hover:border-rose-200 hover:bg-rose-50 rounded-lg text-rose-600 transition cursor-pointer"
+                        className="p-2 border border-rose-100 hover:border-rose-200 hover:bg-rose-50 rounded-lg text-rose-600 transition cursor-pointer active:scale-95"
                       >
                         <Trash2 className="w-4 h-4" />
                       </button>
@@ -714,14 +714,14 @@ export const MyKeraniBackupRecovery: React.FC = () => {
                   <div className="flex justify-end gap-2 pt-2">
                     <button
                       onClick={() => setSelectedBackupForRestore(null)}
-                      className="px-3.5 py-1.5 border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-semibold rounded-lg transition"
+                      className="px-3.5 py-1.5 border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-semibold rounded-lg transition active:scale-[0.98]"
                     >
                       Cancel Overwrite
                     </button>
                     <button
                       onClick={() => handleTriggerRestore(selectedBackupForRestore)}
                       disabled={!canRestore || confirmText.toLowerCase() !== "confirm restore" || !restoreConfirmChecked}
-                      className="px-4 py-2 bg-gradient-to-r from-orange-600 to-amber-600 text-white font-bold text-xs rounded-lg shadow-sm hover:from-orange-700 hover:to-amber-700 disabled:from-slate-300 disabled:to-slate-300 disabled:cursor-not-allowed transition flex items-center gap-1.5"
+                      className="px-4 py-2 bg-gradient-to-r from-orange-600 to-amber-600 text-white font-bold text-xs rounded-lg shadow-sm hover:from-orange-700 hover:to-amber-700 disabled:from-slate-300 disabled:to-slate-300 disabled:cursor-not-allowed transition flex items-center gap-1.5 active:scale-[0.98]"
                       id="btn_execute_restore"
                     >
                       <RefreshCw className="w-3.5 h-3.5" />
@@ -789,7 +789,7 @@ export const MyKeraniBackupRecovery: React.FC = () => {
                       setUploadedBackupPayload(null);
                       setShowUploadPreview(false);
                     }}
-                    className="px-3.5 py-1.5 border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-semibold rounded-lg transition"
+                    className="px-3.5 py-1.5 border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-semibold rounded-lg transition active:scale-[0.98]"
                   >
                     Discard File
                   </button>
@@ -797,7 +797,7 @@ export const MyKeraniBackupRecovery: React.FC = () => {
                     onClick={() => {
                       setSelectedBackupForRestore(uploadedBackupPayload);
                     }}
-                    className="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-lg transition shadow-md flex items-center gap-1.5"
+                    className="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-lg transition shadow-md flex items-center gap-1.5 active:scale-[0.98]"
                   >
                     <RefreshCw className="w-3.5 h-3.5" />
                     Proceed to Restore

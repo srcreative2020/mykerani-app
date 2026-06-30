@@ -1217,17 +1217,17 @@ export function StaffHomeScreen() {
             <span className="text-2xs text-slate-500 font-semibold hidden sm:block">Kakitangan</span>
           </div>
           <button onClick={() => setShowNotifications(true)}
-            className="p-1.5 bg-slate-50 hover:bg-indigo-50 border border-slate-200 hover:border-indigo-200 text-slate-400 hover:text-indigo-500 rounded-xl transition cursor-pointer"
+            className="p-1.5 bg-slate-50 hover:bg-indigo-50 border border-slate-200 hover:border-indigo-200 text-slate-400 hover:text-indigo-500 rounded-xl transition cursor-pointer active:scale-95"
             title="Notifikasi Ruang Kerja">
             <Bell className="w-3.5 h-3.5" />
           </button>
           <button onClick={() => setShowAuditHistory(true)}
-            className="p-1.5 bg-slate-50 hover:bg-emerald-50 border border-slate-200 hover:border-emerald-200 text-slate-400 hover:text-emerald-600 rounded-xl transition cursor-pointer"
+            className="p-1.5 bg-slate-50 hover:bg-emerald-50 border border-slate-200 hover:border-emerald-200 text-slate-400 hover:text-emerald-600 rounded-xl transition cursor-pointer active:scale-95"
             title="Sejarah Tindakan Saya">
             <ShieldCheck className="w-3.5 h-3.5" />
           </button>
           <button onClick={() => signOut()}
-            className="p-1.5 bg-slate-50 hover:bg-rose-50 border border-slate-200 hover:border-rose-200 text-slate-400 hover:text-rose-500 rounded-xl transition cursor-pointer">
+            className="p-1.5 bg-slate-50 hover:bg-rose-50 border border-slate-200 hover:border-rose-200 text-slate-400 hover:text-rose-500 rounded-xl transition cursor-pointer active:scale-95">
             <LogOut className="w-3.5 h-3.5" />
           </button>
         </div>
@@ -1596,11 +1596,11 @@ export function StaffHomeScreen() {
               <form onSubmit={e => { e.preventDefault(); sendChat(); }}
                 className="flex items-center gap-2 bg-white border border-slate-300 rounded-2xl px-4 py-3 shadow-sm focus-within:border-slate-500 transition">
                 <button type="button" onClick={() => chatFileInputRef.current?.click()} disabled={chatAttaching || chatRecording}
-                  className="w-7 h-7 rounded-xl flex items-center justify-center text-indigo-600 bg-indigo-50 hover:bg-indigo-100 disabled:opacity-40 cursor-pointer shrink-0">
+                  className="w-7 h-7 rounded-xl flex items-center justify-center text-indigo-600 bg-indigo-50 hover:bg-indigo-100 disabled:opacity-40 cursor-pointer shrink-0 transition disabled:cursor-not-allowed active:scale-95">
                   <Paperclip className="w-4 h-4" />
                 </button>
                 <button type="button" onClick={chatRecording ? stopChatVoiceRecording : startChatVoiceRecording} disabled={chatAttaching}
-                  className={`w-7 h-7 rounded-xl flex items-center justify-center disabled:opacity-40 cursor-pointer shrink-0 ${chatRecording ? "text-white bg-rose-500" : "text-emerald-600 bg-emerald-50 hover:bg-emerald-100"}`}>
+                  className={`w-7 h-7 rounded-xl flex items-center justify-center disabled:opacity-40 cursor-pointer shrink-0 transition disabled:cursor-not-allowed active:scale-95 ${chatRecording ? "text-white bg-rose-500" : "text-emerald-600 bg-emerald-50 hover:bg-emerald-100"}`}>
                   {chatRecording ? <Square className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
                 </button>
                 <input
@@ -1611,7 +1611,7 @@ export function StaffHomeScreen() {
                   className="flex-1 text-sm outline-none text-slate-800 placeholder-slate-400 bg-transparent"
                 />
                 <button type="submit" disabled={!chatInput.trim() || chatLoading}
-                  className="w-8 h-8 rounded-xl bg-slate-900 text-white flex items-center justify-center disabled:bg-slate-200 transition cursor-pointer shrink-0">
+                  className="w-8 h-8 rounded-xl bg-slate-900 text-white flex items-center justify-center disabled:bg-slate-200 transition cursor-pointer shrink-0 disabled:cursor-not-allowed active:scale-95">
                   <Send className="w-3.5 h-3.5" />
                 </button>
               </form>

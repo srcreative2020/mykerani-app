@@ -479,14 +479,14 @@ export const FinancialCommitmentsManager: React.FC = () => {
                     <div className="flex space-x-1 flex-shrink-0">
                       <button 
                         onClick={() => handleOpenEditForm(cmt)}
-                        className="p-1 hover:bg-slate-100 rounded text-slate-600 hover:text-slate-900 transition"
+                        className="p-1 hover:bg-slate-100 rounded text-slate-600 hover:text-slate-900 transition cursor-pointer"
                         title="Edit Commitment"
                       >
                         <Edit3 className="w-3.5 h-3.5" />
                       </button>
                       <button 
                         onClick={() => deleteFinancialCommitment(cmt.id)}
-                        className="p-1 hover:bg-rose-50 rounded text-slate-400 hover:text-rose-600 transition"
+                        className="p-1 hover:bg-rose-50 rounded text-slate-400 hover:text-rose-600 transition cursor-pointer"
                         title="Delete Commitment Contract"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
@@ -530,7 +530,7 @@ export const FinancialCommitmentsManager: React.FC = () => {
             <select
               value={statusFilter}
               onChange={e => setStatusFilter(e.target.value as any)}
-              className="px-2 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs outline-hidden focus:bg-white text-slate-700"
+              className="px-2 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs outline-hidden focus:bg-white focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 text-slate-700 cursor-pointer"
             >
               <option value="ALL">All Statuses</option>
               <option value="ACTIVE">Active Obligations</option>
@@ -542,7 +542,7 @@ export const FinancialCommitmentsManager: React.FC = () => {
             <select
               value={freqFilter}
               onChange={e => setFreqFilter(e.target.value as any)}
-              className="px-2 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs outline-hidden focus:bg-white text-slate-700"
+              className="px-2 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs outline-hidden focus:bg-white focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 text-slate-700 cursor-pointer"
             >
               <option value="ALL">All Frequencies</option>
               <option value="DAILY">Daily outlays</option>
@@ -561,7 +561,7 @@ export const FinancialCommitmentsManager: React.FC = () => {
               <p className="text-xs font-sans font-medium">No commitments match the selected status / frequency criteria.</p>
               <button 
                 onClick={() => { setSearchQuery(""); setStatusFilter("ALL"); setFreqFilter("ALL"); }}
-                className="mt-2 text-xs font-sans text-indigo-600 hover:underline"
+                className="mt-2 text-xs font-sans text-indigo-600 hover:underline transition cursor-pointer"
               >
                 Clear all active search filters
               </button>
@@ -610,9 +610,9 @@ export const FinancialCommitmentsManager: React.FC = () => {
                       <div className="flex items-center justify-end space-x-1">
                         <button 
                           onClick={() => toggleActiveStatus(cmt)}
-                          className={`p-1.5 rounded transition ${
-                            cmt.status === "ACTIVE" 
-                              ? "hover:bg-amber-50 text-amber-600" 
+                          className={`p-1.5 rounded transition cursor-pointer ${
+                            cmt.status === "ACTIVE"
+                              ? "hover:bg-amber-50 text-amber-600"
                               : "hover:bg-emerald-50 text-emerald-600"
                           }`}
                           title={cmt.status === "ACTIVE" ? "Pause Commitment Contract" : "Resume Commitment Contract"}
@@ -621,14 +621,14 @@ export const FinancialCommitmentsManager: React.FC = () => {
                         </button>
                         <button 
                           onClick={() => handleOpenEditForm(cmt)}
-                          className="p-1.5 hover:bg-slate-100 rounded text-slate-600 transition"
+                          className="p-1.5 hover:bg-slate-100 rounded text-slate-600 transition cursor-pointer"
                           title="Edit Obligation parameters"
                         >
                           <Edit3 className="w-3.5 h-3.5" />
                         </button>
                         <button 
                           onClick={() => deleteFinancialCommitment(cmt.id)}
-                          className="p-1.5 hover:bg-rose-50 rounded text-slate-400 hover:text-rose-600 transition"
+                          className="p-1.5 hover:bg-rose-50 rounded text-slate-400 hover:text-rose-600 transition cursor-pointer"
                           title="Delete Agreement"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
@@ -661,7 +661,7 @@ export const FinancialCommitmentsManager: React.FC = () => {
                 </h4>
                 <button 
                   onClick={() => setIsFormOpen(false)}
-                  className="p-1 hover:bg-slate-50 rounded-lg text-slate-400 hover:text-slate-700 transition"
+                  className="p-1 hover:bg-slate-50 rounded-lg text-slate-400 hover:text-slate-700 transition cursor-pointer"
                 >
                   <X className="w-4 h-4" />
                 </button>

@@ -93,7 +93,7 @@ export const DuplicateReviewQueue: React.FC = () => {
         <button
           onClick={handleScan}
           disabled={scanning}
-          className="shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold bg-slate-900 text-white hover:bg-slate-800 disabled:opacity-50"
+          className="shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold bg-slate-900 text-white hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed transition active:scale-[0.98]"
         >
           <RefreshCw className={`w-3.5 h-3.5 ${scanning ? "animate-spin" : ""}`} />
           {scanning ? "Scanning..." : "Scan for Duplicates"}
@@ -131,14 +131,14 @@ export const DuplicateReviewQueue: React.FC = () => {
                   <button
                     onClick={() => handleReview(flag.id, "CONFIRMED_DUPLICATE")}
                     disabled={isBusy}
-                    className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold bg-rose-600 text-white hover:bg-rose-700 disabled:opacity-50"
+                    className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold bg-rose-600 text-white hover:bg-rose-700 disabled:opacity-50 disabled:cursor-not-allowed transition active:scale-[0.98]"
                   >
                     <Check className="w-3.5 h-3.5" /> Mark Duplicate
                   </button>
                   <button
                     onClick={() => handleReview(flag.id, "REVIEWED_NOT_DUPLICATE")}
                     disabled={isBusy}
-                    className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-100 text-slate-700 hover:bg-slate-200 disabled:opacity-50"
+                    className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-100 text-slate-700 hover:bg-slate-200 disabled:opacity-50 disabled:cursor-not-allowed transition active:scale-[0.98]"
                   >
                     <X className="w-3.5 h-3.5" /> Not a Duplicate
                   </button>

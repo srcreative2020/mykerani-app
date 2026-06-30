@@ -109,7 +109,7 @@ export const StorageBar: React.FC<StorageBarProps> = ({ quota, compact = false, 
           </p>
           {onBuyAddon && quota.frozenReason === "quota_exceeded" && (
             <button onClick={onBuyAddon}
-              className="mt-2 w-full py-2 bg-red-500 text-white rounded-lg text-xs font-bold cursor-pointer hover:bg-red-600 transition">
+              className="mt-2 w-full py-2 bg-red-500 text-white rounded-lg text-xs font-bold cursor-pointer hover:bg-red-600 transition active:scale-[0.98]">
               Beli Tambahan Storan
             </button>
           )}
@@ -137,7 +137,7 @@ export const StorageBar: React.FC<StorageBarProps> = ({ quota, compact = false, 
       {/* Add-on button */}
       {onBuyAddon && quota.warnLevel !== "frozen" && quota.warnLevel !== "none" && (
         <button onClick={onBuyAddon}
-          className="w-full py-2.5 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 cursor-pointer hover:bg-slate-50 transition">
+          className="w-full py-2.5 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 cursor-pointer hover:bg-slate-50 transition active:scale-[0.98]">
           Tambah Storan
         </button>
       )}
