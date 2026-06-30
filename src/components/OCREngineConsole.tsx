@@ -267,6 +267,24 @@ export const OCREngineConsole: React.FC = () => {
       const merchantInput = payload.merchantName || "";
       const matchedPattern = findLearnedPattern(merchantInput);
 
+      // Business/Branch Mapping check: a document whose merchant/issuer is
+      // the user's own registered business or branch was issued BY that
+      // business (e.g. an invoice billed to a customer) — it is money
+      // coming IN, never an outside-vendor expense. This is the
+      // authoritative source for transaction type and overrides BOTH the
+      // documentType/category heuristics below AND any previously learned
+      // vendor pattern (a learned pattern may have been recorded before
+      // the merchant was registered as the user's own business/branch, or
+      // from a generic category guess unaware of own-business status) —
+      // the same way Step 4/5 of the AI Chat assistant prompt (server.ts)
+      // treats an own-business/branch merchant match as INCOME and never
+      // defaults to EXPENSE.
+      const ownMatch = matchOwnBusinessAndBranch(
+        merchantInput,
+        ownBusinesses.filter(b => b.isActive !== false),
+        ownBusinessBranches
+      );
+
       if (matchedPattern) {
         // AI Suggests with Learning memory!
         const confidenceScoreStr = matchedPattern.confidenceScore;
@@ -283,9 +301,14 @@ export const OCREngineConsole: React.FC = () => {
         setReviewedAmount(payload.amount || 0);
         setReviewedCurrency(payload.currency || "MYR");
         setReviewedCategory(matchedPattern.category);
-        setSelectedRecordType(matchedPattern.recordType);
-        
-        setSuccessText(`🤖 Learning Layer Matched: Loaded historical pattern for "${matchedPattern.vendorName}". Pre-classified category to "${matchedPattern.category}" (${matchedPattern.recordType}) with a rolling average confidence of ${Math.round(confidenceScoreStr * 100)}%.`);
+
+        if (ownMatch && !ownMatch.ambiguous) {
+          setSelectedRecordType("INCOME");
+          setSuccessText(`🏢 Pengesanan Syarikat Sendiri: "${merchantInput}" sepadan dengan ${ownMatch.branch ? `cawangan "${ownMatch.branch.branchName}"` : `syarikat "${ownMatch.business.businessName}"`} anda yang berdaftar — dokumen ini dikeluarkan OLEH syarikat anda, jadi diklasifikasikan sebagai PENDAPATAN (INCOME), bukan perbelanjaan, walaupun corak pembelajaran lampau mencadangkan sebaliknya.`);
+        } else {
+          setSelectedRecordType(matchedPattern.recordType);
+          setSuccessText(`🤖 Learning Layer Matched: Loaded historical pattern for "${matchedPattern.vendorName}". Pre-classified category to "${matchedPattern.category}" (${matchedPattern.recordType}) with a rolling average confidence of ${Math.round(confidenceScoreStr * 100)}%.`);
+        }
       } else {
         // Default API behavior
         setExtractedData(payload);
@@ -296,23 +319,10 @@ export const OCREngineConsole: React.FC = () => {
         setReviewedCurrency(payload.currency || "MYR");
         setReviewedCategory(payload.suggestedCategory || "Utilities");
 
-        // Business/Branch Mapping check FIRST: a document whose merchant/issuer
-        // is the user's own registered business or branch was issued BY that
-        // business (e.g. an invoice billed to a customer) — it is money coming
-        // IN, never an outside-vendor expense. This must override the
-        // documentType/category heuristics below, the same way Step 4/5 of the
-        // AI Chat assistant prompt (server.ts) treats an own-business/branch
-        // merchant match as INCOME and never defaults to EXPENSE.
-        const ownMatch = matchOwnBusinessAndBranch(
-          payload.merchantName || "",
-          ownBusinesses.filter(b => b.isActive !== false),
-          ownBusinessBranches
-        );
-
         const categoryLower = (payload.suggestedCategory || "").toLowerCase();
         if (ownMatch && !ownMatch.ambiguous) {
           setSelectedRecordType("INCOME");
-          setSuccessText(`🏢 Pengesanan Syarikat Sendiri: "${payload.merchantName}" sepadan dengan ${ownMatch.branch ? `cawangan "${ownMatch.branch.branchName}"` : `syarikat "${ownMatch.business.businessName}"`} anda yang berdaftar — dokumen ini dikeluarkan OLEH syarikat anda, jadi diklasifikasikan sebagai PENDAPATAN (INCOME), bukan perbelanjaan.`);
+          setSuccessText(`🏢 Pengesanan Syarikat Sendiri: "${merchantInput}" sepadan dengan ${ownMatch.branch ? `cawangan "${ownMatch.branch.branchName}"` : `syarikat "${ownMatch.business.businessName}"`} anda yang berdaftar — dokumen ini dikeluarkan OLEH syarikat anda, jadi diklasifikasikan sebagai PENDAPATAN (INCOME), bukan perbelanjaan.`);
         } else if (documentType === "INVOICE") {
           // Test 5: Invoice -> Suggestion -> Confirm -> payables (the supplier owes us nothing;
           // we owe the supplier — this is an accounts-payable bill, not a generic expense).
