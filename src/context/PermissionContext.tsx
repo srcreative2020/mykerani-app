@@ -258,7 +258,14 @@ export const PermissionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     loadData();
 
     return () => { cancelled = true; };
-  }, [user, activeTenant, isMockUser, realtimeTick]);
+    // Keyed on user?.id / activeTenant?.id, not the objects themselves —
+    // see TenantContext.tsx for why: AuthContext emits a new `user` object
+    // on every onAuthStateChange event (e.g. routine token refresh), which
+    // was re-running this load and flipping loading:true mid-session,
+    // unmounting OwnerDashboard/StaffHomeScreen via RoleRouter while an
+    // upload/chat flow was still in flight.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id, activeTenant?.id, isMockUser, realtimeTick]);
 
   // GAP-M4: another session's role/permission change (e.g. an Owner
   // editing Staff access) must be reflected here without a manual

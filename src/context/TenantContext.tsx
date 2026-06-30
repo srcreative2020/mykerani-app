@@ -192,7 +192,17 @@ export const TenantProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     loadTenants();
 
     return () => { cancelled = true; };
-  }, [user, isMockUser]);
+    // Intentionally keyed on user?.id, not the `user` object: AuthContext
+    // emits a brand-new `user` object reference on every Supabase
+    // onAuthStateChange event (including routine TOKEN_REFRESHED, which
+    // fires periodically and on tab refocus) even when nothing about the
+    // logged-in user actually changed. Depending on the object itself was
+    // re-triggering this load (and its loading:true flip) mid-session,
+    // which cascaded into RoleRouter unmounting OwnerDashboard/
+    // StaffHomeScreen while an upload/chat flow was still in flight,
+    // silently dropping any pending setState calls from that flow.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id, isMockUser]);
 
   // Create a new Tenant
   const createTenant = useCallback(async (name: string, category: TenantCategory): Promise<Tenant> => {
