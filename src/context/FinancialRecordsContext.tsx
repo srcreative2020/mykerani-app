@@ -1933,7 +1933,7 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
   // --- Financial Evidence Packages Actions ---
   const addFinancialEvidencePackage = (pkg: Omit<FinancialEvidencePackage, "id">): FinancialEvidencePackage => {
     const newId = generateUUID();
-    const newPkg: FinancialEvidencePackage = { ...pkg, id: newId };
+    const newPkg: FinancialEvidencePackage = { ...pkg, id: newId, uploadedBy: pkg.uploadedBy || user?.id };
     const updated = [newPkg, ...financialEvidencePackages];
     setFinancialEvidencePackages(updated);
     persistCurrentState(financialEvents, cashAccounts, bankAccounts, debtRecords, financialCommitments, updated);
@@ -1961,11 +1961,19 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
             related_record_type: newPkg.relatedRecordType || null,
             related_record_id: newPkg.relatedRecordId || null,
             notes: newPkg.notes || null,
+            uploaded_by: newPkg.uploadedBy || null,
+            file_size_bytes: newPkg.fileSizeBytes ?? null,
           });
         } catch (err: any) {
           console.error("DB persistence insert evidence package failed:", err.message);
         }
       })();
+
+      notifyWorkspace(
+        "Dokumen bukti baharu dimuat naik",
+        `${user?.fullName || user?.email || "Pengguna"} memuat naik "${newPkg.fileName}".`,
+        { fileName: newPkg.fileName, documentType: newPkg.documentType }
+      );
     }
 
     return newPkg;

@@ -31,6 +31,8 @@ import { computeFinancialCompleteness } from "../lib/financialCompletenessEngine
 import { buildReportBuckets, flattenBuckets } from "../lib/reportBucketAggregator";
 import { buildEvidenceIndex, getEvidenceCoverageRatio } from "../lib/evidenceDrilldown";
 import { recordImportFailures } from "../lib/importFailureLog";
+import { supabase, isSupabaseConfigured } from "../lib/supabase";
+import { isDemoWorkspace } from "../lib/seeder";
 import type { FinancialRecordType } from "../types";
 
 export const HistoricalRecoveryWorkspace: React.FC = () => {
@@ -47,7 +49,7 @@ export const HistoricalRecoveryWorkspace: React.FC = () => {
     learnOcrPattern,
   } = useFinancials();
   const { activeWorkspace } = useWorkspace();
-  const { user } = useAuth();
+  const { user, isMockUser } = useAuth();
   const { hasPermission } = usePermission();
   const { writeAuditLog } = useAudit();
   const { activeTenant } = useTenant();
@@ -101,6 +103,21 @@ export const HistoricalRecoveryWorkspace: React.FC = () => {
       setSkippedRows(result.skippedRows);
       if (activeWorkspace && result.skippedRows.length > 0) {
         recordImportFailures(activeWorkspace.id, file.name, result.skippedRows.length);
+
+        // GAP-M3: an Owner who never opens this screen would otherwise
+        // never learn an import had skipped rows needing review.
+        if (isSupabaseConfigured() && !isMockUser && supabase && activeTenant && !isDemoWorkspace(activeWorkspace.id)) {
+          supabase.from("workspace_notifications").insert({
+            workspace_id: activeWorkspace.id,
+            tenant_id: activeTenant.id,
+            category: "SYSTEM",
+            title: "Import sejarah memerlukan semakan",
+            message: `${result.skippedRows.length} baris dalam fail "${file.name}" tidak dapat diimport secara automatik dan memerlukan semakan manual.`,
+            metadata: { fileName: file.name, skippedCount: result.skippedRows.length }
+          }).then(({ error }) => {
+            if (error) console.error("Import-failure notification insert failed:", error.message);
+          });
+        }
       }
       if (result.transactions.length === 0) {
         setImportError("Tiada transaksi sah dapat dikenal pasti dalam fail ini.");

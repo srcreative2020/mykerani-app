@@ -174,6 +174,8 @@ export interface FinancialEvidencePackage {
   relatedRecordType?: string; // 'INCOME' | 'EXPENSE' | 'RECEIVABLE' | 'PAYABLE' | 'DEBT' | 'COMMITMENT'
   relatedRecordId?: string;
   notes?: string;
+  uploadedBy?: string;
+  fileSizeBytes?: number;
 }
 
 export interface OcrLearnedPattern {

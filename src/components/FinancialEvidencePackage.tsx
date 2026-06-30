@@ -364,6 +364,7 @@ export const FinancialEvidencePackageManager: React.FC = () => {
           relatedRecordType: finalRelType,
           relatedRecordId: finalRelId,
           notes: uploadNotes.trim() || undefined,
+          fileSizeBytes: file.size,
         });
 
         setSuccessText(`Successfully uploaded and created ${file.name}`);

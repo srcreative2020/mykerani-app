@@ -71,6 +71,7 @@ export const PermissionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   const [userRoles, setUserRoles] = useState<UserRoleAssignment[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+  const [realtimeTick, setRealtimeTick] = useState(0);
 
   // Sync / Load permissions from database or localStorage
   useEffect(() => {
@@ -249,7 +250,32 @@ export const PermissionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     };
 
     loadData();
-  }, [user, activeTenant, isMockUser]);
+  }, [user, activeTenant, isMockUser, realtimeTick]);
+
+  // GAP-M4: another session's role/permission change (e.g. an Owner
+  // editing Staff access) must be reflected here without a manual
+  // refresh, so a revoked/suspended Staff session loses access promptly.
+  useEffect(() => {
+    if (!isSupabaseConfigured() || isMockUser || !supabase || !activeTenant) return;
+
+    const channel = supabase
+      .channel(`permission-sync-${activeTenant.id}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "user_role_assignments", filter: `tenant_id=eq.${activeTenant.id}` },
+        () => setRealtimeTick(t => t + 1)
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "permission_matrices", filter: `tenant_id=eq.${activeTenant.id}` },
+        () => setRealtimeTick(t => t + 1)
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [activeTenant, isMockUser]);
 
   // Access check for a specific role
   const checkPermission = (role: UserRole, module: ModuleName, action: keyof ModulePermissions): boolean => {
