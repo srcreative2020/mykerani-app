@@ -3427,6 +3427,10 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
                             <p className="text-xs text-slate-600">AI: {w.aiCreditsBalance.toLocaleString()} baki, {w.aiConsumed30d.toLocaleString()} digunakan/30hr &middot; ${w.aiCostUsd30d.toFixed(2)} kos</p>
                             <p className="text-xs text-slate-600">OCR: {w.ocrCreditsBalance.toLocaleString()} baki, {w.ocrConsumed30d.toLocaleString()} digunakan/30hr</p>
                             <p className="text-xs text-slate-600">Storan: {fmtDocBytes(w.storageUsedBytes)} / {fmtDocBytes(w.storageLimitBytes)}</p>
+                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider pt-1">Pecahan Kuota (Package / Top-up)</p>
+                            <p className="text-xs text-slate-600">AI: Kuota Package {w.aiPackageQuota.toLocaleString()} + Top-up {w.aiPurchasedTopup.toLocaleString()}</p>
+                            <p className="text-xs text-slate-600">OCR: Kuota Package {w.ocrPackageQuota.toLocaleString()} + Top-up {w.ocrPurchasedTopup.toLocaleString()}</p>
+                            <p className="text-xs text-slate-600">Storan: Kuota Package {fmtDocBytes(w.storagePackageQuota)} + Top-up {fmtDocBytes(w.storagePurchasedTopup)}</p>
                           </div>
                         )}
 
