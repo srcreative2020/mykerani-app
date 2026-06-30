@@ -1045,6 +1045,7 @@ Provide your output precisely formatted as raw JSON matching exactly this shape,
       let usedCandidate: AiCandidate | null = null;
       let estimatedInputTokens = 0;
       let estimatedOutputTokens = 0;
+      const ocrAttempts: { provider: string; model: string; result: "FAILED" | "SUCCESS"; error?: string }[] = [];
 
       // Bank statements: split the extracted text into chunks and run extraction per
       // chunk, then merge every chunk's transactions so nothing is dropped to a token
@@ -1082,11 +1083,13 @@ Provide your output precisely formatted as raw JSON matching exactly this shape,
             try {
               chunkResult = await callAiProviderTextOcr(candidate, chunks[i], chunkPrompt);
               usedCandidate = candidate;
+              ocrAttempts.push({ provider: candidate.provider, model: candidate.model, result: "SUCCESS" });
               break;
             } catch (err: any) {
               chunkErr = err;
               const msg = err?.message || String(err);
               distinctChunkErrors.add(`${candidate.provider}: ${msg}`);
+              ocrAttempts.push({ provider: candidate.provider, model: candidate.model, result: "FAILED", error: `chunk ${i + 1}/${chunks.length}: ${msg}`.slice(0, 500) });
               console.error(`AI provider "${candidate.provider}" OCR call failed on chunk ${i + 1}/${chunks.length}, trying next candidate:`, msg);
             }
           }
@@ -1123,6 +1126,7 @@ Provide your output precisely formatted as raw JSON matching exactly this shape,
           const summary = distinctChunkErrors.size > 0
             ? `All ${chunksTotal} chunk(s) failed across all providers. Distinct errors seen: ${Array.from(distinctChunkErrors).join(" | ")}`
             : null;
+          logAiFallback(tenantId, workspaceId, userId, ocrAttempts.map(a => ({ provider: a.provider, model: a.model, error: a.error || "unknown" })), summary || (lastErr?.message || "All chunks failed"), candidates[0]?.strategy, "ocr");
           throw (summary ? new Error(summary) : (lastErr || new Error("All configured AI providers failed for OCR on every chunk")));
         }
 
@@ -1136,14 +1140,18 @@ Provide your output precisely formatted as raw JSON matching exactly this shape,
               ? await callAiProviderTextOcr(candidate, extractedPdfText, ocrPrompt)
               : await callAiProviderOcr(candidate, mimeType, base64Data, ocrPrompt);
             usedCandidate = candidate;
+            ocrAttempts.push({ provider: candidate.provider, model: candidate.model, result: "SUCCESS" });
             break;
           } catch (err: any) {
             lastErr = err;
+            const errMsg = String(err?.message || err).slice(0, 500);
+            ocrAttempts.push({ provider: candidate.provider, model: candidate.model, result: "FAILED", error: errMsg });
             console.error(`AI provider "${candidate.provider}" OCR call failed, trying next candidate:`, err?.message || err);
           }
         }
 
         if (!parsedResult) {
+          logAiFallback(tenantId, workspaceId, userId, ocrAttempts.map(a => ({ provider: a.provider, model: a.model, error: a.error || "unknown" })), lastErr?.message || "All configured AI providers failed for OCR", candidates[0]?.strategy, "ocr");
           throw lastErr || new Error("All configured AI providers failed for OCR");
         }
         estimatedOutputTokens += estimateTokens(JSON.stringify(parsedResult));
@@ -1155,7 +1163,12 @@ Provide your output precisely formatted as raw JSON matching exactly this shape,
       }
 
       console.info(`[AI_ROUTER_DEBUG][OCR] servedBy=${usedCandidate!.provider}:${usedCandidate!.model} mode=${extractedPdfText !== null ? "pdf-text" : "vision"}${isChunkedStatement ? ` chunks=${chunksSucceeded}/${chunksTotal}` : ""}`);
-      logAiUsage(tenantId, workspaceId, userId, "ocr", usedCandidate!.provider, usedCandidate!.model);
+      logAiUsage(tenantId, workspaceId, userId, "ocr", usedCandidate!.provider, usedCandidate!.model, {
+        strategy: usedCandidate!.strategy,
+        candidateOrder: candidates.map(c => `${c.provider}:${c.model}`),
+        attempts: ocrAttempts,
+        totalAttempts: ocrAttempts.length,
+      });
 
       onProgress({ stage: "AI_ANALYSIS", overallProgress: OCR_STAGE_END_PCT.AI_ANALYSIS });
       onProgress({ stage: "CLASSIFICATION", overallProgress: OCR_STAGE_END_PCT.CLASSIFICATION });
@@ -1566,7 +1579,15 @@ Only include a "CONFIRM_TRANSACTION" suggestion entry when financialIntent.detec
         console.error("[AI_CLASSIFICATION_DEBUG] logging failed (non-blocking):", debugErr?.message || debugErr);
       }
 
-      logAiUsage(financialContext?.activeTenant?.id, financialContext?.activeWorkspace?.id, userId, "assistant", usedCandidate!.provider, usedCandidate!.model);
+      logAiUsage(financialContext?.activeTenant?.id, financialContext?.activeWorkspace?.id, userId, "assistant", usedCandidate!.provider, usedCandidate!.model, {
+        strategy: usedCandidate!.strategy,
+        candidateOrder: candidates.map(c => `${c.provider}:${c.model}`),
+        attempts: [
+          ...attemptErrors.map(a => ({ provider: a.provider, model: a.model, result: "FAILED" as const, error: a.error })),
+          { provider: usedCandidate!.provider, model: usedCandidate!.model, result: "SUCCESS" as const },
+        ],
+        totalAttempts: attemptErrors.length + 1,
+      });
 
       if (parsedResponse?.financialIntent?.detected && knowledgeBankMatches.length === 0) {
         logKnowledgeBankGap(financialContext?.activeTenant?.id, financialContext?.activeWorkspace?.id, parsedResponse.financialIntent);
@@ -1619,7 +1640,8 @@ Only include a "CONFIRM_TRANSACTION" suggestion entry when financialIntent.detec
         req.body.financialContext?.activeWorkspace?.id,
         req.body.userId,
         (error as any)?.attemptErrors || candidates.map(c => ({ provider: c.provider, model: c.model, error: errStr })),
-        errStr
+        errStr,
+        candidates[0]?.strategy
       );
 
       const fallbackResult = generateFallbackAssistantResponse(req.body.query, req.body.financialContext || {});
@@ -1640,7 +1662,7 @@ Only include a "CONFIRM_TRANSACTION" suggestion entry when financialIntent.detec
   // here matches what HQ sees. OpenAI-compatible providers share one caller
   // since they all expose the same /chat/completions REST shape.
   type AiProviderId = "gemini" | "openai" | "anthropic" | "deepseek" | "xai" | "mistral" | "groq" | "alibaba";
-  interface AiCandidate { provider: AiProviderId; apiKey: string; model: string; costUsd: number; }
+  interface AiCandidate { provider: AiProviderId; apiKey: string; model: string; costUsd: number; strategy: string; }
 
   const OPENAI_COMPATIBLE_BASE_URLS: Record<string, string> = {
     openai: "https://api.openai.com/v1",
@@ -1819,7 +1841,7 @@ Only include a "CONFIRM_TRANSACTION" suggestion entry when financialIntent.detec
     return aiCostRateCache?.get(`${provider}:${model}`) ?? 0;
   }
 
-  async function logAiUsage(tenantId: string | undefined | null, workspaceId: string | undefined | null, userId: string | undefined | null, feature: "assistant" | "ocr", provider: string, model: string): Promise<void> {
+  async function logAiUsage(tenantId: string | undefined | null, workspaceId: string | undefined | null, userId: string | undefined | null, feature: "assistant" | "ocr", provider: string, model: string, routerTrace?: { strategy: string; candidateOrder: string[]; attempts: { provider: string; model: string; result: "FAILED" | "SUCCESS"; error?: string }[]; totalAttempts: number }): Promise<void> {
     if (!tenantId) return;
     const supabaseUrl = process.env.VITE_SUPABASE_URL;
     const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -1858,7 +1880,18 @@ Only include a "CONFIRM_TRANSACTION" suggestion entry when financialIntent.detec
           user_id: userId || null,
           event_type: feature === "ocr" ? "OCR_PROCESS" : "AI_ANALYSIS",
           description: `${feature === "ocr" ? "OCR document processed" : "AI analysis call"} via ${provider}/${model}`,
-          metadata: { provider, model, feature },
+          metadata: {
+            provider, model, feature,
+            ...(routerTrace ? {
+              strategy: routerTrace.strategy,
+              candidateOrder: routerTrace.candidateOrder,
+              attempts: routerTrace.attempts,
+              totalAttempts: routerTrace.totalAttempts,
+              finalProvider: provider,
+              finalModel: model,
+              finalStatus: "SUCCESS",
+            } : {}),
+          },
         }),
       });
     } catch (err) {
@@ -1872,7 +1905,7 @@ Only include a "CONFIRM_TRANSACTION" suggestion entry when financialIntent.detec
   // host log access. Best-effort — never blocks the fallback response.
   // errStr is the thrown error's message only (status code + provider
   // response body), never request headers, so it cannot leak an API key.
-  function logAiFallback(tenantId: string | undefined | null, workspaceId: string | undefined | null, userId: string | undefined | null, attemptErrors: { provider: string; model: string; error: string }[], errStr: string): void {
+  function logAiFallback(tenantId: string | undefined | null, workspaceId: string | undefined | null, userId: string | undefined | null, attemptErrors: { provider: string; model: string; error: string }[], errStr: string, strategy?: string, feature: "assistant" | "ocr" = "assistant"): void {
     if (!tenantId) return;
     const supabaseUrl = process.env.VITE_SUPABASE_URL;
     const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -1889,9 +1922,14 @@ Only include a "CONFIRM_TRANSACTION" suggestion entry when financialIntent.detec
         tenant_id: tenantId,
         workspace_id: workspaceId || null,
         user_id: userId || null,
-        event_type: "AI_ANALYSIS",
-        description: "AI Assistant fell back to Simulator Mode (all candidate providers failed)",
-        metadata: { outcome: "SIMULATOR_FALLBACK", attemptErrors, lastError: String(errStr).slice(0, 500) },
+        event_type: feature === "ocr" ? "OCR_PROCESS" : "AI_ANALYSIS",
+        description: `${feature === "ocr" ? "OCR" : "AI Assistant"} fell back to Simulator Mode (all candidate providers failed)`,
+        metadata: {
+          outcome: "SIMULATOR_FALLBACK", attemptErrors, lastError: String(errStr).slice(0, 500),
+          strategy: strategy || null,
+          totalAttempts: attemptErrors.length,
+          finalStatus: "ALL_CANDIDATES_FAILED",
+        },
       }),
     }).catch(err => console.error("Failed to log AI fallback diagnostic:", err));
   }
@@ -2283,6 +2321,7 @@ Only include a "CONFIRM_TRANSACTION" suggestion entry when financialIntent.detec
         apiKey: c.apiKey,
         model: c.model || MODEL_CATALOGUE[c.provider][0].id,
         costUsd: modelCostUsd(c.provider, c.model),
+        strategy: dbConfig.strategy,
       }));
 
       if (dbConfig.strategy === "quality") {
@@ -2317,7 +2356,7 @@ Only include a "CONFIRM_TRANSACTION" suggestion entry when financialIntent.detec
     if (allProviders.includes(forced as AiProviderId)) {
       const p = forced as AiProviderId;
       return envKeys[p]
-        ? [{ provider: p, apiKey: envKeys[p]!, model: MODEL_CATALOGUE[p][0].id, costUsd: 0 }]
+        ? [{ provider: p, apiKey: envKeys[p]!, model: MODEL_CATALOGUE[p][0].id, costUsd: 0, strategy: "env_forced" }]
         : [];
     }
     const customOrder = (process.env.AI_PROVIDER_ORDER || "")
@@ -2328,7 +2367,7 @@ Only include a "CONFIRM_TRANSACTION" suggestion entry when financialIntent.detec
       : allProviders;
     return order
       .filter(p => Boolean(envKeys[p]))
-      .map(p => ({ provider: p, apiKey: envKeys[p]!, model: process.env[`${p.toUpperCase()}_MODEL`] || MODEL_CATALOGUE[p][0].id, costUsd: 0 }));
+      .map(p => ({ provider: p, apiKey: envKeys[p]!, model: process.env[`${p.toUpperCase()}_MODEL`] || MODEL_CATALOGUE[p][0].id, costUsd: 0, strategy: "env_order" }));
   }
 
   function parseJsonLoose(content: string): any {
