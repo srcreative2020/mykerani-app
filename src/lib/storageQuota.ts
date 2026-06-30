@@ -109,16 +109,21 @@ export function useStorageQuota(tenantId: string, workspaceId?: string): Storage
     return () => { cancelled = true; };
   }, [tenantId, tick]);
 
-  // Real quota comes from resource_wallets.storage_limit_bytes — the entitlement
-  // single source of truth (reflects plan allowance plus any topups/HQ
-  // adjustments/downgrade clamping) — falling back to localStorage if no
-  // workspace wallet exists.
+  // Real quota comes from the unified get_resource_wallet_breakdown() RPC
+  // (see supabase/migrations/20260801040000_unified_resource_wallet_engine.sql)
+  // — same Package Quota + Purchased Top-up + Usage -> Remaining engine used
+  // by AI/OCR credits, instead of a separate hand-rolled read of
+  // resource_wallets.storage_limit_bytes. quotaBytes here is the total
+  // entitlement (remaining + usage), so existing pctUsed/canUpload math is
+  // unchanged.
   useEffect(() => {
     if (!isSupabaseConfigured() || !supabase || !workspaceId || !uuidRe.test(workspaceId)) return;
     let cancelled = false;
-    supabase.from("resource_wallets").select("storage_limit_bytes").eq("workspace_id", workspaceId).maybeSingle().then(({ data }) => {
+    supabase.rpc("get_resource_wallet_breakdown", { p_workspace_id: workspaceId }).then(({ data }) => {
       if (cancelled || !data) return;
-      const bytes = Number(data.storage_limit_bytes);
+      const row = (data as any[]).find(r => r.credit_type === "STORAGE");
+      if (!row) return;
+      const bytes = Number(row.remaining) + Number(row.usage);
       if (bytes > 0) setState(prev => prev.quotaBytes === bytes ? prev : { ...prev, quotaBytes: bytes });
     });
     return () => { cancelled = true; };

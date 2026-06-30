@@ -9,6 +9,8 @@ import { logTenantActivity } from "../lib/hqService";
 import { confirmFinancialRecord, type ConfirmInput } from "../lib/financialRecordConfirmation";
 import { pollOcrJob, type OcrJobState } from "../lib/ocrJobTypes";
 import DocumentProcessingProgressPanel from "./DocumentProcessingProgressPanel";
+import { loadBusinesses, loadBusinessBranches, type Business, type BusinessBranch } from "../lib/profileData";
+import { matchOwnBusinessAndBranch } from "../lib/businessMatching";
 import { 
   FileText, 
   UploadCloud, 
@@ -49,9 +51,41 @@ export const OCREngineConsole: React.FC = () => {
   } = useFinancials();
 
   const { activeWorkspace } = useWorkspace();
-  const { user } = useAuth();
+  const { user, isMockUser } = useAuth();
   const { hasPermission } = usePermission();
   const { writeAuditLog } = useAudit();
+
+  // Business/Branch Mapping engine state — required so OCR receipt/invoice
+  // classification can detect when the document's merchant/issuer IS the
+  // user's own registered business or branch (same engine + data used by
+  // AI Chat in OwnerDashboard.tsx/StaffHomeScreen.tsx and Bank Statement
+  // import). Without this, OCR review had no way to tell "own company
+  // issued this invoice to a customer" apart from "we paid an outside
+  // vendor", and silently defaulted every non-invoice, non-"sales/revenue"
+  // keyword document to EXPENSE — including a customer-facing document
+  // issued by the user's own company, which must be INCOME.
+  const [ownBusinesses, setOwnBusinesses] = useState<Business[]>([]);
+  const [ownBusinessBranches, setOwnBusinessBranches] = useState<Record<string, BusinessBranch[]>>({});
+
+  useEffect(() => {
+    const wsId = activeWorkspace?.id;
+    if (!wsId) { setOwnBusinesses([]); setOwnBusinessBranches({}); return; }
+    let active = true;
+    (async () => {
+      const businesses = await loadBusinesses(wsId, isMockUser);
+      if (!active) return;
+      setOwnBusinesses(businesses);
+      const activeBusinesses = businesses.filter(b => b.isActive !== false);
+      const branchResults = await Promise.all(
+        activeBusinesses.map(async (b) => ({ id: b.id, branches: await loadBusinessBranches(wsId, isMockUser, b.id) }))
+      );
+      if (!active) return;
+      const map: Record<string, BusinessBranch[]> = {};
+      for (const r of branchResults) map[r.id] = r.branches;
+      setOwnBusinessBranches(map);
+    })();
+    return () => { active = false; };
+  }, [activeWorkspace?.id, isMockUser]);
 
   // Selected Document Type for OCR Input
   const [documentType, setDocumentType] = useState<"RECEIPT" | "INVOICE" | "STATEMENT" | "SUPPORTING_DOC">("RECEIPT");
@@ -233,6 +267,24 @@ export const OCREngineConsole: React.FC = () => {
       const merchantInput = payload.merchantName || "";
       const matchedPattern = findLearnedPattern(merchantInput);
 
+      // Business/Branch Mapping check: a document whose merchant/issuer is
+      // the user's own registered business or branch was issued BY that
+      // business (e.g. an invoice billed to a customer) — it is money
+      // coming IN, never an outside-vendor expense. This is the
+      // authoritative source for transaction type and overrides BOTH the
+      // documentType/category heuristics below AND any previously learned
+      // vendor pattern (a learned pattern may have been recorded before
+      // the merchant was registered as the user's own business/branch, or
+      // from a generic category guess unaware of own-business status) —
+      // the same way Step 4/5 of the AI Chat assistant prompt (server.ts)
+      // treats an own-business/branch merchant match as INCOME and never
+      // defaults to EXPENSE.
+      const ownMatch = matchOwnBusinessAndBranch(
+        merchantInput,
+        ownBusinesses.filter(b => b.isActive !== false),
+        ownBusinessBranches
+      );
+
       if (matchedPattern) {
         // AI Suggests with Learning memory!
         const confidenceScoreStr = matchedPattern.confidenceScore;
@@ -249,9 +301,14 @@ export const OCREngineConsole: React.FC = () => {
         setReviewedAmount(payload.amount || 0);
         setReviewedCurrency(payload.currency || "MYR");
         setReviewedCategory(matchedPattern.category);
-        setSelectedRecordType(matchedPattern.recordType);
-        
-        setSuccessText(`🤖 Learning Layer Matched: Loaded historical pattern for "${matchedPattern.vendorName}". Pre-classified category to "${matchedPattern.category}" (${matchedPattern.recordType}) with a rolling average confidence of ${Math.round(confidenceScoreStr * 100)}%.`);
+
+        if (ownMatch && !ownMatch.ambiguous) {
+          setSelectedRecordType("INCOME");
+          setSuccessText(`🏢 Pengesanan Syarikat Sendiri: "${merchantInput}" sepadan dengan ${ownMatch.branch ? `cawangan "${ownMatch.branch.branchName}"` : `syarikat "${ownMatch.business.businessName}"`} anda yang berdaftar — dokumen ini dikeluarkan OLEH syarikat anda, jadi diklasifikasikan sebagai PENDAPATAN (INCOME), bukan perbelanjaan, walaupun corak pembelajaran lampau mencadangkan sebaliknya.`);
+        } else {
+          setSelectedRecordType(matchedPattern.recordType);
+          setSuccessText(`🤖 Learning Layer Matched: Loaded historical pattern for "${matchedPattern.vendorName}". Pre-classified category to "${matchedPattern.category}" (${matchedPattern.recordType}) with a rolling average confidence of ${Math.round(confidenceScoreStr * 100)}%.`);
+        }
       } else {
         // Default API behavior
         setExtractedData(payload);
@@ -261,9 +318,12 @@ export const OCREngineConsole: React.FC = () => {
         setReviewedAmount(payload.amount || 0);
         setReviewedCurrency(payload.currency || "MYR");
         setReviewedCategory(payload.suggestedCategory || "Utilities");
-        
+
         const categoryLower = (payload.suggestedCategory || "").toLowerCase();
-        if (documentType === "INVOICE") {
+        if (ownMatch && !ownMatch.ambiguous) {
+          setSelectedRecordType("INCOME");
+          setSuccessText(`🏢 Pengesanan Syarikat Sendiri: "${merchantInput}" sepadan dengan ${ownMatch.branch ? `cawangan "${ownMatch.branch.branchName}"` : `syarikat "${ownMatch.business.businessName}"`} anda yang berdaftar — dokumen ini dikeluarkan OLEH syarikat anda, jadi diklasifikasikan sebagai PENDAPATAN (INCOME), bukan perbelanjaan.`);
+        } else if (documentType === "INVOICE") {
           // Test 5: Invoice -> Suggestion -> Confirm -> payables (the supplier owes us nothing;
           // we owe the supplier — this is an accounts-payable bill, not a generic expense).
           setSelectedRecordType("PAYABLE");

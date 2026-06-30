@@ -200,14 +200,18 @@ function effectiveSourceSystem(record: FinancialEvent): SourceSystem {
  *
  * Scoping decisions (see migrations 20260624000000_dedupe_ai_confirmed_records.sql
  * and 20260628000000_add_stmt_reference_unique_indexes.sql):
- * - Same-source duplicates (two AI-chat-confirmed rows, or two bank-statement
- *   import rows, for the same logical transaction) are ALREADY prevented at
- *   the database layer via partial unique indexes on
- *   (workspace_id, reference_number) for 'AI-%' / 'STMT-%' prefixes, with
- *   idempotent upsert (ignoreDuplicates: true) on those write paths. This
- *   engine therefore only flags pairs where source_system DIFFERS between
- *   the two records -- that is the actual unaddressed gap (e.g. OCR receipt
- *   vs. later bank statement import of the same real expense).
+ * - Same-source duplicates for 'STMT-%' (bank statement import) rows are
+ *   ALREADY prevented at the database layer via a partial unique index on
+ *   (workspace_id, reference_number), because that reference number is
+ *   derived deterministically from the statement line's own content. This
+ *   engine therefore still skips same-source STMT/DOC pairs.
+ * - AI Chat ('AI-%') reference numbers are NOT content-derived -- they are
+ *   `AI-${chatSuggestionId}`, a fresh id generated per chat turn, so
+ *   re-uploading and re-confirming the same receipt via AI Chat produces a
+ *   different reference number each time and the unique-index/upsert
+ *   protection never collides. AI_CHAT-sourced pairs are therefore NOT
+ *   exempted from same-source comparison below -- this is the actual gap
+ *   that needs catching cross-engine-wise.
  * - Only records of the EXACT same FinancialRecordType are ever compared
  *   (never Income vs Expense, never Receivable vs Payable, never across
  *   other types) -- enforced by bucketing on `type` below.
@@ -259,9 +263,13 @@ export function detectCrossSourceDuplicates(
         if (recordA.id === recordB.id) continue;
         // Hard filter: exact same transaction class only.
         if (recordA.type !== recordB.type) continue;
-        // Hard filter: same-source pairs are out of scope (already
-        // idempotency-protected at the DB layer -- see module comment).
-        if (effectiveSourceSystem(recordA) === effectiveSourceSystem(recordB)) continue;
+        // Hard filter: same-source pairs are out of scope ONLY for sources
+        // whose reference number is deterministically content-derived and
+        // therefore already idempotency-protected at the DB layer (see
+        // module comment). AI_CHAT reference numbers are not content-derived,
+        // so AI_CHAT-vs-AI_CHAT pairs are still compared below.
+        const sameSource = effectiveSourceSystem(recordA) === effectiveSourceSystem(recordB);
+        if (sameSource && effectiveSourceSystem(recordA) !== "AI_CHAT") continue;
         // Quick reject outside the date window before full scoring.
         if (daysBetween(recordA.date, recordB.date) > dateWindowDays) continue;
         if (Math.abs(recordA.amountMyr - recordB.amountMyr) > Math.max(amountBucketTolerance, Math.abs(recordA.amountMyr) * 0.05, 5)) continue;

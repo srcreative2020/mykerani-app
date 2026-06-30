@@ -100,16 +100,21 @@ export async function createPlan(plan: Omit<HqPlan, "id">): Promise<HqPlan | nul
 
 export async function updatePlan(id: string, plan: Omit<HqPlan, "id">): Promise<boolean> {
   if (!isSupabaseConfigured() || !supabase) return false;
-  const { error } = await supabase.from("subscription_plans").update({
-    name: plan.name,
-    monthly_price_myr: plan.price,
-    annual_price_myr: plan.price * 12,
-    ai_credits_allowance: plan.aiCredits,
-    ocr_credits_allowance: plan.ocrCredits,
-    storage_credits_allowance_mb: plan.storageGB * 1024,
-    features: buildFeaturesJson(plan),
-  }).eq("id", id);
-  return !error;
+  // Routed through update_subscription_plan_and_sync (not a bare table UPDATE)
+  // so every tenant already subscribed to this plan has its wallet balance
+  // delta-synced to the new allowance in the same transaction — HQ Package
+  // Catalog must stay the single source of truth for tenant quotas.
+  const { data, error } = await supabase.rpc("update_subscription_plan_and_sync", {
+    p_plan_id: id,
+    p_name: plan.name,
+    p_monthly_price_myr: plan.price,
+    p_annual_price_myr: plan.price * 12,
+    p_ai_credits_allowance: plan.aiCredits,
+    p_ocr_credits_allowance: plan.ocrCredits,
+    p_storage_credits_allowance_mb: plan.storageGB * 1024,
+    p_features: buildFeaturesJson(plan),
+  });
+  return !error && data === true;
 }
 
 export async function deletePlan(id: string): Promise<boolean> {
@@ -881,6 +886,17 @@ export interface ResourceWalletSummary {
   aiConsumed30d: number;
   ocrConsumed30d: number;
   aiCostUsd30d: number;
+  // Unified Resource Wallet Calculation Engine breakdown — same
+  // package_quota + purchased_topup - usage = remaining formula as
+  // get_resource_wallet_breakdown(), summed tenant-wide. aiCreditsBalance/
+  // ocrCreditsBalance/storage*Bytes above remain the ground-truth
+  // "remaining" inputs; these are purely the decomposition on top.
+  aiPurchasedTopup: number;
+  ocrPurchasedTopup: number;
+  storagePurchasedTopup: number;
+  aiPackageQuota: number;
+  ocrPackageQuota: number;
+  storagePackageQuota: number;
 }
 
 export async function getResourceWalletSummary(): Promise<ResourceWalletSummary[]> {
@@ -898,6 +914,12 @@ export async function getResourceWalletSummary(): Promise<ResourceWalletSummary[
     aiConsumed30d: Number(row.ai_consumed_30d) || 0,
     ocrConsumed30d: Number(row.ocr_consumed_30d) || 0,
     aiCostUsd30d: Number(row.ai_cost_usd_30d) || 0,
+    aiPurchasedTopup: Number(row.ai_purchased_topup) || 0,
+    ocrPurchasedTopup: Number(row.ocr_purchased_topup) || 0,
+    storagePurchasedTopup: Number(row.storage_purchased_topup) || 0,
+    aiPackageQuota: Number(row.ai_package_quota) || 0,
+    ocrPackageQuota: Number(row.ocr_package_quota) || 0,
+    storagePackageQuota: Number(row.storage_package_quota) || 0,
   }));
 }
 

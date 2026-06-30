@@ -148,7 +148,12 @@ export const AuditProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         setLoading(false);
       }
     }
-  }, [user, activeTenant, isMockUser]);
+    // Keyed on user?.id / activeTenant?.id, not the objects — AuthContext
+    // emits a new `user` object on every onAuthStateChange event (e.g.
+    // routine token refresh), which was re-running this load and flipping
+    // loading:true mid-session for no actual data change.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id, activeTenant?.id, isMockUser]);
 
   // Load trace log index initially
   useEffect(() => {

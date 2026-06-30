@@ -73,7 +73,8 @@ export async function pollOcrJob(
     if (cancelSignal?.cancelled) {
       // Attempt to cancel on the server
       try {
-        await fetch(`/api/ocr/analyze/cancel/${jobId}`, { method: "POST" });
+        const { getAuthHeader } = await import("./supabase");
+        await fetch(`/api/ocr/analyze/cancel/${jobId}`, { method: "POST", headers: await getAuthHeader() });
       } catch {}
       return {
         jobId,
@@ -105,9 +106,19 @@ export async function pollOcrJob(
         result: null,
       };
     }
-    const res = await fetch(`/api/ocr/analyze/progress/${jobId}`);
+    // /api/ocr/analyze/progress/:jobId is tenant/workspace-gated server-side
+    // (verifyTenantAccess -> resolveCallerIdentity), same as the /start call
+    // that created this job — an unauthenticated poll always comes back 403.
+    // AI Chat never hits this path (it uses the synchronous /api/ocr/analyze
+    // endpoint with no job/poll), which is why this 403 was isolated to the
+    // Documents module and the OCR Engine Console review flow, both of
+    // which poll a job here.
+    const { getAuthHeader } = await import("./supabase");
+    const res = await fetch(`/api/ocr/analyze/progress/${jobId}`, { headers: await getAuthHeader() });
     if (!res.ok) {
-      throw new Error(`Failed to fetch OCR job progress (HTTP ${res.status})`);
+      const errBody = await res.json().catch(() => null);
+      const reasonSuffix = errBody?.reason ? ` — ${errBody.reason}` : "";
+      throw new Error(`Failed to fetch OCR job progress (HTTP ${res.status})${reasonSuffix}`);
     }
     const job: OcrJobState = await res.json();
     onUpdate(job);

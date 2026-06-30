@@ -849,7 +849,13 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
     loadData();
 
     return () => { cancelled = true; };
-  }, [user, activeWorkspace, isMockUser]);
+    // Keyed on user?.id / activeWorkspace?.id, not the objects — see
+    // TenantContext.tsx for why: AuthContext emits a new `user` object on
+    // every onAuthStateChange event (e.g. routine token refresh), which
+    // was re-running this load and flipping loading:true mid-session for
+    // no actual data change.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id, activeWorkspace?.id, isMockUser]);
 
   const setPresenterPresets = () => {
     if (!activeWorkspace) return;
