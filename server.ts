@@ -1251,7 +1251,8 @@ Provide your output precisely formatted as raw JSON matching exactly this shape,
     }
     const access = await verifyTenantAccess(req, tenantId, workspaceId);
     if (!access.ok) {
-      return res.status(403).json({ error: "Sesi tidak sah atau tidak mempunyai akses kepada syarikat ini." });
+      console.error(`[ocr/analyze/start] 403: ${access.reason}`);
+      return res.status(403).json({ error: "Sesi tidak sah atau tidak mempunyai akses kepada syarikat ini.", reason: access.reason });
     }
 
     const jobId = randomUUID();
@@ -1297,7 +1298,8 @@ Provide your output precisely formatted as raw JSON matching exactly this shape,
     }
     const access = await verifyTenantAccess(req, job.tenantId, job.workspaceId);
     if (!access.ok) {
-      return res.status(403).json({ error: "Sesi tidak sah atau tidak mempunyai akses kepada syarikat ini." });
+      console.error(`[ocr/analyze/progress] 403: ${access.reason} (job.tenantId=${job.tenantId}, job.workspaceId=${job.workspaceId})`);
+      return res.status(403).json({ error: "Sesi tidak sah atau tidak mempunyai akses kepada syarikat ini.", reason: access.reason });
     }
     return res.json(job);
   });
@@ -1310,7 +1312,8 @@ Provide your output precisely formatted as raw JSON matching exactly this shape,
     }
     const access = await verifyTenantAccess(req, job.tenantId, job.workspaceId);
     if (!access.ok) {
-      return res.status(403).json({ error: "Sesi tidak sah atau tidak mempunyai akses kepada syarikat ini." });
+      console.error(`[ocr/analyze/cancel] 403: ${access.reason}`);
+      return res.status(403).json({ error: "Sesi tidak sah atau tidak mempunyai akses kepada syarikat ini.", reason: access.reason });
     }
     job.status = "CANCELLED" as any;
     job.stage = "CANCELLED" as any;
@@ -1926,7 +1929,7 @@ Only include a "CONFIRM_TRANSACTION" suggestion entry when financialIntent.detec
   // single source of truth for "who is calling" used by every endpoint
   // below (Constitution: Multi Tenant Rule — "tenant identity must come
   // from the authenticated session, not the request body").
-  async function resolveCallerIdentity(req: any): Promise<{ ok: boolean; userId?: string; tenantId?: string; role?: string; email?: string }> {
+  async function resolveCallerIdentity(req: any): Promise<{ ok: boolean; userId?: string; tenantId?: string; role?: string; email?: string; reason?: string }> {
     const supabaseUrl = process.env.VITE_SUPABASE_URL;
     const anonKey = process.env.VITE_SUPABASE_ANON_KEY;
     const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -1934,31 +1937,37 @@ Only include a "CONFIRM_TRANSACTION" suggestion entry when financialIntent.detec
 
     const authHeader = req.headers?.authorization || "";
     const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : "";
-    if (!token) return { ok: false };
+    if (!token) return { ok: false, reason: "no_bearer_token_in_request" };
 
     try {
       const userResp = await fetch(`${supabaseUrl}/auth/v1/user`, {
         headers: { apikey: anonKey, Authorization: `Bearer ${token}` },
       });
-      if (!userResp.ok) return { ok: false };
+      if (!userResp.ok) {
+        const body = await userResp.text().catch(() => "");
+        return { ok: false, reason: `auth_v1_user_rejected_token (HTTP ${userResp.status}): ${body.slice(0, 200)}` };
+      }
       const userData = await userResp.json() as any;
       const userId = userData?.id;
-      if (!userId) return { ok: false };
+      if (!userId) return { ok: false, reason: "auth_v1_user_response_missing_id" };
 
       const roleResp = await fetch(
         `${supabaseUrl}/rest/v1/user_role_assignments?user_id=eq.${userId}&select=tenant_id,role,email`,
         { headers: { apikey: serviceRoleKey, Authorization: `Bearer ${serviceRoleKey}` } }
       );
-      if (!roleResp.ok) return { ok: false };
+      if (!roleResp.ok) {
+        const body = await roleResp.text().catch(() => "");
+        return { ok: false, reason: `role_lookup_failed (HTTP ${roleResp.status}): ${body.slice(0, 200)}` };
+      }
       const roleRows: any[] = await roleResp.json();
       const tenantId = roleRows[0]?.tenant_id;
       const role = roleRows[0]?.role;
-      if (!tenantId || !role) return { ok: false };
+      if (!tenantId || !role) return { ok: false, reason: `no_role_assignment_row_for_user_${userId}` };
 
       return { ok: true, userId, tenantId, role, email: roleRows[0]?.email || userData?.email };
-    } catch (err) {
+    } catch (err: any) {
       console.error("Failed to resolve caller identity:", err);
-      return { ok: false };
+      return { ok: false, reason: `exception: ${err?.message || String(err)}` };
     }
   }
 
@@ -1970,12 +1979,14 @@ Only include a "CONFIRM_TRANSACTION" suggestion entry when financialIntent.detec
     req: any,
     claimedTenantId: string | undefined | null,
     claimedWorkspaceId: string | undefined | null
-  ): Promise<{ ok: boolean; userId?: string; tenantId?: string; role?: string }> {
+  ): Promise<{ ok: boolean; userId?: string; tenantId?: string; role?: string; reason?: string }> {
     const identity = await resolveCallerIdentity(req);
-    if (!identity.ok) return { ok: false };
+    if (!identity.ok) return identity;
     // Dev fallback (no Supabase configured) has no tenantId to compare against.
     if (!identity.tenantId) return identity;
-    if (claimedTenantId && identity.tenantId !== claimedTenantId) return { ok: false };
+    if (claimedTenantId && identity.tenantId !== claimedTenantId) {
+      return { ok: false, reason: `tenant_mismatch: identity.tenantId=${identity.tenantId} claimedTenantId=${claimedTenantId}` };
+    }
 
     if (claimedWorkspaceId) {
       const supabaseUrl = process.env.VITE_SUPABASE_URL;
@@ -1985,12 +1996,17 @@ Only include a "CONFIRM_TRANSACTION" suggestion entry when financialIntent.detec
           `${supabaseUrl}/rest/v1/workspaces?id=eq.${claimedWorkspaceId}&select=tenant_id`,
           { headers: { apikey: serviceRoleKey!, Authorization: `Bearer ${serviceRoleKey}` } }
         );
-        if (!wsResp.ok) return { ok: false };
+        if (!wsResp.ok) {
+          const body = await wsResp.text().catch(() => "");
+          return { ok: false, reason: `workspace_lookup_failed (HTTP ${wsResp.status}): ${body.slice(0, 200)}` };
+        }
         const wsRows: any[] = await wsResp.json();
-        if (wsRows[0]?.tenant_id !== identity.tenantId) return { ok: false };
-      } catch (err) {
+        if (wsRows[0]?.tenant_id !== identity.tenantId) {
+          return { ok: false, reason: `workspace_tenant_mismatch: workspace.tenant_id=${wsRows[0]?.tenant_id} identity.tenantId=${identity.tenantId}` };
+        }
+      } catch (err: any) {
         console.error("Failed to verify workspace ownership:", err);
-        return { ok: false };
+        return { ok: false, reason: `workspace_lookup_exception: ${err?.message || String(err)}` };
       }
     }
 

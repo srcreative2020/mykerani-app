@@ -116,7 +116,9 @@ export async function pollOcrJob(
     const { getAuthHeader } = await import("./supabase");
     const res = await fetch(`/api/ocr/analyze/progress/${jobId}`, { headers: await getAuthHeader() });
     if (!res.ok) {
-      throw new Error(`Failed to fetch OCR job progress (HTTP ${res.status})`);
+      const errBody = await res.json().catch(() => null);
+      const reasonSuffix = errBody?.reason ? ` — ${errBody.reason}` : "";
+      throw new Error(`Failed to fetch OCR job progress (HTTP ${res.status})${reasonSuffix}`);
     }
     const job: OcrJobState = await res.json();
     onUpdate(job);
