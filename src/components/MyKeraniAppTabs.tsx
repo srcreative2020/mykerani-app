@@ -400,7 +400,7 @@ export const MyKeraniAppTabs: React.FC<MyKeraniAppTabsProps> = ({
                         )
                       }
                       disabled={simulating}
-                      className="w-full text-left p-4 bg-slate-50 border border-slate-200/80 hover:border-indigo-600 hover:bg-indigo-50/10 rounded-2xl transition cursor-pointer select-none group flex items-center justify-between"
+                      className="w-full text-left p-4 bg-slate-50 border border-slate-200/80 hover:border-indigo-600 hover:bg-indigo-50/10 rounded-2xl transition cursor-pointer select-none group flex items-center justify-between disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       <div>
                         <h4 className="font-sans font-bold text-xs text-indigo-950 group-hover:text-indigo-600">

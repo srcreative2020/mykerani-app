@@ -3032,7 +3032,7 @@ export function OwnerDashboard() {
                     </button>
                   ))}
                 </div>
-                <button onClick={() => signOut()} className="w-full py-3 border border-rose-200 text-rose-500 rounded-2xl text-sm font-semibold hover:bg-rose-50 transition cursor-pointer">
+                <button onClick={() => signOut()} className="w-full py-3 mt-2 border border-rose-200 text-rose-500 rounded-2xl text-sm font-semibold hover:bg-rose-50 transition cursor-pointer">
                   Log Keluar
                 </button>
               </>
@@ -3125,7 +3125,7 @@ export function OwnerDashboard() {
                                 disabled={roleChangeLoadingId === member.id}
                                 onChange={e => handleChangeMemberRole(member, e.target.value)}
                                 title="Tukar peranan kakitangan (direkod dalam role_change_audit_log)"
-                                className="text-2xs border border-slate-200 rounded-lg px-1.5 py-1 bg-white cursor-pointer"
+                                className="text-2xs border border-slate-200 rounded-lg px-1.5 py-1 bg-white cursor-pointer disabled:opacity-50"
                               >
                                 <option value="TENANT_ADMIN">TENANT_ADMIN</option>
                                 <option value="MANAGER">MANAGER</option>
