@@ -1359,8 +1359,16 @@ export function OwnerDashboard() {
       // (e.g. right after login/workspace switch) — sending now would ship an
       // empty financialContext to the AI, making it look like the workspace
       // has no profile/vehicles at all. Wait for the in-flight load instead.
+      // Bounded to 8s: if refreshProfileData's underlying loaders never settle
+      // (a hung/dropped query), profileLoading would otherwise stay true forever
+      // and this await would block sendChat indefinitely with zero feedback —
+      // proceed with whatever context is available rather than hang the chat.
       await new Promise<void>(resolve => {
-        const check = () => { if (!profileLoadingRef.current) resolve(); else setTimeout(check, 100); };
+        const deadline = Date.now() + 8000;
+        const check = () => {
+          if (!profileLoadingRef.current || Date.now() >= deadline) resolve();
+          else setTimeout(check, 100);
+        };
         check();
       });
     }
