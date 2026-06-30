@@ -353,6 +353,27 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
   const { activeWorkspace } = useWorkspace();
   const { writeAuditLog } = useAudit();
 
+  // GAP-H1: cash/bank account changes affect the shared workspace ledger,
+  // so the rest of the tenant team must see them in the notification
+  // center — same closed-loop pattern as PermissionContext's role changes.
+  const notifyWorkspace = (title: string, message: string, metadata: Record<string, unknown>) => {
+    if (!isSupabaseConfigured() || isMockUser || !supabase || !activeWorkspace || isDemoWorkspace(activeWorkspace.id)) return;
+    (async () => {
+      try {
+        await supabase.from("workspace_notifications").insert({
+          workspace_id: activeWorkspace.id,
+          tenant_id: activeWorkspace.tenantId,
+          category: "FINANCIAL_RECORD",
+          title,
+          message,
+          metadata
+        });
+      } catch (err: any) {
+        console.error("Workspace notification insert failed:", err.message);
+      }
+    })();
+  };
+
   const [financialEvents, setFinancialEvents] = useState<FinancialEvent[]>([]);
   const [cashAccounts, setCashAccounts] = useState<CashAccount[]>([]);
   const [bankAccounts, setBankAccounts] = useState<BankAccount[]>([]);
@@ -1447,11 +1468,27 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
       })();
     }
 
+    if (activeWorkspace) {
+      writeAuditLog({
+        workspaceId: activeWorkspace.id,
+        module: "Financial Records",
+        action: "CREATE",
+        oldValue: null,
+        newValue: newAccount
+      });
+      notifyWorkspace(
+        "Akaun tunai baharu ditambah",
+        `${user?.fullName || "Seorang ahli pasukan"} menambah akaun tunai "${newAccount.name}".`,
+        { accountId: newId, accountName: newAccount.name }
+      );
+    }
+
     return newAccount;
   };
 
   const editCashAccount = (id: string, updated: Partial<CashAccount>) => {
     const original = cashAccounts.find((item) => item.id === id);
+    const originalAccount = original;
     const nextList = cashAccounts.map((item) =>
       item.id === id ? ({ ...item, ...updated } as CashAccount) : item
     );
@@ -1481,10 +1518,26 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
         }
       })();
     }
+
+    if (activeWorkspace && originalAccount) {
+      writeAuditLog({
+        workspaceId: activeWorkspace.id,
+        module: "Financial Records",
+        action: "UPDATE",
+        oldValue: originalAccount,
+        newValue: { ...originalAccount, ...updated }
+      });
+      notifyWorkspace(
+        "Akaun tunai dikemaskini",
+        `${user?.fullName || "Seorang ahli pasukan"} mengemaskini akaun tunai "${originalAccount.name}".`,
+        { accountId: id, accountName: originalAccount.name }
+      );
+    }
   };
 
   const deleteCashAccount = (id: string) => {
     const original = cashAccounts.find((item) => item.id === id);
+    const originalAccount = original;
     const nextList = cashAccounts.filter((item) => item.id !== id);
     setCashAccounts(nextList);
     persistCurrentState(financialEvents, nextList);
@@ -1503,6 +1556,21 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
           setError("Gagal menyimpan rekod ke pangkalan data. Sila cuba lagi.");
         }
       })();
+    }
+
+    if (activeWorkspace && originalAccount) {
+      writeAuditLog({
+        workspaceId: activeWorkspace.id,
+        module: "Financial Records",
+        action: "DELETE",
+        oldValue: originalAccount,
+        newValue: null
+      });
+      notifyWorkspace(
+        "Akaun tunai dipadam",
+        `${user?.fullName || "Seorang ahli pasukan"} memadam akaun tunai "${originalAccount.name}".`,
+        { accountId: id, accountName: originalAccount.name }
+      );
     }
   };
 
@@ -1538,11 +1606,27 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
       })();
     }
 
+    if (activeWorkspace) {
+      writeAuditLog({
+        workspaceId: activeWorkspace.id,
+        module: "Financial Records",
+        action: "CREATE",
+        oldValue: null,
+        newValue: newAccount
+      });
+      notifyWorkspace(
+        "Akaun bank baharu ditambah",
+        `${user?.fullName || "Seorang ahli pasukan"} menambah akaun bank "${newAccount.bankName} - ${newAccount.accountName}".`,
+        { accountId: newId, bankName: newAccount.bankName }
+      );
+    }
+
     return newAccount;
   };
 
   const editBankAccount = (id: string, updated: Partial<BankAccount>) => {
     const original = bankAccounts.find((item) => item.id === id);
+    const originalAccount = original;
     const nextList = bankAccounts.map((item) =>
       item.id === id ? ({ ...item, ...updated } as BankAccount) : item
     );
@@ -1574,10 +1658,26 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
         }
       })();
     }
+
+    if (activeWorkspace && originalAccount) {
+      writeAuditLog({
+        workspaceId: activeWorkspace.id,
+        module: "Financial Records",
+        action: "UPDATE",
+        oldValue: originalAccount,
+        newValue: { ...originalAccount, ...updated }
+      });
+      notifyWorkspace(
+        "Akaun bank dikemaskini",
+        `${user?.fullName || "Seorang ahli pasukan"} mengemaskini akaun bank "${originalAccount.bankName} - ${originalAccount.accountName}".`,
+        { accountId: id, bankName: originalAccount.bankName }
+      );
+    }
   };
 
   const deleteBankAccount = (id: string) => {
     const original = bankAccounts.find((item) => item.id === id);
+    const originalAccount = original;
     const nextList = bankAccounts.filter((item) => item.id !== id);
     setBankAccounts(nextList);
     persistCurrentState(financialEvents, cashAccounts, nextList);
@@ -1596,6 +1696,21 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
           setError("Gagal menyimpan rekod ke pangkalan data. Sila cuba lagi.");
         }
       })();
+    }
+
+    if (activeWorkspace && originalAccount) {
+      writeAuditLog({
+        workspaceId: activeWorkspace.id,
+        module: "Financial Records",
+        action: "DELETE",
+        oldValue: originalAccount,
+        newValue: null
+      });
+      notifyWorkspace(
+        "Akaun bank dipadam",
+        `${user?.fullName || "Seorang ahli pasukan"} memadam akaun bank "${originalAccount.bankName} - ${originalAccount.accountName}".`,
+        { accountId: id, bankName: originalAccount.bankName }
+      );
     }
   };
 
@@ -1974,9 +2089,9 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
   // --- Financial Evidence Packages Actions ---
   const addFinancialEvidencePackage = (pkg: Omit<FinancialEvidencePackage, "id">): FinancialEvidencePackage => {
     const newId = generateUUID();
-    const newPkg: FinancialEvidencePackage = { ...pkg, id: newId };
-    let updated: FinancialEvidencePackage[] = [];
-    setFinancialEvidencePackages(prev => { updated = [newPkg, ...prev]; return updated; });
+    const newPkg: FinancialEvidencePackage = { ...pkg, id: newId, uploadedBy: pkg.uploadedBy || user?.id };
+    const updated = [newPkg, ...financialEvidencePackages];
+    setFinancialEvidencePackages(updated);
     persistCurrentState(financialEvents, cashAccounts, bankAccounts, debtRecords, financialCommitments, updated);
 
     if (activeWorkspace) {
@@ -2015,6 +2130,8 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
             related_record_type: newPkg.relatedRecordType || null,
             related_record_id: newPkg.relatedRecordId || null,
             notes: newPkg.notes || null,
+            uploaded_by: newPkg.uploadedBy || null,
+            file_size_bytes: newPkg.fileSizeBytes ?? null,
           });
         } catch (err: any) {
           console.error("DB persistence insert evidence package failed:", err.message);
@@ -2023,6 +2140,12 @@ export const FinancialRecordsProvider: React.FC<{ children: React.ReactNode }> =
           setError("Gagal menyimpan rekod ke pangkalan data. Sila cuba lagi.");
         }
       })();
+
+      notifyWorkspace(
+        "Dokumen bukti baharu dimuat naik",
+        `${user?.fullName || user?.email || "Pengguna"} memuat naik "${newPkg.fileName}".`,
+        { fileName: newPkg.fileName, documentType: newPkg.documentType }
+      );
     }
 
     return newPkg;

@@ -302,6 +302,41 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         activeWorkspace: prev.activeWorkspace || ws,
       }));
 
+      // GAP-H1: new workspaces must be visible to the rest of the tenant
+      // team via the notification closed loop, not just the creator.
+      try {
+        await supabase.from("workspace_notifications").insert({
+          workspace_id: ws.id,
+          tenant_id: activeTenant.id,
+          category: "SYSTEM",
+          title: "Ruang kerja baharu dicipta",
+          message: `${user.fullName || user.email} mencipta ruang kerja baharu "${ws.name}".`,
+          metadata: { workspaceId: ws.id, workspaceName: ws.name }
+        });
+      } catch (err: any) {
+        console.error("Workspace creation notification insert failed:", err.message);
+      }
+
+      // GAP-M8: workspace creation must leave an audit trail, not just a
+      // notification. Written as a direct insert (mirroring AuditContext's
+      // own writeAuditLog shape) rather than via useAudit(), since
+      // AuditProvider is mounted inside WorkspaceProvider in the tree.
+      try {
+        await supabase.from("audit_logs").insert({
+          user_id: user.id,
+          user_email: user.email,
+          user_role: user.role,
+          tenant_id: activeTenant.id,
+          workspace_id: ws.id,
+          module: "Workspace",
+          action: "CREATE",
+          old_value: null,
+          new_value: ws
+        });
+      } catch (err: any) {
+        console.error("Workspace creation audit log insert failed:", err.message);
+      }
+
       return ws;
     }
   }, [user, activeTenant, isMockUser, state.workspaces]);

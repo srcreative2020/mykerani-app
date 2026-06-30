@@ -44,6 +44,7 @@ export interface UserRoleAssignment {
   role: UserRole;
   tenantId: string;
   createdAt?: string;
+  isSuspended?: boolean;
 }
 
 export interface AuthState {
@@ -174,6 +175,8 @@ export interface FinancialEvidencePackage {
   relatedRecordType?: string; // 'INCOME' | 'EXPENSE' | 'RECEIVABLE' | 'PAYABLE' | 'DEBT' | 'COMMITMENT'
   relatedRecordId?: string;
   notes?: string;
+  uploadedBy?: string;
+  fileSizeBytes?: number;
 }
 
 export interface OcrLearnedPattern {
@@ -235,7 +238,7 @@ export interface AuditLogEntry {
   userRole: UserRole;
   tenantId: string;
   workspaceId?: string;
-  module: "Financial Records" | "Financial Commitments" | "Financial Evidence Package" | "OCR Learning" | "Backup & Recovery" | "Storage Provider" | "Notifications" | "Debt Records";
+  module: "Financial Records" | "Financial Commitments" | "Financial Evidence Package" | "OCR Learning" | "Backup & Recovery" | "Storage Provider" | "Notifications" | "Debt Records" | "Workspace";
   action: "CREATE" | "UPDATE" | "DELETE";
   oldValue: Record<string, any> | null;
   newValue: Record<string, any> | null;
