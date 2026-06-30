@@ -487,7 +487,7 @@ export const AIFinancialAssistant: React.FC<AIFinancialAssistantProps> = ({ onTr
               <div
                 className={`p-4 rounded-3xl text-sm leading-relaxed ${
                   isUser
-                    ? "bg-indigo-650 text-white rounded-tr-none"
+                    ? "bg-indigo-700 text-white rounded-tr-none"
                     : "bg-slate-50 text-slate-800 border border-slate-100 rounded-tl-none whitespace-pre-wrap"
                 }`}
               >
@@ -523,7 +523,7 @@ export const AIFinancialAssistant: React.FC<AIFinancialAssistantProps> = ({ onTr
                         key={b.id}
                         type="button"
                         onClick={() => handlePickBusiness(s.id, b)}
-                        className="px-3 py-1.5 rounded-lg bg-indigo-50 hover:bg-indigo-100 border border-indigo-150 text-indigo-700 font-semibold text-xs"
+                        className="px-3 py-1.5 rounded-lg bg-indigo-50 hover:bg-indigo-100 border border-indigo-100 text-indigo-700 font-semibold text-xs"
                       >
                         {b.businessName}
                       </button>
@@ -559,14 +559,14 @@ export const AIFinancialAssistant: React.FC<AIFinancialAssistantProps> = ({ onTr
                             type="button"
                             onClick={() => handleRequestAttachEvidence(s.id)}
                             disabled={uploadingEvidenceFor === s.id}
-                            className="px-2 py-1 rounded-md bg-indigo-50 hover:bg-indigo-100 border border-indigo-150 text-indigo-700 font-semibold text-[11px] disabled:opacity-50"
+                            className="px-2 py-1 rounded-md bg-indigo-50 hover:bg-indigo-100 border border-indigo-100 text-indigo-700 font-semibold text-xs disabled:opacity-50"
                           >
                             {uploadingEvidenceFor === s.id ? "Memuat naik..." : "Lampir Resit"}
                           </button>
                           <button
                             type="button"
                             onClick={() => handleSkipEvidence(s.id)}
-                            className="px-2 py-1 rounded-md bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-700 font-semibold text-[11px]"
+                            className="px-2 py-1 rounded-md bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-700 font-semibold text-xs"
                           >
                             Tiada Resit
                           </button>
@@ -662,7 +662,7 @@ export const AIFinancialAssistant: React.FC<AIFinancialAssistantProps> = ({ onTr
 
       {/* 5. Suggested Questions */}
       <div className="space-y-1.5 mb-4 shrink-0">
-        <span className="text-[10px] uppercase font-mono font-bold tracking-wider text-slate-400 block px-0.5">Cadangan Soalan Kewangan:</span>
+        <span className="text-2xs uppercase font-mono font-bold tracking-wider text-slate-400 block px-0.5">Cadangan Soalan Kewangan:</span>
         <div className="flex flex-wrap gap-2">
           {SUGGESTED_QUESTIONS.map((item, idx) => (
             <button
@@ -670,7 +670,7 @@ export const AIFinancialAssistant: React.FC<AIFinancialAssistantProps> = ({ onTr
               onClick={() => executeAgentQuery(item.query)}
               type="button"
               disabled={loading}
-              className="bg-indigo-50 hover:bg-indigo-150/70 border border-indigo-100 rounded-full py-1.5 px-3.5 text-xs text-indigo-700 transition cursor-pointer disabled:opacity-40 font-medium"
+              className="bg-indigo-50 hover:bg-indigo-100/70 border border-indigo-100 rounded-full py-1.5 px-3.5 text-xs text-indigo-700 transition cursor-pointer disabled:opacity-40 font-medium"
             >
               {item.title}
             </button>
@@ -686,7 +686,7 @@ export const AIFinancialAssistant: React.FC<AIFinancialAssistantProps> = ({ onTr
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Tulis soalan mengenai baki akaun atau belanja syarikat di sini..."
-            className="flex-1 px-4 py-3 text-sm bg-slate-50 border border-slate-250 outline-none focus:bg-white focus:border-indigo-600 rounded-2xl transition shadow-3xs"
+            className="flex-1 px-4 py-3 text-sm bg-slate-50 border border-slate-200 outline-none focus:bg-white focus:border-indigo-600 rounded-2xl transition shadow-3xs"
             disabled={loading}
             required
           />

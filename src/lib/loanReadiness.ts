@@ -133,10 +133,10 @@ export function computeLoanReadiness(
   const scorePct = (passedCount / checks.length) * 100;
 
   let scoreGrade = "Sedia";
-  let scoreColor = "text-emerald-600 bg-emerald-50 border-emerald-150";
+  let scoreColor = "text-emerald-600 bg-emerald-50 border-emerald-100";
   if (scorePct < 50) {
     scoreGrade = "Belum Sedia";
-    scoreColor = "text-rose-600 bg-rose-50 border-rose-150";
+    scoreColor = "text-rose-600 bg-rose-50 border-rose-100";
   } else if (scorePct < 85) {
     scoreGrade = "Sebahagian Sedia";
     scoreColor = "text-amber-600 bg-amber-50 border-amber-100";

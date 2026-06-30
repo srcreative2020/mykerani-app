@@ -115,7 +115,7 @@ export const BalanceSheetReport: React.FC<BalanceSheetReportProps> = ({
       <div className="bg-slate-950 rounded-2xl p-2" id="balance_sheet_statement">
         <div className="px-4 py-3 border-b border-white/10 flex items-center space-x-2">
           <Landmark className="w-4 h-4 text-emerald-400" />
-          <span className="text-[10px] font-mono uppercase tracking-wider text-slate-400">Kunci Kira-Kira (Balance Sheet)</span>
+          <span className="text-2xs font-mono uppercase tracking-wider text-slate-400">Kunci Kira-Kira (Balance Sheet)</span>
         </div>
         {lineRow("ASSETS", tieOut.assets, true)}
         {lineRow("LIABILITIES", tieOut.liabilities)}
@@ -172,16 +172,16 @@ export const BalanceSheetReport: React.FC<BalanceSheetReportProps> = ({
                     <span className="font-semibold text-slate-900">{entry.record.humanFriendlyName}</span>
                     <span className="font-mono">{fmtMyr(entry.record.amountMyr)}</span>
                   </div>
-                  <p className="text-[10px] text-slate-400">{entry.record.date} · {entry.record.resolutionMethod}</p>
+                  <p className="text-2xs text-slate-400">{entry.record.date} · {entry.record.resolutionMethod}</p>
                   {entry.hasEvidence ? (
                     entry.evidence.map((ev) => (
-                      <div key={ev.id} className="flex items-center space-x-2 text-[11px] text-slate-600">
+                      <div key={ev.id} className="flex items-center space-x-2 text-xs text-slate-600">
                         {ev.documentType === "INVOICE" ? <FileText className="w-3.5 h-3.5" /> : <Receipt className="w-3.5 h-3.5" />}
                         <span>{ev.fileName}</span>
                       </div>
                     ))
                   ) : (
-                    <p className="text-[11px] text-amber-600">Tiada pakej bukti dikaitkan.</p>
+                    <p className="text-xs text-amber-600">Tiada pakej bukti dikaitkan.</p>
                   )}
                 </div>
               ))}

@@ -658,7 +658,7 @@ export const OCREngineConsole: React.FC = () => {
           </p>
         </div>
 
-        <div className="inline-flex items-center gap-1 px-2.5 py-1 text-[10px] uppercase font-mono bg-emerald-50 border border-emerald-150 rounded text-emerald-700 font-bold select-none">
+        <div className="inline-flex items-center gap-1 px-2.5 py-1 text-2xs uppercase font-mono bg-emerald-50 border border-emerald-100 rounded text-emerald-700 font-bold select-none">
           <FileCheck className="w-3.5 h-3.5" />
           AI Engine Co-Pilot
         </div>
@@ -666,21 +666,21 @@ export const OCREngineConsole: React.FC = () => {
 
       {/* FEEDBACK LABELS */}
       {errorText && (
-        <div className="p-3 bg-rose-50 border border-rose-150 rounded-xl text-xs text-rose-800 flex items-start gap-2.5 animate-slide-up" id="ocr_error_badge">
+        <div className="p-3 bg-rose-50 border border-rose-100 rounded-xl text-xs text-rose-800 flex items-start gap-2.5 animate-slide-up" id="ocr_error_badge">
           <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
           <span>{errorText}</span>
         </div>
       )}
 
       {successText && (
-        <div className="p-3 bg-emerald-50 border border-emerald-150 rounded-xl text-xs text-emerald-800 flex items-start gap-2.5 animate-slide-up" id="ocr_success_badge">
+        <div className="p-3 bg-emerald-50 border border-emerald-100 rounded-xl text-xs text-emerald-800 flex items-start gap-2.5 animate-slide-up" id="ocr_success_badge">
           <CheckCircle className="w-4 h-4 shrink-0 mt-0.5" />
           <span>{successText}</span>
         </div>
       )}
 
       {/* WORKFLOW TRACK STEPPER */}
-      <div className="grid grid-cols-4 gap-2 text-center text-[10px] font-semibold tracking-wider uppercase text-slate-400 bg-slate-50 p-2 rounded-lg border border-slate-200/60 font-mono">
+      <div className="grid grid-cols-4 gap-2 text-center text-2xs font-semibold tracking-wider uppercase text-slate-400 bg-slate-50 p-2 rounded-lg border border-slate-200/60 font-mono">
         <div className={`py-1 rounded ${!file ? "text-emerald-700 font-bold bg-white border border-slate-200 shadow-3xs" : ""}`}>1. Choose & Drop</div>
         <div className={`py-1 rounded ${file && !extractedData && !isAnalyzing ? "text-emerald-700 font-bold bg-white border border-slate-200 shadow-3xs" : ""}`}>2. OCR Analyze</div>
         <div className={`py-1 rounded ${isAnalyzing ? "text-emerald-700 font-bold bg-white border border-slate-200 shadow-3xs animate-pulse" : ""}`}>3. Co-Pilot Extraction</div>
@@ -751,28 +751,28 @@ export const OCREngineConsole: React.FC = () => {
                 className="hidden"
               />
               
-              <div className="p-3 bg-white border border-slate-150 rounded-full text-slate-500 shadow-3xs group-hover:scale-115 transition">
+              <div className="p-3 bg-white border border-slate-100 rounded-full text-slate-500 shadow-3xs group-hover:scale-115 transition">
                 <UploadCloud className="w-6 h-6 text-emerald-600" />
               </div>
 
               {file ? (
                 <div className="space-y-1">
                   <p className="text-xs font-semibold text-slate-800 line-clamp-1">{file.name}</p>
-                  <p className="text-[10px] font-mono text-slate-400">{(file.size / 1024 / 1024).toFixed(2)} MB • Click to change</p>
+                  <p className="text-2xs font-mono text-slate-400">{(file.size / 1024 / 1024).toFixed(2)} MB • Click to change</p>
                 </div>
               ) : (
                 <div className="space-y-1 pt-1">
                   <p className="text-xs font-semibold text-slate-800">
                     Drag and drop file here, or <span className="text-emerald-700 underline font-bold">browse drive</span>
                   </p>
-                  <p className="text-[10px] text-slate-400">PDFs, JPEGs, PNGs up to 12MB. Securely isolated in workspace.</p>
+                  <p className="text-2xs text-slate-400">PDFs, JPEGs, PNGs up to 12MB. Securely isolated in workspace.</p>
                 </div>
               )}
             </div>
           </div>
 
           {/* Right Column: Original Document Selection State and Action Buttons */}
-          <div className="lg:col-span-5 bg-slate-50 rounded-xl p-5 flex flex-col justify-between border border-slate-150">
+          <div className="lg:col-span-5 bg-slate-50 rounded-xl p-5 flex flex-col justify-between border border-slate-100">
             <div className="space-y-4">
               <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400 font-mono">Attachment Selected</h4>
               
@@ -782,12 +782,12 @@ export const OCREngineConsole: React.FC = () => {
                     <FileText className="w-8 h-8 text-emerald-600" />
                     <div className="truncate text-left">
                       <p className="text-xs font-semibold text-slate-800 truncate" title={file.name}>{file.name}</p>
-                      <p className="text-[10px] font-mono text-slate-400">Type: {file.type || "Unknown binary"}</p>
+                      <p className="text-2xs font-mono text-slate-400">Type: {file.type || "Unknown binary"}</p>
                     </div>
                   </div>
                   
                   {fileDataUrl && file.type.startsWith("image/") && (
-                    <div className="relative aspect-video bg-slate-100 rounded border border-slate-150 overflow-hidden select-none">
+                    <div className="relative aspect-video bg-slate-100 rounded border border-slate-100 overflow-hidden select-none">
                       <img src={fileDataUrl} alt="Snippet Scan" className="object-cover w-full h-full pr-1.5" referrerPolicy="no-referrer" />
                       <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent pointer-events-none" />
                     </div>
@@ -800,7 +800,7 @@ export const OCREngineConsole: React.FC = () => {
                 </div>
               )}
 
-              <div className="text-[11px] text-slate-400 bg-white border border-slate-150 rounded p-2.5 leading-relaxed text-left font-sans">
+              <div className="text-xs text-slate-400 bg-white border border-slate-100 rounded p-2.5 leading-relaxed text-left font-sans">
                 💡 <strong>Workspace Boundary:</strong> Scanning reads text locally using memory buffers. AI suggestions do not construct final ledger entities until your visual review confirms inputs.
               </div>
             </div>
@@ -824,7 +824,7 @@ export const OCREngineConsole: React.FC = () => {
                     <button
                       onClick={handleClearSelected}
                       type="button"
-                      className="px-3 py-2.5 border border-slate-250 hover:bg-slate-150 text-slate-600 rounded-lg text-xs font-bold cursor-pointer transition select-none"
+                      className="px-3 py-2.5 border border-slate-200 hover:bg-slate-100 text-slate-600 rounded-lg text-xs font-bold cursor-pointer transition select-none"
                     >
                       Clear
                     </button>
@@ -836,7 +836,7 @@ export const OCREngineConsole: React.FC = () => {
                     className={`flex-1 py-2.5 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition select-none ${
                       file 
                         ? "bg-emerald-900 border-emerald-950 hover:bg-emerald-800 text-white shadow-xs cursor-pointer" 
-                        : "bg-slate-150 text-slate-400 cursor-not-allowed"
+                        : "bg-slate-100 text-slate-400 cursor-not-allowed"
                     }`}
                   >
                     <Sparkles className="w-4 h-4" />
@@ -860,7 +860,7 @@ export const OCREngineConsole: React.FC = () => {
               <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider font-mono">Original Source Preview</h3>
               <button
                 onClick={handleClearSelected}
-                className="text-[10px] text-slate-400 hover:text-slate-600 flex items-center gap-1 font-sans cursor-pointer"
+                className="text-2xs text-slate-400 hover:text-slate-600 flex items-center gap-1 font-sans cursor-pointer"
               >
                 Upload Different File
               </button>
@@ -874,7 +874,7 @@ export const OCREngineConsole: React.FC = () => {
                   <a
                     href={fileDataUrl}
                     download={file?.name || "extracted_receipt.png"}
-                    className="p-1 px-2 text-[9px] font-mono bg-white/95 text-slate-700 hover:bg-white rounded border border-slate-200 flex items-center gap-1 cursor-pointer font-bold shadow-3xs"
+                    className="p-1 px-2 text-3xs font-mono bg-white/95 text-slate-700 hover:bg-white rounded border border-slate-200 flex items-center gap-1 cursor-pointer font-bold shadow-3xs"
                   >
                     <Download className="w-3.5 h-3.5" />
                     Download
@@ -882,15 +882,15 @@ export const OCREngineConsole: React.FC = () => {
                 </div>
               </div>
             ) : (
-              <div className="border border-slate-150 border-dashed rounded-lg p-12 text-center bg-slate-50/50 space-y-3">
+              <div className="border border-slate-100 border-dashed rounded-lg p-12 text-center bg-slate-50/50 space-y-3">
                 <div className="p-3 bg-white border border-slate-200 rounded-xl inline-block text-slate-400 shadow-3xs">
                   <FileText className="w-8 h-8 text-slate-500" />
                 </div>
                 <div>
                   <p className="text-xs font-semibold text-slate-800">{file?.name}</p>
-                  <p className="text-[10px] font-mono text-slate-400">{(file?.size || 0) / 1024 / 1024} MB • Binary/PDF File</p>
+                  <p className="text-2xs font-mono text-slate-400">{(file?.size || 0) / 1024 / 1024} MB • Binary/PDF File</p>
                 </div>
-                <div className="text-[10px] text-slate-500 font-sans leading-relaxed max-w-sm mx-auto">
+                <div className="text-2xs text-slate-500 font-sans leading-relaxed max-w-sm mx-auto">
                   PDF previewing restricted in nested iframes. Click below to inspect raw file tags or download the document packet.
                 </div>
                 <a 
@@ -906,8 +906,8 @@ export const OCREngineConsole: React.FC = () => {
             {/* Cognitive Snipped Text Area */}
             {extractedData?.rawExtractedText && (
               <div className="space-y-1.5">
-                <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 font-mono">Raw Scan Diagnostic</p>
-                <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-150 text-[10.5px] font-mono text-slate-600 whitespace-pre-wrap leading-tight">
+                <p className="text-2xs font-bold uppercase tracking-wider text-slate-400 font-mono">Raw Scan Diagnostic</p>
+                <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-100 text-2xs font-mono text-slate-600 whitespace-pre-wrap leading-tight">
                   "{extractedData.rawExtractedText}"
                 </div>
               </div>
@@ -919,7 +919,7 @@ export const OCREngineConsole: React.FC = () => {
             <div className="lg:col-span-7 bg-white border border-slate-200 rounded-xl p-5 text-left space-y-4">
               <div className="border-b border-slate-100 pb-3">
                 <h3 className="text-sm font-semibold text-slate-800">Bank Statement — Extracted Transactions</h3>
-                <p className="text-[10px] text-slate-400 font-mono">{extractedData.transactions.length} transaction(s) found. Confirm or reject each one individually.</p>
+                <p className="text-2xs text-slate-400 font-mono">{extractedData.transactions.length} transaction(s) found. Confirm or reject each one individually.</p>
               </div>
               <div className="space-y-2 max-h-[480px] overflow-y-auto pr-1">
                 {extractedData.transactions.map((txn, idx) => {
@@ -965,13 +965,13 @@ export const OCREngineConsole: React.FC = () => {
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <div>
                 <h3 className="text-sm font-semibold text-slate-800">Ledger Input Calibration</h3>
-                <p className="text-[10px] text-slate-400 font-mono">AI generated suggestions. Human verification required.</p>
+                <p className="text-2xs text-slate-400 font-mono">AI generated suggestions. Human verification required.</p>
               </div>
 
               {/* Meter */}
               <div className="text-right flex items-center gap-2 bg-emerald-50 rounded-lg p-2 px-3 border border-emerald-100">
                 <div>
-                  <p className="text-[9px] font-mono font-bold text-slate-400 uppercase tracking-widest text-right">Confidence</p>
+                  <p className="text-3xs font-mono font-bold text-slate-400 uppercase tracking-widest text-right">Confidence</p>
                   <p className="text-xs font-mono font-black text-emerald-800 leading-none">{scorePct}% Accurate</p>
                 </div>
                 <div className="w-1.5 h-8 bg-slate-200 rounded overflow-hidden relative">
@@ -985,7 +985,7 @@ export const OCREngineConsole: React.FC = () => {
               
               {/* Record Type Destination */}
               <div className="sm:col-span-2 space-y-1">
-                <label className="text-[10px] font-mono font-bold text-slate-400 uppercase tracking-wider">Financial Type</label>
+                <label className="text-2xs font-mono font-bold text-slate-400 uppercase tracking-wider">Financial Type</label>
                 <div className="grid grid-cols-2 gap-2">
                   <button
                     type="button"
@@ -1017,7 +1017,7 @@ export const OCREngineConsole: React.FC = () => {
 
               {/* Merchant Supplier Name */}
               <div className="space-y-1">
-                <label className="text-[10px] font-mono font-bold text-slate-400 uppercase tracking-wider">Merchant / Supplier Name</label>
+                <label className="text-2xs font-mono font-bold text-slate-400 uppercase tracking-wider">Merchant / Supplier Name</label>
                 <div className="relative">
                   <input
                     type="text"
@@ -1031,7 +1031,7 @@ export const OCREngineConsole: React.FC = () => {
 
               {/* Document/Invoice Ref No */}
               <div className="space-y-1">
-                <label className="text-[10px] font-mono font-bold text-slate-400 uppercase tracking-wider">Document Ref Number</label>
+                <label className="text-2xs font-mono font-bold text-slate-400 uppercase tracking-wider">Document Ref Number</label>
                 <input
                   type="text"
                   value={reviewedDocumentNumber}
@@ -1043,7 +1043,7 @@ export const OCREngineConsole: React.FC = () => {
 
               {/* Document Date */}
               <div className="space-y-1">
-                <label className="text-[10px] font-mono font-bold text-slate-400 uppercase tracking-wider">Document Date</label>
+                <label className="text-2xs font-mono font-bold text-slate-400 uppercase tracking-wider">Document Date</label>
                 <input
                   type="date"
                   value={reviewedDate}
@@ -1055,7 +1055,7 @@ export const OCREngineConsole: React.FC = () => {
 
               {/* Ledger/Tax Category */}
               <div className="space-y-1">
-                <label className="text-[10px] font-mono font-bold text-slate-400 uppercase tracking-wider">Deducted Category</label>
+                <label className="text-2xs font-mono font-bold text-slate-400 uppercase tracking-wider">Deducted Category</label>
                 <select
                   value={reviewedCategory}
                   onChange={(e) => setReviewedCategory(e.target.value)}
@@ -1075,7 +1075,7 @@ export const OCREngineConsole: React.FC = () => {
 
               {/* Amount */}
               <div className="space-y-1">
-                <label className="text-[10px] font-mono font-bold text-slate-400 uppercase tracking-wider">Amount (Raw Value)</label>
+                <label className="text-2xs font-mono font-bold text-slate-400 uppercase tracking-wider">Amount (Raw Value)</label>
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-3 flex items-center text-slate-400 text-xs font-bold pointer-events-none">
                     {reviewedCurrency}
@@ -1093,7 +1093,7 @@ export const OCREngineConsole: React.FC = () => {
 
               {/* Currency Selector */}
               <div className="space-y-1">
-                <label className="text-[10px] font-mono font-bold text-slate-400 uppercase tracking-wider">Currency Code</label>
+                <label className="text-2xs font-mono font-bold text-slate-400 uppercase tracking-wider">Currency Code</label>
                 <select
                   value={reviewedCurrency}
                   onChange={(e) => setReviewedCurrency(e.target.value)}
@@ -1112,7 +1112,7 @@ export const OCREngineConsole: React.FC = () => {
                 
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
                   <label className="text-xs font-semibold text-slate-700">Offset Asset Account Settlement</label>
-                  <span className="text-[10px] text-slate-400 font-mono">Deducts/increments account balances immediately.</span>
+                  <span className="text-2xs text-slate-400 font-mono">Deducts/increments account balances immediately.</span>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
@@ -1157,7 +1157,7 @@ export const OCREngineConsole: React.FC = () => {
 
                 {offsetAccountType !== "NONE" && (
                   <div className="space-y-1 animate-slide-down">
-                    <label className="text-[9px] font-mono text-slate-400 uppercase tracking-widest font-black">Target Ledger Account</label>
+                    <label className="text-3xs font-mono text-slate-400 uppercase tracking-widest font-black">Target Ledger Account</label>
                     <select
                       value={selectedAccountId}
                       onChange={(e) => setSelectedAccountId(e.target.value)}
@@ -1186,7 +1186,7 @@ export const OCREngineConsole: React.FC = () => {
               <button
                 type="button"
                 onClick={handleClearSelected}
-                className="px-4 py-2.5 border border-slate-250 hover:bg-slate-100/80 rounded-lg text-xs font-bold text-slate-600 transition cursor-pointer"
+                className="px-4 py-2.5 border border-slate-200 hover:bg-slate-100/80 rounded-lg text-xs font-bold text-slate-600 transition cursor-pointer"
               >
                 Reset Scans
               </button>
@@ -1221,23 +1221,23 @@ export const OCREngineConsole: React.FC = () => {
               Active pattern memory extracted from verified transaction audits. Confirmed vendor-to-ledger profiles are used by the Co-Pilot to pre-classify new documents automatically.
             </p>
           </div>
-          <div className="text-[10px] font-mono bg-emerald-50 text-emerald-800 px-2.5 py-1 rounded-md border border-emerald-250/30 font-bold">
+          <div className="text-2xs font-mono bg-emerald-50 text-emerald-800 px-2.5 py-1 rounded-md border border-emerald-250/30 font-bold">
             {ocrLearnedPatterns.length} Active Profiles
           </div>
         </div>
 
         {ocrLearnedPatterns.length === 0 ? (
-          <div className="py-8 text-center bg-slate-50 border border-slate-150/60 rounded-xl space-y-1.5" id="no_patterns_state">
+          <div className="py-8 text-center bg-slate-50 border border-slate-100/60 rounded-xl space-y-1.5" id="no_patterns_state">
             <Sparkles className="w-5 h-5 mx-auto text-emerald-600/60 animate-bounce" />
             <p className="text-xs font-semibold text-slate-600">No learned vendor patterns recorded yet.</p>
-            <p className="text-[10px] text-slate-400 max-w-sm mx-auto">
+            <p className="text-2xs text-slate-400 max-w-sm mx-auto">
               Confirm any OCR scan result to train the AI with your chart of accounts classifications automatically.
             </p>
           </div>
         ) : (
-          <div className="overflow-x-auto rounded-xl border border-slate-150/80" id="patterns_list_table">
+          <div className="overflow-x-auto rounded-xl border border-slate-100/80" id="patterns_list_table">
             <table className="w-full text-left text-xs text-slate-500">
-              <thead className="bg-slate-50 text-[10px] uppercase font-mono text-slate-400 border-b border-slate-200">
+              <thead className="bg-slate-50 text-2xs uppercase font-mono text-slate-400 border-b border-slate-200">
                 <tr>
                   <th className="px-4 py-3 font-semibold">Vendor / Customer Profile</th>
                   <th className="px-4 py-3 font-semibold">Learned Category</th>
@@ -1258,7 +1258,7 @@ export const OCREngineConsole: React.FC = () => {
                       {pattern.category}
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap">
-                      <span className={`inline-flex items-center gap-1 text-[10px] font-mono font-bold px-1.5 py-0.5 rounded ${
+                      <span className={`inline-flex items-center gap-1 text-2xs font-mono font-bold px-1.5 py-0.5 rounded ${
                         pattern.recordType === "INCOME" 
                           ? "bg-emerald-50 text-emerald-700" 
                           : "bg-rose-50 text-rose-700"
@@ -1268,7 +1268,7 @@ export const OCREngineConsole: React.FC = () => {
                     </td>
                     <td className="px-4 py-3 text-center whitespace-nowrap">
                       <div className="flex items-center justify-center gap-1.5">
-                        <span className="font-mono text-[11px] font-bold text-slate-600">
+                        <span className="font-mono text-xs font-bold text-slate-600">
                           {Math.round(pattern.confidenceScore * 100)}%
                         </span>
                         <div className="w-12 h-1.5 bg-slate-200 rounded overflow-hidden relative">
@@ -1284,13 +1284,13 @@ export const OCREngineConsole: React.FC = () => {
                     <td className="px-4 py-3 text-center font-bold text-slate-700">
                       {pattern.occurrenceCount} verified syncs
                     </td>
-                    <td className="px-4 py-3 text-center text-[10px] font-mono text-slate-400">
+                    <td className="px-4 py-3 text-center text-2xs font-mono text-slate-400">
                       {new Date(pattern.lastUpdated).toLocaleDateString("en-MY", { year: "numeric", month: "short", day: "numeric" })}
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap text-right">
                       <button
                         onClick={() => deleteOcrLearnedPattern(pattern.id)}
-                        className="text-rose-600 hover:text-rose-800 hover:bg-rose-50 bg-transparent px-2 py-1 rounded border border-rose-200 hover:border-rose-300 transition text-[11px] font-semibold cursor-pointer"
+                        className="text-rose-600 hover:text-rose-800 hover:bg-rose-50 bg-transparent px-2 py-1 rounded border border-rose-200 hover:border-rose-300 transition text-xs font-semibold cursor-pointer"
                         title="Delete learned mapping constraint"
                       >
                         Purge Memory

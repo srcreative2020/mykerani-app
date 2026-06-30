@@ -53,13 +53,13 @@ export const FinancialHealthSummary: React.FC<FinancialHealthSummaryProps> = ({ 
       <div className="flex items-center gap-3 min-w-0">
         <span className="text-2xl leading-none shrink-0">{meta.emoji}</span>
         <div className="min-w-0">
-          <p className={`text-[11px] font-bold ${meta.text}`}>Kesihatan Kewangan: {meta.label}</p>
-          <p className="text-[10px] text-slate-500 mt-0.5">
+          <p className={`text-xs font-bold ${meta.text}`}>Kesihatan Kewangan: {meta.label}</p>
+          <p className="text-2xs text-slate-500 mt-0.5">
             {health.totalEvents} rekod · {issueCount} isu perlu perhatian
           </p>
         </div>
       </div>
-      <span className={`shrink-0 inline-flex items-center gap-0.5 text-[10px] font-semibold ${meta.text}`}>
+      <span className={`shrink-0 inline-flex items-center gap-0.5 text-2xs font-semibold ${meta.text}`}>
         Lihat Semua <ChevronRight className="w-3 h-3" />
       </span>
     </button>

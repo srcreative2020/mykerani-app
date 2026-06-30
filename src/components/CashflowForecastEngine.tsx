@@ -399,33 +399,33 @@ export const CashflowForecastEngine: React.FC = () => {
         
         {/* 1. OPENING BALANCE */}
         <div className="bg-slate-50 border border-slate-100 p-4 rounded-xl flex flex-col justify-between" id="metric_opening_bal">
-          <p className="text-[10px] text-slate-500 font-mono uppercase tracking-wider">Opening Liquid Reserves</p>
+          <p className="text-2xs text-slate-500 font-mono uppercase tracking-wider">Opening Liquid Reserves</p>
           <p className="text-lg font-bold text-slate-900 mt-1 font-mono">
             RM {forecastData.openingBalance.toLocaleString("en-MY", { minimumFractionDigits: 2 })}
           </p>
-          <span className="text-[10px] text-indigo-600 flex items-center mt-2 bg-indigo-50/60 px-1.5 py-0.5 rounded w-max">
+          <span className="text-2xs text-indigo-600 flex items-center mt-2 bg-indigo-50/60 px-1.5 py-0.5 rounded w-max">
             <Layers className="w-3 h-3 mr-1" /> Cash + Bank balances
           </span>
         </div>
 
         {/* 2. EXPECTED INFLOWS */}
         <div className="bg-emerald-50/40 border border-emerald-100 p-4 rounded-xl flex flex-col justify-between" id="metric_expected_inflow">
-          <p className="text-[10px] text-emerald-700 font-mono uppercase tracking-wider">Prospective Receipts (+)</p>
+          <p className="text-2xs text-emerald-700 font-mono uppercase tracking-wider">Prospective Receipts (+)</p>
           <p className="text-lg font-bold text-emerald-700 mt-1 font-mono">
             RM {forecastData.expectedInflows.toLocaleString("en-MY", { minimumFractionDigits: 2 })}
           </p>
-          <span className="text-[10px] text-emerald-800 flex items-center mt-2 bg-emerald-100/50 px-1.5 py-0.5 rounded w-max">
+          <span className="text-2xs text-emerald-800 flex items-center mt-2 bg-emerald-100/50 px-1.5 py-0.5 rounded w-max">
             <ArrowUpRight className="w-3 h-3 mr-1" /> Receivables & income
           </span>
         </div>
 
         {/* 3. EXPECTED OUTFLOWS */}
         <div className="bg-rose-50/40 border border-rose-100 p-4 rounded-xl flex flex-col justify-between" id="metric_expected_outflow">
-          <p className="text-[10px] text-rose-700 font-mono uppercase tracking-wider">Prospective Commitments (-)</p>
+          <p className="text-2xs text-rose-700 font-mono uppercase tracking-wider">Prospective Commitments (-)</p>
           <p className="text-lg font-bold text-rose-700 mt-1 font-mono">
             RM {forecastData.expectedOutflows.toLocaleString("en-MY", { minimumFractionDigits: 2 })}
           </p>
-          <span className="text-[10px] text-rose-800 flex items-center mt-2 bg-rose-100/50 px-1.5 py-0.5 rounded w-max">
+          <span className="text-2xs text-rose-800 flex items-center mt-2 bg-rose-100/50 px-1.5 py-0.5 rounded w-max">
             <ArrowDownLeft className="w-3 h-3 mr-1" /> Payables + debts + agreements
           </span>
         </div>
@@ -434,13 +434,13 @@ export const CashflowForecastEngine: React.FC = () => {
         <div className={`border p-4 rounded-xl flex flex-col justify-between ${
           forecastData.netPosition >= 0 ? "bg-slate-50 border-slate-100" : "bg-amber-50/30 border-amber-100"
         }`} id="metric_net_position">
-          <p className="text-[10px] text-slate-500 font-mono uppercase tracking-wider">Net Flow Surplus/Deficit</p>
+          <p className="text-2xs text-slate-500 font-mono uppercase tracking-wider">Net Flow Surplus/Deficit</p>
           <p className={`text-lg font-bold mt-1 font-mono ${
             forecastData.netPosition >= 0 ? "text-slate-900" : "text-amber-700"
           }`}>
             {forecastData.netPosition >= 0 ? "+" : "—"} RM {Math.abs(forecastData.netPosition).toLocaleString("en-MY", { minimumFractionDigits: 2 })}
           </p>
-          <span className="text-[10px] text-slate-600 flex items-center mt-2">
+          <span className="text-2xs text-slate-600 flex items-center mt-2">
             Inflows minus Outflows
           </span>
         </div>
@@ -449,11 +449,11 @@ export const CashflowForecastEngine: React.FC = () => {
         <div className={`p-4 rounded-xl flex flex-col justify-between ${
           forecastData.closingBalance > 0 ? "bg-slate-950 border-slate-800 text-white" : "bg-rose-950 border-rose-900 text-white animate-pulse"
         }`} id="metric_closing_bal_proj">
-          <p className="text-[10px] text-slate-300 font-mono uppercase tracking-wider">Projected Liquid End</p>
+          <p className="text-2xs text-slate-300 font-mono uppercase tracking-wider">Projected Liquid End</p>
           <p className="text-lg font-bold mt-1 font-mono">
             RM {forecastData.closingBalance.toLocaleString("en-MY", { minimumFractionDigits: 2 })}
           </p>
-          <span className="text-[10px] text-slate-300 flex items-center mt-2 font-semibold">
+          <span className="text-2xs text-slate-300 flex items-center mt-2 font-semibold">
             Estimated ending ledger
           </span>
         </div>
@@ -468,7 +468,7 @@ export const CashflowForecastEngine: React.FC = () => {
         <div className="space-y-1.5 flex-1 select-none">
           <div className="flex flex-wrap items-center gap-2">
             <span className="font-sans font-extrabold text-sm uppercase tracking-wider">MYKERANI Health Risk:</span>
-            <span className={`text-[10px] font-mono tracking-widest font-extrabold uppercase px-2.5 py-0.5 rounded-full ${riskStyle.badge}`}>
+            <span className={`text-2xs font-mono tracking-widest font-extrabold uppercase px-2.5 py-0.5 rounded-full ${riskStyle.badge}`}>
               {forecastData.riskStatus}
             </span>
           </div>
@@ -481,8 +481,8 @@ export const CashflowForecastEngine: React.FC = () => {
             ))}
           </div>
         </div>
-        <div className="bg-white/60 border border-slate-200/50 backdrop-blur-xs px-3 py-2 rounded-lg text-[10px] text-slate-600 font-mono mt-2 sm:mt-0 max-w-[190px]">
-          <span className="font-bold flex items-center mb-0.5 text-slate-800 uppercase tracking-tight text-[9px]">
+        <div className="bg-white/60 border border-slate-200/50 backdrop-blur-xs px-3 py-2 rounded-lg text-2xs text-slate-600 font-mono mt-2 sm:mt-0 max-w-[190px]">
+          <span className="font-bold flex items-center mb-0.5 text-slate-800 uppercase tracking-tight text-3xs">
             <Info className="w-3 h-3 mr-1" /> Safety Thresholds
           </span>
           Healthy &gt; Watch &gt; Critical. Red status targets liquidity depletion limits.
@@ -541,7 +541,7 @@ export const CashflowForecastEngine: React.FC = () => {
             </div>
           </div>
           
-          <div className="mt-3 flex items-center justify-between text-[10px] text-slate-500 font-mono border-t border-slate-50 pt-3 select-none">
+          <div className="mt-3 flex items-center justify-between text-2xs text-slate-500 font-mono border-t border-slate-50 pt-3 select-none">
             <span>Date Range: Next Day to Day {forecastDays}</span>
             <span className="flex items-center">
               <span className="w-2.5 h-1 bg-indigo-600 rounded mr-1 inline-block" />
@@ -559,20 +559,20 @@ export const CashflowForecastEngine: React.FC = () => {
             </h4>
             <div className="mt-3 space-y-2 max-h-[195px] overflow-y-auto pr-1 text-xs" id="runway_steps_list">
               <div className="p-2.5 bg-slate-50 border border-slate-100 rounded-lg flex items-center justify-between">
-                <span className="font-mono text-[11px] text-slate-500">Day 1 Forecast</span>
+                <span className="font-mono text-xs text-slate-500">Day 1 Forecast</span>
                 <span className="font-mono font-bold text-slate-800">
                   RM {(forecastData.chartPoints[0]?.balance || forecastData.openingBalance).toLocaleString("en-MY", { minimumFractionDigits: 1 })}
                 </span>
               </div>
               <div className="p-2.5 bg-slate-50 border border-slate-100 rounded-lg flex items-center justify-between">
-                <span className="font-mono text-[11px] text-slate-500">Day 7 Forecast</span>
+                <span className="font-mono text-xs text-slate-500">Day 7 Forecast</span>
                 <span className="font-mono font-bold text-slate-800">
                   RM {(forecastData.chartPoints[6]?.balance || forecastData.chartPoints[forecastData.chartPoints.length - 1]?.balance || forecastData.openingBalance).toLocaleString("en-MY", { minimumFractionDigits: 1 })}
                 </span>
               </div>
               {forecastDays >= 30 && (
                 <div className="p-2.5 bg-slate-50 border border-slate-100 rounded-lg flex items-center justify-between">
-                  <span className="font-mono text-[11px] text-slate-500">Day 30 Forecast</span>
+                  <span className="font-mono text-xs text-slate-500">Day 30 Forecast</span>
                   <span className="font-mono font-bold text-slate-800">
                     RM {(forecastData.chartPoints[29]?.balance || forecastData.chartPoints[forecastData.chartPoints.length - 1]?.balance || forecastData.openingBalance).toLocaleString("en-MY", { minimumFractionDigits: 1 })}
                   </span>
@@ -580,16 +580,16 @@ export const CashflowForecastEngine: React.FC = () => {
               )}
               {forecastDays >= 90 && (
                 <div className="p-2.5 bg-slate-50 border border-slate-100 rounded-lg flex items-center justify-between">
-                  <span className="font-mono text-[11px] text-slate-500">Day 90 Forecast</span>
+                  <span className="font-mono text-xs text-slate-500">Day 90 Forecast</span>
                   <span className="font-mono font-bold text-slate-800">
                     RM {(forecastData.chartPoints[89]?.balance || forecastData.chartPoints[forecastData.chartPoints.length - 1]?.balance || forecastData.openingBalance).toLocaleString("en-MY", { minimumFractionDigits: 1 })}
                   </span>
                 </div>
               )}
-              <div className="p-2.5 border-2 border-dashed border-slate-150/80 rounded-xl flex items-center justify-between">
+              <div className="p-2.5 border-2 border-dashed border-slate-200/80 rounded-xl flex items-center justify-between">
                 <div className="space-y-0.5">
-                  <span className="font-sans font-bold text-[10px] text-slate-500 uppercase tracking-wider block">Lowest cash level</span>
-                  <span className="text-[9px] text-slate-400">Periodic cushion minimum floor</span>
+                  <span className="font-sans font-bold text-2xs text-slate-500 uppercase tracking-wider block">Lowest cash level</span>
+                  <span className="text-3xs text-slate-400">Periodic cushion minimum floor</span>
                 </div>
                 <span className={`font-mono font-bold text-xs px-2.5 py-1 rounded-md ${
                   forecastData.lowestForecastedPoint > 0 ? "bg-indigo-50 text-indigo-700" : "bg-rose-50 text-rose-700 animate-pulse"
@@ -599,7 +599,7 @@ export const CashflowForecastEngine: React.FC = () => {
               </div>
             </div>
           </div>
-          <div className="mt-4 border-t border-slate-100 pt-3 flex items-center space-x-1.5 text-[10px] text-slate-450 leading-tight">
+          <div className="mt-4 border-t border-slate-100 pt-3 flex items-center space-x-1.5 text-2xs text-slate-450 leading-tight">
             <Info className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
             <p className="font-sans">Daily runway predictions help anticipate liquidity bottlenecks prior to high outflow draws.</p>
           </div>
@@ -635,7 +635,7 @@ export const CashflowForecastEngine: React.FC = () => {
                 <div key={item.id} className="p-3 bg-slate-50/50 border border-slate-100 rounded-lg text-xs flex items-center justify-between">
                   <div className="space-y-0.5 min-w-0 pr-2">
                     <p className="font-semibold text-slate-900 truncate">{item.party}</p>
-                    <div className="flex items-center space-x-2 text-[10px] text-slate-550">
+                    <div className="flex items-center space-x-2 text-2xs text-slate-550">
                       <span className="font-mono bg-emerald-50 text-emerald-800 px-1 py-0.2 rounded font-bold capitalize select-none">{item.source.toLowerCase()}</span>
                       <span className="text-slate-400 font-mono">{item.date}</span>
                     </div>
@@ -674,7 +674,7 @@ export const CashflowForecastEngine: React.FC = () => {
                 <div key={item.id} className="p-3 bg-slate-50/50 border border-slate-100 rounded-lg text-xs flex items-center justify-between">
                   <div className="space-y-0.5 min-w-0 pr-2">
                     <p className="font-semibold text-slate-900 truncate">{item.party}</p>
-                    <div className="flex items-center space-x-2 text-[10px] text-slate-550">
+                    <div className="flex items-center space-x-2 text-2xs text-slate-550">
                       <span className="font-mono bg-rose-50 text-rose-800 px-1 py-0.2 rounded font-bold capitalize select-none">
                         {item.source === "DEBT_REPAYMENT" ? "debt repay" : item.source.toLowerCase()}
                       </span>

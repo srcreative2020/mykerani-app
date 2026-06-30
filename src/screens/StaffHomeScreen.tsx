@@ -113,13 +113,13 @@ function AddRecordForm({
 
       <div className="space-y-3">
         <div>
-          <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Jumlah (RM)</label>
+          <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Jumlah (RM)</label>
           <input type="number" step="0.01" min="0" value={amount} onChange={e => setAmount(e.target.value)}
             placeholder="0.00" required
             className="w-full mt-1 border border-slate-200 rounded-xl px-4 py-3 text-xl font-bold focus:outline-none focus:border-indigo-400 bg-white" />
         </div>
         <div>
-          <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+          <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">
             {type === "INCOME" ? "Daripada (Pelanggan)" : "Kepada (Pembekal)"}
           </label>
           <input type="text" value={party} onChange={e => setParty(e.target.value)}
@@ -127,19 +127,19 @@ function AddRecordForm({
             className="w-full mt-1 border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-indigo-400 bg-white" />
         </div>
         <div>
-          <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Kategori</label>
+          <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Kategori</label>
           <input type="text" value={category} onChange={e => setCategory(e.target.value)}
             placeholder="Cth: Sewa, Minyak, Jualan Produk"
             className="w-full mt-1 border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-indigo-400 bg-white" />
         </div>
         <div>
-          <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Penerangan</label>
+          <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Penerangan</label>
           <input type="text" value={description} onChange={e => setDescription(e.target.value)}
             placeholder="Cth: Bayar minyak, Terima deposit..."
             className="w-full mt-1 border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-indigo-400 bg-white" />
         </div>
         <div>
-          <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Tarikh</label>
+          <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Tarikh</label>
           <input type="date" value={date} onChange={e => setDate(e.target.value)}
             className="w-full mt-1 border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-indigo-400 bg-white" />
         </div>
@@ -1196,25 +1196,25 @@ export function StaffHomeScreen() {
           <div>
             <div className="flex items-center space-x-1.5">
               <span className="font-bold text-slate-900 text-sm">MYKERANI</span>
-              <span className="text-[9px] font-bold bg-slate-900 text-white px-1.5 py-0.5 rounded-md">V1.0</span>
+              <span className="text-3xs font-bold bg-slate-900 text-white px-1.5 py-0.5 rounded-md">V1.0</span>
             </div>
-            {activeWorkspace && <p className="text-[10px] text-slate-400 leading-none mt-0.5">{activeWorkspace.name}</p>}
+            {activeWorkspace && <p className="text-2xs text-slate-400 leading-none mt-0.5">{activeWorkspace.name}</p>}
           </div>
         </div>
         <div className="flex items-center gap-2">
           {workspaces.length > 1 && (
             <select value={activeWorkspace?.id || ""} onChange={e => selectWorkspace(e.target.value)}
-              className="text-[11px] font-semibold border border-slate-200 rounded-lg px-2 py-1 bg-white outline-none cursor-pointer">
+              className="text-xs font-semibold border border-slate-200 rounded-lg px-2 py-1 bg-white outline-none cursor-pointer">
               {workspaces.map(ws => <option key={ws.id} value={ws.id}>{ws.name}</option>)}
             </select>
           )}
           <div className="flex items-center space-x-1.5 bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1.5">
-            <div className="w-5 h-5 rounded-full bg-slate-700 text-white flex items-center justify-center text-[9px] font-bold">
+            <div className="w-5 h-5 rounded-full bg-slate-700 text-white flex items-center justify-center text-3xs font-bold">
               {firstName.charAt(0).toUpperCase()}
             </div>
-            <span className="text-[11px] font-semibold text-slate-700 hidden sm:block">{firstName}</span>
-            <span className="text-[10px] text-slate-400 hidden sm:block">·</span>
-            <span className="text-[10px] text-slate-500 font-semibold hidden sm:block">Kakitangan</span>
+            <span className="text-xs font-semibold text-slate-700 hidden sm:block">{firstName}</span>
+            <span className="text-2xs text-slate-400 hidden sm:block">·</span>
+            <span className="text-2xs text-slate-500 font-semibold hidden sm:block">Kakitangan</span>
           </div>
           <button onClick={() => setShowNotifications(true)}
             className="p-1.5 bg-slate-50 hover:bg-indigo-50 border border-slate-200 hover:border-indigo-200 text-slate-400 hover:text-indigo-500 rounded-xl transition cursor-pointer"
@@ -1280,7 +1280,7 @@ export function StaffHomeScreen() {
             {chatMessages.length > 0 && (
               <div className="px-4 pt-3 flex justify-end shrink-0">
                 <button type="button" onClick={() => setChatMessages([])}
-                  className="text-[11px] font-semibold text-indigo-600 hover:text-indigo-800 cursor-pointer flex items-center gap-1">
+                  className="text-xs font-semibold text-indigo-600 hover:text-indigo-800 cursor-pointer flex items-center gap-1">
                   <RefreshCw className="w-3 h-3" /> Chat Baharu
                 </button>
               </div>
@@ -1297,7 +1297,7 @@ export function StaffHomeScreen() {
                   </div>
                   <h2 className="text-xl font-bold text-slate-900">{greeting}, {firstName}</h2>
                   <p className="text-sm text-slate-500 max-w-xs">Apa yang berlaku hari ini?</p>
-                  <p className="text-[11px] text-slate-400">{today}</p>
+                  <p className="text-xs text-slate-400">{today}</p>
                 </div>
               )}
 
@@ -1399,7 +1399,7 @@ export function StaffHomeScreen() {
                                   {chatSuggestionJustUpdated[s.id] ? "✅ Dikemaskini." : "✅ Disahkan & direkodkan."}
                                 </div>
                                 {statusObj.confirmedAt && (
-                                  <div className="text-[10px] text-slate-400">
+                                  <div className="text-2xs text-slate-400">
                                     {new Date(statusObj.confirmedAt).toLocaleString("ms-MY", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}
                                     {statusObj.confirmedByName && ` · ${statusObj.confirmedByName}`}
                                     {statusObj.confirmedByUserId && ` · ID: ${statusObj.confirmedByUserId.slice(0, 8)}`}
@@ -1438,7 +1438,7 @@ export function StaffHomeScreen() {
                             {status === "pending" && extra.businessPicked && (
                               <div className="text-xs text-slate-500">
                                 Bisnes: <span className="font-semibold text-slate-700">{extra.branchName ? `${extra.businessName} - ${extra.branchName}` : (extra.businessName || "Personal")}</span>
-                                {extra.autoMapped && <span className="ml-1.5 text-[10px] text-emerald-600 font-semibold">✓ Auto-mapped</span>}
+                                {extra.autoMapped && <span className="ml-1.5 text-2xs text-emerald-600 font-semibold">✓ Auto-mapped</span>}
                               </div>
                             )}
                             {status === "pending" && extra.businessPicked && extra.businessId && !extra.branchPicked && (
@@ -1587,7 +1587,7 @@ export function StaffHomeScreen() {
                   <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse" />
                   <span className="text-xs font-semibold text-rose-700 flex-1">Merekod nota suara...</span>
                   <button type="button" onClick={stopChatVoiceRecording}
-                    className="px-2.5 py-1 rounded-lg bg-rose-600 text-white text-[11px] font-bold cursor-pointer">
+                    className="px-2.5 py-1 rounded-lg bg-rose-600 text-white text-xs font-bold cursor-pointer">
                     Hentikan & Hantar
                   </button>
                 </div>
@@ -1700,7 +1700,7 @@ export function StaffHomeScreen() {
                   { key: "year", label: "Tahunan" },
                 ] as const).map(({ key, label }) => (
                   <button key={key} onClick={() => setDashboardPeriod(key)}
-                    className={`px-2 py-1.5 rounded-lg text-[10px] font-bold transition cursor-pointer ${dashboardPeriod === key ? "bg-indigo-600 text-white shadow" : "text-slate-500 hover:bg-slate-200"}`}>
+                    className={`px-2 py-1.5 rounded-lg text-2xs font-bold transition cursor-pointer ${dashboardPeriod === key ? "bg-indigo-600 text-white shadow" : "text-slate-500 hover:bg-slate-200"}`}>
                     {label}
                   </button>
                 ))}
@@ -1725,23 +1725,23 @@ export function StaffHomeScreen() {
               <>
                 <div className="flex items-center justify-between">
                   {healthFilterRecordIds && (
-                    <span className="text-[10px] text-slate-500">Ditapis: {healthFilterLabel}</span>
+                    <span className="text-2xs text-slate-500">Ditapis: {healthFilterLabel}</span>
                   )}
                   {(txnFilterFrom || txnFilterTo || healthFilterRecordIds) && (
-                    <button onClick={() => { setTxnFilterFrom(""); setTxnFilterTo(""); setHealthFilterRecordIds(null); setHealthFilterLabel(""); }} className="text-[10px] text-indigo-500 font-semibold cursor-pointer hover:underline">
+                    <button onClick={() => { setTxnFilterFrom(""); setTxnFilterTo(""); setHealthFilterRecordIds(null); setHealthFilterLabel(""); }} className="text-2xs text-indigo-500 font-semibold cursor-pointer hover:underline">
                       Kosongkan tapisan
                     </button>
                   )}
                 </div>
                 <div className="flex items-center gap-2 pb-1">
                   <input type="date" value={txnFilterFrom} onChange={e => setTxnFilterFrom(e.target.value)}
-                    className="flex-1 px-2.5 py-1.5 rounded-lg border border-slate-200 text-[11px] text-slate-600" />
-                  <span className="text-[10px] text-slate-400">hingga</span>
+                    className="flex-1 px-2.5 py-1.5 rounded-lg border border-slate-200 text-xs text-slate-600" />
+                  <span className="text-2xs text-slate-400">hingga</span>
                   <input type="date" value={txnFilterTo} onChange={e => setTxnFilterTo(e.target.value)}
-                    className="flex-1 px-2.5 py-1.5 rounded-lg border border-slate-200 text-[11px] text-slate-600" />
+                    className="flex-1 px-2.5 py-1.5 rounded-lg border border-slate-200 text-xs text-slate-600" />
                 </div>
                 {filteredRecords.length === 0 && (
-                  <p className="text-[11px] text-slate-400 text-center py-3">Tiada transaksi dalam tempoh ini.</p>
+                  <p className="text-xs text-slate-400 text-center py-3">Tiada transaksi dalam tempoh ini.</p>
                 )}
                 {filteredRecords.map(rec => (
                   <div key={rec.id} className="bg-white border border-slate-200 rounded-xl p-3.5 shadow-sm">
@@ -1772,12 +1772,12 @@ export function StaffHomeScreen() {
                             onChange={(e) => { const f = e.target.files?.[0]; if (f) attachTxnReceipt(rec, f); e.target.value = ""; }} />
                           {(evidenceByRecordId[rec.id] || []).map(pkg => (
                             <button key={pkg.id} type="button" onClick={() => previewTxnEvidence(pkg)}
-                              className="w-full flex items-center gap-2 px-2 py-1.5 mb-1 rounded border border-emerald-200 bg-emerald-50 text-emerald-700 text-[11px] font-semibold cursor-pointer hover:bg-emerald-100">
-                              <Receipt className="w-3 h-3 shrink-0" /> <span className="truncate">{pkg.fileName}</span> <span className="ml-auto text-[10px] text-emerald-500">Lihat</span>
+                              className="w-full flex items-center gap-2 px-2 py-1.5 mb-1 rounded border border-emerald-200 bg-emerald-50 text-emerald-700 text-xs font-semibold cursor-pointer hover:bg-emerald-100">
+                              <Receipt className="w-3 h-3 shrink-0" /> <span className="truncate">{pkg.fileName}</span> <span className="ml-auto text-2xs text-emerald-500">Lihat</span>
                             </button>
                           ))}
                           <button type="button" onClick={() => txnReceiptInputRef.current?.click()} disabled={uploadingTxnReceipt}
-                            className="w-full flex items-center justify-center gap-1.5 px-2 py-1.5 rounded border border-dashed border-slate-300 text-[11px] font-semibold text-slate-500 hover:border-indigo-400 hover:text-indigo-600 cursor-pointer disabled:opacity-50">
+                            className="w-full flex items-center justify-center gap-1.5 px-2 py-1.5 rounded border border-dashed border-slate-300 text-xs font-semibold text-slate-500 hover:border-indigo-400 hover:text-indigo-600 cursor-pointer disabled:opacity-50">
                             <Paperclip className="w-3 h-3" /> {uploadingTxnReceipt ? "Memuat naik..." : "Lampirkan Resit"}
                           </button>
                         </div>
@@ -1796,8 +1796,8 @@ export function StaffHomeScreen() {
                           </div>
                           <div>
                             <p className="text-sm font-semibold text-slate-800 truncate max-w-[170px]">{(rec.partyName && rec.partyName !== "Tidak Dinyatakan") ? rec.partyName : rec.categoryName}</p>
-                            <p className="text-[11px] text-slate-400">{rec.categoryName} · {rec.referenceNumber}</p>
-                            <p className="text-[10px] text-slate-300">
+                            <p className="text-xs text-slate-400">{rec.categoryName} · {rec.referenceNumber}</p>
+                            <p className="text-2xs text-slate-300">
                               {rec.date}{rec.createdAt ? ` ${new Date(rec.createdAt).toLocaleTimeString("ms-MY", { hour: "2-digit", minute: "2-digit" })}` : ""}
                               {rec.createdByName ? ` · ${rec.createdByName}` : ""}
                             </p>
@@ -1837,7 +1837,7 @@ export function StaffHomeScreen() {
                   <div className="min-w-0 flex-1">
                     <p className="font-bold text-slate-900 truncate text-base">{user?.fullName || "Kakitangan"}</p>
                     <p className="text-xs text-slate-500 truncate mt-0.5">{user?.email}</p>
-                    <span className="text-[10px] bg-indigo-50 text-indigo-700 font-bold px-2.5 py-1 rounded-full mt-1.5 inline-block">Kakitangan Syarikat</span>
+                    <span className="text-2xs bg-indigo-50 text-indigo-700 font-bold px-2.5 py-1 rounded-full mt-1.5 inline-block">Kakitangan Syarikat</span>
                   </div>
                 ) : (
                   <div className="min-w-0 flex-1 space-y-1.5">
@@ -1879,11 +1879,11 @@ export function StaffHomeScreen() {
               {/* Divider + workspace info */}
               {activeWorkspace && (
                 <div className="border-t border-slate-100 px-6 py-4 space-y-1">
-                  <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Syarikat Aktif</p>
+                  <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Syarikat Aktif</p>
                   <p className="text-sm font-semibold text-slate-800">{activeWorkspace.name}</p>
                 </div>
               )}
-              <div className="border-t border-slate-100 px-6 py-3 text-[11px] text-slate-400 space-y-1">
+              <div className="border-t border-slate-100 px-6 py-3 text-xs text-slate-400 space-y-1">
                 <p>Anda log masuk sebagai <span className="font-semibold text-slate-600">TENANT_STAFF</span></p>
                 <p>Untuk tukar tetapan syarikat, hubungi Pemilik.</p>
               </div>
@@ -1981,7 +1981,7 @@ export function StaffHomeScreen() {
                         <button key={y} onClick={() => setChatArchiveYear(y)}
                           className="px-2 py-3 rounded-xl text-center border bg-white border-slate-200 text-slate-700 hover:bg-slate-50 cursor-pointer">
                           <p className="text-sm font-bold">{y}</p>
-                          <p className="text-[9px] text-slate-400">{dates.filter(d => d.startsWith(y)).reduce((n, d) => n + byDate[d].length, 0)} mesej</p>
+                          <p className="text-3xs text-slate-400">{dates.filter(d => d.startsWith(y)).reduce((n, d) => n + byDate[d].length, 0)} mesej</p>
                         </button>
                       ))}
                     </div>
@@ -1990,13 +1990,13 @@ export function StaffHomeScreen() {
                 if (!chatArchiveMonth) {
                   return (
                     <>
-                      <button onClick={() => setChatArchiveYear(null)} className="text-[11px] text-indigo-500 font-semibold cursor-pointer hover:underline">← Tahun</button>
+                      <button onClick={() => setChatArchiveYear(null)} className="text-xs text-indigo-500 font-semibold cursor-pointer hover:underline">← Tahun</button>
                       <div className="grid grid-cols-3 gap-2">
                         {monthsInYear.map(m => (
                           <button key={m} onClick={() => setChatArchiveMonth(m)}
                             className="px-2 py-3 rounded-xl text-center border bg-white border-slate-200 text-slate-700 hover:bg-slate-50 cursor-pointer">
-                            <p className="text-[11px] font-bold">{new Date(`${m}-01`).toLocaleDateString("ms-MY", { month: "long" })}</p>
-                            <p className="text-[9px] text-slate-400">{dates.filter(d => d.startsWith(m)).reduce((n, d) => n + byDate[d].length, 0)} mesej</p>
+                            <p className="text-xs font-bold">{new Date(`${m}-01`).toLocaleDateString("ms-MY", { month: "long" })}</p>
+                            <p className="text-3xs text-slate-400">{dates.filter(d => d.startsWith(m)).reduce((n, d) => n + byDate[d].length, 0)} mesej</p>
                           </button>
                         ))}
                       </div>
@@ -2005,13 +2005,13 @@ export function StaffHomeScreen() {
                 }
                 return (
                   <>
-                    <button onClick={() => setChatArchiveMonth(null)} className="text-[11px] text-indigo-500 font-semibold cursor-pointer hover:underline">← Bulan</button>
+                    <button onClick={() => setChatArchiveMonth(null)} className="text-xs text-indigo-500 font-semibold cursor-pointer hover:underline">← Bulan</button>
                     <div className="grid grid-cols-3 gap-2">
                       {daysInMonth.map(d => (
                         <button key={d} onClick={() => setChatArchiveDate(chatArchiveDate === d ? null : d)}
                           className={`px-2 py-2.5 rounded-xl text-center border transition cursor-pointer ${chatArchiveDate === d ? "bg-indigo-600 border-indigo-600 text-white" : "bg-white border-slate-200 text-slate-700 hover:bg-slate-50"}`}>
-                          <p className="text-[11px] font-bold">{new Date(d).toLocaleDateString("ms-MY", { day: "numeric", month: "short" })}</p>
-                          <p className={`text-[9px] ${chatArchiveDate === d ? "text-indigo-100" : "text-slate-400"}`}>{byDate[d].length} mesej</p>
+                          <p className="text-xs font-bold">{new Date(d).toLocaleDateString("ms-MY", { day: "numeric", month: "short" })}</p>
+                          <p className={`text-3xs ${chatArchiveDate === d ? "text-indigo-100" : "text-slate-400"}`}>{byDate[d].length} mesej</p>
                         </button>
                       ))}
                     </div>
@@ -2120,7 +2120,7 @@ export function StaffHomeScreen() {
                       <Send className="w-3.5 h-3.5" />
                     </button>
                   </form>
-                  <button onClick={() => setSupportView("ticket")} className="mt-2 w-full text-center text-[11px] text-slate-400 hover:text-indigo-600 cursor-pointer">
+                  <button onClick={() => setSupportView("ticket")} className="mt-2 w-full text-center text-xs text-slate-400 hover:text-indigo-600 cursor-pointer">
                     Masalah tidak selesai? Buka tiket â†'
                   </button>
                 </div>
@@ -2244,14 +2244,14 @@ export function StaffHomeScreen() {
                               {style.icon === "check" ? <CheckCircle2 className={`w-4 h-4 shrink-0 mt-0.5 ${style.text}`} /> : <Clock className={`w-4 h-4 shrink-0 mt-0.5 ${style.text}`} />}
                               <div className="flex-1">
                                 <p className={`text-xs font-bold ${style.text}`}>#{t.id.slice(0, 8)} — {t.subject}</p>
-                                <p className={`text-[11px] mt-0.5 ${style.text}`}>Status: {TICKET_STATUS_LABEL_MS[t.status]}</p>
+                                <p className={`text-xs mt-0.5 ${style.text}`}>Status: {TICKET_STATUS_LABEL_MS[t.status]}</p>
                                 <div className="flex items-center gap-2 mt-1 flex-wrap">
-                                  <span className="text-[10px] text-slate-400">Dihantar {new Date(t.createdAt).toLocaleDateString("ms-MY")}</span>
-                                  {t.assigned && <span className="text-[10px] text-slate-400">• Staf HQ: {t.assigned}</span>}
-                                  {sla === "breached" && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-red-100 text-red-700">SLA Lewat</span>}
-                                  {sla === "near" && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700">SLA Hampir Tamat</span>}
-                                  {t.replies.length > 0 && <span className="text-[10px] text-slate-400">• {t.replies.length} balasan</span>}
-                                  {t.attachments.length > 0 && <span className="text-[10px] text-slate-400">• {t.attachments.length} lampiran</span>}
+                                  <span className="text-2xs text-slate-400">Dihantar {new Date(t.createdAt).toLocaleDateString("ms-MY")}</span>
+                                  {t.assigned && <span className="text-2xs text-slate-400">• Staf HQ: {t.assigned}</span>}
+                                  {sla === "breached" && <span className="text-3xs font-bold px-1.5 py-0.5 rounded-full bg-red-100 text-red-700">SLA Lewat</span>}
+                                  {sla === "near" && <span className="text-3xs font-bold px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700">SLA Hampir Tamat</span>}
+                                  {t.replies.length > 0 && <span className="text-2xs text-slate-400">• {t.replies.length} balasan</span>}
+                                  {t.attachments.length > 0 && <span className="text-2xs text-slate-400">• {t.attachments.length} lampiran</span>}
                                 </div>
                               </div>
                               <ChevronRight className={`w-3.5 h-3.5 text-slate-300 shrink-0 mt-1 transition-transform ${isOpen ? "rotate-90" : ""}`} />
@@ -2261,7 +2261,7 @@ export function StaffHomeScreen() {
                                 {t.replies.length > 0 && (
                                   <div className="space-y-1.5">
                                     {t.replies.map(r => (
-                                      <div key={r.id} className="text-[11px] text-slate-600 bg-white/60 rounded-lg px-2.5 py-1.5">
+                                      <div key={r.id} className="text-xs text-slate-600 bg-white/60 rounded-lg px-2.5 py-1.5">
                                         <span className="font-bold text-slate-700">{r.author}: </span>{r.text}
                                       </div>
                                     ))}
@@ -2274,7 +2274,7 @@ export function StaffHomeScreen() {
                                       onChange={e => setTicketReplyDraft(e.target.value)}
                                       placeholder="Balas tiket ini..."
                                       rows={2}
-                                      className="w-full text-[11px] border border-slate-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-indigo-400"
+                                      className="w-full text-xs border border-slate-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-indigo-400"
                                     />
                                     <button
                                       disabled={!ticketReplyDraft.trim() || ticketReplySending}
@@ -2287,7 +2287,7 @@ export function StaffHomeScreen() {
                                           getMyTenantSupportTickets().then(setMyTickets);
                                         }
                                       }}
-                                      className="px-3 py-1.5 bg-indigo-600 text-white rounded-lg text-[11px] font-bold disabled:opacity-40 cursor-pointer"
+                                      className="px-3 py-1.5 bg-indigo-600 text-white rounded-lg text-xs font-bold disabled:opacity-40 cursor-pointer"
                                     >
                                       {ticketReplySending ? "Menghantar..." : "Hantar Balasan"}
                                     </button>
@@ -2299,7 +2299,7 @@ export function StaffHomeScreen() {
                                       <button key={a.id} onClick={async () => {
                                         const url = await getTicketAttachmentUrl(a.filePath);
                                         if (url) window.open(url, "_blank");
-                                      }} className="flex items-center gap-1.5 text-[11px] text-indigo-600 hover:underline cursor-pointer">
+                                      }} className="flex items-center gap-1.5 text-xs text-indigo-600 hover:underline cursor-pointer">
                                         <FileText className="w-3 h-3" />{a.fileName}
                                       </button>
                                     ))}
@@ -2307,8 +2307,8 @@ export function StaffHomeScreen() {
                                 )}
                                 {t.resolutionNotes && (
                                   <div className="p-2 bg-emerald-50 border border-emerald-100 rounded-lg">
-                                    <p className="text-[10px] font-bold text-emerald-700 uppercase">Nota Penyelesaian</p>
-                                    <p className="text-[11px] text-emerald-700 mt-0.5">{t.resolutionNotes}</p>
+                                    <p className="text-2xs font-bold text-emerald-700 uppercase">Nota Penyelesaian</p>
+                                    <p className="text-xs text-emerald-700 mt-0.5">{t.resolutionNotes}</p>
                                   </div>
                                 )}
                               </div>
@@ -2370,7 +2370,7 @@ export function StaffHomeScreen() {
             <button key={id} onClick={() => setActiveTab(id)}
               className={`flex flex-col items-center py-1.5 px-2 rounded-xl transition cursor-pointer ${active ? "text-slate-900" : "text-slate-400"}`}>
               <Icon className={`w-5 h-5 ${active ? "text-slate-900" : ""}`} />
-              <span className={`text-[9px] font-bold mt-0.5 ${active ? "text-slate-900" : ""}`}>{label}</span>
+              <span className={`text-3xs font-bold mt-0.5 ${active ? "text-slate-900" : ""}`}>{label}</span>
             </button>
           );
         })}
