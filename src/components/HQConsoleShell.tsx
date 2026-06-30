@@ -2837,7 +2837,23 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
                             <label className="text-[10px] text-slate-500 font-semibold">Kredit/bln:</label>
                             <input type="number" min={0} value={p.aiCredits}
                               onChange={e => setPlans(prev => prev.map(pl => pl.id === p.id ? { ...pl, aiCredits: Number(e.target.value) } : pl))}
-                              onBlur={() => localStorage.setItem(plansKey, JSON.stringify(plans))}
+                              onBlur={async e => {
+                                const aiCredits = Number(e.target.value);
+                                if (useRealData) {
+                                  // Route through the same HQ Package Catalog RPC the
+                                  // Edit Plan modal uses, so this quick-edit field can't
+                                  // silently diverge from subscription_plans / wallets.
+                                  await hqService.updatePlan(p.id, {
+                                    name: p.name, price: p.price, aiCredits, ocrCredits: p.ocrCredits,
+                                    storageGB: p.storageGB, maxUsers: p.maxUsers, featured: p.featured,
+                                    features: p.features ?? [], limitations: p.limitations ?? [],
+                                    isTrial: p.isTrial ?? false, trialDays: p.trialDays ?? 0, isCustomPricing: p.isCustomPricing ?? false,
+                                  });
+                                  reloadPlans();
+                                } else {
+                                  localStorage.setItem(plansKey, JSON.stringify(plans));
+                                }
+                              }}
                               className="w-24 border border-slate-200 rounded-lg px-2 py-1.5 text-xs text-center focus:outline-none focus:border-emerald-400 bg-white" />
                           </div>
                         </div>
