@@ -1132,9 +1132,9 @@ export const OCREngineConsole: React.FC = () => {
                     type="button"
                     disabled={cashAccounts.length === 0}
                     onClick={() => { setOffsetAccountType("CASH"); setSelectedAccountId(cashAccounts[0]?.id || ""); }}
-                    className={`py-1.5 px-3 border text-xs font-semibold rounded-lg select-none cursor-pointer disabled:opacity-40 transition ${
-                      offsetAccountType === "CASH" 
-                        ? "bg-slate-900 text-white border-slate-950 font-bold" 
+                    className={`py-1.5 px-3 border text-xs font-semibold rounded-lg select-none cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed transition ${
+                      offsetAccountType === "CASH"
+                        ? "bg-slate-900 text-white border-slate-950 font-bold"
                         : "bg-slate-50 hover:bg-slate-100 text-slate-600 border-slate-200"
                     }`}
                   >
@@ -1145,9 +1145,9 @@ export const OCREngineConsole: React.FC = () => {
                     type="button"
                     disabled={bankAccounts.length === 0}
                     onClick={() => { setOffsetAccountType("BANK"); setSelectedAccountId(bankAccounts[0]?.id || ""); }}
-                    className={`py-1.5 px-3 border text-xs font-semibold rounded-lg select-none cursor-pointer disabled:opacity-40 transition ${
-                      offsetAccountType === "BANK" 
-                        ? "bg-slate-900 text-white border-slate-950 font-bold" 
+                    className={`py-1.5 px-3 border text-xs font-semibold rounded-lg select-none cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed transition ${
+                      offsetAccountType === "BANK"
+                        ? "bg-slate-900 text-white border-slate-950 font-bold"
                         : "bg-slate-50 hover:bg-slate-100 text-slate-600 border-slate-200"
                     }`}
                   >

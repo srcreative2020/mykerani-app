@@ -365,7 +365,7 @@ export const MyKeraniAppTabs: React.FC<MyKeraniAppTabsProps> = ({
                   setShowSimulateUploadModal(false);
                   setSimulationSuccess(null);
                 }}
-                className="text-slate-400 hover:text-slate-650 p-1 rounded-full hover:bg-slate-50"
+                className="text-slate-400 hover:text-slate-650 p-1 rounded-full hover:bg-slate-50 transition active:scale-95 cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>

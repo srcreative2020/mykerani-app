@@ -523,7 +523,7 @@ export const AIFinancialAssistant: React.FC<AIFinancialAssistantProps> = ({ onTr
                         key={b.id}
                         type="button"
                         onClick={() => handlePickBusiness(s.id, b)}
-                        className="px-3 py-1.5 rounded-lg bg-indigo-50 hover:bg-indigo-100 border border-indigo-100 text-indigo-700 font-semibold text-xs"
+                        className="px-3 py-1.5 rounded-lg bg-indigo-50 hover:bg-indigo-100 border border-indigo-100 text-indigo-700 font-semibold text-xs transition active:scale-[0.98] cursor-pointer"
                       >
                         {b.businessName}
                       </button>
@@ -531,7 +531,7 @@ export const AIFinancialAssistant: React.FC<AIFinancialAssistantProps> = ({ onTr
                     <button
                       type="button"
                       onClick={() => handlePickBusiness(s.id, null)}
-                      className="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-700 font-semibold text-xs"
+                      className="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-700 font-semibold text-xs transition active:scale-[0.98] cursor-pointer"
                     >
                       Personal
                     </button>
@@ -559,14 +559,14 @@ export const AIFinancialAssistant: React.FC<AIFinancialAssistantProps> = ({ onTr
                             type="button"
                             onClick={() => handleRequestAttachEvidence(s.id)}
                             disabled={uploadingEvidenceFor === s.id}
-                            className="px-2 py-1 rounded-md bg-indigo-50 hover:bg-indigo-100 border border-indigo-100 text-indigo-700 font-semibold text-xs disabled:opacity-50"
+                            className="px-2 py-1 rounded-md bg-indigo-50 hover:bg-indigo-100 border border-indigo-100 text-indigo-700 font-semibold text-xs transition active:scale-[0.98] cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                           >
                             {uploadingEvidenceFor === s.id ? "Memuat naik..." : "Lampir Resit"}
                           </button>
                           <button
                             type="button"
                             onClick={() => handleSkipEvidence(s.id)}
-                            className="px-2 py-1 rounded-md bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-700 font-semibold text-xs"
+                            className="px-2 py-1 rounded-md bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-700 font-semibold text-xs transition active:scale-[0.98] cursor-pointer"
                           >
                             Tiada Resit
                           </button>
@@ -581,9 +581,9 @@ export const AIFinancialAssistant: React.FC<AIFinancialAssistantProps> = ({ onTr
 
                   {status === "pending" && editingSuggestionId !== s.id && (
                     <div className="flex gap-2 pt-1">
-                      <button type="button" onClick={() => handleConfirmSuggestion(s)} disabled={confirmingId === s.id} className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-semibold disabled:opacity-50 disabled:cursor-not-allowed">Sahkan</button>
-                      <button type="button" onClick={() => handleStartEdit(s)} className="px-3 py-1.5 rounded-lg bg-slate-200 hover:bg-slate-300 text-slate-800 font-semibold">Edit</button>
-                      <button type="button" onClick={() => handleRejectSuggestion(s.id)} className="px-3 py-1.5 rounded-lg bg-rose-100 hover:bg-rose-200 text-rose-700 font-semibold">Tolak</button>
+                      <button type="button" onClick={() => handleConfirmSuggestion(s)} disabled={confirmingId === s.id} className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-semibold transition active:scale-[0.98] cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed">Sahkan</button>
+                      <button type="button" onClick={() => handleStartEdit(s)} className="px-3 py-1.5 rounded-lg bg-slate-200 hover:bg-slate-300 text-slate-800 font-semibold transition active:scale-[0.98] cursor-pointer">Edit</button>
+                      <button type="button" onClick={() => handleRejectSuggestion(s.id)} className="px-3 py-1.5 rounded-lg bg-rose-100 hover:bg-rose-200 text-rose-700 font-semibold transition active:scale-[0.98] cursor-pointer">Tolak</button>
                     </div>
                   )}
 
@@ -594,8 +594,8 @@ export const AIFinancialAssistant: React.FC<AIFinancialAssistantProps> = ({ onTr
                       <input value={editDraft.relatedParty} onChange={e => setEditDraft(d => ({ ...d, relatedParty: e.target.value }))} placeholder="Related Party" className="w-full px-2 py-1 rounded border border-amber-300 text-xs" />
                       <input value={editDraft.date} onChange={e => setEditDraft(d => ({ ...d, date: e.target.value }))} type="date" className="w-full px-2 py-1 rounded border border-amber-300 text-xs" />
                       <div className="flex gap-2 pt-1">
-                        <button type="button" onClick={() => handleConfirmSuggestion(s, editDraft)} disabled={confirmingId === s.id} className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-semibold disabled:opacity-50 disabled:cursor-not-allowed">Sahkan Perubahan</button>
-                        <button type="button" onClick={() => setEditingSuggestionId(null)} className="px-3 py-1.5 rounded-lg bg-slate-200 hover:bg-slate-300 text-slate-800 font-semibold">Batal</button>
+                        <button type="button" onClick={() => handleConfirmSuggestion(s, editDraft)} disabled={confirmingId === s.id} className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-semibold transition active:scale-[0.98] cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed">Sahkan Perubahan</button>
+                        <button type="button" onClick={() => setEditingSuggestionId(null)} className="px-3 py-1.5 rounded-lg bg-slate-200 hover:bg-slate-300 text-slate-800 font-semibold transition active:scale-[0.98] cursor-pointer">Batal</button>
                       </div>
                     </div>
                   )}
@@ -634,7 +634,7 @@ export const AIFinancialAssistant: React.FC<AIFinancialAssistantProps> = ({ onTr
           <button
             onClick={() => onTriggerUpload("RECEIPT")}
             type="button"
-            className="flex items-center justify-center space-x-2 p-3 bg-slate-50 hover:bg-slate-100/90 active:bg-slate-200 border border-slate-200 hover:border-slate-350 text-slate-800 rounded-2xl transition cursor-pointer text-xs font-bold shadow-3xs"
+            className="flex items-center justify-center space-x-2 p-3 bg-slate-50 hover:bg-slate-100/90 active:bg-slate-200 active:scale-[0.98] border border-slate-200 hover:border-slate-350 text-slate-800 rounded-2xl transition cursor-pointer text-xs font-bold shadow-3xs"
           >
             <Receipt className="w-4 h-4 text-emerald-600" />
             <span>Muat Naik Resit</span>
@@ -643,7 +643,7 @@ export const AIFinancialAssistant: React.FC<AIFinancialAssistantProps> = ({ onTr
           <button
             onClick={() => onTriggerUpload("INVOICE")}
             type="button"
-            className="flex items-center justify-center space-x-2 p-3 bg-slate-50 hover:bg-slate-100/90 active:bg-slate-200 border border-slate-200 hover:border-slate-350 text-slate-800 rounded-2xl transition cursor-pointer text-xs font-bold shadow-3xs"
+            className="flex items-center justify-center space-x-2 p-3 bg-slate-50 hover:bg-slate-100/90 active:bg-slate-200 active:scale-[0.98] border border-slate-200 hover:border-slate-350 text-slate-800 rounded-2xl transition cursor-pointer text-xs font-bold shadow-3xs"
           >
             <FileText className="w-4 h-4 text-rose-600" />
             <span>Muat Naik PDF</span>
@@ -652,7 +652,7 @@ export const AIFinancialAssistant: React.FC<AIFinancialAssistantProps> = ({ onTr
           <button
             onClick={() => onTriggerUpload("STATEMENT")}
             type="button"
-            className="flex items-center justify-center space-x-2 p-3 bg-slate-50 hover:bg-slate-100/90 active:bg-slate-200 border border-slate-200 hover:border-slate-350 text-slate-800 rounded-2xl transition cursor-pointer text-xs font-bold shadow-3xs"
+            className="flex items-center justify-center space-x-2 p-3 bg-slate-50 hover:bg-slate-100/90 active:bg-slate-200 active:scale-[0.98] border border-slate-200 hover:border-slate-350 text-slate-800 rounded-2xl transition cursor-pointer text-xs font-bold shadow-3xs"
           >
             <Building className="w-4 h-4 text-blue-600" />
             <span>Muat Naik Penyata Bank</span>
@@ -670,7 +670,7 @@ export const AIFinancialAssistant: React.FC<AIFinancialAssistantProps> = ({ onTr
               onClick={() => executeAgentQuery(item.query)}
               type="button"
               disabled={loading}
-              className="bg-indigo-50 hover:bg-indigo-100/70 border border-indigo-100 rounded-full py-1.5 px-3.5 text-xs text-indigo-700 transition cursor-pointer disabled:opacity-40 font-medium"
+              className="bg-indigo-50 hover:bg-indigo-100/70 border border-indigo-100 rounded-full py-1.5 px-3.5 text-xs text-indigo-700 transition active:scale-[0.98] cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed font-medium"
             >
               {item.title}
             </button>
@@ -693,7 +693,7 @@ export const AIFinancialAssistant: React.FC<AIFinancialAssistantProps> = ({ onTr
           <button
             type="submit"
             disabled={loading || !query.trim()}
-            className="bg-indigo-950 hover:bg-slate-900 disabled:opacity-40 text-white rounded-2xl p-3 px-5 transition flex items-center justify-center text-sm font-semibold shrink-0 cursor-pointer shadow-3xs"
+            className="bg-indigo-950 hover:bg-slate-900 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-2xl p-3 px-5 transition active:scale-[0.98] flex items-center justify-center text-sm font-semibold shrink-0 cursor-pointer shadow-3xs"
           >
             <Send className="w-4 h-4 mr-1.5" /> Tanya
           </button>

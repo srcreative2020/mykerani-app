@@ -99,7 +99,7 @@ export const CashFlowReport: React.FC<CashFlowReportProps> = ({
       type="button"
       id={`cf_activity_${activity.toLowerCase()}`}
       onClick={() => setSelectedActivity(activity)}
-      className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-white/5 transition rounded-lg"
+      className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-white/5 transition rounded-lg active:scale-[0.98]"
     >
       <span className="text-sm text-white">{activityLabel(activity)}</span>
       <span className={`text-sm font-mono flex items-center space-x-1 ${amount >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
@@ -112,9 +112,9 @@ export const CashFlowReport: React.FC<CashFlowReportProps> = ({
   return (
     <div className="space-y-6" id="cash_flow_report_root">
       <div className="flex flex-wrap items-center gap-2">
-        <button id="cf_period_current_month" onClick={() => setPeriodMode("current_month")} className={`px-3 py-1.5 rounded-full text-xs font-semibold border ${periodMode === "current_month" ? "bg-slate-950 border-slate-950 text-white" : "bg-white border-slate-200 text-slate-600"}`}>Bulan Ini</button>
-        <button id="cf_period_last_month" onClick={() => setPeriodMode("last_month")} className={`px-3 py-1.5 rounded-full text-xs font-semibold border ${periodMode === "last_month" ? "bg-slate-950 border-slate-950 text-white" : "bg-white border-slate-200 text-slate-600"}`}>Bulan Lepas</button>
-        <button id="cf_period_custom" onClick={() => setPeriodMode("custom")} className={`px-3 py-1.5 rounded-full text-xs font-semibold border ${periodMode === "custom" ? "bg-slate-950 border-slate-950 text-white" : "bg-white border-slate-200 text-slate-600"}`}>Tempoh Tersuai</button>
+        <button id="cf_period_current_month" onClick={() => setPeriodMode("current_month")} className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition active:scale-[0.98] ${periodMode === "current_month" ? "bg-slate-950 border-slate-950 text-white" : "bg-white border-slate-200 text-slate-600"}`}>Bulan Ini</button>
+        <button id="cf_period_last_month" onClick={() => setPeriodMode("last_month")} className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition active:scale-[0.98] ${periodMode === "last_month" ? "bg-slate-950 border-slate-950 text-white" : "bg-white border-slate-200 text-slate-600"}`}>Bulan Lepas</button>
+        <button id="cf_period_custom" onClick={() => setPeriodMode("custom")} className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition active:scale-[0.98] ${periodMode === "custom" ? "bg-slate-950 border-slate-950 text-white" : "bg-white border-slate-200 text-slate-600"}`}>Tempoh Tersuai</button>
         {periodMode === "custom" && (
           <>
             <input id="cf_custom_from" type="date" value={customFrom} onChange={(e) => setCustomFrom(e.target.value)} className="text-xs border border-slate-200 rounded-lg px-2 py-1.5" />
@@ -122,8 +122,8 @@ export const CashFlowReport: React.FC<CashFlowReportProps> = ({
           </>
         )}
         <div className="flex-1" />
-        <button id="cf_layer_human" onClick={() => setLayer("human")} className={`px-3 py-1.5 rounded-full text-xs font-semibold border ${layer === "human" ? "bg-slate-950 border-slate-950 text-white" : "bg-white border-slate-200 text-slate-600"}`}>Mudah Faham</button>
-        <button id="cf_layer_accounting" onClick={() => setLayer("accounting")} className={`px-3 py-1.5 rounded-full text-xs font-semibold border ${layer === "accounting" ? "bg-slate-950 border-slate-950 text-white" : "bg-white border-slate-200 text-slate-600"}`}>Perakaunan</button>
+        <button id="cf_layer_human" onClick={() => setLayer("human")} className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition active:scale-[0.98] ${layer === "human" ? "bg-slate-950 border-slate-950 text-white" : "bg-white border-slate-200 text-slate-600"}`}>Mudah Faham</button>
+        <button id="cf_layer_accounting" onClick={() => setLayer("accounting")} className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition active:scale-[0.98] ${layer === "accounting" ? "bg-slate-950 border-slate-950 text-white" : "bg-white border-slate-200 text-slate-600"}`}>Perakaunan</button>
       </div>
 
       <div className="bg-slate-950 rounded-2xl p-2" id="cash_flow_statement">
@@ -147,7 +147,7 @@ export const CashFlowReport: React.FC<CashFlowReportProps> = ({
             <motion.div id="cf_drilldown_panel" className="relative w-full max-w-md bg-white h-full overflow-y-auto p-6 space-y-4" initial={{ x: "100%" }} animate={{ x: 0 }} exit={{ x: "100%" }}>
               <div className="flex items-center justify-between">
                 <h4 className="font-display font-bold text-slate-950">{activityLabel(selectedActivity)}</h4>
-                <button id="cf_drilldown_close" onClick={() => setSelectedActivity(null)}>
+                <button id="cf_drilldown_close" onClick={() => setSelectedActivity(null)} className="p-1 hover:bg-slate-100 rounded-lg transition active:scale-95 cursor-pointer">
                   <X className="w-5 h-5 text-slate-400" />
                 </button>
               </div>

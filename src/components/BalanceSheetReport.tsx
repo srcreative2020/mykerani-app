@@ -86,7 +86,7 @@ export const BalanceSheetReport: React.FC<BalanceSheetReportProps> = ({
       type="button"
       id={`bs_line_${line.toLowerCase()}`}
       onClick={() => setSelectedLine(line)}
-      className={`w-full flex items-center justify-between px-4 py-3 text-left hover:bg-white/5 transition rounded-lg ${bold ? "font-bold" : ""}`}
+      className={`w-full flex items-center justify-between px-4 py-3 text-left hover:bg-white/5 transition rounded-lg active:scale-[0.98] ${bold ? "font-bold" : ""}`}
     >
       <span className="text-sm text-white">{lineLabel(line)}</span>
       <span className="text-sm font-mono text-white">{fmtMyr(amount)}</span>
@@ -99,14 +99,14 @@ export const BalanceSheetReport: React.FC<BalanceSheetReportProps> = ({
         <button
           id="bs_layer_human"
           onClick={() => setLayer("human")}
-          className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition ${layer === "human" ? "bg-slate-950 border-slate-950 text-white" : "bg-white border-slate-200 text-slate-600"}`}
+          className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition active:scale-[0.98] ${layer === "human" ? "bg-slate-950 border-slate-950 text-white" : "bg-white border-slate-200 text-slate-600"}`}
         >
           Mudah Faham
         </button>
         <button
           id="bs_layer_accounting"
           onClick={() => setLayer("accounting")}
-          className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition ${layer === "accounting" ? "bg-slate-950 border-slate-950 text-white" : "bg-white border-slate-200 text-slate-600"}`}
+          className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition active:scale-[0.98] ${layer === "accounting" ? "bg-slate-950 border-slate-950 text-white" : "bg-white border-slate-200 text-slate-600"}`}
         >
           Perakaunan
         </button>
@@ -161,7 +161,7 @@ export const BalanceSheetReport: React.FC<BalanceSheetReportProps> = ({
             >
               <div className="flex items-center justify-between">
                 <h4 className="font-display font-bold text-slate-950">{lineLabel(selectedLine)}</h4>
-                <button id="bs_drilldown_close" onClick={() => setSelectedLine(null)}>
+                <button id="bs_drilldown_close" onClick={() => setSelectedLine(null)} className="p-1 hover:bg-slate-100 rounded-lg transition active:scale-95 cursor-pointer">
                   <X className="w-5 h-5 text-slate-400" />
                 </button>
               </div>

@@ -382,14 +382,14 @@ export const HistoricalRecoveryWorkspace: React.FC = () => {
                               <button
                                 type="button"
                                 onClick={() => handleConfirmRow(idx)}
-                                className="px-2 py-1 rounded bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-2xs"
+                                className="px-2 py-1 rounded bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-2xs transition cursor-pointer active:scale-95"
                               >
                                 Confirm
                               </button>
                               <button
                                 type="button"
                                 onClick={() => handleRejectRow(idx)}
-                                className="px-2 py-1 rounded bg-rose-100 hover:bg-rose-200 text-rose-700 font-bold text-2xs"
+                                className="px-2 py-1 rounded bg-rose-100 hover:bg-rose-200 text-rose-700 font-bold text-2xs transition cursor-pointer active:scale-95"
                               >
                                 Reject
                               </button>

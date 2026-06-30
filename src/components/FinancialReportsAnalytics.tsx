@@ -792,7 +792,7 @@ export const FinancialReportsAnalytics: React.FC<FinancialReportsAnalyticsProps>
           <div className="flex flex-col space-y-2" id="advanced_reports_list">
             <button
               onClick={() => { setSelectedReport("summary"); setSearchTerm(""); }}
-              className={`w-full text-left px-3.5 py-3 rounded-xl text-xs font-semibold flex items-center justify-between transition border ${
+              className={`w-full text-left px-3.5 py-3 rounded-xl text-xs font-semibold flex items-center justify-between transition border cursor-pointer ${
                 selectedReport === "summary"
                   ? "bg-slate-950 border-slate-950 text-white shadow-xs"
                   : "bg-white border-slate-200 text-slate-700 hover:bg-slate-50 hover:text-slate-950"
@@ -807,7 +807,7 @@ export const FinancialReportsAnalytics: React.FC<FinancialReportsAnalyticsProps>
 
             <button
               onClick={() => { setSelectedReport("receivables_aging"); setSearchTerm(""); }}
-              className={`w-full text-left px-3.5 py-3 rounded-xl text-xs font-semibold flex items-center justify-between transition border ${
+              className={`w-full text-left px-3.5 py-3 rounded-xl text-xs font-semibold flex items-center justify-between transition border cursor-pointer ${
                 selectedReport === "receivables_aging"
                   ? "bg-slate-950 border-slate-950 text-white shadow-xs"
                   : "bg-white border-slate-200 text-slate-700 hover:bg-slate-50 hover:text-slate-950"
@@ -822,7 +822,7 @@ export const FinancialReportsAnalytics: React.FC<FinancialReportsAnalyticsProps>
 
             <button
               onClick={() => { setSelectedReport("payables_aging"); setSearchTerm(""); }}
-              className={`w-full text-left px-3.5 py-3 rounded-xl text-xs font-semibold flex items-center justify-between transition border ${
+              className={`w-full text-left px-3.5 py-3 rounded-xl text-xs font-semibold flex items-center justify-between transition border cursor-pointer ${
                 selectedReport === "payables_aging"
                   ? "bg-slate-950 border-slate-950 text-white shadow-xs"
                   : "bg-white border-slate-200 text-slate-700 hover:bg-slate-50 hover:text-slate-950"
@@ -837,7 +837,7 @@ export const FinancialReportsAnalytics: React.FC<FinancialReportsAnalyticsProps>
 
             <button
               onClick={() => { setSelectedReport("commitments"); setSearchTerm(""); }}
-              className={`w-full text-left px-3.5 py-3 rounded-xl text-xs font-semibold flex items-center justify-between transition border ${
+              className={`w-full text-left px-3.5 py-3 rounded-xl text-xs font-semibold flex items-center justify-between transition border cursor-pointer ${
                 selectedReport === "commitments"
                   ? "bg-slate-950 border-slate-950 text-white shadow-xs"
                   : "bg-white border-slate-200 text-slate-700 hover:bg-slate-50 hover:text-slate-950"
@@ -852,7 +852,7 @@ export const FinancialReportsAnalytics: React.FC<FinancialReportsAnalyticsProps>
 
             <button
               onClick={() => { setSelectedReport("balance_sheet"); setSearchTerm(""); }}
-              className={`w-full text-left px-3.5 py-3 rounded-xl text-xs font-semibold flex items-center justify-between transition border ${
+              className={`w-full text-left px-3.5 py-3 rounded-xl text-xs font-semibold flex items-center justify-between transition border cursor-pointer ${
                 selectedReport === "balance_sheet"
                   ? "bg-slate-950 border-slate-950 text-white shadow-xs"
                   : "bg-white border-slate-200 text-slate-700 hover:bg-slate-50 hover:text-slate-950"
@@ -867,7 +867,7 @@ export const FinancialReportsAnalytics: React.FC<FinancialReportsAnalyticsProps>
 
             <button
               onClick={() => { setSelectedReport("bank_readiness"); setSearchTerm(""); }}
-              className={`w-full text-left px-3.5 py-3 rounded-xl text-xs font-semibold flex items-center justify-between transition border ${
+              className={`w-full text-left px-3.5 py-3 rounded-xl text-xs font-semibold flex items-center justify-between transition border cursor-pointer ${
                 selectedReport === "bank_readiness"
                   ? "bg-slate-950 border-slate-950 text-white shadow-xs"
                   : "bg-white border-slate-200 text-slate-700 hover:bg-slate-50 hover:text-slate-950"

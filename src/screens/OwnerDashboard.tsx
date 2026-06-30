@@ -2383,7 +2383,7 @@ export function OwnerDashboard() {
                                     Edit
                                   </button>
                                   <button type="button" onClick={() => handleChatDeleteConfirmed(s)}
-                                    className="px-3 py-1.5 rounded-lg bg-rose-100 hover:bg-rose-200 text-rose-700 font-semibold text-xs">
+                                    className="px-3 py-1.5 rounded-lg bg-rose-100 hover:bg-rose-200 text-rose-700 font-semibold text-xs transition active:scale-[0.98]">
                                     Padam
                                   </button>
                                 </div>
@@ -2576,12 +2576,12 @@ export function OwnerDashboard() {
                 className="flex items-center gap-2 bg-white border border-slate-300 rounded-2xl px-4 py-3 shadow-sm focus-within:border-indigo-400 transition">
                 <button type="button" onClick={() => chatFileInputRef.current?.click()} disabled={chatAttaching || chatRecording}
                   title="Lampir resit / PDF" aria-label="Lampir fail"
-                  className="w-7 h-7 rounded-xl flex items-center justify-center text-indigo-600 bg-indigo-50 hover:bg-indigo-100 transition cursor-pointer disabled:opacity-40 shrink-0">
+                  className="w-7 h-7 rounded-xl flex items-center justify-center text-indigo-600 bg-indigo-50 hover:bg-indigo-100 transition cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed active:scale-95 shrink-0">
                   <Paperclip className="w-4 h-4" />
                 </button>
                 <button type="button" onClick={chatRecording ? stopChatVoiceRecording : startChatVoiceRecording} disabled={chatAttaching}
                   title="Rekod nota suara" aria-label="Rekod nota suara"
-                  className={`w-7 h-7 rounded-xl flex items-center justify-center transition cursor-pointer disabled:opacity-40 shrink-0 ${chatRecording ? "text-white bg-rose-500" : "text-emerald-600 bg-emerald-50 hover:bg-emerald-100"}`}>
+                  className={`w-7 h-7 rounded-xl flex items-center justify-center transition cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed active:scale-95 shrink-0 ${chatRecording ? "text-white bg-rose-500" : "text-emerald-600 bg-emerald-50 hover:bg-emerald-100"}`}>
                   {chatRecording ? <Square className="w-3.5 h-3.5" /> : <Mic className="w-4 h-4" />}
                 </button>
                 <input
@@ -2593,7 +2593,7 @@ export function OwnerDashboard() {
                   className="flex-1 text-sm outline-none text-slate-800 placeholder-slate-400 bg-transparent"
                 />
                 <button type="submit" disabled={!chatInput.trim() || chatLoading || chatAttaching}
-                  className="w-8 h-8 rounded-xl bg-indigo-600 text-white flex items-center justify-center disabled:bg-slate-200 transition cursor-pointer shrink-0">
+                  className="w-8 h-8 rounded-xl bg-indigo-600 text-white flex items-center justify-center disabled:bg-slate-200 disabled:cursor-not-allowed transition active:scale-95 cursor-pointer shrink-0">
                   <Send className="w-3.5 h-3.5" />
                 </button>
               </form>
@@ -2806,14 +2806,14 @@ export function OwnerDashboard() {
                             </button>
                           ))}
                           <button type="button" onClick={() => txnReceiptInputRef.current?.click()} disabled={uploadingTxnReceipt}
-                            className="w-full flex items-center justify-center gap-1.5 px-2 py-1.5 rounded border border-dashed border-slate-300 text-xs font-semibold text-slate-500 hover:border-indigo-400 hover:text-indigo-600 cursor-pointer disabled:opacity-50">
+                            className="w-full flex items-center justify-center gap-1.5 px-2 py-1.5 rounded border border-dashed border-slate-300 text-xs font-semibold text-slate-500 hover:border-indigo-400 hover:text-indigo-600 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed transition">
                             <Paperclip className="w-3 h-3" /> {uploadingTxnReceipt ? "Memuat naik..." : "Lampirkan Resit"}
                           </button>
                         </div>
 
                         <div className="flex gap-2 pt-1">
-                          <button onClick={saveEditTxn} className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold cursor-pointer">Simpan</button>
-                          <button onClick={() => setEditingTxnId(null)} className="px-3 py-1.5 rounded-lg bg-slate-200 hover:bg-slate-300 text-slate-800 text-xs font-semibold cursor-pointer">Batal</button>
+                          <button onClick={saveEditTxn} className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold cursor-pointer transition active:scale-[0.98]">Simpan</button>
+                          <button onClick={() => setEditingTxnId(null)} className="px-3 py-1.5 rounded-lg bg-slate-200 hover:bg-slate-300 text-slate-800 text-xs font-semibold cursor-pointer transition active:scale-[0.98]">Batal</button>
                         </div>
                       </div>
                     ) : (
@@ -2877,12 +2877,12 @@ export function OwnerDashboard() {
                     </select>
                     <div className="flex items-center gap-2">
                       <button disabled={txnPage === 0} onClick={() => setTxnPage(p => Math.max(0, p - 1))}
-                        className="px-2 py-1 rounded-lg border border-slate-200 text-2xs font-semibold text-slate-500 disabled:opacity-40 cursor-pointer">
+                        className="px-2 py-1 rounded-lg border border-slate-200 text-2xs font-semibold text-slate-500 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition">
                         Sebelum
                       </button>
                       <span className="text-2xs text-slate-400">Muka {txnPage + 1} / {txnTotalPages}</span>
                       <button disabled={txnPage >= txnTotalPages - 1} onClick={() => setTxnPage(p => Math.min(txnTotalPages - 1, p + 1))}
-                        className="px-2 py-1 rounded-lg border border-slate-200 text-2xs font-semibold text-slate-500 disabled:opacity-40 cursor-pointer">
+                        className="px-2 py-1 rounded-lg border border-slate-200 text-2xs font-semibold text-slate-500 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition">
                         Seterus
                       </button>
                     </div>
@@ -3073,7 +3073,7 @@ export function OwnerDashboard() {
                     <input type="email" value={inviteEmail} onChange={e => setInviteEmail(e.target.value)} placeholder="Email kakitangan"
                       className="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-400 bg-white" />
                     <button onClick={handleInviteSubmit} disabled={inviteLoading || !inviteEmail.trim() || !inviteName.trim()}
-                      className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 text-white rounded-xl text-xs font-bold cursor-pointer transition">
+                      className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 disabled:cursor-not-allowed text-white rounded-xl text-xs font-bold cursor-pointer transition">
                       {inviteLoading ? "Mencipta akaun..." : "Cipta & Jemput"}
                     </button>
                     {inviteResult && (
@@ -3136,7 +3136,7 @@ export function OwnerDashboard() {
                                 disabled={roleChangeLoadingId === member.id}
                                 onChange={e => handleChangeMemberRole(member, e.target.value)}
                                 title="Tukar peranan kakitangan (direkod dalam role_change_audit_log)"
-                                className="text-2xs border border-slate-200 rounded-lg px-1.5 py-1 bg-white cursor-pointer disabled:opacity-50"
+                                className="text-2xs border border-slate-200 rounded-lg px-1.5 py-1 bg-white cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                               >
                                 <option value="TENANT_ADMIN">TENANT_ADMIN</option>
                                 <option value="MANAGER">MANAGER</option>
@@ -3147,7 +3147,7 @@ export function OwnerDashboard() {
                                 onClick={() => handleRevokeMember(member)}
                                 disabled={roleChangeLoadingId === member.id}
                                 title="Tarik balik akses (direkod dalam role_change_audit_log)"
-                                className="text-2xs font-bold text-rose-600 hover:text-rose-700 cursor-pointer disabled:opacity-50"
+                                className="text-2xs font-bold text-rose-600 hover:text-rose-700 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed transition"
                               >
                                 Buang
                               </button>
@@ -3174,7 +3174,7 @@ export function OwnerDashboard() {
                         placeholder="Terangkan sebab rayuan anda..." rows={3}
                         className="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-400 bg-white" />
                       <button onClick={handleSubmitAppeal} disabled={appealLoading || !appealReason.trim()}
-                        className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 text-white rounded-xl text-xs font-bold cursor-pointer transition">
+                        className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 disabled:cursor-not-allowed text-white rounded-xl text-xs font-bold cursor-pointer transition">
                         {appealLoading ? "Menghantar..." : "Hantar Rayuan"}
                       </button>
                       {appealResult && (
@@ -3381,7 +3381,7 @@ export function OwnerDashboard() {
                     </button>
                   ) : (
                     <div className="flex gap-2">
-                      <button onClick={saveAccount} disabled={accountSaving} className="flex-1 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-semibold disabled:opacity-50 cursor-pointer">
+                      <button onClick={saveAccount} disabled={accountSaving} className="flex-1 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-semibold disabled:opacity-50 disabled:cursor-not-allowed transition active:scale-[0.98] cursor-pointer">
                         {accountSaving ? "Menyimpan..." : "Simpan"}
                       </button>
                       <button onClick={() => setEditingAccount(false)} className="flex-1 py-2.5 bg-slate-200 hover:bg-slate-300 text-slate-800 rounded-xl text-sm font-semibold cursor-pointer">
@@ -3536,13 +3536,13 @@ export function OwnerDashboard() {
                     <input value={companyMasterForm.supportContactName} onChange={e => setCompanyMasterForm(f => ({ ...f, supportContactName: e.target.value }))} placeholder="Nama Kontak Sokongan" className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm" />
                     <input type="email" value={companyMasterForm.supportEmail} onChange={e => setCompanyMasterForm(f => ({ ...f, supportEmail: e.target.value }))} placeholder="E-mel Sokongan" className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm" />
                   </div>
-                  <button onClick={saveCompanyMaster} disabled={companyMasterSaving} className="w-full py-2.5 bg-slate-900 text-white rounded-xl text-sm font-semibold disabled:opacity-50 cursor-pointer">
+                  <button onClick={saveCompanyMaster} disabled={companyMasterSaving} className="w-full py-2.5 bg-slate-900 text-white rounded-xl text-sm font-semibold disabled:opacity-50 disabled:cursor-not-allowed transition active:scale-[0.98] cursor-pointer">
                     {companyMasterSaving ? "Menyimpan..." : "Simpan Maklumat Syarikat"}
                   </button>
                   {companyMasterMsg && <p className="text-xs text-emerald-600">{companyMasterMsg}</p>}
                 </div>
 
-                <button onClick={saveProfiles} disabled={profileSaving} className="w-full py-3 bg-indigo-600 text-white rounded-xl text-sm font-semibold disabled:opacity-50 cursor-pointer">
+                <button onClick={saveProfiles} disabled={profileSaving} className="w-full py-3 bg-indigo-600 text-white rounded-xl text-sm font-semibold disabled:opacity-50 disabled:cursor-not-allowed transition active:scale-[0.98] cursor-pointer">
                   {profileSaving ? "Menyimpan..." : "Simpan Profil"}
                 </button>
                 {profileSavedAt && <p className="text-center text-xs text-emerald-600">Profil disimpan ✓</p>}
@@ -3974,7 +3974,7 @@ export function OwnerDashboard() {
                           placeholder="Tanya soalan tentang MYKERANI..."
                           className="flex-1 text-xs border border-slate-200 rounded-xl px-3 py-2 outline-none focus:border-indigo-400 bg-white" />
                         <button type="submit" disabled={!supportInput.trim() || supportLoading}
-                          className="px-3 py-2 bg-indigo-600 text-white rounded-xl disabled:bg-slate-200 cursor-pointer transition">
+                          className="px-3 py-2 bg-indigo-600 text-white rounded-xl disabled:bg-slate-200 disabled:cursor-not-allowed cursor-pointer transition">
                           <Send className="w-3.5 h-3.5" />
                         </button>
                       </form>
@@ -4080,7 +4080,7 @@ export function OwnerDashboard() {
                             else setTicketError("Gagal menghantar tiket. Sila cuba lagi.");
                           }}
                           disabled={!ticketSubject.trim() || !ticketDesc.trim() || ticketSending}
-                          className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-200 text-white rounded-xl text-sm font-bold transition cursor-pointer">
+                          className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-200 disabled:cursor-not-allowed text-white rounded-xl text-sm font-bold transition cursor-pointer">
                           {ticketSending ? "Menghantar..." : "Hantar Tiket"}
                         </button>
                       </>
@@ -4164,7 +4164,7 @@ export function OwnerDashboard() {
                                             setTicketReplySending(false);
                                             if (ok) { setTicketReplyDraft(""); refreshMyTickets(); }
                                           }}
-                                          className="px-3 py-1.5 bg-indigo-600 text-white rounded-lg text-xs font-bold disabled:opacity-40 cursor-pointer"
+                                          className="px-3 py-1.5 bg-indigo-600 text-white rounded-lg text-xs font-bold disabled:opacity-40 disabled:cursor-not-allowed transition active:scale-95 cursor-pointer"
                                         >
                                           {ticketReplySending ? "Menghantar..." : "Hantar Balasan"}
                                         </button>
@@ -4249,7 +4249,7 @@ export function OwnerDashboard() {
                         )}
                         {p.isTrial ? (
                           <button onClick={startTrial} disabled={trialSubmitting || !!currentSub}
-                            className="w-full py-2 bg-indigo-600 text-white rounded-xl text-xs font-bold cursor-pointer hover:bg-indigo-700 transition disabled:opacity-40">
+                            className="w-full py-2 bg-indigo-600 text-white rounded-xl text-xs font-bold cursor-pointer hover:bg-indigo-700 transition disabled:opacity-40 disabled:cursor-not-allowed">
                             {trialSubmitting ? "Mengaktifkan..." : "Mulakan Percubaan Percuma"}
                           </button>
                         ) : p.isCustomPricing ? (
@@ -4451,7 +4451,7 @@ export function OwnerDashboard() {
                   {paymentError && <p className="text-xs text-red-600 bg-red-50 p-2.5 rounded-xl">{paymentError}</p>}
 
                   <button onClick={submitPayment} disabled={paymentSubmitting || (!paymentMethods.chipAsiaEnabled && !paymentMethods.manualPaymentEnabled)}
-                    className="w-full py-2.5 bg-indigo-600 text-white rounded-xl text-xs font-bold cursor-pointer hover:bg-indigo-700 transition disabled:opacity-40">
+                    className="w-full py-2.5 bg-indigo-600 text-white rounded-xl text-xs font-bold cursor-pointer hover:bg-indigo-700 transition disabled:opacity-40 disabled:cursor-not-allowed">
                     {paymentSubmitting ? "Menghantar..." : paymentMethod === "chip_asia" ? "Teruskan ke Chip Asia" : "Hantar Slip untuk Kelulusan"}
                   </button>
                 </div>
@@ -4609,7 +4609,7 @@ export function OwnerDashboard() {
                             <span className={`text-3xs font-bold px-2 py-0.5 rounded-full border ${color}`}>{badge}</span>
                           ) : (
                             <button onClick={() => connectStorage(id)} disabled={connectingProv === id}
-                              className="px-3 py-1.5 bg-slate-900 text-white rounded-lg text-2xs font-bold cursor-pointer hover:bg-slate-700 transition disabled:opacity-50 shrink-0">
+                              className="px-3 py-1.5 bg-slate-900 text-white rounded-lg text-2xs font-bold cursor-pointer hover:bg-slate-700 transition disabled:opacity-50 disabled:cursor-not-allowed shrink-0">
                               {connectingProv === id ? "Menyambung..." : "Sambung"}
                             </button>
                           )}
@@ -4762,7 +4762,7 @@ export function OwnerDashboard() {
             <button
               disabled={promoBusy || !promoCode.trim()}
               onClick={submitPromoRedeem}
-              className="w-full py-2.5 bg-emerald-600 text-white rounded-xl text-sm font-bold cursor-pointer hover:bg-emerald-700 transition disabled:opacity-50"
+              className="w-full py-2.5 bg-emerald-600 text-white rounded-xl text-sm font-bold cursor-pointer hover:bg-emerald-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {promoBusy ? "Menebus..." : "Tebus Sekarang"}
             </button>
@@ -4854,7 +4854,7 @@ export function OwnerDashboard() {
                   <button
                     onClick={async () => { if (obBizName.trim()) { await saveObBizName(); setOnboardStep(2); } }}
                     disabled={!obBizName.trim() || obSavingName}
-                    className="w-full min-h-11 py-3 bg-emerald-500 hover:bg-emerald-600 text-white rounded-2xl text-sm font-bold transition cursor-pointer disabled:opacity-40">
+                    className="w-full min-h-11 py-3 bg-emerald-500 hover:bg-emerald-600 text-white rounded-2xl text-sm font-bold transition cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed">
                     {obSavingName ? "Menyimpan..." : "Mula"}
                   </button>
                 </div>
@@ -4888,7 +4888,7 @@ export function OwnerDashboard() {
                       Kembali
                     </button>
                     <button onClick={() => obBizType && setOnboardStep(3)} disabled={!obBizType}
-                      className="flex-1 py-3 bg-emerald-500 hover:bg-emerald-600 text-white rounded-2xl text-sm font-bold transition cursor-pointer disabled:opacity-40">
+                      className="flex-1 py-3 bg-emerald-500 hover:bg-emerald-600 text-white rounded-2xl text-sm font-bold transition cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed">
                       Seterusnya
                     </button>
                   </div>
