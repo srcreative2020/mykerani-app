@@ -55,7 +55,7 @@ export const FinancialHealthCenter: React.FC<FinancialHealthCenterProps> = ({
     <div className="space-y-4" id="financial_health_command_center">
       <div className="flex items-center justify-between">
         <h2 className="text-sm font-bold text-slate-900">Pusat Kesihatan Kewangan</h2>
-        <span className="text-[10px] text-slate-400">{health.totalEvents} rekod</span>
+        <span className="text-2xs text-slate-400">{health.totalEvents} rekod</span>
       </div>
 
       {/* Section 1 + 2 — clickable health cards */}
@@ -73,9 +73,9 @@ export const FinancialHealthCenter: React.FC<FinancialHealthCenterProps> = ({
                 <span className="text-lg leading-none">{bucket.emoji}</span>
                 <span className={`text-xl font-extrabold ${c.text}`}>{bucket.count}</span>
               </div>
-              <p className={`text-[11px] font-bold ${c.text}`}>{bucket.label}</p>
-              <p className="text-[10px] text-slate-500 mt-0.5 leading-snug line-clamp-2">{bucket.description}</p>
-              <span className={`mt-1.5 inline-flex items-center gap-0.5 text-[10px] font-semibold ${c.text} group-hover:underline`}>
+              <p className={`text-xs font-bold ${c.text}`}>{bucket.label}</p>
+              <p className="text-2xs text-slate-500 mt-0.5 leading-snug line-clamp-2">{bucket.description}</p>
+              <span className={`mt-1.5 inline-flex items-center gap-0.5 text-2xs font-semibold ${c.text} group-hover:underline`}>
                 {bucket.actionLabel} <ChevronRight className="w-3 h-3" />
               </span>
             </button>
@@ -93,15 +93,15 @@ export const FinancialHealthCenter: React.FC<FinancialHealthCenterProps> = ({
               id={`readiness_${r.key}`}
             >
               <div className="flex items-center justify-between">
-                <p className="text-[11px] font-bold">{r.label}</p>
+                <p className="text-xs font-bold">{r.label}</p>
                 <span className="text-lg font-extrabold">{r.score}%</span>
               </div>
-              <p className="text-[10px] opacity-75 mt-0.5">
+              <p className="text-2xs opacity-75 mt-0.5">
                 {r.reasons.length === 0 ? "No issues found." : "Tap to see why"}
               </p>
             </button>
             {expandedReadiness === r.key && r.reasons.length > 0 && (
-              <div className="px-3 pb-3 text-[10px] space-y-1 border-t border-current/10 pt-2">
+              <div className="px-3 pb-3 text-2xs space-y-1 border-t border-current/10 pt-2">
                 {r.reasons.map((reason, i) => (
                   <p key={i}>• {reason}</p>
                 ))}
@@ -113,16 +113,16 @@ export const FinancialHealthCenter: React.FC<FinancialHealthCenterProps> = ({
 
       {/* Section 5 — quick actions */}
       <div className="flex flex-wrap gap-2">
-        <button onClick={() => onSelectBucket("pendingConfirmation")} className="px-3 py-1.5 rounded-lg text-[11px] font-semibold bg-blue-600 text-white hover:bg-blue-700 cursor-pointer">
+        <button onClick={() => onSelectBucket("pendingConfirmation")} className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-blue-600 text-white hover:bg-blue-700 cursor-pointer">
           Review Records
         </button>
-        <button onClick={onOpenDuplicateQueue} className="px-3 py-1.5 rounded-lg text-[11px] font-semibold bg-rose-600 text-white hover:bg-rose-700 cursor-pointer">
+        <button onClick={onOpenDuplicateQueue} className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-rose-600 text-white hover:bg-rose-700 cursor-pointer">
           Review Duplicates
         </button>
-        <button onClick={() => onSelectBucket("missingEvidence")} className="px-3 py-1.5 rounded-lg text-[11px] font-semibold bg-orange-500 text-white hover:bg-orange-600 cursor-pointer">
+        <button onClick={() => onSelectBucket("missingEvidence")} className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-orange-500 text-white hover:bg-orange-600 cursor-pointer">
           Attach Evidence
         </button>
-        <button onClick={onOpenImportRecovery} className="px-3 py-1.5 rounded-lg text-[11px] font-semibold bg-slate-800 text-white hover:bg-slate-900 cursor-pointer">
+        <button onClick={onOpenImportRecovery} className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 text-white hover:bg-slate-900 cursor-pointer">
           Retry Imports
         </button>
       </div>

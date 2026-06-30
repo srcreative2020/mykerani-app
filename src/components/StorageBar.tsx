@@ -34,9 +34,9 @@ export const StorageBar: React.FC<StorageBarProps> = ({ quota, compact = false, 
             ) : (
               <HardDrive className="w-3.5 h-3.5 text-slate-400" />
             )}
-            <span className="text-[11px] font-bold text-slate-600">Storan</span>
+            <span className="text-xs font-bold text-slate-600">Storan</span>
           </div>
-          <span className={`text-[10px] font-bold ${
+          <span className={`text-2xs font-bold ${
             quota.warnLevel === "frozen" || quota.warnLevel === "red" ? "text-red-600"
             : quota.warnLevel === "orange" ? "text-amber-600"
             : quota.warnLevel === "yellow" ? "text-yellow-600"
@@ -49,7 +49,7 @@ export const StorageBar: React.FC<StorageBarProps> = ({ quota, compact = false, 
           <div className={`h-full rounded-full transition-all ${barColor}`} style={{ width: `${pct}%` }} />
         </div>
         {quota.warnLevel === "frozen" && (
-          <p className="text-[10px] text-red-600 font-semibold">Storan dibekukan - hubungi HQ</p>
+          <p className="text-2xs text-red-600 font-semibold">Storan dibekukan - hubungi HQ</p>
         )}
       </div>
     );
@@ -85,7 +85,7 @@ export const StorageBar: React.FC<StorageBarProps> = ({ quota, compact = false, 
         <div className="h-3 bg-slate-200 rounded-full overflow-hidden">
           <div className={`h-full rounded-full transition-all duration-700 ${barColor}`} style={{ width: `${pct}%` }} />
         </div>
-        <div className="flex justify-between text-[11px] text-slate-500">
+        <div className="flex justify-between text-xs text-slate-500">
           <span>Digunakan: <strong className="text-slate-700">{fmtBytes(quota.usedBytes)}</strong></span>
           <span>Had: <strong className="text-slate-700">{fmtBytes(quota.quotaBytes)}</strong></span>
         </div>
@@ -93,7 +93,7 @@ export const StorageBar: React.FC<StorageBarProps> = ({ quota, compact = false, 
 
       {/* Add-ons summary */}
       {quota.addOns.length > 0 && (
-        <p className="text-[10px] text-slate-400">
+        <p className="text-2xs text-slate-400">
           + {fmtBytes(quota.addOns.reduce((s, a) => s + a.bytes, 0))} tambahan dibeli
         </p>
       )}
@@ -102,7 +102,7 @@ export const StorageBar: React.FC<StorageBarProps> = ({ quota, compact = false, 
       {quota.warnLevel === "frozen" && (
         <div className="bg-red-100 border border-red-200 rounded-xl p-3 space-y-1">
           <p className="text-xs font-bold text-red-700">Storan Dibekukan oleh Sistem</p>
-          <p className="text-[11px] text-red-600">
+          <p className="text-xs text-red-600">
             {quota.frozenReason === "quota_exceeded" && "Storan melebihi 95%. Upload disekat. Hubungi HQ atau beli tambahan."}
             {quota.frozenReason === "hq_manual" && "HQ telah membekukan storan anda. Hubungi HQ untuk maklumat lanjut."}
             {quota.frozenReason === "inactive" && "Akaun tidak aktif. Hubungi HQ untuk aktifkan semula."}
@@ -120,18 +120,18 @@ export const StorageBar: React.FC<StorageBarProps> = ({ quota, compact = false, 
           <AlertTriangle className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
           <div>
             <p className="text-xs font-bold text-red-700">Storan Kritikal ({pct.toFixed(0)}%)</p>
-            <p className="text-[11px] text-red-600">Upload akan disekat bila sampai 95%. Tambah storan sekarang.</p>
+            <p className="text-xs text-red-600">Upload akan disekat bila sampai 95%. Tambah storan sekarang.</p>
           </div>
         </div>
       )}
       {quota.warnLevel === "orange" && (
         <div className="flex items-start gap-2">
           <AlertCircle className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
-          <p className="text-[11px] text-amber-700">Storan hampir penuh. Pertimbangkan tambahan storan.</p>
+          <p className="text-xs text-amber-700">Storan hampir penuh. Pertimbangkan tambahan storan.</p>
         </div>
       )}
       {quota.warnLevel === "yellow" && (
-        <p className="text-[11px] text-yellow-700">Storan telah mencapai 70%. Pantau penggunaan anda.</p>
+        <p className="text-xs text-yellow-700">Storan telah mencapai 70%. Pantau penggunaan anda.</p>
       )}
 
       {/* Add-on button */}

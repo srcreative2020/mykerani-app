@@ -379,7 +379,7 @@ export const MyKeraniBackupRecovery: React.FC = () => {
       <div className="bg-gradient-to-r from-slate-900 via-slate-800 to-indigo-950 text-white rounded-2xl p-6 shadow-sm relative overflow-hidden">
         <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
-            <span className="bg-rose-500/20 text-rose-300 border border-rose-500/30 text-[10px] font-semibold tracking-wider uppercase px-2 py-0.5 rounded-full inline-block mb-2">
+            <span className="bg-rose-500/20 text-rose-300 border border-rose-500/30 text-2xs font-semibold tracking-wider uppercase px-2 py-0.5 rounded-full inline-block mb-2">
               Disaster Recovery Frame
             </span>
             <h2 className="font-display font-bold text-2xl tracking-normal">
@@ -501,11 +501,11 @@ export const MyKeraniBackupRecovery: React.FC = () => {
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center justify-between">
                     <span className="font-semibold text-xs text-slate-900">{item.title}</span>
-                    <span className="font-mono text-[10px] text-slate-400 font-bold bg-slate-100 px-1.5 py-0.5 rounded-full">
+                    <span className="font-mono text-2xs text-slate-400 font-bold bg-slate-100 px-1.5 py-0.5 rounded-full">
                       {item.count} items
                     </span>
                   </div>
-                  <p className="text-[11px] text-slate-400 mt-0.5 leading-snug">{item.desc}</p>
+                  <p className="text-xs text-slate-400 mt-0.5 leading-snug">{item.desc}</p>
                 </div>
               </div>
             ))}
@@ -517,7 +517,7 @@ export const MyKeraniBackupRecovery: React.FC = () => {
               <Upload className="w-4 h-4 text-slate-600" />
               Upload Local Backup File
             </h4>
-            <p className="text-[11px] text-slate-500 leading-relaxed mb-3">
+            <p className="text-xs text-slate-500 leading-relaxed mb-3">
               Have an exported snapshot saved on your laptop? Select it to run verification checks and override live states.
             </p>
             <input
@@ -548,7 +548,7 @@ export const MyKeraniBackupRecovery: React.FC = () => {
                   Archived Workspace Backups History
                 </h3>
               </div>
-              <span className="text-[10px] font-mono font-semibold bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full">
+              <span className="text-2xs font-mono font-semibold bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full">
                 {backupsList.length} Archived
               </span>
             </div>
@@ -557,7 +557,7 @@ export const MyKeraniBackupRecovery: React.FC = () => {
               <div className="text-center py-12 bg-slate-50 rounded-xl border border-dashed border-slate-100">
                 <Archive className="w-10 h-10 text-slate-300 mx-auto stroke-1" />
                 <h4 className="text-slate-700 font-semibold text-xs mt-3">No backups created yet for this workspace</h4>
-                <p className="text-slate-400 text-[11px] max-w-sm mx-auto mt-1">
+                <p className="text-slate-400 text-xs max-w-sm mx-auto mt-1">
                   Trigger a live recovery snapshot backup above to secure current financial records inside your local vault.
                 </p>
               </div>
@@ -573,15 +573,15 @@ export const MyKeraniBackupRecovery: React.FC = () => {
                         <span className="font-mono font-bold text-xs text-slate-800 bg-indigo-50 border border-indigo-100 px-2 py-0.5 rounded">
                           {backup.id}
                         </span>
-                        <span className="text-[10px] text-slate-400 font-medium flex items-center gap-1">
+                        <span className="text-2xs text-slate-400 font-medium flex items-center gap-1">
                           <Calendar className="w-3.5 h-3.5 text-slate-400" />
                           {new Date(backup.backupDate).toLocaleString()}
                         </span>
-                        <span className="bg-emerald-500/10 text-emerald-700 text-[9px] font-bold px-1.5 py-0.5 rounded-full">
+                        <span className="bg-emerald-500/10 text-emerald-700 text-3xs font-bold px-1.5 py-0.5 rounded-full">
                           {backup.status}
                         </span>
                       </div>
-                      <p className="text-[11px] text-slate-500 leading-normal">
+                      <p className="text-xs text-slate-500 leading-normal">
                         Size: <span className="font-semibold text-slate-700">{formatBytes(backup.sizeBytes)}</span> • Events: <span className="font-semibold text-indigo-600">{backup.recordsCount.events}</span> • Accounts: <span className="font-semibold text-indigo-600">{backup.recordsCount.cashAccounts + backup.recordsCount.bankAccounts}</span> • Commitments: <span className="font-semibold text-indigo-600">{backup.recordsCount.commitments}</span> • OCR patterns: <span className="font-semibold text-indigo-600">{backup.recordsCount.ocrNew}</span>
                       </p>
                     </div>
@@ -596,7 +596,7 @@ export const MyKeraniBackupRecovery: React.FC = () => {
                       </button>
                       <button
                         onClick={() => setSelectedBackupForRestore(backup)}
-                        className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-[11px] font-semibold flex items-center gap-1 transition cursor-pointer"
+                        className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-xs font-semibold flex items-center gap-1 transition cursor-pointer"
                       >
                         <RefreshCw className="w-3.5 h-3.5" />
                         Restore
@@ -643,25 +643,25 @@ export const MyKeraniBackupRecovery: React.FC = () => {
                 {/* Comparison tally view */}
                 <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-100 grid grid-cols-2 sm:grid-cols-4 gap-3 text-center">
                   <div>
-                    <span className="text-[10px] text-slate-400 font-semibold uppercase block">Records Set</span>
+                    <span className="text-2xs text-slate-400 font-semibold uppercase block">Records Set</span>
                     <span className="font-mono text-sm font-bold text-indigo-600">
                       {selectedBackupForRestore.recordsCount.events} Events
                     </span>
                   </div>
                   <div>
-                    <span className="text-[10px] text-slate-400 font-semibold uppercase block">Cash & Bank</span>
+                    <span className="text-2xs text-slate-400 font-semibold uppercase block">Cash & Bank</span>
                     <span className="font-mono text-sm font-bold text-indigo-600">
                       {selectedBackupForRestore.recordsCount.cashAccounts + selectedBackupForRestore.recordsCount.bankAccounts} Accts
                     </span>
                   </div>
                   <div>
-                    <span className="text-[10px] text-slate-400 font-semibold uppercase block">Commitments</span>
+                    <span className="text-2xs text-slate-400 font-semibold uppercase block">Commitments</span>
                     <span className="font-mono text-sm font-bold text-indigo-600">
                       {selectedBackupForRestore.recordsCount.commitments} Contracts
                     </span>
                   </div>
                   <div>
-                    <span className="text-[10px] text-slate-400 font-semibold uppercase block">OCR Learn Matrix</span>
+                    <span className="text-2xs text-slate-400 font-semibold uppercase block">OCR Learn Matrix</span>
                     <span className="font-mono text-sm font-bold text-indigo-600">
                       {selectedBackupForRestore.recordsCount.ocrNew} Patterns
                     </span>
@@ -676,7 +676,7 @@ export const MyKeraniBackupRecovery: React.FC = () => {
                       Required Gate: Only Administrator & Owners.
                     </span>
                   </div>
-                  <span className={`font-bold px-2 py-0.5 rounded text-[11px] uppercase ${canRestore ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'}`}>
+                  <span className={`font-bold px-2 py-0.5 rounded text-xs uppercase ${canRestore ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'}`}>
                     {user?.role}: {canRestore ? 'Authorized to restore' : 'RESTORING LOCKED'}
                   </span>
                 </div>
@@ -699,7 +699,7 @@ export const MyKeraniBackupRecovery: React.FC = () => {
                   </div>
 
                   <div className="space-y-1">
-                    <label className="text-[11px] font-bold text-slate-600 uppercase block">
+                    <label className="text-xs font-bold text-slate-600 uppercase block">
                       Type <span className="text-orange-600">confirm restore</span> below to authorize:
                     </label>
                     <input
@@ -766,8 +766,8 @@ export const MyKeraniBackupRecovery: React.FC = () => {
                   </div>
 
                   <div className="bg-indigo-50/50 p-3 rounded-xl space-y-2 border border-indigo-100">
-                    <h4 className="font-bold text-[10px] text-slate-600 uppercase">Parsed Datastores:</h4>
-                    <div className="grid grid-cols-2 gap-2 text-[11px] text-slate-700 font-semibold font-mono">
+                    <h4 className="font-bold text-2xs text-slate-600 uppercase">Parsed Datastores:</h4>
+                    <div className="grid grid-cols-2 gap-2 text-xs text-slate-700 font-semibold font-mono">
                       <span>Events: {uploadedBackupPayload.recordsCount?.events || 0}</span>
                       <span>Accounts: {(uploadedBackupPayload.recordsCount?.cashAccounts || 0) + (uploadedBackupPayload.recordsCount?.bankAccounts || 0)}</span>
                       <span>Commitments: {uploadedBackupPayload.recordsCount?.commitments || 0}</span>
@@ -776,7 +776,7 @@ export const MyKeraniBackupRecovery: React.FC = () => {
                   </div>
                 </div>
 
-                <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl flex items-start gap-2 text-[11px] text-amber-800">
+                <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl flex items-start gap-2 text-xs text-amber-800">
                   <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
                   <span>
                     Warning: Restoring this uploaded backup is subject to role permission controls. It will overwrite all transaction records in this active workspace with the data from the imported file.

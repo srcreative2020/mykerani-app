@@ -686,7 +686,7 @@ export const FinancialEvidencePackageManager: React.FC = () => {
                   <p className="text-xs font-semibold text-slate-800 font-sans">
                     Drag & Drop file here, or <span className="text-slate-950 underline font-bold group-hover:text-slate-999">browse local files</span>
                   </p>
-                  <p className="text-[10px] text-slate-400 mt-1">
+                  <p className="text-2xs text-slate-400 mt-1">
                     Supports JPG, PNG, WEBP, PDF, CSV up to 10MB
                   </p>
                 </div>
@@ -724,7 +724,7 @@ export const FinancialEvidencePackageManager: React.FC = () => {
             <h4 className="font-display font-semibold text-sm tracking-wide text-slate-300">
               Audit Compliance Overview
             </h4>
-            <p className="text-[11px] text-slate-400 font-sans leading-relaxed">
+            <p className="text-xs text-slate-400 font-sans leading-relaxed">
               In MYKERANI system ledger context, **Financial Evidence Packages** verify the validity of cashflows, payables settlement, and operational commitments in line with isolation policy criteria.
             </p>
 
@@ -750,7 +750,7 @@ export const FinancialEvidencePackageManager: React.FC = () => {
             </div>
           </div>
 
-          <div className="bg-slate-800/40 border border-slate-800 rounded-xl p-3.5 space-y-1.5 text-[10px] text-slate-400 font-sans">
+          <div className="bg-slate-800/40 border border-slate-800 rounded-xl p-3.5 space-y-1.5 text-2xs text-slate-400 font-sans">
             <div className="flex items-center text-slate-300 font-semibold mb-1">
               <AlertCircle className="w-3.5 h-3.5 text-amber-500 mr-1 shrink-0" />
               Tenant & Workspace Isolated
@@ -766,7 +766,7 @@ export const FinancialEvidencePackageManager: React.FC = () => {
           <Package className="w-4.5 h-4.5 text-slate-700" />
           <h4 className="font-display font-semibold text-sm text-slate-900">Sediakan Pek Bukti Kewangan</h4>
         </div>
-        <p className="text-[11px] text-slate-500 font-sans leading-relaxed">
+        <p className="text-xs text-slate-500 font-sans leading-relaxed">
           Bila bank, LHDN, atau akauntan minta bukti kewangan, jana satu pek (ZIP) yang mengandungi ringkasan kewangan
           serta semua dokumen sokongan (resit, invois, penyata) dalam tempoh yang dipilih.
         </p>
@@ -885,7 +885,7 @@ export const FinancialEvidencePackageManager: React.FC = () => {
                     {/* Header: Type and Action Icon */}
                     <div className="flex justify-between items-center">
                       <span
-                        className={`text-[9px] font-bold tracking-wider uppercase px-2.5 py-1 rounded-full ${
+                        className={`text-3xs font-bold tracking-wider uppercase px-2.5 py-1 rounded-full ${
                           pkg.documentType === "RECEIPT"
                             ? "bg-rose-50 text-rose-700 border border-rose-100"
                             : pkg.documentType === "INVOICE"
@@ -923,7 +923,7 @@ export const FinancialEvidencePackageManager: React.FC = () => {
                       <h5 className="text-xs font-semibold text-slate-900 truncate font-sans" title={pkg.fileName}>
                         {pkg.fileName}
                       </h5>
-                      <span className="flex items-center text-[10px] text-slate-400 mt-1">
+                      <span className="flex items-center text-2xs text-slate-400 mt-1">
                         <Calendar className="w-3 h-3 mr-1 text-slate-400" />
                         Uploaded: {pkg.uploadDate}
                       </span>
@@ -931,7 +931,7 @@ export const FinancialEvidencePackageManager: React.FC = () => {
 
                     {/* Notes preview clip */}
                     {pkg.notes && (
-                      <p className="text-[11px] text-slate-500 italic font-sans line-clamp-2 bg-slate-50 p-2 rounded-lg border border-slate-100">
+                      <p className="text-xs text-slate-500 italic font-sans line-clamp-2 bg-slate-50 p-2 rounded-lg border border-slate-100">
                         "{pkg.notes}"
                       </p>
                     )}
@@ -947,10 +947,10 @@ export const FinancialEvidencePackageManager: React.FC = () => {
                         <div className="flex items-start space-x-2 scroll-py-1 text-left overflow-hidden">
                           <Link2 className="w-3.5 h-3.5 mt-0.5 text-slate-500 shrink-0" />
                           <div className="overflow-hidden">
-                            <span className="text-[9px] font-bold text-slate-500 block uppercase tracking-wide">
+                            <span className="text-3xs font-bold text-slate-500 block uppercase tracking-wide">
                               Linked Connection ({linkage.badge})
                             </span>
-                            <span className="text-[11px] font-semibold text-slate-800 block truncate font-sans">
+                            <span className="text-xs font-semibold text-slate-800 block truncate font-sans">
                               {linkage.title}
                             </span>
                           </div>
@@ -966,7 +966,7 @@ export const FinancialEvidencePackageManager: React.FC = () => {
                             setSelectedPackage(pkg);
                             setIsLinkingInPreview(true);
                           }}
-                          className="mx-auto text-[10px] text-slate-500 hover:text-slate-900 hover:underline font-bold flex items-center space-x-1 cursor-pointer"
+                          className="mx-auto text-2xs text-slate-500 hover:text-slate-900 hover:underline font-bold flex items-center space-x-1 cursor-pointer"
                           id={`btn_link_init_${pkg.id}`}
                         >
                           <LinkIcon className="w-3 h-3 text-slate-400 mr-1" />
@@ -1010,7 +1010,7 @@ export const FinancialEvidencePackageManager: React.FC = () => {
               {/* Header */}
               <div className="border-b border-slate-100 p-5 flex justify-between items-center bg-slate-50">
                 <div className="space-y-1">
-                  <span className="text-[9px] font-bold uppercase tracking-wider text-slate-500 bg-white px-2 py-0.5 rounded-md border border-slate-100">
+                  <span className="text-3xs font-bold uppercase tracking-wider text-slate-500 bg-white px-2 py-0.5 rounded-md border border-slate-100">
                     {selectedPackage.documentType} Package Verification
                   </span>
                   <h4 className="font-display font-bold text-slate-900 text-sm truncate max-w-[340px]">
@@ -1057,7 +1057,7 @@ export const FinancialEvidencePackageManager: React.FC = () => {
                         <p className="text-xs font-semibold text-slate-800">
                           Non-Image Document Format
                         </p>
-                        <p className="text-[10px] text-slate-400 mt-0.5">
+                        <p className="text-2xs text-slate-400 mt-0.5">
                           File reference is safely buffered in isolated storage.
                         </p>
                       </div>
@@ -1083,32 +1083,32 @@ export const FinancialEvidencePackageManager: React.FC = () => {
                   </h5>
                   <div className="grid grid-cols-2 gap-y-3 gap-x-2 text-xs">
                     <div>
-                      <span className="text-[10px] text-slate-400 block mb-0.5">Unique Voucher ID</span>
-                      <span className="font-mono text-[11px] text-slate-800 bg-white border border-slate-100 px-1.5 py-0.5 rounded-sm block truncate">
+                      <span className="text-2xs text-slate-400 block mb-0.5">Unique Voucher ID</span>
+                      <span className="font-mono text-xs text-slate-800 bg-white border border-slate-100 px-1.5 py-0.5 rounded-sm block truncate">
                         {selectedPackage.id}
                       </span>
                     </div>
                     <div>
-                      <span className="text-[10px] text-slate-400 block mb-0.5">Submission Date</span>
+                      <span className="text-2xs text-slate-400 block mb-0.5">Submission Date</span>
                       <span className="text-slate-800 font-medium block">
                         {selectedPackage.uploadDate}
                       </span>
                     </div>
                     <div>
-                      <span className="text-[10px] text-slate-400 block mb-0.5">Classification Tag</span>
+                      <span className="text-2xs text-slate-400 block mb-0.5">Classification Tag</span>
                       <span className="text-slate-800 font-medium block">
                         {selectedPackage.documentType.replace("_", " ")}
                       </span>
                     </div>
                     <div>
-                      <span className="text-[10px] text-slate-400 block mb-0.5">Workspace Origin</span>
+                      <span className="text-2xs text-slate-400 block mb-0.5">Workspace Origin</span>
                       <span className="text-slate-800 font-medium block">
                         {activeWorkspace?.name} ({activeWorkspace?.slug})
                       </span>
                     </div>
                     {selectedPackage.notes && (
                       <div className="col-span-2">
-                        <span className="text-[10px] text-slate-400 block mb-0.5">Clearing Audit Notes</span>
+                        <span className="text-2xs text-slate-400 block mb-0.5">Clearing Audit Notes</span>
                         <div className="bg-white border border-slate-100 rounded-lg p-2.5 text-xs text-slate-600 italic">
                           "{selectedPackage.notes}"
                         </div>
@@ -1126,7 +1126,7 @@ export const FinancialEvidencePackageManager: React.FC = () => {
                     {selectedPackage.relatedRecordId && (
                       <button
                         onClick={handleRemovePreviewLink}
-                        className="text-[10px] text-red-600 hover:text-red-800 font-semibold flex items-center space-x-1 cursor-pointer"
+                        className="text-2xs text-red-600 hover:text-red-800 font-semibold flex items-center space-x-1 cursor-pointer"
                         id="btn_remove_link"
                       >
                         <X className="w-3 h-3 mr-0.5" />
@@ -1143,13 +1143,13 @@ export const FinancialEvidencePackageManager: React.FC = () => {
                       return (
                         <div className="p-4 bg-emerald-50/40 border border-emerald-100 rounded-2xl flex items-center justify-between">
                           <div className="space-y-1">
-                            <span className="text-[9px] font-bold uppercase tracking-wider text-emerald-700 bg-emerald-100/60 px-2 py-0.5 rounded-sm">
+                            <span className="text-3xs font-bold uppercase tracking-wider text-emerald-700 bg-emerald-100/60 px-2 py-0.5 rounded-sm">
                               {mapping.badge} Bound Connection
                             </span>
                             <p className="text-xs font-semibold text-slate-800 font-sans">
                               {mapping.title}
                             </p>
-                            <p className="text-[10px] text-slate-400 font-sans">
+                            <p className="text-2xs text-slate-400 font-sans">
                               {mapping.sub}
                             </p>
                           </div>
@@ -1181,7 +1181,7 @@ export const FinancialEvidencePackageManager: React.FC = () => {
                         <div className="space-y-3">
                           <div className="grid grid-cols-2 gap-3">
                             <div>
-                              <label className="block text-[10px] font-bold text-slate-500 mb-1">
+                              <label className="block text-2xs font-bold text-slate-500 mb-1">
                                 Link Ledger Record Type
                               </label>
                               <select
@@ -1201,7 +1201,7 @@ export const FinancialEvidencePackageManager: React.FC = () => {
 
                             {previewLinkType !== "NONE" && (
                               <div>
-                                <label className="block text-[10px] font-bold text-slate-500 mb-1">
+                                <label className="block text-2xs font-bold text-slate-500 mb-1">
                                   Choose Target Record
                                 </label>
                                 <select

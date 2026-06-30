@@ -22,7 +22,7 @@ function formatTime(ms: number): string {
 
 function StatRow({ label, value }: { label: string; value: string | number | null | undefined }) {
   return (
-    <div className="flex items-center justify-between text-[11px] py-0.5">
+    <div className="flex items-center justify-between text-xs py-0.5">
       <span className="text-slate-500">{label}</span>
       <span className="font-semibold text-slate-800">{value === null || value === undefined || value === "" ? "—" : value}</span>
     </div>
@@ -32,7 +32,7 @@ function StatRow({ label, value }: { label: string; value: string | number | nul
 function StageProgressBar({ label, pct }: { label: string; pct: number }) {
   const clamped = Math.max(0, Math.min(100, pct));
   return (
-    <div className="flex items-center gap-2 text-[11px]">
+    <div className="flex items-center gap-2 text-xs">
       <span className="w-32 text-slate-500 shrink-0">{label}</span>
       <div className="flex-1 h-1.5 bg-slate-200 rounded-full overflow-hidden">
         <div className="h-full bg-indigo-500 transition-all" style={{ width: `${clamped}%` }} />
@@ -82,7 +82,7 @@ export default function DocumentProcessingProgressPanel({ job }: { job: OcrJobSt
             {failed ? "Pemprosesan Gagal" : job.status === "COMPLETED" ? "Pemprosesan Selesai" : "Memproses Dokumen..."}
           </p>
         </div>
-        <span className="text-[11px] font-semibold text-slate-500">{OCR_STAGE_LABELS[job.stage]}</span>
+        <span className="text-xs font-semibold text-slate-500">{OCR_STAGE_LABELS[job.stage]}</span>
       </div>
 
       {/* File metadata */}
@@ -102,7 +102,7 @@ export default function DocumentProcessingProgressPanel({ job }: { job: OcrJobSt
           const isCurrent = !failed && job.stage === stage && job.status === "PROCESSING";
           const isFailedHere = failed && job.errorStage === stage;
           return (
-            <div key={stage} className="flex items-center gap-2 text-[11px]">
+            <div key={stage} className="flex items-center gap-2 text-xs">
               {isFailedHere ? (
                 <XCircle className="w-3.5 h-3.5 text-red-500 shrink-0" />
               ) : isCurrent ? (
@@ -126,7 +126,7 @@ export default function DocumentProcessingProgressPanel({ job }: { job: OcrJobSt
         <StageProgressBar label="PDF Extraction" pct={stagePct("PDF_EXTRACTED")} />
         <StageProgressBar label="OCR / AI Analysis" pct={stagePct("OCR_PROCESSING") * 0.7 + stagePct("AI_ANALYSIS") * 0.3} />
         <StageProgressBar label="Transaction Parse" pct={stagePct("CLASSIFICATION") * 0.3 + stagePct("TRANSACTION_EXTRACTION") * 0.7} />
-        <div className="pt-1 flex items-center gap-2 text-[11px] font-bold">
+        <div className="pt-1 flex items-center gap-2 text-xs font-bold">
           <span className="w-32 text-slate-700 shrink-0">Overall Progress</span>
           <div className="flex-1 h-2 bg-slate-200 rounded-full overflow-hidden">
             <div
@@ -162,9 +162,9 @@ export default function DocumentProcessingProgressPanel({ job }: { job: OcrJobSt
 
       {failed && (
         <div className="bg-red-50 border border-red-200 rounded-lg px-3 py-2 space-y-1">
-          <p className="text-[11px] font-bold text-red-700">Peringkat Gagal: {OCR_STAGE_LABELS[job.errorStage || "OCR_PROCESSING"]}</p>
-          <p className="text-[11px] text-red-600">{job.error}</p>
-          {job.errorDetail && <p className="text-[10px] text-red-500 break-all">[{job.errorDetail}]</p>}
+          <p className="text-xs font-bold text-red-700">Peringkat Gagal: {OCR_STAGE_LABELS[job.errorStage || "OCR_PROCESSING"]}</p>
+          <p className="text-xs text-red-600">{job.error}</p>
+          {job.errorDetail && <p className="text-2xs text-red-500 break-all">[{job.errorDetail}]</p>}
         </div>
       )}
     </div>

@@ -294,7 +294,7 @@ export const FinancialCommitmentsManager: React.FC = () => {
             <Briefcase className="w-5 h-5" />
           </div>
           <div>
-            <p className="text-[10px] text-slate-500 font-mono uppercase tracking-wider">Active Commitments</p>
+            <p className="text-2xs text-slate-500 font-mono uppercase tracking-wider">Active Commitments</p>
             <p className="text-xl font-semibold text-slate-900 mt-0.5">{totalActiveCount}</p>
           </div>
         </div>
@@ -304,7 +304,7 @@ export const FinancialCommitmentsManager: React.FC = () => {
             <TrendingDown className="w-5 h-5" />
           </div>
           <div>
-            <p className="text-[10px] text-slate-500 font-mono uppercase tracking-wider">Projected Outflow (Est)</p>
+            <p className="text-2xs text-slate-500 font-mono uppercase tracking-wider">Projected Outflow (Est)</p>
             <p className="text-xl font-semibold text-rose-600 mt-0.5">RM {monthlyProjectedOutflow.toLocaleString()}</p>
           </div>
         </div>
@@ -314,7 +314,7 @@ export const FinancialCommitmentsManager: React.FC = () => {
             <Clock className="w-5 h-5" />
           </div>
           <div>
-            <p className="text-[10px] text-slate-500 font-mono uppercase tracking-wider">Due Next 7 Days</p>
+            <p className="text-2xs text-slate-500 font-mono uppercase tracking-wider">Due Next 7 Days</p>
             <p className="text-xl font-semibold text-slate-900 mt-0.5">{upcomingSevenDaysCount} obligations</p>
           </div>
         </div>
@@ -324,7 +324,7 @@ export const FinancialCommitmentsManager: React.FC = () => {
             <CalendarIcon className="w-5 h-5" />
           </div>
           <div>
-            <p className="text-[10px] text-slate-500 font-mono uppercase tracking-wider">7-Day Due Volume</p>
+            <p className="text-2xs text-slate-500 font-mono uppercase tracking-wider">7-Day Due Volume</p>
             <p className="text-xl font-semibold text-slate-900 mt-0.5">RM {upcomingSevenDaysTotal.toLocaleString()}</p>
           </div>
         </div>
@@ -362,7 +362,7 @@ export const FinancialCommitmentsManager: React.FC = () => {
           </div>
 
           {/* CALENDAR ROW LABELS */}
-          <div className="grid grid-cols-7 gap-1 text-center font-mono text-[10px] text-slate-500 uppercase tracking-widest border-b border-slate-100 pb-2">
+          <div className="grid grid-cols-7 gap-1 text-center font-mono text-2xs text-slate-500 uppercase tracking-widest border-b border-slate-100 pb-2">
             <div>Sun</div>
             <div>Mon</div>
             <div>Tue</div>
@@ -410,7 +410,7 @@ export const FinancialCommitmentsManager: React.FC = () => {
                             />
                           ))}
                           {day.commitments.length > 3 && (
-                            <span className={`text-[8px] font-mono leading-none ${isSelected ? "text-indigo-100" : "text-indigo-600 font-bold"}`}>
+                            <span className={`text-3xs font-mono leading-none ${isSelected ? "text-indigo-100" : "text-indigo-600 font-bold"}`}>
                               +{day.commitments.length - 3}
                             </span>
                           )}
@@ -425,7 +425,7 @@ export const FinancialCommitmentsManager: React.FC = () => {
             })}
           </div>
 
-          <div className="mt-3 flex items-center justify-between text-[11px] text-slate-500 font-mono border-t border-slate-100 pt-3">
+          <div className="mt-3 flex items-center justify-between text-xs text-slate-500 font-mono border-t border-slate-100 pt-3">
             <span className="flex items-center">
               <span className="w-2.5 h-2.5 rounded-full bg-indigo-500 mr-1.5 inline-block" />
               Active Commitment Date
@@ -470,10 +470,10 @@ export const FinancialCommitmentsManager: React.FC = () => {
                   >
                     <div className="space-y-0.5 min-w-0 pr-2">
                       <p className="text-xs font-semibold text-slate-950 truncate">{cmt.obligeeName}</p>
-                      <p className="text-[10px] text-slate-500 truncate">{cmt.description || "No Notes Added"}</p>
+                      <p className="text-2xs text-slate-500 truncate">{cmt.description || "No Notes Added"}</p>
                       <div className="flex items-center space-x-2">
-                        <span className="text-[10px] font-mono font-bold text-rose-500">RM {cmt.amountPerIntervalMyr.toLocaleString()}</span>
-                        <span className="text-[9px] font-mono px-1.5 py-0.2 bg-indigo-50 text-indigo-700 rounded capitalize">{cmt.recurrence.toLowerCase()}</span>
+                        <span className="text-2xs font-mono font-bold text-rose-500">RM {cmt.amountPerIntervalMyr.toLocaleString()}</span>
+                        <span className="text-3xs font-mono px-1.5 py-0.2 bg-indigo-50 text-indigo-700 rounded capitalize">{cmt.recurrence.toLowerCase()}</span>
                       </div>
                     </div>
                     <div className="flex space-x-1 flex-shrink-0">
@@ -569,7 +569,7 @@ export const FinancialCommitmentsManager: React.FC = () => {
           ) : (
             <table className="w-full text-left border-collapse">
               <thead>
-                <tr className="border-b border-slate-100 text-[10px] font-mono uppercase tracking-widest text-slate-500">
+                <tr className="border-b border-slate-100 text-2xs font-mono uppercase tracking-widest text-slate-500">
                   <th className="py-3 px-2 font-mono">Obligee (Vendor Name)</th>
                   <th className="py-3 px-2 font-mono">Reference/License Contract</th>
                   <th className="py-3 px-2 font-mono">Recurrence Frequency</th>
@@ -584,25 +584,25 @@ export const FinancialCommitmentsManager: React.FC = () => {
                   <tr key={cmt.id} className="border-b border-slate-50 hover:bg-slate-50/50 transition text-slate-800">
                     <td className="py-3 px-2">
                       <div className="font-sans font-semibold text-xs text-slate-900">{cmt.obligeeName}</div>
-                      <div className="text-[10px] text-slate-400 truncate max-w-[200px]" title={cmt.description}>{cmt.description || "No notes appended."}</div>
+                      <div className="text-2xs text-slate-400 truncate max-w-[200px]" title={cmt.description}>{cmt.description || "No notes appended."}</div>
                     </td>
-                    <td className="py-3 px-2 font-mono text-[11px] text-slate-600">
+                    <td className="py-3 px-2 font-mono text-xs text-slate-600">
                       {cmt.contractNumber || "—"}
                     </td>
                     <td className="py-3 px-2">
-                      <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full font-mono bg-slate-100 text-slate-800 uppercase">
+                      <span className="text-2xs font-semibold px-2 py-0.5 rounded-full font-mono bg-slate-100 text-slate-800 uppercase">
                         {cmt.recurrence}
                       </span>
                     </td>
-                    <td className="py-3 px-2 font-mono text-[11px] text-slate-600">
+                    <td className="py-3 px-2 font-mono text-xs text-slate-600">
                       <div>{cmt.startDate}</div>
-                      {cmt.endDate && <div className="text-[9px] text-slate-400 italic">to {cmt.endDate}</div>}
+                      {cmt.endDate && <div className="text-3xs text-slate-400 italic">to {cmt.endDate}</div>}
                     </td>
                     <td className="py-3 px-2 text-right font-mono text-xs font-bold text-rose-600">
                       RM {cmt.amountPerIntervalMyr.toLocaleString()}
                     </td>
                     <td className="py-3 px-2 text-center">
-                      <span className={`inline-block text-[10px] font-sans font-semibold px-2.5 py-0.5 rounded-md border ${getUrgencyColor(cmt.status)}`}>
+                      <span className={`inline-block text-2xs font-sans font-semibold px-2.5 py-0.5 rounded-md border ${getUrgencyColor(cmt.status)}`}>
                         {cmt.status}
                       </span>
                     </td>

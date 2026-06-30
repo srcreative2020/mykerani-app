@@ -214,7 +214,7 @@ export const ProfitLossReport: React.FC<ProfitLossReportProps> = ({ financialEve
             <input type="date" value={customTo} onChange={(e) => setCustomTo(e.target.value)} className="text-xs border border-slate-200 rounded-lg px-2 py-1.5" id="pnl_custom_to" />
           </div>
         )}
-        <span className="text-[11px] text-slate-400 ml-auto font-mono">{fmtDate(currentRange.from)} — {fmtDate(currentRange.to)}</span>
+        <span className="text-xs text-slate-400 ml-auto font-mono">{fmtDate(currentRange.from)} — {fmtDate(currentRange.to)}</span>
       </div>
 
       {/* Layer toggle */}
@@ -263,12 +263,12 @@ export const ProfitLossReport: React.FC<ProfitLossReportProps> = ({ financialEve
             {explanation.reasons.map((r, i) => <li key={i}>{r}</li>)}
           </ul>
         )}
-        <p className="text-[11px] text-slate-500 font-mono">
+        <p className="text-xs text-slate-500 font-mono">
           Berbanding {fmtDate(previousRange.from)} — {fmtDate(previousRange.to)} (perubahan untung: {fmtMyr(explanation.profitDelta)})
         </p>
       </div>
 
-      <p className="text-[11px] text-slate-400 flex items-center gap-1.5">
+      <p className="text-xs text-slate-400 flex items-center gap-1.5">
         <Sparkles className="w-3.5 h-3.5" /> Klik mana-mana baris penyata di atas untuk melihat transaksi, resit, invois dan pakej bukti yang menyumbang kepada nilai tersebut.
       </p>
 
@@ -293,7 +293,7 @@ export const ProfitLossReport: React.FC<ProfitLossReportProps> = ({ financialEve
             >
               <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
                 <div>
-                  <p className="text-[10px] font-mono uppercase text-slate-400 font-bold">Lihat Punca Nilai</p>
+                  <p className="text-2xs font-mono uppercase text-slate-400 font-bold">Lihat Punca Nilai</p>
                   <h4 className="text-base font-bold text-slate-950">
                     {layer === "human" ? LAYER_A_LABELS[selectedLine] : LAYER_B_LABELS[selectedLine]}
                   </h4>
@@ -312,21 +312,21 @@ export const ProfitLossReport: React.FC<ProfitLossReportProps> = ({ financialEve
                       <span className="text-xs font-semibold text-slate-800">{entry.record.accountingName}</span>
                       <span className="text-xs font-mono font-bold text-slate-900">{fmtMyr(entry.record.amountMyr)}</span>
                     </div>
-                    <div className="flex items-center justify-between text-[11px] text-slate-400">
+                    <div className="flex items-center justify-between text-xs text-slate-400">
                       <span>{entry.record.date}</span>
                       <span className="font-mono">{entry.record.resolutionMethod}</span>
                     </div>
                     {entry.hasEvidence ? (
                       <div className="space-y-1 pt-1 border-t border-slate-100">
                         {entry.evidence.map((ev) => (
-                          <div key={ev.id} className="flex items-center space-x-1.5 text-[11px] text-slate-600">
+                          <div key={ev.id} className="flex items-center space-x-1.5 text-xs text-slate-600">
                             {ev.documentType === "INVOICE" ? <FileText className="w-3 h-3 text-blue-500" /> : <Receipt className="w-3 h-3 text-emerald-500" />}
                             <span>{ev.documentType} — {ev.fileName}</span>
                           </div>
                         ))}
                       </div>
                     ) : (
-                      <p className="text-[11px] text-amber-600 pt-1 border-t border-slate-100">Tiada pakej bukti dikaitkan</p>
+                      <p className="text-xs text-amber-600 pt-1 border-t border-slate-100">Tiada pakej bukti dikaitkan</p>
                     )}
                   </div>
                 ))}

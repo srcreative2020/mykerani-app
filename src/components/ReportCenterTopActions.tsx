@@ -40,10 +40,10 @@ export const ReportCenterTopActions: React.FC<ReportCenterTopActionsProps> = ({ 
   if (insufficientData) {
     return (
       <div className="space-y-2" id="report_center_top_actions">
-        <p className="text-[10px] font-mono text-slate-400 uppercase font-bold tracking-wider px-0.5">
+        <p className="text-2xs font-mono text-slate-400 uppercase font-bold tracking-wider px-0.5">
           3 Tindakan Paling Penting
         </p>
-        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3.5 text-[11px] text-slate-500 font-semibold" id="report_center_top_actions_empty">
+        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3.5 text-xs text-slate-500 font-semibold" id="report_center_top_actions_empty">
           Belum cukup data untuk analisis. Tambah rekod pertama untuk menjana analisis.
         </div>
       </div>
@@ -53,10 +53,10 @@ export const ReportCenterTopActions: React.FC<ReportCenterTopActionsProps> = ({ 
   if (actions.length === 0) {
     return (
       <div className="space-y-2" id="report_center_top_actions">
-        <p className="text-[10px] font-mono text-slate-400 uppercase font-bold tracking-wider px-0.5">
+        <p className="text-2xs font-mono text-slate-400 uppercase font-bold tracking-wider px-0.5">
           3 Tindakan Paling Penting
         </p>
-        <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-3.5 text-[11px] text-emerald-700 font-semibold">
+        <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-3.5 text-xs text-emerald-700 font-semibold">
           Tidak ada isu kritikal dikesan sekarang. Semua semakan utama lulus.
         </div>
       </div>
@@ -65,7 +65,7 @@ export const ReportCenterTopActions: React.FC<ReportCenterTopActionsProps> = ({ 
 
   return (
     <div className="space-y-2" id="report_center_top_actions">
-      <p className="text-[10px] font-mono text-slate-400 uppercase font-bold tracking-wider px-0.5">
+      <p className="text-2xs font-mono text-slate-400 uppercase font-bold tracking-wider px-0.5">
         3 Tindakan Paling Penting
       </p>
       <div className="grid grid-cols-1 gap-2">
@@ -79,12 +79,12 @@ export const ReportCenterTopActions: React.FC<ReportCenterTopActionsProps> = ({ 
               id={`top_action_${action.id}`}
             >
               <div className="flex items-center gap-2.5 min-w-0">
-                <span className={`shrink-0 w-5 h-5 rounded-full ${meta.chip} text-white text-[10px] font-bold flex items-center justify-center`}>
+                <span className={`shrink-0 w-5 h-5 rounded-full ${meta.chip} text-white text-2xs font-bold flex items-center justify-center`}>
                   {idx + 1}
                 </span>
                 <div className="min-w-0">
-                  <p className="text-[11px] font-semibold text-slate-800 leading-snug">{action.problem}</p>
-                  <p className={`text-[10px] font-mono font-bold ${meta.text} mt-0.5 flex items-center gap-1`}>
+                  <p className="text-xs font-semibold text-slate-800 leading-snug">{action.problem}</p>
+                  <p className={`text-2xs font-mono font-bold ${meta.text} mt-0.5 flex items-center gap-1`}>
                     <AlertTriangle className="w-3 h-3" />
                     {action.affectedCount} rekod terjejas
                   </p>

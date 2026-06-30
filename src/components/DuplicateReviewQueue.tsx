@@ -118,10 +118,10 @@ export const DuplicateReviewQueue: React.FC = () => {
             return (
               <div key={flag.id} className="border border-slate-200 rounded-xl p-4 bg-white">
                 <div className="flex items-center justify-between mb-3">
-                  <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full border ${badgeClass}`}>
+                  <span className={`text-xs font-bold px-2 py-0.5 rounded-full border ${badgeClass}`}>
                     {flag.classification.replace(/_/g, " ")}
                   </span>
-                  <span className="text-[11px] text-slate-400">Score: {(flag.score * 100).toFixed(0)}%</span>
+                  <span className="text-xs text-slate-400">Score: {(flag.score * 100).toFixed(0)}%</span>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
                   <RecordSummary record={recordA} />

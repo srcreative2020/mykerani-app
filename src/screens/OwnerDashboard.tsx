@@ -2018,25 +2018,25 @@ export function OwnerDashboard() {
           <div>
             <div className="flex items-center space-x-1.5">
               <span className="font-bold text-slate-900 text-sm">MYKERANI</span>
-              <span className="text-[9px] font-bold bg-slate-900 text-white px-1.5 py-0.5 rounded-md">V1.0</span>
+              <span className="text-3xs font-bold bg-slate-900 text-white px-1.5 py-0.5 rounded-md">V1.0</span>
             </div>
-            {activeWorkspace && <p className="text-[10px] text-slate-400 leading-none mt-0.5">{activeWorkspace.name}</p>}
+            {activeWorkspace && <p className="text-2xs text-slate-400 leading-none mt-0.5">{activeWorkspace.name}</p>}
           </div>
         </div>
         <div className="flex items-center gap-2">
           {workspaces.length > 1 && (
             <select value={activeWorkspace?.id || ""} onChange={e => selectWorkspace(e.target.value)}
-              className="text-[11px] font-semibold border border-slate-200 rounded-lg px-2 py-1 bg-white outline-none cursor-pointer">
+              className="text-xs font-semibold border border-slate-200 rounded-lg px-2 py-1 bg-white outline-none cursor-pointer">
               {workspaces.map(ws => <option key={ws.id} value={ws.id}>{ws.name}</option>)}
             </select>
           )}
           <div className="flex items-center space-x-1.5 bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1.5">
-            <div className="w-5 h-5 rounded-full bg-indigo-600 text-white flex items-center justify-center text-[9px] font-bold">
+            <div className="w-5 h-5 rounded-full bg-indigo-600 text-white flex items-center justify-center text-3xs font-bold">
               {firstName.charAt(0).toUpperCase()}
             </div>
-            <span className="text-[11px] font-semibold text-slate-700 hidden sm:block">{firstName}</span>
-            <span className="text-[10px] text-slate-400 hidden sm:block">·</span>
-            <span className="text-[10px] text-indigo-500 font-semibold hidden sm:block">Pemilik</span>
+            <span className="text-xs font-semibold text-slate-700 hidden sm:block">{firstName}</span>
+            <span className="text-2xs text-slate-400 hidden sm:block">·</span>
+            <span className="text-2xs text-indigo-500 font-semibold hidden sm:block">Pemilik</span>
           </div>
           {/* Bell */}
           <div className="relative">
@@ -2044,7 +2044,7 @@ export function OwnerDashboard() {
               className="relative p-1.5 bg-slate-50 hover:bg-indigo-50 border border-slate-200 hover:border-indigo-200 text-slate-400 hover:text-indigo-500 rounded-xl transition cursor-pointer">
               <Bell className="w-3.5 h-3.5" />
               {notif.unreadCount > 0 && (
-                <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center">
+                <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-3xs font-bold rounded-full flex items-center justify-center">
                   {notif.unreadCount > 9 ? "9+" : notif.unreadCount}
                 </span>
               )}
@@ -2068,10 +2068,10 @@ export function OwnerDashboard() {
               <div className="flex items-center gap-2">
                 <p className="text-sm font-bold text-slate-900">Notifikasi</p>
                 {notif.unreadCount > 0 && (
-                  <span className="text-[10px] font-bold text-red-600 bg-red-50 border border-red-200 px-1.5 py-0.5 rounded-full">{notif.unreadCount} baru</span>
+                  <span className="text-2xs font-bold text-red-600 bg-red-50 border border-red-200 px-1.5 py-0.5 rounded-full">{notif.unreadCount} baru</span>
                 )}
               </div>
-              <button onClick={notif.markAllRead} className="text-[11px] text-indigo-500 font-semibold cursor-pointer hover:text-indigo-700">
+              <button onClick={notif.markAllRead} className="text-xs text-indigo-500 font-semibold cursor-pointer hover:text-indigo-700">
                 Tandai semua dibaca
               </button>
             </div>
@@ -2099,8 +2099,8 @@ export function OwnerDashboard() {
                             <X className="w-3 h-3" />
                           </button>
                         </div>
-                        <p className="text-[11px] text-slate-500 leading-snug">{n.body}</p>
-                        <p className="text-[10px] text-slate-400">{fmtNotifTime(n.at)}</p>
+                        <p className="text-xs text-slate-500 leading-snug">{n.body}</p>
+                        <p className="text-2xs text-slate-400">{fmtNotifTime(n.at)}</p>
                       </div>
                     </div>
                   );
@@ -2111,7 +2111,7 @@ export function OwnerDashboard() {
             {/* Footer */}
             {notif.notifs.length > 0 && (
               <div className="px-4 py-2.5 border-t border-slate-100 flex justify-end">
-                <button onClick={notif.clearAll} className="text-[11px] text-slate-400 cursor-pointer hover:text-slate-600">Padam semua</button>
+                <button onClick={notif.clearAll} className="text-xs text-slate-400 cursor-pointer hover:text-slate-600">Padam semua</button>
               </div>
             )}
           </div>
@@ -2128,7 +2128,7 @@ export function OwnerDashboard() {
             {chatMessages.length > 0 && (
               <div className="px-4 pt-3 flex justify-end shrink-0">
                 <button type="button" onClick={() => setChatMessages([])}
-                  className="text-[11px] font-semibold text-indigo-600 hover:text-indigo-800 cursor-pointer flex items-center gap-1">
+                  className="text-xs font-semibold text-indigo-600 hover:text-indigo-800 cursor-pointer flex items-center gap-1">
                   <RefreshCw className="w-3 h-3" /> Chat Baharu
                 </button>
               </div>
@@ -2169,18 +2169,18 @@ export function OwnerDashboard() {
                   {/* Financial Snapshot */}
                   {myEvents.length > 0 ? (
                     <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm space-y-3">
-                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Ringkasan Bulan Ini</p>
+                      <p className="text-2xs font-bold text-slate-400 uppercase tracking-wider">Ringkasan Bulan Ini</p>
                       <div className="grid grid-cols-3 gap-2">
                         <div className="text-center">
-                          <p className="text-[10px] text-slate-400 mb-0.5">Masuk</p>
+                          <p className="text-2xs text-slate-400 mb-0.5">Masuk</p>
                           <p className="text-sm font-bold text-emerald-600">RM {incomeThisMonth.toLocaleString("ms-MY",{minimumFractionDigits:0})}</p>
                         </div>
                         <div className="text-center border-x border-slate-100">
-                          <p className="text-[10px] text-slate-400 mb-0.5">Keluar</p>
+                          <p className="text-2xs text-slate-400 mb-0.5">Keluar</p>
                           <p className="text-sm font-bold text-rose-500">RM {expenseThisMonth.toLocaleString("ms-MY",{minimumFractionDigits:0})}</p>
                         </div>
                         <div className="text-center">
-                          <p className="text-[10px] text-slate-400 mb-0.5">Bersih</p>
+                          <p className="text-2xs text-slate-400 mb-0.5">Bersih</p>
                           <p className={`text-sm font-bold ${(incomeThisMonth-expenseThisMonth)>=0?"text-slate-800":"text-rose-500"}`}>
                             {(incomeThisMonth-expenseThisMonth)>=0?"+":"-"}RM {Math.abs(incomeThisMonth-expenseThisMonth).toLocaleString("ms-MY",{minimumFractionDigits:0})}
                           </p>
@@ -2195,14 +2195,14 @@ export function OwnerDashboard() {
                                 <div className={`w-5 h-5 rounded-lg flex items-center justify-center shrink-0 ${ev.type==="INCOME"?"bg-emerald-50":"bg-rose-50"}`}>
                                   {ev.type==="INCOME"?<TrendingUp className="w-3 h-3 text-emerald-500"/>:<TrendingDown className="w-3 h-3 text-rose-400"/>}
                                 </div>
-                                <p className="text-[11px] text-slate-600 truncate">{getFriendlyTransactionLabel(ev, businesses).label}</p>
+                                <p className="text-xs text-slate-600 truncate">{getFriendlyTransactionLabel(ev, businesses).label}</p>
                               </div>
-                              <span className={`text-[11px] font-bold shrink-0 ${ev.type==="INCOME"?"text-emerald-600":"text-rose-500"}`}>
+                              <span className={`text-xs font-bold shrink-0 ${ev.type==="INCOME"?"text-emerald-600":"text-rose-500"}`}>
                                 {ev.type==="INCOME"?"+":"-"}RM {ev.amountMyr.toFixed(2)}
                               </span>
                             </div>
                           ))}
-                          <button onClick={()=>setActiveTab("dashboard")} className="text-[10px] text-indigo-500 font-semibold w-full text-right cursor-pointer hover:underline">
+                          <button onClick={()=>setActiveTab("dashboard")} className="text-2xs text-indigo-500 font-semibold w-full text-right cursor-pointer hover:underline">
                             Lihat semua -&gt;
                           </button>
                         </div>
@@ -2212,7 +2212,7 @@ export function OwnerDashboard() {
                     <div className="bg-white border border-dashed border-slate-200 rounded-2xl p-5 text-center space-y-2">
                       <Wallet className="w-8 h-8 text-slate-200 mx-auto" />
                       <p className="text-xs font-semibold text-slate-500">Belum ada rekod kewangan</p>
-                      <p className="text-[11px] text-slate-400">Beritahu MYKERANI atau gunakan butang di bawah untuk tambah rekod pertama anda.</p>
+                      <p className="text-xs text-slate-400">Beritahu MYKERANI atau gunakan butang di bawah untuk tambah rekod pertama anda.</p>
                     </div>
                   )}
 
@@ -2230,7 +2230,7 @@ export function OwnerDashboard() {
                       {myHealthScore.reasons.length > 0 && (
                         <ul className="mt-1 space-y-0.5">
                           {myHealthScore.reasons.map((reason, i) => (
-                            <li key={i} className={`text-[11px] ${myHealthScore.riskLevel === "high" ? "text-red-600" : "text-amber-600"}`}>• {reason}</li>
+                            <li key={i} className={`text-xs ${myHealthScore.riskLevel === "high" ? "text-red-600" : "text-amber-600"}`}>• {reason}</li>
                           ))}
                         </ul>
                       )}
@@ -2358,7 +2358,7 @@ export function OwnerDashboard() {
                                   {chatSuggestionJustUpdated[s.id] ? "✅ Dikemaskini." : "✅ Disahkan & direkodkan."}
                                 </div>
                                 {statusObj.confirmedAt && (
-                                  <div className="text-[10px] text-slate-400">
+                                  <div className="text-2xs text-slate-400">
                                     {new Date(statusObj.confirmedAt).toLocaleDateString("ms-MY", { day: "numeric", month: "short", year: "numeric" })}{" "}
                                     {new Date(statusObj.confirmedAt).toLocaleTimeString("ms-MY", { hour: "2-digit", minute: "2-digit" })}
                                     {statusObj.confirmedByName ? ` - ${statusObj.confirmedByName}` : ""}
@@ -2404,7 +2404,7 @@ export function OwnerDashboard() {
                             {status === "pending" && extra.businessPicked && (
                               <div className="text-xs text-slate-500">
                                 Bisnes: <span className="font-semibold text-slate-700">{extra.branchName ? `${extra.businessName} - ${extra.branchName}` : (extra.businessName || "Personal")}</span>
-                                {extra.autoMapped && <span className="ml-1.5 text-[10px] text-emerald-600 font-semibold">✓ Auto-mapped</span>}
+                                {extra.autoMapped && <span className="ml-1.5 text-2xs text-emerald-600 font-semibold">✓ Auto-mapped</span>}
                               </div>
                             )}
                             {status === "pending" && extra.businessPicked && extra.businessId && !extra.branchPicked && (
@@ -2555,7 +2555,7 @@ export function OwnerDashboard() {
                   <span className="text-xs font-semibold text-rose-700 flex items-center gap-1.5">
                     <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse" /> Sedang merekod nota suara...
                   </span>
-                  <button type="button" onClick={stopChatVoiceRecording} className="px-2.5 py-1 rounded-lg bg-rose-600 text-white text-[11px] font-bold cursor-pointer">
+                  <button type="button" onClick={stopChatVoiceRecording} className="px-2.5 py-1 rounded-lg bg-rose-600 text-white text-xs font-bold cursor-pointer">
                     Hentikan & Hantar
                   </button>
                 </div>
@@ -2621,7 +2621,7 @@ export function OwnerDashboard() {
                   { key: "year", label: "Tahunan" },
                 ] as const).map(({ key, label }) => (
                   <button key={key} onClick={() => setDashboardPeriod(key)}
-                    className={`px-2 py-1.5 rounded-lg text-[10px] font-bold transition cursor-pointer ${dashboardPeriod === key ? "bg-indigo-600 text-white shadow" : "text-slate-500 hover:bg-slate-200"}`}>
+                    className={`px-2 py-1.5 rounded-lg text-2xs font-bold transition cursor-pointer ${dashboardPeriod === key ? "bg-indigo-600 text-white shadow" : "text-slate-500 hover:bg-slate-200"}`}>
                     {label}
                   </button>
                 ))}
@@ -2638,18 +2638,18 @@ export function OwnerDashboard() {
                 className="w-full bg-white border border-dashed border-slate-200 rounded-2xl p-4 text-center space-y-1.5 cursor-pointer hover:border-indigo-300 transition">
                 <Wallet className="w-7 h-7 text-slate-200 mx-auto" />
                 <p className="text-xs font-semibold text-slate-500">Belum ada rekod. Upload resit pertama anda.</p>
-                <p className="text-[11px] text-indigo-500 font-semibold">Beritahu MYKERANI -&gt;</p>
+                <p className="text-xs text-indigo-500 font-semibold">Beritahu MYKERANI -&gt;</p>
               </button>
             )}
 
             <div className="grid grid-cols-2 gap-3">
               <div className="bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-2xl p-4 text-white shadow">
-                <p className="text-[11px] text-emerald-100">Pendapatan</p>
+                <p className="text-xs text-emerald-100">Pendapatan</p>
                 <p className="text-xl font-bold mt-1">RM {incomeInPeriod.toLocaleString("ms-MY", { minimumFractionDigits: 2 })}</p>
                 <TrendingUp className="w-4 h-4 text-emerald-200 mt-1" />
               </div>
               <div className="bg-gradient-to-br from-rose-500 to-pink-600 rounded-2xl p-4 text-white shadow">
-                <p className="text-[11px] text-rose-100">Perbelanjaan</p>
+                <p className="text-xs text-rose-100">Perbelanjaan</p>
                 <p className="text-xl font-bold mt-1">RM {expenseInPeriod.toLocaleString("ms-MY", { minimumFractionDigits: 2 })}</p>
                 <TrendingDown className="w-4 h-4 text-rose-200 mt-1" />
               </div>
@@ -2664,11 +2664,11 @@ export function OwnerDashboard() {
 
             <div className="grid grid-cols-2 gap-3">
               <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
-                <p className="text-[11px] text-slate-500 mb-1">Perlu Dikutip</p>
+                <p className="text-xs text-slate-500 mb-1">Perlu Dikutip</p>
                 <p className="text-lg font-bold text-amber-600">RM {totalReceivable.toLocaleString("ms-MY", { minimumFractionDigits: 2 })}</p>
               </div>
               <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
-                <p className="text-[11px] text-slate-500 mb-1">Perlu Dibayar</p>
+                <p className="text-xs text-slate-500 mb-1">Perlu Dibayar</p>
                 <p className="text-lg font-bold text-indigo-600">RM {totalPayable.toLocaleString("ms-MY", { minimumFractionDigits: 2 })}</p>
               </div>
             </div>
@@ -2696,34 +2696,34 @@ export function OwnerDashboard() {
                     {dashboardTypeFilter === "INCOME" ? "Senarai Pendapatan" : dashboardTypeFilter === "EXPENSE" ? "Senarai Perbelanjaan" : "Transaksi Terkini"}
                   </p>
                   {(txnFilterFrom || txnFilterTo || dashboardTypeFilter !== "ALL" || txnSearch || txnFilterBusiness !== "ALL" || txnFilterCategory !== "ALL" || txnFilterSource !== "ALL" || healthFilterRecordIds) && (
-                    <button onClick={() => { setTxnFilterFrom(""); setTxnFilterTo(""); setDashboardTypeFilter("ALL"); setTxnSearch(""); setTxnFilterBusiness("ALL"); setTxnFilterCategory("ALL"); setTxnFilterSource("ALL"); setHealthFilterRecordIds(null); setHealthFilterLabel(""); }} className="text-[10px] text-indigo-500 font-semibold cursor-pointer hover:underline">
+                    <button onClick={() => { setTxnFilterFrom(""); setTxnFilterTo(""); setDashboardTypeFilter("ALL"); setTxnSearch(""); setTxnFilterBusiness("ALL"); setTxnFilterCategory("ALL"); setTxnFilterSource("ALL"); setHealthFilterRecordIds(null); setHealthFilterLabel(""); }} className="text-2xs text-indigo-500 font-semibold cursor-pointer hover:underline">
                       Kosongkan tapisan
                     </button>
                   )}
                 </div>
                 <input type="text" value={txnSearch} onChange={e => setTxnSearch(e.target.value)}
                   placeholder="Cari deskripsi, pihak, nombor rujukan, kategori..."
-                  className="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 text-[11px] text-slate-600" />
+                  className="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 text-xs text-slate-600" />
                 <div className="flex items-center gap-2">
                   <input type="date" value={txnFilterFrom} onChange={e => setTxnFilterFrom(e.target.value)}
-                    className="flex-1 px-2.5 py-1.5 rounded-lg border border-slate-200 text-[11px] text-slate-600" />
-                  <span className="text-[10px] text-slate-400">hingga</span>
+                    className="flex-1 px-2.5 py-1.5 rounded-lg border border-slate-200 text-xs text-slate-600" />
+                  <span className="text-2xs text-slate-400">hingga</span>
                   <input type="date" value={txnFilterTo} onChange={e => setTxnFilterTo(e.target.value)}
-                    className="flex-1 px-2.5 py-1.5 rounded-lg border border-slate-200 text-[11px] text-slate-600" />
+                    className="flex-1 px-2.5 py-1.5 rounded-lg border border-slate-200 text-xs text-slate-600" />
                 </div>
                 <div className="grid grid-cols-3 gap-2">
                   <select value={txnFilterBusiness} onChange={e => setTxnFilterBusiness(e.target.value)}
-                    className="px-2 py-1.5 rounded-lg border border-slate-200 text-[10px] text-slate-600">
+                    className="px-2 py-1.5 rounded-lg border border-slate-200 text-2xs text-slate-600">
                     <option value="ALL">Semua Perniagaan</option>
                     {businesses.map(b => <option key={b.id} value={b.id}>{b.businessName}</option>)}
                   </select>
                   <select value={txnFilterCategory} onChange={e => setTxnFilterCategory(e.target.value)}
-                    className="px-2 py-1.5 rounded-lg border border-slate-200 text-[10px] text-slate-600">
+                    className="px-2 py-1.5 rounded-lg border border-slate-200 text-2xs text-slate-600">
                     <option value="ALL">Semua Kategori</option>
                     {txnCategoryOptions.map(c => <option key={c} value={c}>{c}</option>)}
                   </select>
                   <select value={txnFilterSource} onChange={e => setTxnFilterSource(e.target.value as typeof txnFilterSource)}
-                    className="px-2 py-1.5 rounded-lg border border-slate-200 text-[10px] text-slate-600">
+                    className="px-2 py-1.5 rounded-lg border border-slate-200 text-2xs text-slate-600">
                     <option value="ALL">Semua Sumber</option>
                     <option value="AI_CHAT">Chat AI</option>
                     <option value="RECEIPT_OCR">Resit (OCR)</option>
@@ -2733,19 +2733,19 @@ export function OwnerDashboard() {
                   </select>
                 </div>
                 {filteredEvents.length === 0 && (
-                  <p className="text-[11px] text-slate-400 text-center py-3">Tiada transaksi dalam tempoh ini.</p>
+                  <p className="text-xs text-slate-400 text-center py-3">Tiada transaksi dalam tempoh ini.</p>
                 )}
                 {pagedEvents.map(ev => (
                   <div key={ev.id} className="bg-white border border-slate-200 rounded-xl p-3 shadow-sm">
                     {editingTxnId === ev.id ? (
                       <div className="space-y-1.5">
-                        <div className="flex items-center justify-between text-[10px] text-slate-400">
+                        <div className="flex items-center justify-between text-2xs text-slate-400">
                           <span className={`px-1.5 py-0.5 rounded font-bold ${ev.type === "INCOME" ? "bg-emerald-50 text-emerald-600" : "bg-rose-50 text-rose-500"}`}>
                             {ev.type === "INCOME" ? "Pendapatan" : "Perbelanjaan"}
                           </span>
                           {ev.createdByName && <span>Direkod oleh: {ev.createdByName}</span>}
                         </div>
-                        <div className="flex items-center gap-2 flex-wrap text-[10px] text-slate-400">
+                        <div className="flex items-center gap-2 flex-wrap text-2xs text-slate-400">
                           <span className={`px-1 py-0.5 rounded font-semibold ${txnSourceBadgeClass(getTxnSource(ev))}`}>{txnSourceLabel(getTxnSource(ev))}</span>
                           <span>Ref: {ev.referenceNumber}</span>
                           {ev.businessId && <span>🏢 {getBusinessBranchLabel(ev)}</span>}
@@ -2780,7 +2780,7 @@ export function OwnerDashboard() {
                         <div className="pt-1">
                           {uploadError && (
                             <div className="bg-red-50 border border-red-200 rounded-lg px-2 py-1.5 mb-1 flex items-center justify-between">
-                              <p className="text-[11px] text-red-600 font-semibold">{uploadError}</p>
+                              <p className="text-xs text-red-600 font-semibold">{uploadError}</p>
                               <button onClick={() => setUploadError(null)} className="text-red-400 hover:text-red-600 cursor-pointer shrink-0 ml-1">
                                 <X className="w-3 h-3" />
                               </button>
@@ -2790,12 +2790,12 @@ export function OwnerDashboard() {
                             onChange={(e) => { const f = e.target.files?.[0]; if (f) attachTxnReceipt(ev, f); e.target.value = ""; }} />
                           {(evidenceByRecordId[ev.id] || []).map(pkg => (
                             <button key={pkg.id} type="button" onClick={() => previewTxnEvidence(pkg)}
-                              className="w-full flex items-center gap-2 px-2 py-1.5 mb-1 rounded border border-emerald-200 bg-emerald-50 text-emerald-700 text-[11px] font-semibold cursor-pointer hover:bg-emerald-100">
-                              <Receipt className="w-3 h-3 shrink-0" /> <span className="truncate">{pkg.fileName}</span> <span className="ml-auto text-[10px] text-emerald-500">Lihat</span>
+                              className="w-full flex items-center gap-2 px-2 py-1.5 mb-1 rounded border border-emerald-200 bg-emerald-50 text-emerald-700 text-xs font-semibold cursor-pointer hover:bg-emerald-100">
+                              <Receipt className="w-3 h-3 shrink-0" /> <span className="truncate">{pkg.fileName}</span> <span className="ml-auto text-2xs text-emerald-500">Lihat</span>
                             </button>
                           ))}
                           <button type="button" onClick={() => txnReceiptInputRef.current?.click()} disabled={uploadingTxnReceipt}
-                            className="w-full flex items-center justify-center gap-1.5 px-2 py-1.5 rounded border border-dashed border-slate-300 text-[11px] font-semibold text-slate-500 hover:border-indigo-400 hover:text-indigo-600 cursor-pointer disabled:opacity-50">
+                            className="w-full flex items-center justify-center gap-1.5 px-2 py-1.5 rounded border border-dashed border-slate-300 text-xs font-semibold text-slate-500 hover:border-indigo-400 hover:text-indigo-600 cursor-pointer disabled:opacity-50">
                             <Paperclip className="w-3 h-3" /> {uploadingTxnReceipt ? "Memuat naik..." : "Lampirkan Resit"}
                           </button>
                         </div>
@@ -2813,33 +2813,33 @@ export function OwnerDashboard() {
                           </div>
                           <div className="min-w-0">
                             <p className="text-xs font-semibold text-slate-800 truncate max-w-[160px]">{getFriendlyTransactionLabel(ev, businesses).label}</p>
-                            <p className="text-[10px] text-slate-400 truncate max-w-[180px]">{ev.partyName || ev.categoryName} - {ev.referenceNumber}</p>
-                            <p className="text-[10px] text-slate-400">
+                            <p className="text-2xs text-slate-400 truncate max-w-[180px]">{ev.partyName || ev.categoryName} - {ev.referenceNumber}</p>
+                            <p className="text-2xs text-slate-400">
                               {ev.date}{ev.createdAt ? ` ${new Date(ev.createdAt).toLocaleTimeString("ms-MY", { hour: "2-digit", minute: "2-digit" })}` : ""}
                               {ev.createdByName ? ` - ${ev.createdByName}` : ""}
                             </p>
                             <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-                              <span className={`text-[9px] px-1 py-0.5 rounded font-semibold ${txnSourceBadgeClass(getTxnSource(ev))}`}>{txnSourceLabel(getTxnSource(ev))}</span>
+                              <span className={`text-3xs px-1 py-0.5 rounded font-semibold ${txnSourceBadgeClass(getTxnSource(ev))}`}>{txnSourceLabel(getTxnSource(ev))}</span>
                               {findTxnConfidence(ev) !== null && (
-                                <span className="text-[9px] px-1 py-0.5 rounded bg-indigo-50 text-indigo-500 font-semibold">Confiden {findTxnConfidence(ev)}%</span>
+                                <span className="text-3xs px-1 py-0.5 rounded bg-indigo-50 text-indigo-500 font-semibold">Confiden {findTxnConfidence(ev)}%</span>
                               )}
                               {(evidenceByRecordId[ev.id] || []).length > 0 && (
                                 <button type="button" onClick={() => previewTxnEvidence(evidenceByRecordId[ev.id][0])}
-                                  className="text-[9px] px-1 py-0.5 rounded bg-emerald-50 text-emerald-600 font-semibold cursor-pointer hover:bg-emerald-100 flex items-center gap-0.5">
+                                  className="text-3xs px-1 py-0.5 rounded bg-emerald-50 text-emerald-600 font-semibold cursor-pointer hover:bg-emerald-100 flex items-center gap-0.5">
                                   <Receipt className="w-2.5 h-2.5" /> Resit
                                 </button>
                               )}
                               {ev.businessId && (
-                                <span className="text-[9px] px-1 py-0.5 rounded bg-slate-100 text-slate-600 font-semibold">
+                                <span className="text-3xs px-1 py-0.5 rounded bg-slate-100 text-slate-600 font-semibold">
                                   🏢 {getBusinessBranchLabel(ev)}
                                 </span>
                               )}
                               {getHealthFlags(ev).map(f => (
-                                <span key={f} className={`text-[9px] px-1 py-0.5 rounded font-semibold ${healthFlagBadgeClass(f)}`}>{healthFlagLabel(f)}</span>
+                                <span key={f} className={`text-3xs px-1 py-0.5 rounded font-semibold ${healthFlagBadgeClass(f)}`}>{healthFlagLabel(f)}</span>
                               ))}
                             </div>
                             {ev.description && (
-                              <p className="text-[10px] text-slate-400 italic truncate max-w-[220px] mt-0.5">📝 {ev.description}</p>
+                              <p className="text-2xs text-slate-400 italic truncate max-w-[220px] mt-0.5">📝 {ev.description}</p>
                             )}
                           </div>
                         </div>
@@ -2858,7 +2858,7 @@ export function OwnerDashboard() {
                 {filteredEvents.length > 0 && (
                   <div className="flex items-center justify-between pt-2">
                     <select value={txnPageSize} onChange={e => setTxnPageSize(Number(e.target.value) as typeof txnPageSize)}
-                      className="px-2 py-1 rounded-lg border border-slate-200 text-[10px] text-slate-600">
+                      className="px-2 py-1 rounded-lg border border-slate-200 text-2xs text-slate-600">
                       <option value={50}>50 / muka</option>
                       <option value={100}>100 / muka</option>
                       <option value={250}>250 / muka</option>
@@ -2866,12 +2866,12 @@ export function OwnerDashboard() {
                     </select>
                     <div className="flex items-center gap-2">
                       <button disabled={txnPage === 0} onClick={() => setTxnPage(p => Math.max(0, p - 1))}
-                        className="px-2 py-1 rounded-lg border border-slate-200 text-[10px] font-semibold text-slate-500 disabled:opacity-40 cursor-pointer">
+                        className="px-2 py-1 rounded-lg border border-slate-200 text-2xs font-semibold text-slate-500 disabled:opacity-40 cursor-pointer">
                         Sebelum
                       </button>
-                      <span className="text-[10px] text-slate-400">Muka {txnPage + 1} / {txnTotalPages}</span>
+                      <span className="text-2xs text-slate-400">Muka {txnPage + 1} / {txnTotalPages}</span>
                       <button disabled={txnPage >= txnTotalPages - 1} onClick={() => setTxnPage(p => Math.min(txnTotalPages - 1, p + 1))}
-                        className="px-2 py-1 rounded-lg border border-slate-200 text-[10px] font-semibold text-slate-500 disabled:opacity-40 cursor-pointer">
+                        className="px-2 py-1 rounded-lg border border-slate-200 text-2xs font-semibold text-slate-500 disabled:opacity-40 cursor-pointer">
                         Seterus
                       </button>
                     </div>
@@ -2895,7 +2895,7 @@ export function OwnerDashboard() {
               <div className="bg-white border border-slate-200 rounded-2xl p-3.5 shadow-sm" id="financial_health_detail_section">
                 <div className="flex items-center justify-between mb-2">
                   <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Butiran Kesihatan Kewangan</h3>
-                  <button onClick={() => setShowHealthDetail(false)} className="text-[10px] text-indigo-500 font-semibold cursor-pointer hover:underline">
+                  <button onClick={() => setShowHealthDetail(false)} className="text-2xs text-indigo-500 font-semibold cursor-pointer hover:underline">
                     Tutup
                   </button>
                 </div>
@@ -3026,7 +3026,7 @@ export function OwnerDashboard() {
                       </div>
                       <div className="flex-grow">
                         <p className="text-sm font-semibold text-slate-900">{label}</p>
-                        <p className="text-[11px] text-slate-400 truncate">{desc}</p>
+                        <p className="text-xs text-slate-400 truncate">{desc}</p>
                       </div>
                       <ChevronRight className="w-4 h-4 text-slate-300" />
                     </button>
@@ -3071,7 +3071,7 @@ export function OwnerDashboard() {
                         <p className={inviteResult.success ? "text-emerald-600" : "text-rose-600"}>{inviteResult.message}</p>
                         {inviteResult.tempPassword && (
                           <div className="mt-2 p-2 bg-white border border-emerald-200 rounded-lg">
-                            <p className="text-[10px] text-slate-500 mb-1">Kata Laluan Sementara:</p>
+                            <p className="text-2xs text-slate-500 mb-1">Kata Laluan Sementara:</p>
                             <p className="font-mono font-bold text-slate-900 select-all">{inviteResult.tempPassword}</p>
                           </div>
                         )}
@@ -3087,7 +3087,7 @@ export function OwnerDashboard() {
                     <div>
                       <p className="font-bold text-slate-900 text-sm">{user?.fullName}</p>
                       <p className="text-xs text-slate-500">{user?.email}</p>
-                      <span className="text-[10px] bg-indigo-100 text-indigo-700 font-bold px-2 py-0.5 rounded-full">Pemilik</span>
+                      <span className="text-2xs bg-indigo-100 text-indigo-700 font-bold px-2 py-0.5 rounded-full">Pemilik</span>
                     </div>
                   </div>
                   {(() => {
@@ -3113,7 +3113,7 @@ export function OwnerDashboard() {
                             <div>
                               <p className="font-bold text-slate-900 text-sm">{member.fullName}</p>
                               <p className="text-xs text-slate-500">{member.email}</p>
-                              <span className="text-[10px] bg-slate-200 text-slate-700 font-bold px-2 py-0.5 rounded-full">
+                              <span className="text-2xs bg-slate-200 text-slate-700 font-bold px-2 py-0.5 rounded-full">
                                 {effectiveRole === "TENANT_OWNER" ? "Pemilik" : effectiveRole}
                               </span>
                             </div>
@@ -3125,7 +3125,7 @@ export function OwnerDashboard() {
                                 disabled={roleChangeLoadingId === member.id}
                                 onChange={e => handleChangeMemberRole(member, e.target.value)}
                                 title="Tukar peranan kakitangan (direkod dalam role_change_audit_log)"
-                                className="text-[10px] border border-slate-200 rounded-lg px-1.5 py-1 bg-white cursor-pointer"
+                                className="text-2xs border border-slate-200 rounded-lg px-1.5 py-1 bg-white cursor-pointer"
                               >
                                 <option value="TENANT_ADMIN">TENANT_ADMIN</option>
                                 <option value="MANAGER">MANAGER</option>
@@ -3136,7 +3136,7 @@ export function OwnerDashboard() {
                                 onClick={() => handleRevokeMember(member)}
                                 disabled={roleChangeLoadingId === member.id}
                                 title="Tarik balik akses (direkod dalam role_change_audit_log)"
-                                className="text-[10px] font-bold text-rose-600 hover:text-rose-700 cursor-pointer disabled:opacity-50"
+                                className="text-2xs font-bold text-rose-600 hover:text-rose-700 cursor-pointer disabled:opacity-50"
                               >
                                 Buang
                               </button>
@@ -3248,7 +3248,7 @@ export function OwnerDashboard() {
                     </select>
                   </div>
                   <div className="flex items-center justify-end gap-2 pt-1">
-                    <label className="text-[11px] text-slate-400">Papar setiap halaman:</label>
+                    <label className="text-xs text-slate-400">Papar setiap halaman:</label>
                     <select
                       value={historyPageSize}
                       onChange={e => setHistoryPageSize(Number(e.target.value))}
@@ -3276,25 +3276,25 @@ export function OwnerDashboard() {
                           </div>
                           <div className="min-w-0">
                             <p className="text-xs font-semibold text-slate-800 truncate">{getFriendlyTransactionLabel(ev, businesses).label}</p>
-                            <p className="text-[10px] text-slate-400 truncate">{ev.partyName || ev.categoryName} &middot; {ev.date} &middot; Ref: {ev.referenceNumber}</p>
+                            <p className="text-2xs text-slate-400 truncate">{ev.partyName || ev.categoryName} &middot; {ev.date} &middot; Ref: {ev.referenceNumber}</p>
                             <div className="flex items-center gap-1 mt-0.5 flex-wrap">
-                              <span className={`text-[9px] px-1 py-0.5 rounded font-semibold ${txnSourceBadgeClass(getTxnSource(ev))}`}>{txnSourceLabel(getTxnSource(ev))}</span>
+                              <span className={`text-3xs px-1 py-0.5 rounded font-semibold ${txnSourceBadgeClass(getTxnSource(ev))}`}>{txnSourceLabel(getTxnSource(ev))}</span>
                               {findTxnConfidence(ev) !== null && (
-                                <span className="text-[9px] px-1 py-0.5 rounded bg-indigo-50 text-indigo-500 font-semibold">Confiden {findTxnConfidence(ev)}%</span>
+                                <span className="text-3xs px-1 py-0.5 rounded bg-indigo-50 text-indigo-500 font-semibold">Confiden {findTxnConfidence(ev)}%</span>
                               )}
                               {(evidenceByRecordId[ev.id] || []).length > 0 && (
                                 <button type="button" onClick={() => previewTxnEvidence(evidenceByRecordId[ev.id][0])}
-                                  className="text-[9px] px-1 py-0.5 rounded bg-emerald-50 text-emerald-600 font-semibold cursor-pointer hover:bg-emerald-100 flex items-center gap-0.5">
+                                  className="text-3xs px-1 py-0.5 rounded bg-emerald-50 text-emerald-600 font-semibold cursor-pointer hover:bg-emerald-100 flex items-center gap-0.5">
                                   <Receipt className="w-2.5 h-2.5" /> Resit
                                 </button>
                               )}
                               {ev.businessId && (
-                                <span className="text-[9px] px-1 py-0.5 rounded bg-slate-100 text-slate-600 font-semibold">
+                                <span className="text-3xs px-1 py-0.5 rounded bg-slate-100 text-slate-600 font-semibold">
                                   🏢 {getBusinessBranchLabel(ev)}
                                 </span>
                               )}
                               {getHealthFlags(ev).map(f => (
-                                <span key={f} className={`text-[9px] px-1 py-0.5 rounded font-semibold ${healthFlagBadgeClass(f)}`}>{healthFlagLabel(f)}</span>
+                                <span key={f} className={`text-3xs px-1 py-0.5 rounded font-semibold ${healthFlagBadgeClass(f)}`}>{healthFlagLabel(f)}</span>
                               ))}
                             </div>
                           </div>
@@ -3318,7 +3318,7 @@ export function OwnerDashboard() {
                       >
                         Sebelum
                       </button>
-                      <span className="text-[11px] text-slate-400">
+                      <span className="text-xs text-slate-400">
                         Halaman {historyPage + 1} / {historyTotalPages}
                       </span>
                       <button
@@ -3348,7 +3348,7 @@ export function OwnerDashboard() {
                       <div className="min-w-0">
                         <p className="font-bold text-slate-900 truncate">{user?.fullName}</p>
                         <p className="text-xs text-slate-500 truncate">{user?.email}</p>
-                        <span className="text-[10px] bg-indigo-100 text-indigo-700 font-bold px-2 py-0.5 rounded-full mt-1 inline-block">Pemilik Syarikat</span>
+                        <span className="text-2xs bg-indigo-100 text-indigo-700 font-bold px-2 py-0.5 rounded-full mt-1 inline-block">Pemilik Syarikat</span>
                       </div>
                     ) : (
                       <div className="min-w-0 flex-1 space-y-1.5">
@@ -3466,7 +3466,7 @@ export function OwnerDashboard() {
                                 <div key={br.id} className="flex items-center justify-between bg-white border border-slate-100 rounded-lg px-2 py-1.5">
                                   <div>
                                     <p className="text-xs font-semibold text-slate-700">{br.branchName}</p>
-                                    {br.location && <p className="text-[10px] text-slate-400">{br.location}</p>}
+                                    {br.location && <p className="text-2xs text-slate-400">{br.location}</p>}
                                   </div>
                                   <button onClick={() => removeBranch(b.id, br.id)} className="text-rose-400 hover:text-rose-600 cursor-pointer"><Trash2 className="w-3.5 h-3.5" /></button>
                                 </div>
@@ -3563,7 +3563,7 @@ export function OwnerDashboard() {
                         <div className="flex items-center justify-between">
                           <div>
                             <p className="text-sm font-semibold text-slate-800">{v.name} {v.plateNumber && <span className="text-slate-400 font-normal">· {v.plateNumber}</span>}</p>
-                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${v.ownership === "BUSINESS" ? "bg-indigo-100 text-indigo-700" : "bg-amber-100 text-amber-700"}`}>{v.ownership === "BUSINESS" ? "Perniagaan" : "Peribadi"}</span>
+                            <span className={`text-2xs font-bold px-2 py-0.5 rounded-full ${v.ownership === "BUSINESS" ? "bg-indigo-100 text-indigo-700" : "bg-amber-100 text-amber-700"}`}>{v.ownership === "BUSINESS" ? "Perniagaan" : "Peribadi"}</span>
                           </div>
                           <div className="flex items-center space-x-2">
                             <button onClick={() => startEditVehicle(v)} className="text-slate-400 hover:text-indigo-600 cursor-pointer"><Edit3 className="w-4 h-4" /></button>
@@ -3686,8 +3686,8 @@ export function OwnerDashboard() {
                           {dates.map(d => (
                             <button key={d} onClick={() => setChatArchiveDate(chatArchiveDate === d ? null : d)}
                               className={`px-2 py-2.5 rounded-xl text-center border transition cursor-pointer ${chatArchiveDate === d ? "bg-indigo-600 border-indigo-600 text-white" : "bg-white border-slate-200 text-slate-700 hover:bg-slate-50"}`}>
-                              <p className="text-[11px] font-bold">{new Date(d).toLocaleDateString("ms-MY", { day: "numeric", month: "short" })}</p>
-                              <p className={`text-[9px] ${chatArchiveDate === d ? "text-indigo-100" : "text-slate-400"}`}>{byDate[d].length} mesej</p>
+                              <p className="text-xs font-bold">{new Date(d).toLocaleDateString("ms-MY", { day: "numeric", month: "short" })}</p>
+                              <p className={`text-3xs ${chatArchiveDate === d ? "text-indigo-100" : "text-slate-400"}`}>{byDate[d].length} mesej</p>
                             </button>
                           ))}
                         </div>
@@ -3778,13 +3778,13 @@ export function OwnerDashboard() {
                     ) : (
                       <div className="space-y-1.5">
                         {dataAccessLog.map(entry => (
-                          <div key={entry.id} className="flex items-center justify-between text-[11px] p-2 bg-slate-50 rounded-lg">
+                          <div key={entry.id} className="flex items-center justify-between text-xs p-2 bg-slate-50 rounded-lg">
                             <div>
                               <p className="font-bold text-slate-700">{entry.staffEmail || "Staf HQ"}</p>
                               <p className="text-slate-400">{entry.action} • {new Date(entry.timestamp).toLocaleString("ms-MY")}</p>
                             </div>
                             {entry.currentlyActive && (
-                              <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700">Aktif</span>
+                              <span className="text-3xs font-bold px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700">Aktif</span>
                             )}
                           </div>
                         ))}
@@ -3814,11 +3814,11 @@ export function OwnerDashboard() {
                     <div className="flex justify-between items-start gap-3">
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-semibold text-slate-900 leading-snug">{entry.description}</p>
-                        <p className="text-[11px] text-slate-400 mt-0.5">
+                        <p className="text-xs text-slate-400 mt-0.5">
                           {entry.actorName || entry.actorEmail} &middot; {entry.actorRole} &middot; {entry.module}
                         </p>
                       </div>
-                      <p className="text-[10px] text-slate-300 whitespace-nowrap shrink-0">
+                      <p className="text-2xs text-slate-300 whitespace-nowrap shrink-0">
                         {new Date(entry.createdAt).toLocaleDateString('ms-MY', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
                       </p>
                     </div>
@@ -3847,7 +3847,7 @@ export function OwnerDashboard() {
                         {myHealthScore.reasons.length > 0 && (
                           <ul className="mt-1 space-y-0.5">
                             {myHealthScore.reasons.map((r, i) => (
-                              <li key={i} className="text-[11px] text-slate-400">• {r}</li>
+                              <li key={i} className="text-xs text-slate-400">• {r}</li>
                             ))}
                           </ul>
                         )}
@@ -3967,7 +3967,7 @@ export function OwnerDashboard() {
                           <Send className="w-3.5 h-3.5" />
                         </button>
                       </form>
-                      <button onClick={() => setSupportView("ticket")} className="mt-2 w-full text-center text-[11px] text-slate-400 hover:text-indigo-600 transition cursor-pointer">
+                      <button onClick={() => setSupportView("ticket")} className="mt-2 w-full text-center text-xs text-slate-400 hover:text-indigo-600 transition cursor-pointer">
                         Masalah tidak selesai? Buka tiket sokongan â†'
                       </button>
                     </div>
@@ -4018,7 +4018,7 @@ export function OwnerDashboard() {
                       <>
                         <div className="space-y-3">
                           <div>
-                            <label className="text-[11px] font-bold text-slate-400 uppercase">Jenis Isu</label>
+                            <label className="text-xs font-bold text-slate-400 uppercase">Jenis Isu</label>
                             <select value={ticketCategory} onChange={e => {
                               const key = e.target.value;
                               setTicketCategory(key);
@@ -4031,25 +4031,25 @@ export function OwnerDashboard() {
                             </select>
                           </div>
                           <div>
-                            <label className="text-[11px] font-bold text-slate-400 uppercase">Tajuk Masalah</label>
+                            <label className="text-xs font-bold text-slate-400 uppercase">Tajuk Masalah</label>
                             <input type="text" value={ticketSubject} onChange={e => setTicketSubject(e.target.value)}
                               placeholder="Cth: Tidak boleh muat naik resit"
                               className="w-full mt-1 border border-slate-200 rounded-xl px-3 py-2.5 text-sm outline-none focus:border-indigo-400 bg-white" />
                           </div>
                           <div>
-                            <label className="text-[11px] font-bold text-slate-400 uppercase">Penerangan</label>
+                            <label className="text-xs font-bold text-slate-400 uppercase">Penerangan</label>
                             <textarea value={ticketDesc} onChange={e => setTicketDesc(e.target.value)}
                               placeholder="Terangkan masalah anda dengan terperinci..."
                               rows={4}
                               className="w-full mt-1 border border-slate-200 rounded-xl px-3 py-2.5 text-sm outline-none focus:border-indigo-400 bg-white resize-none" />
                           </div>
                           <div>
-                            <label className="text-[11px] font-bold text-slate-400 uppercase">Lampiran (pilihan)</label>
+                            <label className="text-xs font-bold text-slate-400 uppercase">Lampiran (pilihan)</label>
                             <input type="file" accept="image/*,.pdf,.doc,.docx" onChange={e => setTicketAttachFile(e.target.files?.[0] || null)}
                               className="w-full mt-1 text-xs text-slate-500" />
                           </div>
                           <div className="p-3 bg-indigo-50 border border-indigo-100 rounded-xl">
-                            <p className="text-[11px] text-indigo-700 font-semibold">AI akan ringkaskan isu anda sebelum hantar ke pasukan HQ.</p>
+                            <p className="text-xs text-indigo-700 font-semibold">AI akan ringkaskan isu anda sebelum hantar ke pasukan HQ.</p>
                           </div>
                           {ticketError && (
                             <p className="text-xs font-bold text-red-600">{ticketError}</p>
@@ -4109,28 +4109,28 @@ export function OwnerDashboard() {
                                   {style.icon === "check" ? <CheckCircle2 className={`w-4 h-4 shrink-0 mt-0.5 ${style.text}`} /> : <Clock className={`w-4 h-4 shrink-0 mt-0.5 ${style.text}`} />}
                                   <div className="flex-1">
                                     <p className={`text-xs font-bold ${style.text}`}>#{t.id.slice(0, 8)} — {t.subject}</p>
-                                    <p className={`text-[11px] mt-0.5 ${style.text}`}>Status: {TICKET_STATUS_LABEL_MS[t.status]}</p>
+                                    <p className={`text-xs mt-0.5 ${style.text}`}>Status: {TICKET_STATUS_LABEL_MS[t.status]}</p>
                                     <div className="flex items-center gap-2 mt-1 flex-wrap">
-                                      <span className="text-[10px] text-slate-400">Dihantar {new Date(t.createdAt).toLocaleDateString("ms-MY")}</span>
-                                      {t.assigned && <span className="text-[10px] text-slate-400">• Staf HQ: {t.assigned}</span>}
-                                      {sla === "breached" && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-red-100 text-red-700">SLA Lewat</span>}
-                                      {sla === "near" && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700">SLA Hampir Tamat</span>}
-                                      {t.replies.length > 0 && <span className="text-[10px] text-slate-400">• {t.replies.length} balasan</span>}
-                                      {t.attachments.length > 0 && <span className="text-[10px] text-slate-400">• {t.attachments.length} lampiran</span>}
+                                      <span className="text-2xs text-slate-400">Dihantar {new Date(t.createdAt).toLocaleDateString("ms-MY")}</span>
+                                      {t.assigned && <span className="text-2xs text-slate-400">• Staf HQ: {t.assigned}</span>}
+                                      {sla === "breached" && <span className="text-3xs font-bold px-1.5 py-0.5 rounded-full bg-red-100 text-red-700">SLA Lewat</span>}
+                                      {sla === "near" && <span className="text-3xs font-bold px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700">SLA Hampir Tamat</span>}
+                                      {t.replies.length > 0 && <span className="text-2xs text-slate-400">• {t.replies.length} balasan</span>}
+                                      {t.attachments.length > 0 && <span className="text-2xs text-slate-400">• {t.attachments.length} lampiran</span>}
                                     </div>
                                   </div>
                                   <ChevronRight className={`w-3.5 h-3.5 text-slate-300 shrink-0 mt-1 transition-transform ${isOpen ? "rotate-90" : ""}`} />
                                 </button>
                                 {isOpen && (
                                   <div className="mt-3 pt-3 border-t border-slate-200/70 space-y-3">
-                                    <div className="grid grid-cols-2 gap-2 text-[11px]">
+                                    <div className="grid grid-cols-2 gap-2 text-xs">
                                       <div><p className="text-slate-400">Keutamaan</p><p className="font-semibold text-slate-700 capitalize">{t.priority}</p></div>
                                       <div><p className="text-slate-400">Balasan Pertama</p><p className="font-semibold text-slate-700">{t.firstResponseAt ? new Date(t.firstResponseAt).toLocaleString("ms-MY") : "—"}</p></div>
                                     </div>
                                     {t.replies.length > 0 && (
                                       <div className="space-y-1.5">
                                         {t.replies.map(r => (
-                                          <div key={r.id} className="text-[11px] text-slate-600 bg-white/60 rounded-lg px-2.5 py-1.5">
+                                          <div key={r.id} className="text-xs text-slate-600 bg-white/60 rounded-lg px-2.5 py-1.5">
                                             <span className="font-bold text-slate-700">{r.author}: </span>{r.text}
                                           </div>
                                         ))}
@@ -4143,7 +4143,7 @@ export function OwnerDashboard() {
                                           onChange={e => setTicketReplyDraft(e.target.value)}
                                           placeholder="Balas tiket ini..."
                                           rows={2}
-                                          className="w-full text-[11px] border border-slate-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-indigo-400"
+                                          className="w-full text-xs border border-slate-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-indigo-400"
                                         />
                                         <button
                                           disabled={!ticketReplyDraft.trim() || ticketReplySending}
@@ -4153,7 +4153,7 @@ export function OwnerDashboard() {
                                             setTicketReplySending(false);
                                             if (ok) { setTicketReplyDraft(""); refreshMyTickets(); }
                                           }}
-                                          className="px-3 py-1.5 bg-indigo-600 text-white rounded-lg text-[11px] font-bold disabled:opacity-40 cursor-pointer"
+                                          className="px-3 py-1.5 bg-indigo-600 text-white rounded-lg text-xs font-bold disabled:opacity-40 cursor-pointer"
                                         >
                                           {ticketReplySending ? "Menghantar..." : "Hantar Balasan"}
                                         </button>
@@ -4165,7 +4165,7 @@ export function OwnerDashboard() {
                                           <button key={a.id} onClick={async () => {
                                             const url = await getTicketAttachmentUrl(a.filePath);
                                             if (url) window.open(url, "_blank");
-                                          }} className="flex items-center gap-1.5 text-[11px] text-indigo-600 hover:underline cursor-pointer">
+                                          }} className="flex items-center gap-1.5 text-xs text-indigo-600 hover:underline cursor-pointer">
                                             <FileText className="w-3 h-3" />{a.fileName}
                                           </button>
                                         ))}
@@ -4173,8 +4173,8 @@ export function OwnerDashboard() {
                                     )}
                                     {t.resolutionNotes && (
                                       <div className="p-2 bg-emerald-50 border border-emerald-100 rounded-lg">
-                                        <p className="text-[10px] font-bold text-emerald-700 uppercase">Nota Penyelesaian</p>
-                                        <p className="text-[11px] text-emerald-700 mt-0.5">{t.resolutionNotes}</p>
+                                        <p className="text-2xs font-bold text-emerald-700 uppercase">Nota Penyelesaian</p>
+                                        <p className="text-xs text-emerald-700 mt-0.5">{t.resolutionNotes}</p>
                                       </div>
                                     )}
                                   </div>
@@ -4199,14 +4199,14 @@ export function OwnerDashboard() {
                 <div className="bg-gradient-to-br from-indigo-600 to-violet-700 rounded-2xl p-5 text-white shadow">
                   <div className="flex items-center justify-between mb-3">
                     <div>
-                      <p className="text-[11px] text-indigo-200">Plan Semasa</p>
+                      <p className="text-xs text-indigo-200">Plan Semasa</p>
                       <p className="text-2xl font-bold">{currentSub?.planName || "Tiada Plan"}</p>
                     </div>
-                    <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full ${currentSub?.status === "active" ? "bg-emerald-400 text-emerald-900" : "bg-amber-300 text-amber-900"}`}>
+                    <span className={`text-2xs font-bold px-2.5 py-1 rounded-full ${currentSub?.status === "active" ? "bg-emerald-400 text-emerald-900" : "bg-amber-300 text-amber-900"}`}>
                       {currentSub?.status === "active" ? "Aktif" : currentSub?.status === "trialing" ? "Trial" : "Belum Aktif"}
                     </span>
                   </div>
-                  <div className="grid grid-cols-2 gap-2 text-[11px]">
+                  <div className="grid grid-cols-2 gap-2 text-xs">
                     <div><p className="text-indigo-300">Tarikh Pembaharuan</p><p className="font-semibold">{currentSub?.renewal || "—"}</p></div>
                     <div><p className="text-indigo-300">Harga Bulanan</p><p className="font-semibold">RM {(currentSub?.price ?? 0).toLocaleString()}/bulan</p></div>
                   </div>
@@ -4232,7 +4232,7 @@ export function OwnerDashboard() {
                           <p className="text-xl font-bold text-slate-900">RM {p.price.toLocaleString()}<span className="text-xs text-slate-400 font-normal">/bln</span></p>
                         )}
                         {p.features.length > 0 && (
-                          <ul className="text-[10px] text-emerald-700 space-y-0.5">
+                          <ul className="text-2xs text-emerald-700 space-y-0.5">
                             {p.features.slice(0, 5).map((f, i) => <li key={i}>+ {f}</li>)}
                           </ul>
                         )}
@@ -4276,7 +4276,7 @@ export function OwnerDashboard() {
                     <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
                       <div className="h-full bg-amber-400 rounded-full" style={{ width: `${Math.min(100, (aiCredits.used / Math.max(1, aiCredits.total)) * 100)}%` }} />
                     </div>
-                    <p className="text-[10px] text-slate-400">{Math.max(0, aiCredits.total - aiCredits.used)} kredit berbaki</p>
+                    <p className="text-2xs text-slate-400">{Math.max(0, aiCredits.total - aiCredits.used)} kredit berbaki</p>
                   </div>
                   <div className="grid grid-cols-2 gap-2">
                     <button onClick={() => setShowCreditModal("AI")} className="py-2.5 bg-amber-50 border border-amber-100 text-amber-700 rounded-xl text-xs font-bold cursor-pointer hover:bg-amber-100 transition">Beli Kredit</button>
@@ -4301,7 +4301,7 @@ export function OwnerDashboard() {
                     <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
                       <div className="h-full bg-violet-400 rounded-full" style={{ width: `${Math.min(100, (ocrCredits.used / Math.max(1, ocrCredits.total)) * 100)}%` }} />
                     </div>
-                    <p className="text-[10px] text-slate-400">{Math.max(0, ocrCredits.total - ocrCredits.used)} kredit berbaki</p>
+                    <p className="text-2xs text-slate-400">{Math.max(0, ocrCredits.total - ocrCredits.used)} kredit berbaki</p>
                   </div>
                   <div className="grid grid-cols-2 gap-2">
                     <button onClick={() => setShowCreditModal("OCR")} className="py-2.5 bg-violet-50 border border-violet-100 text-violet-700 rounded-xl text-xs font-bold cursor-pointer hover:bg-violet-100 transition">Beli Kredit</button>
@@ -4326,7 +4326,7 @@ export function OwnerDashboard() {
                     <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
                       <div className="h-full bg-blue-400 rounded-full" style={{ width: `${Math.min(100, storageQuota.pctUsed * 100)}%` }} />
                     </div>
-                    <p className="text-[10px] text-slate-400">{Math.max(0, storageQuota.quotaGB - storageQuota.usedGB).toFixed(2)} GB berbaki</p>
+                    <p className="text-2xs text-slate-400">{Math.max(0, storageQuota.quotaGB - storageQuota.usedGB).toFixed(2)} GB berbaki</p>
                   </div>
                   <div className="grid grid-cols-2 gap-2">
                     <button onClick={() => setShowAddonModal(true)} className="py-2.5 bg-blue-50 border border-blue-100 text-blue-700 rounded-xl text-xs font-bold cursor-pointer hover:bg-blue-100 transition">Beli Storan</button>
@@ -4340,7 +4340,7 @@ export function OwnerDashboard() {
                     <Star className="w-4 h-4 text-emerald-500" />
                     <p className="text-sm font-bold text-slate-900">Kod Promosi</p>
                   </div>
-                  <p className="text-[11px] text-slate-500">Ada kod promosi? Tebus untuk kredit dompet percuma atau lanjutan tempoh percubaan.</p>
+                  <p className="text-xs text-slate-500">Ada kod promosi? Tebus untuk kredit dompet percuma atau lanjutan tempoh percubaan.</p>
                   <button onClick={() => { setShowPromoModal(true); setPromoResult(null); }} className="w-full py-2.5 bg-emerald-50 border border-emerald-100 text-emerald-700 rounded-xl text-xs font-bold cursor-pointer hover:bg-emerald-100 transition">Tebus Kod Promosi</button>
                   {/* Promo history */}
                   {promoHistory.length > 0 && (
@@ -4369,9 +4369,9 @@ export function OwnerDashboard() {
                         <div key={tx.id} className="flex items-center justify-between p-2.5 border border-slate-100 rounded-xl">
                           <div>
                             <p className="text-xs font-semibold text-slate-800">{tx.kind === "addon" ? tx.addonLabel : tx.planName} — RM {tx.amountMyr.toLocaleString()}</p>
-                            <p className="text-[10px] text-slate-400">{new Date(tx.createdAt).toLocaleDateString("ms-MY", { day: "numeric", month: "short", year: "numeric" })} · {tx.method === "manual" ? "Manual" : "Chip Asia"}</p>
+                            <p className="text-2xs text-slate-400">{new Date(tx.createdAt).toLocaleDateString("ms-MY", { day: "numeric", month: "short", year: "numeric" })} · {tx.method === "manual" ? "Manual" : "Chip Asia"}</p>
                           </div>
-                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                          <span className={`text-2xs font-bold px-2 py-0.5 rounded-full ${
                             tx.status === "approved" || tx.status === "success" ? "bg-emerald-50 text-emerald-700" :
                             tx.status === "rejected" || tx.status === "failed" ? "bg-red-50 text-red-600" : "bg-amber-50 text-amber-700"
                           }`}>
@@ -4433,7 +4433,7 @@ export function OwnerDashboard() {
                       <label className="text-xs font-semibold text-slate-500 mb-1 block">Slip Bank (gambar/PDF)</label>
                       <input type="file" accept="image/*,application/pdf" onChange={e => setSlipFile(e.target.files?.[0] || null)}
                         className="w-full text-xs border border-slate-200 rounded-xl px-3 py-2.5" />
-                      <p className="text-[10px] text-slate-400 mt-1">HQ owner atau staf akan menyemak dan meluluskan sebelum pakej diaktifkan.</p>
+                      <p className="text-2xs text-slate-400 mt-1">HQ owner atau staf akan menyemak dan meluluskan sebelum pakej diaktifkan.</p>
                     </div>
                   )}
 
@@ -4469,10 +4469,10 @@ export function OwnerDashboard() {
                       </div>
                       <div className="text-left">
                         <p className={`text-xs font-bold ${resAI === id ? "text-indigo-800" : "text-slate-700"}`}>{label}</p>
-                        <p className="text-[10px] text-slate-400">{desc}</p>
+                        <p className="text-2xs text-slate-400">{desc}</p>
                       </div>
                       {resAI === id && id === "mykerani" && (
-                        <span className="ml-auto text-[9px] font-bold text-emerald-700 bg-emerald-100 px-1.5 py-0.5 rounded-full">Aktif</span>
+                        <span className="ml-auto text-3xs font-bold text-emerald-700 bg-emerald-100 px-1.5 py-0.5 rounded-full">Aktif</span>
                       )}
                     </button>
                   ))}
@@ -4481,7 +4481,7 @@ export function OwnerDashboard() {
                       <input type="password" value={resAIKey} onChange={e => setResAIKey(e.target.value)}
                         placeholder="Masukkan API Key (Gemini / OpenAI / Claude)"
                         className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-xs outline-none focus:border-indigo-400 bg-white font-mono" />
-                      <p className="text-[10px] text-slate-400">API Key disimpan dalam peranti anda sahaja dan tidak dihantar ke pelayan MYKERANI.</p>
+                      <p className="text-2xs text-slate-400">API Key disimpan dalam peranti anda sahaja dan tidak dihantar ke pelayan MYKERANI.</p>
                     </div>
                   )}
                 </div>
@@ -4494,7 +4494,7 @@ export function OwnerDashboard() {
                       <p className="text-sm font-bold text-slate-900">Kos & Perbelanjaan AI</p>
                     </div>
                     {aiCostSummary.map(row => (
-                      <div key={row.model} className="flex items-center justify-between text-[11px] p-2 bg-slate-50 rounded-lg">
+                      <div key={row.model} className="flex items-center justify-between text-xs p-2 bg-slate-50 rounded-lg">
                         <div>
                           <p className="font-bold text-slate-700">{row.model}</p>
                           <p className="text-slate-400">USD {row.costPerCallUsd.toFixed(4)}/panggilan • {row.callsThisMonth} panggilan bulan ini</p>
@@ -4523,9 +4523,9 @@ export function OwnerDashboard() {
                               {storageConn.provider === "gdrive" ? "Google Drive" : storageConn.provider === "onedrive" ? "OneDrive" : "Dropbox"} Tersambung
                             </p>
                           </div>
-                          <span className="text-[9px] font-bold text-emerald-600 bg-emerald-100 px-2 py-0.5 rounded-full border border-emerald-200">Aktif</span>
+                          <span className="text-3xs font-bold text-emerald-600 bg-emerald-100 px-2 py-0.5 rounded-full border border-emerald-200">Aktif</span>
                         </div>
-                        <div className="space-y-1 text-[11px] text-slate-600">
+                        <div className="space-y-1 text-xs text-slate-600">
                           <div className="flex justify-between">
                             <span className="text-slate-400">Akaun</span>
                             <span className="font-semibold">{storageConn.email}</span>
@@ -4548,7 +4548,7 @@ export function OwnerDashboard() {
                       {/* Folder picker */}
                       {showFolderPicker ? (
                         <div className="space-y-2">
-                          <p className="text-[11px] font-semibold text-slate-600">Nama folder dalam {storageConn.provider === "gdrive" ? "Google Drive" : storageConn.provider === "onedrive" ? "OneDrive" : "Dropbox"}:</p>
+                          <p className="text-xs font-semibold text-slate-600">Nama folder dalam {storageConn.provider === "gdrive" ? "Google Drive" : storageConn.provider === "onedrive" ? "OneDrive" : "Dropbox"}:</p>
                           <div className="flex gap-2">
                             <input value={folderInput} onChange={e => setFolderInput(e.target.value)}
                               placeholder="MYKERANI Dokumen"
@@ -4582,7 +4582,7 @@ export function OwnerDashboard() {
                   ) : (
                     /* Not connected — show provider options */
                     <div className="space-y-2">
-                      <p className="text-[11px] text-slate-500 pb-1">Sambung storan cloud anda untuk simpan dokumen di luar MYKERANI:</p>
+                      <p className="text-xs text-slate-500 pb-1">Sambung storan cloud anda untuk simpan dokumen di luar MYKERANI:</p>
                       {([
                         { id: "mykerani" as const,  label: "Storan MYKERANI",  desc: "Storan selamat dalam platform",         color: "bg-emerald-50 border-emerald-200 text-emerald-700", badge: "Aktif" },
                         { id: "gdrive" as const,    label: "Google Drive",      desc: "Simpan terus ke Google Drive anda",     color: "bg-blue-50 border-blue-200 text-blue-700",           badge: null },
@@ -4592,13 +4592,13 @@ export function OwnerDashboard() {
                         <div key={id} className="flex items-center justify-between p-3 rounded-xl border border-slate-100 bg-slate-50/50">
                           <div>
                             <p className="text-xs font-bold text-slate-700">{label}</p>
-                            <p className="text-[10px] text-slate-400">{desc}</p>
+                            <p className="text-2xs text-slate-400">{desc}</p>
                           </div>
                           {id === "mykerani" ? (
-                            <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full border ${color}`}>{badge}</span>
+                            <span className={`text-3xs font-bold px-2 py-0.5 rounded-full border ${color}`}>{badge}</span>
                           ) : (
                             <button onClick={() => connectStorage(id)} disabled={connectingProv === id}
-                              className="px-3 py-1.5 bg-slate-900 text-white rounded-lg text-[10px] font-bold cursor-pointer hover:bg-slate-700 transition disabled:opacity-50 shrink-0">
+                              className="px-3 py-1.5 bg-slate-900 text-white rounded-lg text-2xs font-bold cursor-pointer hover:bg-slate-700 transition disabled:opacity-50 shrink-0">
                               {connectingProv === id ? "Menyambung..." : "Sambung"}
                             </button>
                           )}
@@ -4610,7 +4610,7 @@ export function OwnerDashboard() {
 
                 {/* Info box */}
                 <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl">
-                  <p className="text-[10px] text-slate-500 leading-relaxed">
+                  <p className="text-2xs text-slate-500 leading-relaxed">
                     Pilihan storan luar bergantung kepada kebenaran yang ditetapkan HQ. Dokumen yang dimuat naik akan disimpan ke folder yang dipilih. MYKERANI tidak menyimpan salinan jika storan luar digunakan.
                   </p>
                 </div>
@@ -4634,7 +4634,7 @@ export function OwnerDashboard() {
             <button key={id} onClick={() => { setActiveTab(id); if (id === "more") setMorePage("menu"); }}
               className={`flex flex-col items-center py-1.5 px-3 rounded-xl transition cursor-pointer ${active ? "text-indigo-600" : "text-slate-400"}`}>
               <Icon className={`w-5 h-5 ${active ? "text-indigo-600" : ""}`} />
-              <span className={`text-[10px] font-bold mt-0.5 ${active ? "text-indigo-600" : ""}`}>{label}</span>
+              <span className={`text-2xs font-bold mt-0.5 ${active ? "text-indigo-600" : ""}`}>{label}</span>
             </button>
           );
         })}
@@ -4648,10 +4648,10 @@ export function OwnerDashboard() {
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-xs font-bold">Storan Dibekukan</p>
-            <p className="text-[10px] text-red-200">Upload disekat. Hubungi HQ atau beli tambahan storan.</p>
+            <p className="text-2xs text-red-200">Upload disekat. Hubungi HQ atau beli tambahan storan.</p>
           </div>
           <button onClick={() => setShowAddonModal(true)}
-            className="shrink-0 bg-white text-red-600 text-[10px] font-bold px-3 py-1.5 rounded-lg cursor-pointer">
+            className="shrink-0 bg-white text-red-600 text-2xs font-bold px-3 py-1.5 rounded-lg cursor-pointer">
             Beli
           </button>
         </div>
@@ -4667,7 +4667,7 @@ export function OwnerDashboard() {
                 <X className="w-4 h-4 text-slate-400" />
               </button>
             </div>
-            <p className="text-[11px] text-slate-500">Pilih pakej tambahan storan. Bayaran akan disahkan oleh HQ.</p>
+            <p className="text-xs text-slate-500">Pilih pakej tambahan storan. Bayaran akan disahkan oleh HQ.</p>
             <div className="space-y-2">
               {storagePackages.length === 0 ? (
                 <p className="text-xs text-slate-400 text-center py-3">Tiada pakej tersedia.</p>
@@ -4680,13 +4680,13 @@ export function OwnerDashboard() {
                   className={`w-full flex items-center justify-between p-4 rounded-xl border-2 transition cursor-pointer ${pkg.isBestValue ? "border-emerald-500 bg-emerald-50" : "border-slate-100 hover:border-slate-200"}`}>
                   <div className="text-left">
                     <p className={`text-sm font-bold ${pkg.isBestValue ? "text-emerald-800" : "text-slate-800"}`}>{pkg.label}</p>
-                    {pkg.isBestValue && <span className="text-[9px] font-bold text-emerald-600 bg-emerald-100 px-1.5 py-0.5 rounded-full">TERBAIK</span>}
+                    {pkg.isBestValue && <span className="text-3xs font-bold text-emerald-600 bg-emerald-100 px-1.5 py-0.5 rounded-full">TERBAIK</span>}
                   </div>
                   <p className={`text-sm font-bold ${pkg.isBestValue ? "text-emerald-700" : "text-slate-600"}`}>RM {pkg.priceMyr}/bln</p>
                 </button>
               ))}
             </div>
-            <p className="text-[10px] text-slate-400 text-center">Storan tambahan aktif selepas pembayaran disahkan (Chip Asia serta-merta, slip manual selepas semakan HQ).</p>
+            <p className="text-2xs text-slate-400 text-center">Storan tambahan aktif selepas pembayaran disahkan (Chip Asia serta-merta, slip manual selepas semakan HQ).</p>
           </div>
         </div>
       )}
@@ -4701,7 +4701,7 @@ export function OwnerDashboard() {
                 <X className="w-4 h-4 text-slate-400" />
               </button>
             </div>
-            <p className="text-[11px] text-slate-500">Pilih pakej kredit tambahan. Kredit ditambah ke wallet selepas pembayaran disahkan.</p>
+            <p className="text-xs text-slate-500">Pilih pakej kredit tambahan. Kredit ditambah ke wallet selepas pembayaran disahkan.</p>
             <div className="space-y-2">
               {(showCreditModal === "AI" ? aiCreditPackages : ocrCreditPackages).length === 0 ? (
                 <p className="text-xs text-slate-400 text-center py-3">Tiada pakej tersedia.</p>
@@ -4715,13 +4715,13 @@ export function OwnerDashboard() {
                   className={`w-full flex items-center justify-between p-4 rounded-xl border-2 transition cursor-pointer ${pkg.isBestValue ? "border-emerald-500 bg-emerald-50" : "border-slate-100 hover:border-slate-200"}`}>
                   <div className="text-left">
                     <p className={`text-sm font-bold ${pkg.isBestValue ? "text-emerald-800" : "text-slate-800"}`}>{pkg.label}</p>
-                    {pkg.isBestValue && <span className="text-[9px] font-bold text-emerald-600 bg-emerald-100 px-1.5 py-0.5 rounded-full">TERBAIK</span>}
+                    {pkg.isBestValue && <span className="text-3xs font-bold text-emerald-600 bg-emerald-100 px-1.5 py-0.5 rounded-full">TERBAIK</span>}
                   </div>
                   <p className={`text-sm font-bold ${pkg.isBestValue ? "text-emerald-700" : "text-slate-600"}`}>RM {pkg.priceMyr}</p>
                 </button>
               ))}
             </div>
-            <p className="text-[10px] text-slate-400 text-center">Kredit tambahan aktif selepas pembayaran disahkan (Chip Asia serta-merta, slip manual selepas semakan HQ).</p>
+            <p className="text-2xs text-slate-400 text-center">Kredit tambahan aktif selepas pembayaran disahkan (Chip Asia serta-merta, slip manual selepas semakan HQ).</p>
           </div>
         </div>
       )}
@@ -4736,7 +4736,7 @@ export function OwnerDashboard() {
                 <X className="w-4 h-4 text-slate-400" />
               </button>
             </div>
-            <p className="text-[11px] text-slate-500">Masukkan kod promosi untuk menebus kredit dompet percuma atau lanjutan tempoh percubaan.</p>
+            <p className="text-xs text-slate-500">Masukkan kod promosi untuk menebus kredit dompet percuma atau lanjutan tempoh percubaan.</p>
             <input
               value={promoCode}
               onChange={(e) => setPromoCode(e.target.value)}
@@ -4800,8 +4800,8 @@ export function OwnerDashboard() {
             <div className="p-6 space-y-5">
               {/* Step indicator */}
               <div className="flex items-center justify-between">
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Langkah {onboardStep} / 3</p>
-                <button onClick={finishOnboard} className="text-[10px] text-slate-300 cursor-pointer hover:text-slate-400">Langkau</button>
+                <p className="text-2xs font-bold text-slate-400 uppercase tracking-wider">Langkah {onboardStep} / 3</p>
+                <button onClick={finishOnboard} className="text-2xs text-slate-300 cursor-pointer hover:text-slate-400">Langkau</button>
               </div>
 
               {/* Step 1: Welcome + Biz name */}
@@ -4902,7 +4902,7 @@ export function OwnerDashboard() {
                       <TrendingUp className="w-5 h-5 text-emerald-500 shrink-0" />
                       <div className="text-left">
                         <p className="text-sm font-bold text-emerald-800">Rekod Pendapatan Pertama</p>
-                        <p className="text-[11px] text-emerald-600">Catat jualan atau pendapatan hari ini</p>
+                        <p className="text-xs text-emerald-600">Catat jualan atau pendapatan hari ini</p>
                       </div>
                     </button>
                     <button onClick={() => { finishOnboard(); setQuickAdd("EXPENSE"); }}
@@ -4910,7 +4910,7 @@ export function OwnerDashboard() {
                       <TrendingDown className="w-5 h-5 text-rose-400 shrink-0" />
                       <div className="text-left">
                         <p className="text-sm font-bold text-rose-700">Rekod Perbelanjaan Pertama</p>
-                        <p className="text-[11px] text-rose-500">Catat kos atau perbelanjaan perniagaan</p>
+                        <p className="text-xs text-rose-500">Catat kos atau perbelanjaan perniagaan</p>
                       </div>
                     </button>
                     <button onClick={() => { finishOnboard(); sendChat("Helo MYKERANI! Saya baru mula. Boleh tolong terangkan apa yang awak boleh buat untuk perniagaan saya?"); }}
@@ -4918,7 +4918,7 @@ export function OwnerDashboard() {
                       <Brain className="w-5 h-5 text-indigo-400 shrink-0" />
                       <div className="text-left">
                         <p className="text-sm font-bold text-slate-700">Tanya AI Dahulu</p>
-                        <p className="text-[11px] text-slate-400">Ketahui apa yang MYKERANI boleh bantu</p>
+                        <p className="text-xs text-slate-400">Ketahui apa yang MYKERANI boleh bantu</p>
                       </div>
                     </button>
                   </div>

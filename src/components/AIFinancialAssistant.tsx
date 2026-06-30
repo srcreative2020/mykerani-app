@@ -559,14 +559,14 @@ export const AIFinancialAssistant: React.FC<AIFinancialAssistantProps> = ({ onTr
                             type="button"
                             onClick={() => handleRequestAttachEvidence(s.id)}
                             disabled={uploadingEvidenceFor === s.id}
-                            className="px-2 py-1 rounded-md bg-indigo-50 hover:bg-indigo-100 border border-indigo-100 text-indigo-700 font-semibold text-[11px] disabled:opacity-50"
+                            className="px-2 py-1 rounded-md bg-indigo-50 hover:bg-indigo-100 border border-indigo-100 text-indigo-700 font-semibold text-xs disabled:opacity-50"
                           >
                             {uploadingEvidenceFor === s.id ? "Memuat naik..." : "Lampir Resit"}
                           </button>
                           <button
                             type="button"
                             onClick={() => handleSkipEvidence(s.id)}
-                            className="px-2 py-1 rounded-md bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-700 font-semibold text-[11px]"
+                            className="px-2 py-1 rounded-md bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-700 font-semibold text-xs"
                           >
                             Tiada Resit
                           </button>
@@ -662,7 +662,7 @@ export const AIFinancialAssistant: React.FC<AIFinancialAssistantProps> = ({ onTr
 
       {/* 5. Suggested Questions */}
       <div className="space-y-1.5 mb-4 shrink-0">
-        <span className="text-[10px] uppercase font-mono font-bold tracking-wider text-slate-400 block px-0.5">Cadangan Soalan Kewangan:</span>
+        <span className="text-2xs uppercase font-mono font-bold tracking-wider text-slate-400 block px-0.5">Cadangan Soalan Kewangan:</span>
         <div className="flex flex-wrap gap-2">
           {SUGGESTED_QUESTIONS.map((item, idx) => (
             <button

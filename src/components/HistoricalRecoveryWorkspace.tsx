@@ -267,7 +267,7 @@ export const HistoricalRecoveryWorkspace: React.FC = () => {
   return (
     <div className="space-y-6" id="historical_recovery_workspace_root">
       <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-1">
-        <span className="text-[10px] font-mono uppercase bg-slate-900 text-slate-100 px-2.5 py-0.5 rounded-md font-bold">
+        <span className="text-2xs font-mono uppercase bg-slate-900 text-slate-100 px-2.5 py-0.5 rounded-md font-bold">
           Financial Recovery Foundation
         </span>
         <p className="text-xs text-slate-500 font-sans">
@@ -284,12 +284,12 @@ export const HistoricalRecoveryWorkspace: React.FC = () => {
           { label: "Liputan Sejarah", value: completeness.historicalCoveragePct },
         ].map((m) => (
           <div key={m.label} className="bg-slate-50 p-3 border border-slate-200 rounded-xl">
-            <span className="text-[9px] font-mono uppercase text-slate-400 font-bold block">{m.label}</span>
+            <span className="text-3xs font-mono uppercase text-slate-400 font-bold block">{m.label}</span>
             <p className="text-sm font-mono font-bold text-slate-800 mt-0.5">{m.value.toFixed(1)}%</p>
           </div>
         ))}
         <div className="bg-slate-900 text-white p-3 rounded-xl text-center flex flex-col justify-center">
-          <span className="text-[9px] font-mono text-slate-350 uppercase font-bold block">Overall Completeness</span>
+          <span className="text-3xs font-mono text-slate-350 uppercase font-bold block">Overall Completeness</span>
           <p className="text-sm font-mono font-bold mt-0.5">{completeness.overallCompletenessPct.toFixed(1)}%</p>
         </div>
       </div>
@@ -299,7 +299,7 @@ export const HistoricalRecoveryWorkspace: React.FC = () => {
         <div className="flex items-center justify-between border-b border-slate-100 pb-3">
           <div>
             <h3 className="font-display font-semibold text-sm text-slate-900">1. Import Bank Statement Lama (CSV/Excel)</h3>
-            <p className="text-[11px] text-slate-500 mt-0.5">Sokong Maybank, CIMB, RHB, BSN, Bank Islam, Public Bank, Hong Leong, dan format generik.</p>
+            <p className="text-xs text-slate-500 mt-0.5">Sokong Maybank, CIMB, RHB, BSN, Bank Islam, Public Bank, Hong Leong, dan format generik.</p>
           </div>
           <button
             type="button"
@@ -329,7 +329,7 @@ export const HistoricalRecoveryWorkspace: React.FC = () => {
 
         {parsedTransactions.length > 0 && (
           <div className="space-y-3">
-            <div className="flex items-center gap-2 text-[11px] text-slate-500">
+            <div className="flex items-center gap-2 text-xs text-slate-500">
               <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
               <span>
                 {parsedTransactions.length} transaksi dikesan ({detectedBank}). {skippedRows.length} baris diabaikan.
@@ -340,7 +340,7 @@ export const HistoricalRecoveryWorkspace: React.FC = () => {
             <div className="border border-slate-200 rounded-xl overflow-hidden text-xs max-h-[480px] overflow-y-auto">
               <table className="w-full text-left border-collapse">
                 <thead>
-                  <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 font-mono text-[9px] uppercase tracking-wider sticky top-0">
+                  <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 font-mono text-3xs uppercase tracking-wider sticky top-0">
                     <th className="p-2.5">Tarikh</th>
                     <th className="p-2.5">Keterangan</th>
                     <th className="p-2.5 text-right">Jumlah (RM)</th>
@@ -364,7 +364,7 @@ export const HistoricalRecoveryWorkspace: React.FC = () => {
                         </td>
                         <td className="p-2.5">
                           {isTransfer ? (
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-indigo-50 text-indigo-700 border border-indigo-100 text-[9px] font-bold uppercase">
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-indigo-50 text-indigo-700 border border-indigo-100 text-3xs font-bold uppercase">
                               <ArrowLeftRight className="w-3 h-3" /> Internal Transfer
                             </span>
                           ) : (
@@ -382,14 +382,14 @@ export const HistoricalRecoveryWorkspace: React.FC = () => {
                               <button
                                 type="button"
                                 onClick={() => handleConfirmRow(idx)}
-                                className="px-2 py-1 rounded bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[10px]"
+                                className="px-2 py-1 rounded bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-2xs"
                               >
                                 Confirm
                               </button>
                               <button
                                 type="button"
                                 onClick={() => handleRejectRow(idx)}
-                                className="px-2 py-1 rounded bg-rose-100 hover:bg-rose-200 text-rose-700 font-bold text-[10px]"
+                                className="px-2 py-1 rounded bg-rose-100 hover:bg-rose-200 text-rose-700 font-bold text-2xs"
                               >
                                 Reject
                               </button>
@@ -411,7 +411,7 @@ export const HistoricalRecoveryWorkspace: React.FC = () => {
         <div className="flex items-center justify-between border-b border-slate-100 pb-3">
           <div>
             <h3 className="font-display font-semibold text-sm text-slate-900">2. Arkibkan Dokumen Kewangan Lama</h3>
-            <p className="text-[11px] text-slate-500 mt-0.5">P&amp;L Lama, Balance Sheet Lama, atau Excel Lama — disimpan sebagai bukti sejarah kewangan anda.</p>
+            <p className="text-xs text-slate-500 mt-0.5">P&amp;L Lama, Balance Sheet Lama, atau Excel Lama — disimpan sebagai bukti sejarah kewangan anda.</p>
           </div>
           <button
             type="button"
@@ -435,7 +435,7 @@ export const HistoricalRecoveryWorkspace: React.FC = () => {
           />
         </div>
         {archiveStatus && (
-          <div className="flex items-center gap-1.5 text-[11px] text-emerald-700 bg-emerald-50 border border-emerald-100 rounded-lg p-3">
+          <div className="flex items-center gap-1.5 text-xs text-emerald-700 bg-emerald-50 border border-emerald-100 rounded-lg p-3">
             <ShieldCheck className="w-3.5 h-3.5" />
             {archiveStatus}
           </div>

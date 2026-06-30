@@ -888,7 +888,7 @@ export const FinancialReportsAnalytics: React.FC<FinancialReportsAnalyticsProps>
 
           {/* Active Canvas Header */}
           <div className="border-b border-slate-100 pb-4">
-            <div className="flex items-center space-x-2 text-rose-500 font-mono text-[10px] uppercase font-bold tracking-wider">
+            <div className="flex items-center space-x-2 text-rose-500 font-mono text-2xs uppercase font-bold tracking-wider">
               <span>Sistem Penyediaan Automatik Terkawal</span>
             </div>
             <h3 className="font-display font-bold text-lg text-slate-950 mt-1">
@@ -915,37 +915,37 @@ export const FinancialReportsAnalytics: React.FC<FinancialReportsAnalyticsProps>
               {/* Top Highlighting Metrics */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="bg-slate-50 p-4 border border-slate-200 rounded-xl">
-                  <span className="text-[10px] font-mono uppercase text-slate-400 font-bold block">
+                  <span className="text-2xs font-mono uppercase text-slate-400 font-bold block">
                     JUMLAH ASET
                   </span>
                   <p className="text-lg font-mono font-bold text-slate-900 mt-1">
                     RM {aggregateAssets.toLocaleString("en-MY", { minimumFractionDigits: 2 })}
                   </p>
-                  <span className="text-[9px] text-slate-405 font-sans mt-1 block">
+                  <span className="text-3xs text-slate-405 font-sans mt-1 block">
                     Mudah tunai + tuntutan pelanggan
                   </span>
                 </div>
 
                 <div className="bg-slate-50 p-4 border border-slate-200 rounded-xl">
-                  <span className="text-[10px] font-mono uppercase text-slate-400 font-bold block">
+                  <span className="text-2xs font-mono uppercase text-slate-400 font-bold block">
                     JUMLAH LIABILITI
                   </span>
                   <p className="text-lg font-mono font-bold text-rose-600 mt-1">
                     RM {aggregateLiabilities.toLocaleString("en-MY", { minimumFractionDigits: 2 })}
                   </p>
-                  <span className="text-[9px] text-slate-405 font-sans mt-1 block">
+                  <span className="text-3xs text-slate-405 font-sans mt-1 block">
                     Hutang pembekal + pinjaman aktif
                   </span>
                 </div>
 
                 <div className="bg-slate-950 p-4 rounded-xl text-white">
-                  <span className="text-[10px] font-mono uppercase text-indigo-200 font-bold block">
+                  <span className="text-2xs font-mono uppercase text-indigo-200 font-bold block">
                     EKUITI BERSIH (MARGINAL)
                   </span>
                   <p className={`text-lg font-mono font-bold mt-1 ${netCapitalMargin >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
                     RM {netCapitalMargin.toLocaleString("en-MY", { minimumFractionDigits: 2 })}
                   </p>
-                  <span className="text-[9px] text-indigo-200 font-sans mt-1 block">
+                  <span className="text-3xs text-indigo-200 font-sans mt-1 block">
                     Jumlah aset bersih sedia ada
                   </span>
                 </div>
@@ -959,16 +959,16 @@ export const FinancialReportsAnalytics: React.FC<FinancialReportsAnalyticsProps>
 
                 <div className="border border-slate-200 rounded-xl overflow-hidden text-xs">
                   <div className="grid grid-cols-12 bg-slate-50 p-3 font-semibold text-slate-500 border-b border-slate-200">
-                    <span className="col-span-6 font-mono uppercase tracking-wider text-[10px]">Aset Semasa (Current Assets)</span>
-                    <span className="col-span-3 text-right font-mono uppercase tracking-wider text-[10px]">Kadar</span>
-                    <span className="col-span-3 text-right font-mono uppercase tracking-wider text-[10px]">Nilai Kuasa (MYR)</span>
+                    <span className="col-span-6 font-mono uppercase tracking-wider text-2xs">Aset Semasa (Current Assets)</span>
+                    <span className="col-span-3 text-right font-mono uppercase tracking-wider text-2xs">Kadar</span>
+                    <span className="col-span-3 text-right font-mono uppercase tracking-wider text-2xs">Nilai Kuasa (MYR)</span>
                   </div>
 
                   <div className="divide-y divide-slate-100">
                     <div className="grid grid-cols-12 p-3 items-center">
                       <div className="col-span-6">
                         <span className="font-semibold text-slate-800 font-sans block">Baki Laci Tunai</span>
-                        <span className="text-[10px] text-slate-400">Physical safe balances across physical terminals</span>
+                        <span className="text-2xs text-slate-400">Physical safe balances across physical terminals</span>
                       </div>
                       <span className="col-span-3 text-right text-slate-500">Liquid Cash</span>
                       <span className="col-span-3 text-right font-mono text-slate-900 font-semibold">RM {totalCash.toLocaleString("en-MY", { minimumFractionDigits: 2 })}</span>
@@ -977,7 +977,7 @@ export const FinancialReportsAnalytics: React.FC<FinancialReportsAnalyticsProps>
                     <div className="grid grid-cols-12 p-3 items-center">
                       <div className="col-span-6">
                         <span className="font-semibold text-slate-800 font-sans block">Baki Vault Simpanan Bank</span>
-                        <span className="text-[10px] text-slate-400">Secured clearing business bank deposits</span>
+                        <span className="text-2xs text-slate-400">Secured clearing business bank deposits</span>
                       </div>
                       <span className="col-span-3 text-right text-slate-500">Liquid Savings</span>
                       <span className="col-span-3 text-right font-mono text-slate-900 font-semibold">RM {totalBank.toLocaleString("en-MY", { minimumFractionDigits: 2 })}</span>
@@ -986,7 +986,7 @@ export const FinancialReportsAnalytics: React.FC<FinancialReportsAnalyticsProps>
                     <div className="grid grid-cols-12 p-3 items-center">
                       <div className="col-span-6">
                         <span className="font-semibold text-indigo-750 font-sans block">Jumlah Piutang (Receivables)</span>
-                        <span className="text-[10px] text-slate-400">Outstanding invoices issued to business clients</span>
+                        <span className="text-2xs text-slate-400">Outstanding invoices issued to business clients</span>
                       </div>
                       <span className="col-span-3 text-right text-slate-500">Outstanding Invoices</span>
                       <span className="col-span-3 text-right font-mono text-indigo-600 font-semibold">RM {totalReceivables.toLocaleString("en-MY", { minimumFractionDigits: 2 })}</span>
@@ -996,16 +996,16 @@ export const FinancialReportsAnalytics: React.FC<FinancialReportsAnalyticsProps>
 
                 <div className="border border-slate-200 rounded-xl overflow-hidden text-xs">
                   <div className="grid grid-cols-12 bg-slate-50 p-3 font-semibold text-slate-500 border-b border-slate-200">
-                    <span className="col-span-6 font-mono uppercase tracking-wider text-[10px]">Kewajipan Semasa (Current Liabilities)</span>
-                    <span className="col-span-3 text-right font-mono uppercase tracking-wider text-[10px]">Pihak</span>
-                    <span className="col-span-3 text-right font-mono uppercase tracking-wider text-[10px]">Nilai Hutang (MYR)</span>
+                    <span className="col-span-6 font-mono uppercase tracking-wider text-2xs">Kewajipan Semasa (Current Liabilities)</span>
+                    <span className="col-span-3 text-right font-mono uppercase tracking-wider text-2xs">Pihak</span>
+                    <span className="col-span-3 text-right font-mono uppercase tracking-wider text-2xs">Nilai Hutang (MYR)</span>
                   </div>
 
                   <div className="divide-y divide-slate-100">
                     <div className="grid grid-cols-12 p-3 items-center">
                       <div className="col-span-6">
                         <span className="font-semibold text-slate-800 font-sans block">Hutang Tempoh Pembekal (Payables)</span>
-                        <span className="text-[10px] text-slate-400">Direct trade payables from received supply lines</span>
+                        <span className="text-2xs text-slate-400">Direct trade payables from received supply lines</span>
                       </div>
                       <span className="col-span-3 text-right text-slate-500">Vendor Bills</span>
                       <span className="col-span-3 text-right font-mono text-rose-600 font-semibold">RM {totalPayables.toLocaleString("en-MY", { minimumFractionDigits: 2 })}</span>
@@ -1014,7 +1014,7 @@ export const FinancialReportsAnalytics: React.FC<FinancialReportsAnalyticsProps>
                     <div className="grid grid-cols-12 p-3 items-center">
                       <div className="col-span-6">
                         <span className="font-semibold text-slate-800 font-sans block">Kredit Bertulis & Pembiayaan Pajakan (Debt)</span>
-                        <span className="text-[10px] text-slate-400">Total remaining principal of collateralized bank loans</span>
+                        <span className="text-2xs text-slate-400">Total remaining principal of collateralized bank loans</span>
                       </div>
                       <span className="col-span-3 text-right text-slate-500">Active Borrowings</span>
                       <span className="col-span-3 text-right font-mono text-rose-600 font-semibold">RM {totalDebts.toLocaleString("en-MY", { minimumFractionDigits: 2 })}</span>
@@ -1049,7 +1049,7 @@ export const FinancialReportsAnalytics: React.FC<FinancialReportsAnalyticsProps>
               {/* Summary brackets cards */}
               <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
                 <div className="bg-slate-50 p-3 border border-slate-200 rounded-xl">
-                  <span className="text-[9px] font-mono uppercase text-slate-400 font-bold block">
+                  <span className="text-3xs font-mono uppercase text-slate-400 font-bold block">
                     Belum Matang (Current)
                   </span>
                   <p className="text-sm font-mono font-bold text-slate-800 mt-0.5">
@@ -1057,7 +1057,7 @@ export const FinancialReportsAnalytics: React.FC<FinancialReportsAnalyticsProps>
                   </p>
                 </div>
                 <div className="bg-slate-50 p-3 border border-slate-200 rounded-xl">
-                  <span className="text-[9px] font-mono uppercase text-slate-400 font-bold block">
+                  <span className="text-3xs font-mono uppercase text-slate-400 font-bold block">
                     1-30 Hari Lambat
                   </span>
                   <p className="text-sm font-mono font-bold text-indigo-700 mt-0.5">
@@ -1065,7 +1065,7 @@ export const FinancialReportsAnalytics: React.FC<FinancialReportsAnalyticsProps>
                   </p>
                 </div>
                 <div className="bg-amber-50 border border-amber-150 p-3 rounded-xl">
-                  <span className="text-[9px] font-mono uppercase text-amber-700 font-bold block">
+                  <span className="text-3xs font-mono uppercase text-amber-700 font-bold block">
                     31-60 Hari Lambat
                   </span>
                   <p className="text-sm font-mono font-bold text-amber-805 mt-0.5">
@@ -1073,7 +1073,7 @@ export const FinancialReportsAnalytics: React.FC<FinancialReportsAnalyticsProps>
                   </p>
                 </div>
                 <div className="bg-rose-50 border border-rose-100 p-3 rounded-xl">
-                  <span className="text-[9px] font-mono uppercase text-rose-700 font-bold block">
+                  <span className="text-3xs font-mono uppercase text-rose-700 font-bold block">
                     60+ Hari Lambat
                   </span>
                   <p className="text-sm font-mono font-bold text-rose-800 mt-0.5">
@@ -1081,7 +1081,7 @@ export const FinancialReportsAnalytics: React.FC<FinancialReportsAnalyticsProps>
                   </p>
                 </div>
                 <div className="col-span-2 md:col-span-1 bg-slate-900 text-white p-3 rounded-xl text-center flex flex-col justify-center">
-                  <span className="text-[9px] font-mono text-slate-350 uppercase font-bold block">
+                  <span className="text-3xs font-mono text-slate-350 uppercase font-bold block">
                     JUMLAH BESAR
                   </span>
                   <p className="text-sm font-mono font-bold mt-0.5">
@@ -1092,10 +1092,10 @@ export const FinancialReportsAnalytics: React.FC<FinancialReportsAnalyticsProps>
 
               {/* Progress visualizer */}
               <div className="space-y-2">
-                <span className="text-[10px] font-mono uppercase text-slate-400 font-bold tracking-wider block">
+                <span className="text-2xs font-mono uppercase text-slate-400 font-bold tracking-wider block">
                   Agihan Peratusan Penuaan Tuntutan
                 </span>
-                <div className="w-full bg-slate-100 h-4 rounded-lg overflow-hidden flex text-[9px] font-mono text-white text-center font-bold">
+                <div className="w-full bg-slate-100 h-4 rounded-lg overflow-hidden flex text-3xs font-mono text-white text-center font-bold">
                   {receivablesAgingData.total > 0 ? (
                     <>
                       {receivablesAgingData.current > 0 && (
@@ -1152,7 +1152,7 @@ export const FinancialReportsAnalytics: React.FC<FinancialReportsAnalyticsProps>
                 <div className="border border-slate-200 rounded-xl overflow-hidden text-xs">
                   <table className="w-full text-left border-collapse">
                     <thead>
-                      <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 font-mono text-[9px] uppercase tracking-wider">
+                      <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 font-mono text-3xs uppercase tracking-wider">
                         <th className="p-3">Kategori</th>
                         <th className="p-3">Nama Pelanggan</th>
                         <th className="p-3">Tarikh Inv</th>
@@ -1200,7 +1200,7 @@ export const FinancialReportsAnalytics: React.FC<FinancialReportsAnalyticsProps>
                                 <td className="p-3 font-mono font-bold text-slate-650">{ageText}</td>
                                 <td className="p-3 text-right font-mono font-bold text-slate-900">RM {e.amountMyr.toLocaleString()}</td>
                                 <td className="p-3 text-center">
-                                  <span className={`inline-flex items-center px-2 py-0.5 rounded border text-[9px] font-bold uppercase ${labelStyle}`}>
+                                  <span className={`inline-flex items-center px-2 py-0.5 rounded border text-3xs font-bold uppercase ${labelStyle}`}>
                                     {diffDays <= 0 ? "CURRENT" : diffDays <= 30 ? "1-30 DAYS" : diffDays <= 60 ? "31-60 DAYS" : "60+ OVERDUE"}
                                   </span>
                                 </td>
@@ -1223,7 +1223,7 @@ export const FinancialReportsAnalytics: React.FC<FinancialReportsAnalyticsProps>
               {/* Summary bracket boxes */}
               <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
                 <div className="bg-slate-50 p-3 border border-slate-200 rounded-xl">
-                  <span className="text-[9px] font-mono uppercase text-slate-400 font-bold block">
+                  <span className="text-3xs font-mono uppercase text-slate-400 font-bold block">
                     Belum Matang (Current)
                   </span>
                   <p className="text-sm font-mono font-bold text-slate-850 mt-0.5">
@@ -1231,7 +1231,7 @@ export const FinancialReportsAnalytics: React.FC<FinancialReportsAnalyticsProps>
                   </p>
                 </div>
                 <div className="bg-slate-50 p-3 border border-slate-200 rounded-xl">
-                  <span className="text-[9px] font-mono uppercase text-slate-400 font-bold block">
+                  <span className="text-3xs font-mono uppercase text-slate-400 font-bold block">
                     1-30 Hari Lambat
                   </span>
                   <p className="text-sm font-mono font-bold text-indigo-700 mt-0.5">
@@ -1239,7 +1239,7 @@ export const FinancialReportsAnalytics: React.FC<FinancialReportsAnalyticsProps>
                   </p>
                 </div>
                 <div className="bg-amber-50 border border-amber-150 p-3 rounded-xl">
-                  <span className="text-[9px] font-mono uppercase text-amber-700 font-bold block">
+                  <span className="text-3xs font-mono uppercase text-amber-700 font-bold block">
                     31-60 Hari Lambat
                   </span>
                   <p className="text-sm font-mono font-bold text-amber-805 mt-0.5">
@@ -1247,7 +1247,7 @@ export const FinancialReportsAnalytics: React.FC<FinancialReportsAnalyticsProps>
                   </p>
                 </div>
                 <div className="bg-rose-50 border border-rose-100 p-3 rounded-xl">
-                  <span className="text-[9px] font-mono uppercase text-rose-700 font-bold block">
+                  <span className="text-3xs font-mono uppercase text-rose-700 font-bold block">
                     60+ Hari Lambat
                   </span>
                   <p className="text-sm font-mono font-bold text-rose-800 mt-0.5">
@@ -1255,7 +1255,7 @@ export const FinancialReportsAnalytics: React.FC<FinancialReportsAnalyticsProps>
                   </p>
                 </div>
                 <div className="col-span-2 md:col-span-1 bg-slate-900 text-white p-3 rounded-xl text-center flex flex-col justify-center">
-                  <span className="text-[9px] font-mono text-slate-350 uppercase font-bold block">
+                  <span className="text-3xs font-mono text-slate-350 uppercase font-bold block">
                     JUMLAH BESAR
                   </span>
                   <p className="text-sm font-mono font-bold mt-0.5">
@@ -1266,10 +1266,10 @@ export const FinancialReportsAnalytics: React.FC<FinancialReportsAnalyticsProps>
 
               {/* Progress visualizer */}
               <div className="space-y-2">
-                <span className="text-[10px] font-mono uppercase text-slate-400 font-bold tracking-wider block">
+                <span className="text-2xs font-mono uppercase text-slate-400 font-bold tracking-wider block">
                   Agihan Peratusan Penuaan Hutang Pembekal
                 </span>
-                <div className="w-full bg-slate-100 h-4 rounded-lg overflow-hidden flex text-[9px] font-mono text-white text-center font-bold">
+                <div className="w-full bg-slate-100 h-4 rounded-lg overflow-hidden flex text-3xs font-mono text-white text-center font-bold">
                   {payablesAgingData.total > 0 ? (
                     <>
                       {payablesAgingData.current > 0 && (
@@ -1326,7 +1326,7 @@ export const FinancialReportsAnalytics: React.FC<FinancialReportsAnalyticsProps>
                 <div className="border border-slate-200 rounded-xl overflow-hidden text-xs">
                   <table className="w-full text-left border-collapse">
                     <thead>
-                      <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 font-mono text-[9px] uppercase tracking-wider">
+                      <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 font-mono text-3xs uppercase tracking-wider">
                         <th className="p-3">Kategori Bil</th>
                         <th className="p-3">Nama Pembekal</th>
                         <th className="p-3">Tarikh Bil</th>
@@ -1374,7 +1374,7 @@ export const FinancialReportsAnalytics: React.FC<FinancialReportsAnalyticsProps>
                                 <td className="p-3 font-mono font-bold text-slate-650">{ageText}</td>
                                 <td className="p-3 text-right font-mono font-bold text-rose-600">RM {e.amountMyr.toLocaleString()}</td>
                                 <td className="p-3 text-center">
-                                  <span className={`inline-flex items-center px-2 py-0.5 rounded border text-[9px] font-bold uppercase ${labelStyle}`}>
+                                  <span className={`inline-flex items-center px-2 py-0.5 rounded border text-3xs font-bold uppercase ${labelStyle}`}>
                                     {diffDays <= 0 ? "CURRENT" : diffDays <= 30 ? "1-30 DAYS" : diffDays <= 60 ? "31-60 DAYS" : "60+ OVERDUE"}
                                   </span>
                                 </td>
@@ -1397,37 +1397,37 @@ export const FinancialReportsAnalytics: React.FC<FinancialReportsAnalyticsProps>
               {/* Burn Rate box headers */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="bg-slate-950 text-white p-4 rounded-xl">
-                  <span className="text-[10px] font-mono text-indigo-200 font-bold block">
+                  <span className="text-2xs font-mono text-indigo-200 font-bold block">
                     KOMITMEN KONTRAK AKTIF
                   </span>
                   <p className="text-xl font-mono font-bold mt-1">
                     {commitmentBurnData.count} Isian Kontrak
                   </p>
-                  <span className="text-[9px] text-indigo-300 font-sans mt-0.5 block">
+                  <span className="text-3xs text-indigo-300 font-sans mt-0.5 block">
                     Menyokong rancangan operasi pelbagai jangka
                   </span>
                 </div>
 
                 <div className="bg-slate-550 bg-slate-50 border border-slate-200 p-4 rounded-xl">
-                  <span className="text-[10px] font-mono uppercase text-slate-400 font-bold block">
+                  <span className="text-2xs font-mono uppercase text-slate-400 font-bold block">
                     BURN RATE BULANAN (ESTIMASI)
                   </span>
                   <p className="text-xl font-mono font-bold text-slate-900 mt-1">
                     RM {commitmentBurnData.monthlyBurn.toLocaleString("en-MY", { minimumFractionDigits: 2 })}
                   </p>
-                  <span className="text-[9px] text-slate-405 font-sans mt-0.5 block">
+                  <span className="text-3xs text-slate-405 font-sans mt-0.5 block">
                     Kadar bil berulang ditukarkan ke bulanan
                   </span>
                 </div>
 
                 <div className="bg-slate-50 border border-slate-200 p-4 rounded-xl">
-                  <span className="text-[10px] font-mono uppercase text-slate-400 font-bold block">
+                  <span className="text-2xs font-mono uppercase text-slate-400 font-bold block">
                     LIABILITI TAHUNAN PROJEK
                   </span>
                   <p className="text-xl font-mono font-bold text-rose-605 text-rose-700 mt-1">
                     RM {commitmentBurnData.annualBurn.toLocaleString("en-MY", { minimumFractionDigits: 2 })}
                   </p>
-                  <span className="text-[9px] text-slate-405 font-sans mt-0.5 block">
+                  <span className="text-3xs text-slate-405 font-sans mt-0.5 block">
                     Hasil darab 12 bulan komitmen aktif syarikat
                   </span>
                 </div>
@@ -1442,7 +1442,7 @@ export const FinancialReportsAnalytics: React.FC<FinancialReportsAnalyticsProps>
                 <div className="border border-slate-200 rounded-xl overflow-hidden text-xs">
                   <table className="w-full text-left border-collapse">
                     <thead>
-                      <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 font-mono text-[9px] uppercase tracking-wider">
+                      <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 font-mono text-3xs uppercase tracking-wider">
                         <th className="p-3">Syarikat / Pemberi Pajakan</th>
                         <th className="p-3">Kekerapan (Interval)</th>
                         <th className="p-3">Tarikh Mula</th>
@@ -1464,12 +1464,12 @@ export const FinancialReportsAnalytics: React.FC<FinancialReportsAnalyticsProps>
                             <tr key={c.id} className="hover:bg-slate-50/50">
                               <td className="p-3">
                                 <span className="font-semibold text-slate-900 block">{c.obligeeName}</span>
-                                <span className="text-[10px] font-mono text-slate-400 block truncate max-w-[200px]" title={c.description}>
+                                <span className="text-2xs font-mono text-slate-400 block truncate max-w-[200px]" title={c.description}>
                                   {c.description || "—"}
                                 </span>
                               </td>
                               <td className="p-3">
-                                <span className="px-1.5 py-0.5 bg-slate-100 text-slate-800 rounded font-mono font-bold text-[9px] tracking-wide select-none">
+                                <span className="px-1.5 py-0.5 bg-slate-100 text-slate-800 rounded font-mono font-bold text-3xs tracking-wide select-none">
                                   {c.recurrence}
                                 </span>
                               </td>
@@ -1481,7 +1481,7 @@ export const FinancialReportsAnalytics: React.FC<FinancialReportsAnalyticsProps>
                                 RM {Math.round(c.monthlyContribution).toLocaleString()}
                               </td>
                               <td className="p-3 text-center">
-                                <span className="inline-flex items-center px-2 py-0.5 rounded bg-emerald-50 text-emerald-800 border border-emerald-100 text-[9px] font-bold">
+                                <span className="inline-flex items-center px-2 py-0.5 rounded bg-emerald-50 text-emerald-800 border border-emerald-100 text-3xs font-bold">
                                   AKTIF
                                 </span>
                               </td>
@@ -1507,17 +1507,17 @@ export const FinancialReportsAnalytics: React.FC<FinancialReportsAnalyticsProps>
                 {/* Solvency Solvency Indicator */}
                 <div className={`p-5 rounded-2xl border-2 space-y-3 ${healthScoring.solvencyColor}`}>
                   <div className="flex justify-between items-center border-b border-white/20 pb-2">
-                    <span className="text-[10px] font-mono font-bold uppercase tracking-wide">
+                    <span className="text-2xs font-mono font-bold uppercase tracking-wide">
                       Aset vs Liabiliti (Solvency)
                     </span>
                     <span className="text-xs font-mono font-bold">{healthScoring.solvencyGrade}</span>
                   </div>
                   <div>
-                    <span className="text-[10px] block opacity-80 font-medium">Nisbah Pelindung</span>
+                    <span className="text-2xs block opacity-80 font-medium">Nisbah Pelindung</span>
                     <p className="text-2xl font-mono font-bold tracking-tight mt-0.5">
                       {healthScoring.solvencyRatio.toFixed(2)}x
                     </p>
-                    <p className="text-[11px] font-sans mt-2 opacity-90 leading-relaxed">
+                    <p className="text-xs font-sans mt-2 opacity-90 leading-relaxed">
                       Mengukur sama ada nilai keseluruhan tunai dan tuntutan dwi-lejar mencukupi untuk menutupi hutang dan bil supplier. Tahap semasa: <strong>{healthScoring.solvencyGrade}</strong>.
                     </p>
                   </div>
@@ -1526,17 +1526,17 @@ export const FinancialReportsAnalytics: React.FC<FinancialReportsAnalyticsProps>
                 {/* Quick Liquidity Indicator */}
                 <div className={`p-5 rounded-2xl border-2 space-y-3 ${healthScoring.quickColor}`}>
                   <div className="flex justify-between items-center border-b border-white/20 pb-2">
-                    <span className="text-[10px] font-mono font-bold uppercase tracking-wide">
+                    <span className="text-2xs font-mono font-bold uppercase tracking-wide">
                       Mudah Tunai vs Bil (Quick Ratio)
                     </span>
                     <span className="text-xs font-mono font-bold">{healthScoring.quickGrade}</span>
                   </div>
                   <div>
-                    <span className="text-[10px] block opacity-80 font-medium">Liquid Quotient</span>
+                    <span className="text-2xs block opacity-80 font-medium">Liquid Quotient</span>
                     <p className="text-2xl font-mono font-bold tracking-tight mt-0.5">
                       {healthScoring.quickRatio.toFixed(2)}x
                     </p>
-                    <p className="text-[11px] font-sans mt-2 opacity-90 leading-relaxed">
+                    <p className="text-xs font-sans mt-2 opacity-90 leading-relaxed">
                       Mengesan keupayaan perniagaan anda membayar bil pembekal serta-merta menggunakan baki tunai & bank sedia ada. Keadaan: <strong>{healthScoring.quickGrade}</strong>.
                     </p>
                   </div>
@@ -1545,17 +1545,17 @@ export const FinancialReportsAnalytics: React.FC<FinancialReportsAnalyticsProps>
                 {/* Survival Operating Runway Indicator */}
                 <div className={`p-5 rounded-2xl border-2 space-y-3 ${healthScoring.runwayColor}`}>
                   <div className="flex justify-between items-center border-b border-white/20 pb-2">
-                    <span className="text-[10px] font-mono font-bold uppercase tracking-wide">
+                    <span className="text-2xs font-mono font-bold uppercase tracking-wide">
                       Kelangsungan Operasi (Runway)
                     </span>
                     <span className="text-xs font-mono font-bold">{healthScoring.runwayGrade}</span>
                   </div>
                   <div>
-                    <span className="text-[10px] block opacity-80 font-medium font-semibold">Tahan Tanpa Jualan</span>
+                    <span className="text-2xs block opacity-80 font-medium font-semibold">Tahan Tanpa Jualan</span>
                     <p className="text-2xl font-mono font-bold tracking-tight mt-0.5">
                       {healthScoring.runwayMonths === 999 ? "∞" : `${healthScoring.runwayMonths.toFixed(1)} Bulan`}
                     </p>
-                    <p className="text-[11px] font-sans mt-2 opacity-90 leading-relaxed">
+                    <p className="text-xs font-sans mt-2 opacity-90 leading-relaxed">
                       Nisbah baki tunai cair dibahagi dengan bil komitmen bulanan syarikat. Jangkaan ketahanan: <strong>{healthScoring.runwayGrade}</strong>.
                     </p>
                   </div>
@@ -1570,28 +1570,28 @@ export const FinancialReportsAnalytics: React.FC<FinancialReportsAnalyticsProps>
                 </h4>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
                   <div className="p-5 rounded-2xl border-2 border-slate-200 bg-white space-y-2" id="health_v1_cash">
-                    <span className="text-[10px] font-mono font-bold uppercase tracking-wide text-slate-500">Cash Health</span>
+                    <span className="text-2xs font-mono font-bold uppercase tracking-wide text-slate-500">Cash Health</span>
                     <p className="text-xl font-mono font-bold tracking-tight text-slate-950">
                       RM {healthV1.cashHealth.totalLiquidAssets.toLocaleString("en-MY", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </p>
-                    <p className="text-[11px] text-slate-500">Quick Ratio: {healthV1.cashHealth.quickRatio.toFixed(2)}x · {healthV1.cashHealth.quickGrade}</p>
+                    <p className="text-xs text-slate-500">Quick Ratio: {healthV1.cashHealth.quickRatio.toFixed(2)}x · {healthV1.cashHealth.quickGrade}</p>
                   </div>
                   <div className="p-5 rounded-2xl border-2 border-slate-200 bg-white space-y-2" id="health_v1_debt">
-                    <span className="text-[10px] font-mono font-bold uppercase tracking-wide text-slate-500">Debt Health</span>
+                    <span className="text-2xs font-mono font-bold uppercase tracking-wide text-slate-500">Debt Health</span>
                     <p className="text-xl font-mono font-bold tracking-tight text-slate-950">
                       RM {healthV1.debtHealth.totalActiveDebt.toLocaleString("en-MY", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </p>
-                    <p className="text-[11px] text-slate-500">{healthV1.debtHealth.overdueDebtCount} hutang tertunggak · {healthV1.debtHealth.solvencyGrade}</p>
+                    <p className="text-xs text-slate-500">{healthV1.debtHealth.overdueDebtCount} hutang tertunggak · {healthV1.debtHealth.solvencyGrade}</p>
                   </div>
                   <div className="p-5 rounded-2xl border-2 border-slate-200 bg-white space-y-2" id="health_v1_evidence_coverage">
-                    <span className="text-[10px] font-mono font-bold uppercase tracking-wide text-slate-500">Evidence Coverage %</span>
+                    <span className="text-2xs font-mono font-bold uppercase tracking-wide text-slate-500">Evidence Coverage %</span>
                     <p className="text-xl font-mono font-bold tracking-tight text-slate-950">{healthV1.evidenceCoveragePct.toFixed(1)}%</p>
-                    <p className="text-[11px] text-slate-505">Peratus rekod kewangan yang mempunyai pakej bukti (invois/resit) dikaitkan.</p>
+                    <p className="text-xs text-slate-505">Peratus rekod kewangan yang mempunyai pakej bukti (invois/resit) dikaitkan.</p>
                   </div>
                   <div className="p-5 rounded-2xl border-2 border-slate-200 bg-white space-y-2" id="health_v1_data_completeness">
-                    <span className="text-[10px] font-mono font-bold uppercase tracking-wide text-slate-500">Data Completeness %</span>
+                    <span className="text-2xs font-mono font-bold uppercase tracking-wide text-slate-500">Data Completeness %</span>
                     <p className="text-xl font-mono font-bold tracking-tight text-slate-950">{healthV1.dataCompletenessPct.toFixed(1)}%</p>
-                    <p className="text-[11px] text-slate-505">Peratus rekod kewangan yang dikategorikan dengan lengkap (bukan "Lain-lain"/kosong).</p>
+                    <p className="text-xs text-slate-505">Peratus rekod kewangan yang dikategorikan dengan lengkap (bukan "Lain-lain"/kosong).</p>
                   </div>
                 </div>
               </div>
@@ -1663,7 +1663,7 @@ export const FinancialReportsAnalytics: React.FC<FinancialReportsAnalyticsProps>
               {hasInsufficientData ? (
                 <div className="p-5 rounded-2xl border-2 border-slate-200 bg-slate-50 space-y-2" id="report_tax_readiness_empty">
                   <p className="text-sm font-bold text-slate-700">Belum cukup data untuk analisis.</p>
-                  <p className="text-[11px] text-slate-500 leading-relaxed">
+                  <p className="text-xs text-slate-500 leading-relaxed">
                     Tambah rekod pertama (pendapatan, perbelanjaan atau dokumen sokongan) untuk menjana analisis Kesediaan Cukai LHDN.
                   </p>
                 </div>
@@ -1671,7 +1671,7 @@ export const FinancialReportsAnalytics: React.FC<FinancialReportsAnalyticsProps>
               <>
               <div className={`p-5 rounded-2xl border-2 space-y-2 ${taxReadiness.scoreColor}`}>
                 <div className="flex justify-between items-center border-b border-white/20 pb-2">
-                  <span className="text-[10px] font-mono font-bold uppercase tracking-wide">
+                  <span className="text-2xs font-mono font-bold uppercase tracking-wide">
                     Skor Kesediaan Cukai LHDN
                   </span>
                   <span className="text-xs font-mono font-bold">{taxReadiness.passedCount}/{taxReadiness.totalChecks} Pemeriksaan Lulus</span>
@@ -1679,7 +1679,7 @@ export const FinancialReportsAnalytics: React.FC<FinancialReportsAnalyticsProps>
                 <p className="text-2xl font-mono font-bold tracking-tight mt-0.5">
                   {taxReadiness.scorePct.toFixed(0)}%
                 </p>
-                <p className="text-[11px] font-sans mt-1 opacity-90 leading-relaxed">
+                <p className="text-xs font-sans mt-1 opacity-90 leading-relaxed">
                   Status: <strong>{taxReadiness.scoreGrade}</strong>. Skor ini dikira terus daripada kelengkapan rekod pendapatan, perbelanjaan, bukti dokumen dan profil perniagaan anda — bukan anggaran kosmetik.
                 </p>
               </div>
@@ -1706,7 +1706,7 @@ export const FinancialReportsAnalytics: React.FC<FinancialReportsAnalyticsProps>
               </div>
 
               <div className="p-4 bg-slate-50 rounded-xl border border-slate-200">
-                <p className="text-[11px] text-slate-500 leading-relaxed font-sans">
+                <p className="text-xs text-slate-500 leading-relaxed font-sans">
                   Senarai semak ini adalah panduan kesediaan dalaman MYKERANI dan bukan nasihat percukaian rasmi. Sila rujuk akauntan bertauliah atau LHDN sebelum penyerahan cukai sebenar.
                 </p>
               </div>
@@ -1723,7 +1723,7 @@ export const FinancialReportsAnalytics: React.FC<FinancialReportsAnalyticsProps>
               {hasInsufficientData ? (
                 <div className="p-5 rounded-2xl border-2 border-slate-200 bg-slate-50 space-y-2" id="report_bank_readiness_empty">
                   <p className="text-sm font-bold text-slate-700">Belum cukup data untuk analisis.</p>
-                  <p className="text-[11px] text-slate-500 leading-relaxed">
+                  <p className="text-xs text-slate-500 leading-relaxed">
                     Tambah rekod pertama (pendapatan, perbelanjaan atau hutang) untuk menjana analisis Kesediaan Pembiayaan/Pinjaman.
                   </p>
                 </div>
@@ -1731,7 +1731,7 @@ export const FinancialReportsAnalytics: React.FC<FinancialReportsAnalyticsProps>
               <>
               <div className={`p-5 rounded-2xl border-2 space-y-2 ${bankReadiness.scoreColor}`}>
                 <div className="flex justify-between items-center border-b border-white/20 pb-2">
-                  <span className="text-[10px] font-mono font-bold uppercase tracking-wide">
+                  <span className="text-2xs font-mono font-bold uppercase tracking-wide">
                     Skor Kesediaan Pembiayaan/Pinjaman
                   </span>
                   <span className="text-xs font-mono font-bold">{bankReadiness.passedCount}/{bankReadiness.totalChecks} Pemeriksaan Lulus</span>
@@ -1739,7 +1739,7 @@ export const FinancialReportsAnalytics: React.FC<FinancialReportsAnalyticsProps>
                 <p className="text-2xl font-mono font-bold tracking-tight mt-0.5">
                   {bankReadiness.scorePct.toFixed(0)}%
                 </p>
-                <p className="text-[11px] font-sans mt-1 opacity-90 leading-relaxed">
+                <p className="text-xs font-sans mt-1 opacity-90 leading-relaxed">
                   Status: <strong>{bankReadiness.scoreGrade}</strong>. Skor ini dikira daripada nisbah solvensi, penampan mudah tunai, rekod pembayaran hutang dan kutipan piutang sebenar anda. Kriteria sebenar berbeza mengikut bank/institusi — ini adalah panduan signal umum, bukan kelulusan rasmi.
                 </p>
               </div>
@@ -1766,7 +1766,7 @@ export const FinancialReportsAnalytics: React.FC<FinancialReportsAnalyticsProps>
               </div>
 
               <div className="p-4 bg-slate-50 rounded-xl border border-slate-200">
-                <p className="text-[11px] text-slate-500 leading-relaxed font-sans">
+                <p className="text-xs text-slate-500 leading-relaxed font-sans">
                   Senarai semak ini adalah panduan kesediaan dalaman MYKERANI berdasarkan signal kewangan umum dan bukan kelulusan atau nasihat pembiayaan rasmi. Setiap bank/institusi mempunyai kriteria sendiri — sila rujuk pegawai pembiayaan untuk penilaian sebenar.
                 </p>
               </div>

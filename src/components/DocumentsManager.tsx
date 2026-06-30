@@ -799,7 +799,7 @@ export function DocumentsManager({
       <div className="flex-1 overflow-y-auto p-4 space-y-4 max-w-2xl mx-auto w-full pb-20" id="documents_manager_pane">
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-bold text-slate-900">Dokumen</h2>
-          <span className="text-[11px] text-slate-400">{docs.length} fail</span>
+          <span className="text-xs text-slate-400">{docs.length} fail</span>
         </div>
 
         {/* Hidden file input */}
@@ -834,7 +834,7 @@ export function DocumentsManager({
                   ? <RefreshCw className="w-5 h-5 animate-spin" />
                   : <Icon className="w-5 h-5" />}
               </div>
-              <span className="text-[11px] font-semibold text-slate-700 text-center leading-tight">{label}</span>
+              <span className="text-xs font-semibold text-slate-700 text-center leading-tight">{label}</span>
             </button>
           ))}
         </div>
@@ -852,17 +852,17 @@ export function DocumentsManager({
             <FileSpreadsheet className="w-4 h-4 text-slate-700" />
             <h3 className="font-bold text-slate-900 text-sm">Sediakan Pek Bukti Kewangan</h3>
           </div>
-          <p className="text-[11px] text-slate-500 leading-relaxed">
+          <p className="text-xs text-slate-500 leading-relaxed">
             Bila bank, LHDN, atau akauntan minta bukti, jana satu pek (ZIP) berisi ringkasan kewangan dan semua dokumen dalam tempoh yang dipilih.
           </p>
           <div className="grid grid-cols-2 gap-2">
             <div>
-              <label className="text-[10px] font-semibold text-slate-500 block mb-1">Dari Tarikh</label>
+              <label className="text-2xs font-semibold text-slate-500 block mb-1">Dari Tarikh</label>
               <input type="date" value={packageStartDate} onChange={(e) => setPackageStartDate(e.target.value)}
                 className="w-full text-xs bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-2 outline-hidden focus:bg-white focus:border-slate-900" />
             </div>
             <div>
-              <label className="text-[10px] font-semibold text-slate-500 block mb-1">Hingga Tarikh</label>
+              <label className="text-2xs font-semibold text-slate-500 block mb-1">Hingga Tarikh</label>
               <input type="date" value={packageEndDate} onChange={(e) => setPackageEndDate(e.target.value)}
                 className="w-full text-xs bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-2 outline-hidden focus:bg-white focus:border-slate-900" />
             </div>
@@ -871,7 +871,7 @@ export function DocumentsManager({
             className="w-full px-4 py-2.5 bg-slate-900 hover:bg-slate-800 disabled:opacity-50 text-white text-xs font-semibold rounded-xl transition cursor-pointer">
             {isCompilingPackage ? "Menyediakan..." : "Jana Pek (ZIP)"}
           </button>
-          {compilePackageError && <p className="text-[10px] text-rose-600">{compilePackageError}</p>}
+          {compilePackageError && <p className="text-2xs text-rose-600">{compilePackageError}</p>}
         </div>
 
         {docAnalyzing && docOcrJob && (
@@ -910,7 +910,7 @@ export function DocumentsManager({
               { id: "SUPPORTING_DOC" as const, label: "Lain-lain" },
             ]).map(f => (
               <button key={f.id} onClick={() => setDocTypeFilter(f.id)}
-                className={`shrink-0 px-3 py-1.5 rounded-full text-[11px] font-semibold cursor-pointer transition ${docTypeFilter === f.id ? "bg-indigo-600 text-white" : "bg-white border border-slate-200 text-slate-500 hover:bg-slate-50"}`}>
+                className={`shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold cursor-pointer transition ${docTypeFilter === f.id ? "bg-indigo-600 text-white" : "bg-white border border-slate-200 text-slate-500 hover:bg-slate-50"}`}>
                 {f.label}
               </button>
             ))}
@@ -927,14 +927,14 @@ export function DocumentsManager({
           <div className="py-10 text-center bg-white border border-slate-100 rounded-2xl">
             <FileText className="w-8 h-8 text-slate-200 mx-auto mb-2" />
             <p className="text-xs font-semibold text-slate-400">Belum ada dokumen</p>
-            <p className="text-[11px] text-slate-300 mt-0.5">Muat naik resit, invois atau penyata bank</p>
+            <p className="text-xs text-slate-300 mt-0.5">Muat naik resit, invois atau penyata bank</p>
           </div>
         ) : (
           <>
             <div className="flex items-center justify-between">
-              <p className="text-[10px] text-slate-400">{filteredDocs.length} dokumen &middot; muka {docPage}/{docTotalPages}</p>
+              <p className="text-2xs text-slate-400">{filteredDocs.length} dokumen &middot; muka {docPage}/{docTotalPages}</p>
               <select value={docPageSize} onChange={e => setDocPageSize(Number(e.target.value) as 20 | 50 | 100 | 200)}
-                className="text-[10px] font-semibold border border-slate-200 rounded-lg px-2 py-1 bg-white outline-none cursor-pointer">
+                className="text-2xs font-semibold border border-slate-200 rounded-lg px-2 py-1 bg-white outline-none cursor-pointer">
                 {[20, 50, 100, 200].map(n => <option key={n} value={n}>{n} / muka surat</option>)}
               </select>
             </div>
@@ -954,12 +954,12 @@ export function DocumentsManager({
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-xs font-bold text-slate-800 truncate">{doc.file_name}</p>
-                        <p className="text-[10px] text-slate-400 mt-0.5">
+                        <p className="text-2xs text-slate-400 mt-0.5">
                           {typeLabel[doc.document_type] || doc.document_type} &middot; {fmtDocBytes(doc.file_size_bytes)} &middot; {new Date(doc.created_at).toLocaleDateString("ms-MY")} {new Date(doc.created_at).toLocaleTimeString("ms-MY", { hour: "2-digit", minute: "2-digit" })}
                           {reviewStatus === "CONFIRMED" && <span className="text-emerald-600 font-semibold"> &middot; Disahkan</span>}
                           {reviewStatus === "REJECTED" && <span className="text-rose-500 font-semibold"> &middot; Ditolak</span>}
                         </p>
-                        <p className="text-[10px] text-slate-300">{uploaderName ? `Dimuat naik oleh: ${uploaderName}` : "Dimuat naik"}</p>
+                        <p className="text-2xs text-slate-300">{uploaderName ? `Dimuat naik oleh: ${uploaderName}` : "Dimuat naik"}</p>
                       </div>
                       <button onClick={() => handleDownloadDoc(doc)} title="Muat turun"
                         className="text-slate-300 hover:text-indigo-600 cursor-pointer p-1 shrink-0">
@@ -1004,7 +1004,7 @@ export function DocumentsManager({
             <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between shrink-0">
               <div>
                 <h3 className="text-sm font-bold text-slate-900">AI Membaca Dokumen</h3>
-                <p className="text-[11px] text-slate-400 mt-0.5">{docReview.doc.file_name}</p>
+                <p className="text-xs text-slate-400 mt-0.5">{docReview.doc.file_name}</p>
               </div>
               <button onClick={() => setDocReview(null)} className="text-slate-300 hover:text-slate-600 cursor-pointer"><X className="w-5 h-5" /></button>
             </div>
@@ -1013,37 +1013,37 @@ export function DocumentsManager({
               {docReview.lines ? (
                 <>
                   <div className="grid grid-cols-4 gap-2 text-center bg-slate-50 border border-slate-200 rounded-xl p-2">
-                    <div><p className="text-[10px] text-slate-400">Pages Found</p><p className="text-sm font-bold text-slate-800">{docReview.pagesFound ?? "—"}</p></div>
-                    <div><p className="text-[10px] text-slate-400">Transactions Found</p><p className="text-sm font-bold text-slate-800">{docReview.transactionsFound ?? docReview.lines.length}</p></div>
-                    <div><p className="text-[10px] text-slate-400">Extracted</p><p className="text-sm font-bold text-slate-800">{docReview.lines.length}</p></div>
-                    <div><p className="text-[10px] text-slate-400">To Import</p><p className="text-sm font-bold text-emerald-600">{docReview.lines.filter(l => l.include).length}</p></div>
+                    <div><p className="text-2xs text-slate-400">Pages Found</p><p className="text-sm font-bold text-slate-800">{docReview.pagesFound ?? "—"}</p></div>
+                    <div><p className="text-2xs text-slate-400">Transactions Found</p><p className="text-sm font-bold text-slate-800">{docReview.transactionsFound ?? docReview.lines.length}</p></div>
+                    <div><p className="text-2xs text-slate-400">Extracted</p><p className="text-sm font-bold text-slate-800">{docReview.lines.length}</p></div>
+                    <div><p className="text-2xs text-slate-400">To Import</p><p className="text-sm font-bold text-emerald-600">{docReview.lines.filter(l => l.include).length}</p></div>
                   </div>
                   {docReview.extractionIncomplete && (
-                    <p className="text-[11px] font-semibold text-rose-600 bg-rose-50 border border-rose-200 rounded-xl p-2">
+                    <p className="text-xs font-semibold text-rose-600 bg-rose-50 border border-rose-200 rounded-xl p-2">
                       ⚠ Sebahagian penyata ini gagal diproses oleh AI ({docReview.chunksFailed ?? "?"} daripada {docReview.chunksTotal ?? "?"} bahagian) — sesetengah transaksi mungkin TIDAK dipaparkan di bawah. Sila semak semula dokumen asal atau muat naik semula.
                     </p>
                   )}
-                  <p className="text-[11px] text-slate-500">
+                  <p className="text-xs text-slate-500">
                     AI mengesan {docReview.lines.length} transaksi dalam penyata ini, padankan dengan rekod yang anda dah masukkan sendiri,
                     dan kenal pasti {docReview.lines.filter(l => l.isInternalTransfer).length} pemindahan dalaman serta {docReview.lines.filter(l => l.isOwnBusinessMatch).length} transaksi dengan bisnes anda sendiri.
                     {" "}Transaksi yang <span className="font-semibold text-emerald-600">sudah sepadan</span>, <span className="font-semibold text-violet-600">pemindahan dalaman</span>, atau <span className="font-semibold text-amber-600">bisnes sendiri</span> tak akan direkod sebagai Pendapatan/Perbelanjaan — batalkan tanda untuk yang tidak mahu direkod, atau tanda balik jika padanan tersilap.
                   </p>
                   <div className="flex items-center gap-1.5 flex-wrap bg-indigo-50/60 border border-indigo-100 rounded-xl p-2">
-                    <span className="text-[10px] font-semibold text-indigo-700 mr-1">Pilihan Pukal:</span>
+                    <span className="text-2xs font-semibold text-indigo-700 mr-1">Pilihan Pukal:</span>
                     <button type="button" onClick={() => setDocReview(d => d ? { ...d, lines: d.lines!.map(x => ({ ...x, include: true })) } : d)}
-                      className="text-[10px] font-semibold px-2 py-1 rounded-lg bg-white border border-indigo-200 text-indigo-700 hover:bg-indigo-100 cursor-pointer">
+                      className="text-2xs font-semibold px-2 py-1 rounded-lg bg-white border border-indigo-200 text-indigo-700 hover:bg-indigo-100 cursor-pointer">
                       Pilih Semua
                     </button>
                     <button type="button" onClick={() => setDocReview(d => d ? { ...d, lines: d.lines!.map(x => ({ ...x, include: false })) } : d)}
-                      className="text-[10px] font-semibold px-2 py-1 rounded-lg bg-white border border-indigo-200 text-indigo-700 hover:bg-indigo-100 cursor-pointer">
+                      className="text-2xs font-semibold px-2 py-1 rounded-lg bg-white border border-indigo-200 text-indigo-700 hover:bg-indigo-100 cursor-pointer">
                       Nyahpilih Semua
                     </button>
                     <button type="button" onClick={() => setDocReview(d => d ? { ...d, lines: d.lines!.map(x => ({ ...x, include: x.confidenceScore >= 0.8 })) } : d)}
-                      className="text-[10px] font-semibold px-2 py-1 rounded-lg bg-white border border-indigo-200 text-indigo-700 hover:bg-indigo-100 cursor-pointer">
+                      className="text-2xs font-semibold px-2 py-1 rounded-lg bg-white border border-indigo-200 text-indigo-700 hover:bg-indigo-100 cursor-pointer">
                       Pilih Keyakinan Tinggi (≥80%)
                     </button>
                     <button type="button" onClick={() => setDocReview(d => d ? { ...d, lines: d.lines!.map(x => ({ ...x, include: x.include && !x.isInternalTransfer && !x.isOwnBusinessMatch && !x.matchedEventId })) } : d)}
-                      className="text-[10px] font-semibold px-2 py-1 rounded-lg bg-white border border-indigo-200 text-indigo-700 hover:bg-indigo-100 cursor-pointer">
+                      className="text-2xs font-semibold px-2 py-1 rounded-lg bg-white border border-indigo-200 text-indigo-700 hover:bg-indigo-100 cursor-pointer">
                       Nyahpilih Padanan/Pemindahan
                     </button>
                   </div>
@@ -1058,17 +1058,17 @@ export function DocumentsManager({
                         <span className={`text-xs font-bold ${l.type === "CREDIT" ? "text-emerald-600" : "text-rose-500"}`}>{l.type === "CREDIT" ? "+" : "-"}RM{l.amount.toFixed(2)}</span>
                       </div>
                       {l.isInternalTransfer && (
-                        <p className="pl-6 text-[10px] font-semibold text-violet-600">
+                        <p className="pl-6 text-2xs font-semibold text-violet-600">
                           ⇄ Pemindahan Dalaman — sepadan dengan "{l.transferPairLabel}" dalam penyata ini, bukan Pendapatan/Perbelanjaan sebenar
                         </p>
                       )}
                       {l.isOwnBusinessMatch && (
-                        <p className="pl-6 text-[10px] font-semibold text-amber-600">
+                        <p className="pl-6 text-2xs font-semibold text-amber-600">
                           🏢 {l.ownBusinessMatchLabel} — semak sama ada ini perlu direkod sebagai Pendapatan/Perbelanjaan luaran
                         </p>
                       )}
                       {l.branchMatchAmbiguous && (
-                        <p className="pl-6 text-[10px] font-semibold text-amber-600">
+                        <p className="pl-6 text-2xs font-semibold text-amber-600">
                           ⚠ Lebih daripada satu cawangan sepadan ({(l.branchMatchCandidates || []).join(", ")}) — sila pilih cawangan yang betul di bawah:
                         </p>
                       )}
@@ -1079,7 +1079,7 @@ export function DocumentsManager({
                         <select
                           value={l.ownBusinessMatchId || ""}
                           onChange={e => setDocReview(d => d ? { ...d, lines: d.lines!.map((x, xi) => xi === i ? { ...x, ownBusinessMatchId: e.target.value || undefined, branchMatchId: undefined } : x) } : d)}
-                          className="flex-1 px-2 py-1 rounded border border-slate-200 text-[11px]"
+                          className="flex-1 px-2 py-1 rounded border border-slate-200 text-xs"
                         >
                           <option value="">Tiada Bisnes (Personal)</option>
                           {businesses.filter(b => b.isActive).map(b => (
@@ -1090,7 +1090,7 @@ export function DocumentsManager({
                           <select
                             value={l.branchMatchId || ""}
                             onChange={e => setDocReview(d => d ? { ...d, lines: d.lines!.map((x, xi) => xi === i ? { ...x, branchMatchId: e.target.value || undefined } : x) } : d)}
-                            className="flex-1 px-2 py-1 rounded border border-slate-200 text-[11px]"
+                            className="flex-1 px-2 py-1 rounded border border-slate-200 text-xs"
                           >
                             <option value="">Tiada Cawangan Tertentu</option>
                             {(businessBranches[l.ownBusinessMatchId] || []).filter(br => br.isActive).map(br => (
@@ -1100,15 +1100,15 @@ export function DocumentsManager({
                         )}
                       </div>
                       {l.matchedEventId && (
-                        <p className="pl-6 text-[10px] font-semibold text-emerald-600">
+                        <p className="pl-6 text-2xs font-semibold text-emerald-600">
                           ✓ Sudah sepadan dengan rekod sedia ada ({l.matchedLabel}) — tidak akan direkod semula
                         </p>
                       )}
                       <div className="flex items-center gap-2 pl-6">
                         <input value={l.suggestedCategory} onChange={e => setDocReview(d => d ? { ...d, lines: d.lines!.map((x, xi) => xi === i ? { ...x, suggestedCategory: e.target.value } : x) } : d)}
-                          className="flex-1 px-2 py-1 rounded border border-slate-200 text-[11px]" placeholder="Kategori" />
+                          className="flex-1 px-2 py-1 rounded border border-slate-200 text-xs" placeholder="Kategori" />
                         <input type="date" value={l.date} onChange={e => setDocReview(d => d ? { ...d, lines: d.lines!.map((x, xi) => xi === i ? { ...x, date: e.target.value } : x) } : d)}
-                          className="px-2 py-1 rounded border border-slate-200 text-[11px]" />
+                          className="px-2 py-1 rounded border border-slate-200 text-xs" />
                       </div>
                     </div>
                   ))}
@@ -1118,7 +1118,7 @@ export function DocumentsManager({
                   {/* Original document preview — supports image, PDF, and text files */}
                   {docOcrJob?.result?.fileUrl && (
                     <div className="bg-slate-50 border border-slate-200 rounded-xl p-2 mb-2">
-                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Dokumen Asal</p>
+                      <p className="text-2xs font-bold text-slate-400 uppercase tracking-wider mb-1">Dokumen Asal</p>
                       {docOcrJob.result.fileUrl.startsWith("data:image") ? (
                         <img src={docOcrJob.result.fileUrl} alt="Dokumen asal" className="w-full max-h-96 object-contain rounded-lg cursor-zoom-in" onClick={() => window.open(docOcrJob.result.fileUrl, "_blank")} />
                       ) : docOcrJob.result.fileUrl.startsWith("data:application/pdf") || docOcrJob.result.mimeType === "application/pdf" ? (
@@ -1131,14 +1131,14 @@ export function DocumentsManager({
                       )}
                     </div>
                   )}
-                  <p className="text-[11px] text-slate-500">Sahkan atau betulkan apa yang AI kenal pasti daripada dokumen ini sebelum direkodkan.</p>
+                  <p className="text-xs text-slate-500">Sahkan atau betulkan apa yang AI kenal pasti daripada dokumen ini sebelum direkodkan.</p>
                   <div>
-                    <label className="text-[11px] font-semibold text-slate-500">Pihak Berkaitan / Vendor</label>
+                    <label className="text-xs font-semibold text-slate-500">Pihak Berkaitan / Vendor</label>
                     <input value={docReview.merchantName} onChange={e => setDocReview(d => d ? { ...d, merchantName: e.target.value } : d)}
                       className="w-full mt-1 px-3 py-2 rounded-lg border border-slate-200 text-sm" />
                   </div>
                   <div>
-                    <label className="text-[11px] font-semibold text-slate-500">Bisnes</label>
+                    <label className="text-xs font-semibold text-slate-500">Bisnes</label>
                     <select value={docReview.businessId || ""}
                       onChange={e => setDocReview(d => d ? { ...d, businessId: e.target.value || undefined, branchId: undefined } : d)}
                       className="w-full mt-1 px-3 py-2 rounded-lg border border-slate-200 text-sm">
@@ -1150,7 +1150,7 @@ export function DocumentsManager({
                   </div>
                   {docReview.businessId && (businessBranches[docReview.businessId] || []).filter(br => br.isActive).length > 0 && (
                     <div>
-                      <label className="text-[11px] font-semibold text-slate-500">Cawangan</label>
+                      <label className="text-xs font-semibold text-slate-500">Cawangan</label>
                       <select value={docReview.branchId || ""}
                         onChange={e => setDocReview(d => d ? { ...d, branchId: e.target.value || undefined } : d)}
                         className="w-full mt-1 px-3 py-2 rounded-lg border border-slate-200 text-sm">
@@ -1162,34 +1162,34 @@ export function DocumentsManager({
                     </div>
                   )}
                   {docReview.businessId ? (
-                    <p className="text-[11px] font-semibold text-emerald-600 bg-emerald-50 border border-emerald-200 rounded-xl px-3 py-2">
+                    <p className="text-xs font-semibold text-emerald-600 bg-emerald-50 border border-emerald-200 rounded-xl px-3 py-2">
                       ✓ Auto-mapped — Bisnes: {businesses.find(b => b.id === docReview.businessId)?.businessName}
                       {docReview.branchId && <> · Cawangan: {(businessBranches[docReview.businessId] || []).find(br => br.id === docReview.branchId)?.branchName}</>}
                     </p>
                   ) : (
-                    <p className="text-[11px] font-semibold text-slate-400 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2">
+                    <p className="text-xs font-semibold text-slate-400 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2">
                       ⚠ Tiada Padanan Ditemui — akan direkod sebagai Personal
                     </p>
                   )}
                   <div className="grid grid-cols-2 gap-2">
                     <div>
-                      <label className="text-[11px] font-semibold text-slate-500">Jumlah (RM)</label>
+                      <label className="text-xs font-semibold text-slate-500">Jumlah (RM)</label>
                       <input type="number" value={docReview.amount} onChange={e => setDocReview(d => d ? { ...d, amount: e.target.value } : d)}
                         className="w-full mt-1 px-3 py-2 rounded-lg border border-slate-200 text-sm" />
                     </div>
                     <div>
-                      <label className="text-[11px] font-semibold text-slate-500">Tarikh</label>
+                      <label className="text-xs font-semibold text-slate-500">Tarikh</label>
                       <input type="date" value={docReview.date} onChange={e => setDocReview(d => d ? { ...d, date: e.target.value } : d)}
                         className="w-full mt-1 px-3 py-2 rounded-lg border border-slate-200 text-sm" />
                     </div>
                   </div>
                   <div>
-                    <label className="text-[11px] font-semibold text-slate-500">Kategori</label>
+                    <label className="text-xs font-semibold text-slate-500">Kategori</label>
                     <input value={docReview.category} onChange={e => setDocReview(d => d ? { ...d, category: e.target.value } : d)}
                       className="w-full mt-1 px-3 py-2 rounded-lg border border-slate-200 text-sm" />
                   </div>
                   <div>
-                    <label className="text-[11px] font-semibold text-slate-500">Jenis Transaksi</label>
+                    <label className="text-xs font-semibold text-slate-500">Jenis Transaksi</label>
                     <select value={docReview.recordType} onChange={e => setDocReview(d => d ? { ...d, recordType: e.target.value as any } : d)}
                       className="w-full mt-1 px-3 py-2 rounded-lg border border-slate-200 text-sm">
                       <option value="INCOME">Pendapatan</option>
@@ -1205,7 +1205,7 @@ export function DocumentsManager({
 
             {importProgress && (
               <div className="px-5 pt-3 shrink-0 space-y-1">
-                <div className="flex items-center justify-between text-[11px] font-semibold text-slate-600">
+                <div className="flex items-center justify-between text-xs font-semibold text-slate-600">
                   <span>Merekod transaksi... ({importProgress.inserted + importProgress.failed}/{importProgress.submitted})</span>
                   <span>Bahagian {importProgress.batchNumber}/{importProgress.totalBatches || "—"}</span>
                 </div>
@@ -1213,7 +1213,7 @@ export function DocumentsManager({
                   <div className="h-full bg-indigo-600 transition-all" style={{ width: `${importProgress.submitted ? Math.round(((importProgress.inserted + importProgress.failed) / importProgress.submitted) * 100) : 0}%` }} />
                 </div>
                 {importProgress.failed > 0 && (
-                  <p className="text-[11px] text-red-600 font-semibold">{importProgress.failed} transaksi gagal disimpan ke pangkalan data dan TIDAK direkodkan. Baris yang gagal akan kekal untuk disahkan semula.</p>
+                  <p className="text-xs text-red-600 font-semibold">{importProgress.failed} transaksi gagal disimpan ke pangkalan data dan TIDAK direkodkan. Baris yang gagal akan kekal untuk disahkan semula.</p>
                 )}
               </div>
             )}
