@@ -598,7 +598,7 @@ export const OCREngineConsole: React.FC = () => {
           </p>
         </div>
 
-        <div className="inline-flex items-center gap-1 px-2.5 py-1 text-[10px] uppercase font-mono bg-emerald-50 border border-emerald-150 rounded text-emerald-700 font-bold select-none">
+        <div className="inline-flex items-center gap-1 px-2.5 py-1 text-[10px] uppercase font-mono bg-emerald-50 border border-emerald-100 rounded text-emerald-700 font-bold select-none">
           <FileCheck className="w-3.5 h-3.5" />
           AI Engine Co-Pilot
         </div>
@@ -606,14 +606,14 @@ export const OCREngineConsole: React.FC = () => {
 
       {/* FEEDBACK LABELS */}
       {errorText && (
-        <div className="p-3 bg-rose-50 border border-rose-150 rounded-xl text-xs text-rose-800 flex items-start gap-2.5 animate-slide-up" id="ocr_error_badge">
+        <div className="p-3 bg-rose-50 border border-rose-100 rounded-xl text-xs text-rose-800 flex items-start gap-2.5 animate-slide-up" id="ocr_error_badge">
           <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
           <span>{errorText}</span>
         </div>
       )}
 
       {successText && (
-        <div className="p-3 bg-emerald-50 border border-emerald-150 rounded-xl text-xs text-emerald-800 flex items-start gap-2.5 animate-slide-up" id="ocr_success_badge">
+        <div className="p-3 bg-emerald-50 border border-emerald-100 rounded-xl text-xs text-emerald-800 flex items-start gap-2.5 animate-slide-up" id="ocr_success_badge">
           <CheckCircle className="w-4 h-4 shrink-0 mt-0.5" />
           <span>{successText}</span>
         </div>
@@ -691,7 +691,7 @@ export const OCREngineConsole: React.FC = () => {
                 className="hidden"
               />
               
-              <div className="p-3 bg-white border border-slate-150 rounded-full text-slate-500 shadow-3xs group-hover:scale-115 transition">
+              <div className="p-3 bg-white border border-slate-100 rounded-full text-slate-500 shadow-3xs group-hover:scale-115 transition">
                 <UploadCloud className="w-6 h-6 text-emerald-600" />
               </div>
 
@@ -712,7 +712,7 @@ export const OCREngineConsole: React.FC = () => {
           </div>
 
           {/* Right Column: Original Document Selection State and Action Buttons */}
-          <div className="lg:col-span-5 bg-slate-50 rounded-xl p-5 flex flex-col justify-between border border-slate-150">
+          <div className="lg:col-span-5 bg-slate-50 rounded-xl p-5 flex flex-col justify-between border border-slate-100">
             <div className="space-y-4">
               <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400 font-mono">Attachment Selected</h4>
               
@@ -727,7 +727,7 @@ export const OCREngineConsole: React.FC = () => {
                   </div>
                   
                   {fileDataUrl && file.type.startsWith("image/") && (
-                    <div className="relative aspect-video bg-slate-100 rounded border border-slate-150 overflow-hidden select-none">
+                    <div className="relative aspect-video bg-slate-100 rounded border border-slate-100 overflow-hidden select-none">
                       <img src={fileDataUrl} alt="Snippet Scan" className="object-cover w-full h-full pr-1.5" referrerPolicy="no-referrer" />
                       <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent pointer-events-none" />
                     </div>
@@ -740,7 +740,7 @@ export const OCREngineConsole: React.FC = () => {
                 </div>
               )}
 
-              <div className="text-[11px] text-slate-400 bg-white border border-slate-150 rounded p-2.5 leading-relaxed text-left font-sans">
+              <div className="text-[11px] text-slate-400 bg-white border border-slate-100 rounded p-2.5 leading-relaxed text-left font-sans">
                 💡 <strong>Workspace Boundary:</strong> Scanning reads text locally using memory buffers. AI suggestions do not construct final ledger entities until your visual review confirms inputs.
               </div>
             </div>
@@ -764,7 +764,7 @@ export const OCREngineConsole: React.FC = () => {
                     <button
                       onClick={handleClearSelected}
                       type="button"
-                      className="px-3 py-2.5 border border-slate-250 hover:bg-slate-150 text-slate-600 rounded-lg text-xs font-bold cursor-pointer transition select-none"
+                      className="px-3 py-2.5 border border-slate-200 hover:bg-slate-100 text-slate-600 rounded-lg text-xs font-bold cursor-pointer transition select-none"
                     >
                       Clear
                     </button>
@@ -776,7 +776,7 @@ export const OCREngineConsole: React.FC = () => {
                     className={`flex-1 py-2.5 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition select-none ${
                       file 
                         ? "bg-emerald-900 border-emerald-950 hover:bg-emerald-800 text-white shadow-xs cursor-pointer" 
-                        : "bg-slate-150 text-slate-400 cursor-not-allowed"
+                        : "bg-slate-100 text-slate-400 cursor-not-allowed"
                     }`}
                   >
                     <Sparkles className="w-4 h-4" />
@@ -822,7 +822,7 @@ export const OCREngineConsole: React.FC = () => {
                 </div>
               </div>
             ) : (
-              <div className="border border-slate-150 border-dashed rounded-lg p-12 text-center bg-slate-50/50 space-y-3">
+              <div className="border border-slate-100 border-dashed rounded-lg p-12 text-center bg-slate-50/50 space-y-3">
                 <div className="p-3 bg-white border border-slate-200 rounded-xl inline-block text-slate-400 shadow-3xs">
                   <FileText className="w-8 h-8 text-slate-500" />
                 </div>
@@ -847,7 +847,7 @@ export const OCREngineConsole: React.FC = () => {
             {extractedData?.rawExtractedText && (
               <div className="space-y-1.5">
                 <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 font-mono">Raw Scan Diagnostic</p>
-                <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-150 text-[10.5px] font-mono text-slate-600 whitespace-pre-wrap leading-tight">
+                <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-100 text-[10.5px] font-mono text-slate-600 whitespace-pre-wrap leading-tight">
                   "{extractedData.rawExtractedText}"
                 </div>
               </div>
@@ -1126,7 +1126,7 @@ export const OCREngineConsole: React.FC = () => {
               <button
                 type="button"
                 onClick={handleClearSelected}
-                className="px-4 py-2.5 border border-slate-250 hover:bg-slate-100/80 rounded-lg text-xs font-bold text-slate-600 transition cursor-pointer"
+                className="px-4 py-2.5 border border-slate-200 hover:bg-slate-100/80 rounded-lg text-xs font-bold text-slate-600 transition cursor-pointer"
               >
                 Reset Scans
               </button>
@@ -1167,7 +1167,7 @@ export const OCREngineConsole: React.FC = () => {
         </div>
 
         {ocrLearnedPatterns.length === 0 ? (
-          <div className="py-8 text-center bg-slate-50 border border-slate-150/60 rounded-xl space-y-1.5" id="no_patterns_state">
+          <div className="py-8 text-center bg-slate-50 border border-slate-100/60 rounded-xl space-y-1.5" id="no_patterns_state">
             <Sparkles className="w-5 h-5 mx-auto text-emerald-600/60 animate-bounce" />
             <p className="text-xs font-semibold text-slate-600">No learned vendor patterns recorded yet.</p>
             <p className="text-[10px] text-slate-400 max-w-sm mx-auto">
@@ -1175,7 +1175,7 @@ export const OCREngineConsole: React.FC = () => {
             </p>
           </div>
         ) : (
-          <div className="overflow-x-auto rounded-xl border border-slate-150/80" id="patterns_list_table">
+          <div className="overflow-x-auto rounded-xl border border-slate-100/80" id="patterns_list_table">
             <table className="w-full text-left text-xs text-slate-500">
               <thead className="bg-slate-50 text-[10px] uppercase font-mono text-slate-400 border-b border-slate-200">
                 <tr>

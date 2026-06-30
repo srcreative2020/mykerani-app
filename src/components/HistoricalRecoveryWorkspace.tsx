@@ -324,7 +324,7 @@ export const HistoricalRecoveryWorkspace: React.FC = () => {
         </div>
 
         {importError && (
-          <div className="text-xs text-rose-700 bg-rose-50 border border-rose-150 rounded-lg p-3">{importError}</div>
+          <div className="text-xs text-rose-700 bg-rose-50 border border-rose-100 rounded-lg p-3">{importError}</div>
         )}
 
         {parsedTransactions.length > 0 && (
@@ -364,7 +364,7 @@ export const HistoricalRecoveryWorkspace: React.FC = () => {
                         </td>
                         <td className="p-2.5">
                           {isTransfer ? (
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-indigo-50 text-indigo-700 border border-indigo-150 text-[9px] font-bold uppercase">
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-indigo-50 text-indigo-700 border border-indigo-100 text-[9px] font-bold uppercase">
                               <ArrowLeftRight className="w-3 h-3" /> Internal Transfer
                             </span>
                           ) : (
@@ -435,7 +435,7 @@ export const HistoricalRecoveryWorkspace: React.FC = () => {
           />
         </div>
         {archiveStatus && (
-          <div className="flex items-center gap-1.5 text-[11px] text-emerald-700 bg-emerald-50 border border-emerald-150 rounded-lg p-3">
+          <div className="flex items-center gap-1.5 text-[11px] text-emerald-700 bg-emerald-50 border border-emerald-100 rounded-lg p-3">
             <ShieldCheck className="w-3.5 h-3.5" />
             {archiveStatus}
           </div>

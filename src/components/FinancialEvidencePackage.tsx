@@ -529,7 +529,7 @@ export const FinancialEvidencePackageManager: React.FC = () => {
           </div>
 
           {/* Active Isolated Storage Target Info Banner */}
-          <div className="p-3 bg-white border border-slate-150 rounded-xl flex items-center justify-between text-2xs text-slate-600 font-mono">
+          <div className="p-3 bg-white border border-slate-100 rounded-xl flex items-center justify-between text-2xs text-slate-600 font-mono">
             <span className="flex items-center space-x-1.5 font-sans font-medium text-slate-500">
               <span className={`w-1.5 h-1.5 rounded-full ${activeProvider?.connectionStatus === "CONNECTED" ? "bg-emerald-550 animate-pulse" : "bg-amber-400"}`} />
               <span>Target Storage Routing:</span>
@@ -1118,7 +1118,7 @@ export const FinancialEvidencePackageManager: React.FC = () => {
                 </div>
 
                 {/* Link modification foundation wrapper */}
-                <div className="border-t border-slate-150 pt-5 space-y-4">
+                <div className="border-t border-slate-100 pt-5 space-y-4">
                   <div className="flex justify-between items-center">
                     <h5 className="font-display font-semibold text-xs text-slate-800">
                       Ledger Association Foundation
@@ -1170,7 +1170,7 @@ export const FinancialEvidencePackageManager: React.FC = () => {
                               setPreviewLinkType("NONE");
                               setPreviewLinkId("");
                             }}
-                            className="text-xs font-bold text-slate-950 bg-white border border-slate-250 hover:bg-slate-50 px-4 py-2 rounded-xl transition cursor-pointer inline-flex items-center space-x-1"
+                            className="text-xs font-bold text-slate-950 bg-white border border-slate-200 hover:bg-slate-50 px-4 py-2 rounded-xl transition cursor-pointer inline-flex items-center space-x-1"
                             id="btn_enable_link"
                           >
                             <Plus className="w-3.5 h-3.5 mr-1" />

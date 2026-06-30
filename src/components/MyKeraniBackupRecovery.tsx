@@ -449,7 +449,7 @@ export const MyKeraniBackupRecovery: React.FC = () => {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Protected Assets List Column */}
-        <div className="bg-white rounded-2xl border border-slate-150 p-5 space-y-4">
+        <div className="bg-white rounded-2xl border border-slate-100 p-5 space-y-4">
           <div className="flex items-center gap-2 border-b border-slate-100 pb-3">
             <ShieldCheck className="w-5 h-5 text-indigo-600" />
             <h3 className="font-display font-bold text-sm text-slate-900">
@@ -512,7 +512,7 @@ export const MyKeraniBackupRecovery: React.FC = () => {
           </div>
 
           {/* Local File Import Section */}
-          <div className="border-t border-dashed border-slate-150 pt-4 mt-4">
+          <div className="border-t border-dashed border-slate-100 pt-4 mt-4">
             <h4 className="font-semibold text-xs text-slate-800 flex items-center gap-1.5 mb-2">
               <Upload className="w-4 h-4 text-slate-600" />
               Upload Local Backup File
@@ -540,7 +540,7 @@ export const MyKeraniBackupRecovery: React.FC = () => {
         {/* History Column */}
         <div className="lg:col-span-2 space-y-6">
           {/* Workspace Backups History List */}
-          <div className="bg-white rounded-2xl border border-slate-150 p-5">
+          <div className="bg-white rounded-2xl border border-slate-100 p-5">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3 mb-4">
               <div className="flex items-center gap-2">
                 <Clock className="w-5 h-5 text-indigo-600" />
@@ -554,7 +554,7 @@ export const MyKeraniBackupRecovery: React.FC = () => {
             </div>
 
             {backupsList.length === 0 ? (
-              <div className="text-center py-12 bg-slate-50 rounded-xl border border-dashed border-slate-150">
+              <div className="text-center py-12 bg-slate-50 rounded-xl border border-dashed border-slate-100">
                 <Archive className="w-10 h-10 text-slate-300 mx-auto stroke-1" />
                 <h4 className="text-slate-700 font-semibold text-xs mt-3">No backups created yet for this workspace</h4>
                 <p className="text-slate-400 text-[11px] max-w-sm mx-auto mt-1">
@@ -566,7 +566,7 @@ export const MyKeraniBackupRecovery: React.FC = () => {
                 {backupsList.map((backup) => (
                   <div
                     key={backup.id}
-                    className="p-3.5 border border-slate-150 hover:border-slate-300 rounded-xl bg-slate-50/50 hover:bg-white transition flex flex-col md:flex-row md:items-center justify-between gap-4"
+                    className="p-3.5 border border-slate-100 hover:border-slate-300 rounded-xl bg-slate-50/50 hover:bg-white transition flex flex-col md:flex-row md:items-center justify-between gap-4"
                   >
                     <div className="space-y-1">
                       <div className="flex items-center gap-2">
@@ -641,7 +641,7 @@ export const MyKeraniBackupRecovery: React.FC = () => {
                 </div>
 
                 {/* Comparison tally view */}
-                <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-150 grid grid-cols-2 sm:grid-cols-4 gap-3 text-center">
+                <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-100 grid grid-cols-2 sm:grid-cols-4 gap-3 text-center">
                   <div>
                     <span className="text-[10px] text-slate-400 font-semibold uppercase block">Records Set</span>
                     <span className="font-mono text-sm font-bold text-indigo-600">

@@ -797,7 +797,7 @@ function MainDashboardContent() {
                     <span className="text-[9px] font-mono text-amber-600 uppercase font-bold">Auto base schemas</span>
                   </div>
                   <p className="text-[10.5px] text-slate-500 leading-relaxed">
-                    This triggers programmatic extraction of all structure layout definitions from <code className="bg-slate-150 px-1 rounded text-slate-800">DATABASE_ARCHITECTURE_V1_2.md</code> followed by execution of all chronological sql scripts listed above.
+                    This triggers programmatic extraction of all structure layout definitions from <code className="bg-slate-100 px-1 rounded text-slate-800">DATABASE_ARCHITECTURE_V1_2.md</code> followed by execution of all chronological sql scripts listed above.
                   </p>
                   <button
                     onClick={handleInitializeDb}

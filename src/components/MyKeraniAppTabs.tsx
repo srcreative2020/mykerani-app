@@ -372,7 +372,7 @@ export const MyKeraniAppTabs: React.FC<MyKeraniAppTabsProps> = ({
             </div>
 
             {simulationSuccess ? (
-              <div className="p-4 bg-emerald-50 border border-emerald-150 rounded-2xl text-center space-y-3 py-6" id="sim_sucess_view">
+              <div className="p-4 bg-emerald-50 border border-emerald-100 rounded-2xl text-center space-y-3 py-6" id="sim_sucess_view">
                 <Check className="w-10 h-10 text-emerald-600 mx-auto bg-white p-2 border border-emerald-250 rounded-full animate-bounce" />
                 <h4 className="font-sans font-bold text-xs text-emerald-800">Pemprosesan OCR Selesai!</h4>
                 <p className="text-[11.5px] text-slate-600 leading-relaxed max-w-xs mx-auto">
@@ -403,7 +403,7 @@ export const MyKeraniAppTabs: React.FC<MyKeraniAppTabsProps> = ({
                       className="w-full text-left p-4 bg-slate-50 border border-slate-200/80 hover:border-indigo-600 hover:bg-indigo-50/10 rounded-2xl transition cursor-pointer select-none group flex items-center justify-between"
                     >
                       <div>
-                        <h4 className="font-sans font-bold text-xs text-indigo-950 group-hover:text-indigo-650">
+                        <h4 className="font-sans font-bold text-xs text-indigo-950 group-hover:text-indigo-600">
                           {item.name}
                         </h4>
                         <p className="text-[10px] text-slate-450 font-mono mt-0.5 uppercase tracking-wide">
@@ -419,7 +419,7 @@ export const MyKeraniAppTabs: React.FC<MyKeraniAppTabsProps> = ({
 
                 {simulating && (
                   <div className="flex flex-col items-center justify-center space-y-2 py-4" id="sim_loading_state">
-                    <RefreshCw className="w-5 h-5 text-indigo-650 animate-spin" />
+                    <RefreshCw className="w-5 h-5 text-indigo-600 animate-spin" />
                     <p className="text-[10px] text-slate-450 font-mono tracking-wide uppercase">Membaca format PDF, mencerapi zon imej lejar...</p>
                   </div>
                 )}

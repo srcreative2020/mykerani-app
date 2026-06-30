@@ -288,22 +288,22 @@ export const FinancialReportsAnalytics: React.FC<FinancialReportsAnalyticsProps>
     const scoring = computeFinancialHealthScoring(cashAccounts, bankAccounts, financialEvents, debtRecords, financialCommitments, baseDate);
 
     const solvencyColor = scoring.solvencyGrade === "Critical Risk"
-      ? "text-rose-600 bg-rose-50 border-rose-150"
+      ? "text-rose-600 bg-rose-50 border-rose-100"
       : scoring.solvencyGrade === "Moderate"
         ? "text-amber-600 bg-amber-50 border-amber-100"
-        : "text-emerald-600 bg-emerald-50 border-emerald-150";
+        : "text-emerald-600 bg-emerald-50 border-emerald-100";
 
     const quickColor = scoring.quickGrade === "Strained"
-      ? "text-rose-600 bg-rose-50 border-rose-154"
+      ? "text-rose-600 bg-rose-50 border-rose-100"
       : scoring.quickGrade === "Adequate"
-        ? "text-amber-650 bg-amber-50 border-amber-150"
-        : "text-emerald-600 bg-emerald-50 border-emerald-155";
+        ? "text-amber-700 bg-amber-50 border-amber-100"
+        : "text-emerald-600 bg-emerald-50 border-emerald-100";
 
     const runwayColor = scoring.runwayGrade === "Immediate Action Required (< 2 Months)"
-      ? "text-rose-600 bg-rose-50 border-rose-150"
+      ? "text-rose-600 bg-rose-50 border-rose-100"
       : scoring.runwayGrade === "Moderate Buffer (2-5 Months)"
         ? "text-amber-600 bg-amber-50 border-amber-100"
-        : "text-emerald-600 bg-emerald-50 border-emerald-150";
+        : "text-emerald-600 bg-emerald-50 border-emerald-100";
 
     return { ...scoring, solvencyColor, quickColor, runwayColor };
   }, [cashAccounts, bankAccounts, financialEvents, debtRecords, financialCommitments, baseDate]);
@@ -964,7 +964,7 @@ export const FinancialReportsAnalytics: React.FC<FinancialReportsAnalyticsProps>
                     <span className="col-span-3 text-right font-mono uppercase tracking-wider text-[10px]">Nilai Kuasa (MYR)</span>
                   </div>
 
-                  <div className="divide-y divide-slate-150">
+                  <div className="divide-y divide-slate-100">
                     <div className="grid grid-cols-12 p-3 items-center">
                       <div className="col-span-6">
                         <span className="font-semibold text-slate-800 font-sans block">Baki Laci Tunai</span>
@@ -1001,7 +1001,7 @@ export const FinancialReportsAnalytics: React.FC<FinancialReportsAnalyticsProps>
                     <span className="col-span-3 text-right font-mono uppercase tracking-wider text-[10px]">Nilai Hutang (MYR)</span>
                   </div>
 
-                  <div className="divide-y divide-slate-150">
+                  <div className="divide-y divide-slate-100">
                     <div className="grid grid-cols-12 p-3 items-center">
                       <div className="col-span-6">
                         <span className="font-semibold text-slate-800 font-sans block">Hutang Tempoh Pembekal (Payables)</span>
@@ -1024,7 +1024,7 @@ export const FinancialReportsAnalytics: React.FC<FinancialReportsAnalyticsProps>
 
                 <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl text-xs space-y-1 text-slate-600">
                   <div className="flex items-center space-x-1.5 font-semibold text-slate-800">
-                    <Info className="w-3.5 h-3.5 text-indigo-505" />
+                    <Info className="w-3.5 h-3.5 text-indigo-600" />
                     <span>Lembaga Audit Kewangan Tempatan</span>
                   </div>
                   <p className="leading-relaxed">
@@ -1072,7 +1072,7 @@ export const FinancialReportsAnalytics: React.FC<FinancialReportsAnalyticsProps>
                     RM {receivablesAgingData.b31_60.toLocaleString()}
                   </p>
                 </div>
-                <div className="bg-rose-50 border border-rose-150 p-3 rounded-xl">
+                <div className="bg-rose-50 border border-rose-100 p-3 rounded-xl">
                   <span className="text-[9px] font-mono uppercase text-rose-700 font-bold block">
                     60+ Hari Lambat
                   </span>
@@ -1095,7 +1095,7 @@ export const FinancialReportsAnalytics: React.FC<FinancialReportsAnalyticsProps>
                 <span className="text-[10px] font-mono uppercase text-slate-400 font-bold tracking-wider block">
                   Agihan Peratusan Penuaan Tuntutan
                 </span>
-                <div className="w-full bg-slate-105 h-4 rounded-lg overflow-hidden flex text-[9px] font-mono text-white text-center font-bold">
+                <div className="w-full bg-slate-100 h-4 rounded-lg overflow-hidden flex text-[9px] font-mono text-white text-center font-bold">
                   {receivablesAgingData.total > 0 ? (
                     <>
                       {receivablesAgingData.current > 0 && (
@@ -1109,7 +1109,7 @@ export const FinancialReportsAnalytics: React.FC<FinancialReportsAnalyticsProps>
                       )}
                       {receivablesAgingData.b1_30 > 0 && (
                         <div 
-                          className="bg-indigo-505 bg-indigo-500 flex items-center justify-center" 
+                          className="bg-indigo-600 flex items-center justify-center"
                           style={{ width: `${(receivablesAgingData.b1_30 / receivablesAgingData.total) * 100}%` }}
                           title="1-30 Days"
                         >
@@ -1185,11 +1185,11 @@ export const FinancialReportsAnalytics: React.FC<FinancialReportsAnalyticsProps>
                             let labelStyle = "bg-slate-50 text-slate-600 border-slate-200";
                             
                             if (diffDays >= 1 && diffDays <= 30) {
-                              labelStyle = "bg-indigo-50 text-indigo-700 border-indigo-150";
+                              labelStyle = "bg-indigo-50 text-indigo-700 border-indigo-100";
                             } else if (diffDays >= 31 && diffDays <= 60) {
                               labelStyle = "bg-amber-50 text-amber-800 border-amber-200/60";
                             } else if (diffDays > 60) {
-                              labelStyle = "bg-rose-50 text-rose-800 border-rose-150";
+                              labelStyle = "bg-rose-50 text-rose-800 border-rose-100";
                             }
 
                             return (
@@ -1246,7 +1246,7 @@ export const FinancialReportsAnalytics: React.FC<FinancialReportsAnalyticsProps>
                     RM {payablesAgingData.b31_60.toLocaleString()}
                   </p>
                 </div>
-                <div className="bg-rose-50 border border-rose-150 p-3 rounded-xl">
+                <div className="bg-rose-50 border border-rose-100 p-3 rounded-xl">
                   <span className="text-[9px] font-mono uppercase text-rose-700 font-bold block">
                     60+ Hari Lambat
                   </span>
@@ -1269,7 +1269,7 @@ export const FinancialReportsAnalytics: React.FC<FinancialReportsAnalyticsProps>
                 <span className="text-[10px] font-mono uppercase text-slate-400 font-bold tracking-wider block">
                   Agihan Peratusan Penuaan Hutang Pembekal
                 </span>
-                <div className="w-full bg-slate-105 h-4 rounded-lg overflow-hidden flex text-[9px] font-mono text-white text-center font-bold">
+                <div className="w-full bg-slate-100 h-4 rounded-lg overflow-hidden flex text-[9px] font-mono text-white text-center font-bold">
                   {payablesAgingData.total > 0 ? (
                     <>
                       {payablesAgingData.current > 0 && (
@@ -1283,7 +1283,7 @@ export const FinancialReportsAnalytics: React.FC<FinancialReportsAnalyticsProps>
                       )}
                       {payablesAgingData.b1_30 > 0 && (
                         <div 
-                          className="bg-indigo-505 bg-indigo-500 flex items-center justify-center" 
+                          className="bg-indigo-600 flex items-center justify-center"
                           style={{ width: `${(payablesAgingData.b1_30 / payablesAgingData.total) * 100}%` }}
                           title="1-30 Days"
                         >
@@ -1359,11 +1359,11 @@ export const FinancialReportsAnalytics: React.FC<FinancialReportsAnalyticsProps>
                             let labelStyle = "bg-slate-50 text-slate-600 border-slate-200";
                             
                             if (diffDays >= 1 && diffDays <= 30) {
-                              labelStyle = "bg-indigo-50 text-indigo-700 border-indigo-150";
+                              labelStyle = "bg-indigo-50 text-indigo-700 border-indigo-100";
                             } else if (diffDays >= 31 && diffDays <= 60) {
                               labelStyle = "bg-amber-50 text-amber-800 border-amber-200/60";
                             } else if (diffDays > 60) {
-                              labelStyle = "bg-rose-50 text-rose-800 border-rose-150";
+                              labelStyle = "bg-rose-50 text-rose-800 border-rose-100";
                             }
 
                             return (
@@ -1481,7 +1481,7 @@ export const FinancialReportsAnalytics: React.FC<FinancialReportsAnalyticsProps>
                                 RM {Math.round(c.monthlyContribution).toLocaleString()}
                               </td>
                               <td className="p-3 text-center">
-                                <span className="inline-flex items-center px-2 py-0.5 rounded bg-emerald-50 text-emerald-800 border border-emerald-150 text-[9px] font-bold">
+                                <span className="inline-flex items-center px-2 py-0.5 rounded bg-emerald-50 text-emerald-800 border border-emerald-100 text-[9px] font-bold">
                                   AKTIF
                                 </span>
                               </td>

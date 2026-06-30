@@ -253,7 +253,7 @@ export const ProfitLossReport: React.FC<ProfitLossReportProps> = ({ financialEve
       </div>
 
       {/* Summary explanation */}
-      <div className={`p-4 rounded-xl border space-y-2 ${explanation.profitDelta >= 0 ? "bg-emerald-50 border-emerald-150" : "bg-rose-50 border-rose-150"}`}>
+      <div className={`p-4 rounded-xl border space-y-2 ${explanation.profitDelta >= 0 ? "bg-emerald-50 border-emerald-100" : "bg-rose-50 border-rose-100"}`}>
         <div className="flex items-center space-x-2">
           {explanation.profitDelta >= 0 ? <TrendingUp className="w-4 h-4 text-emerald-600" /> : <TrendingDown className="w-4 h-4 text-rose-600" />}
           <span className="text-sm font-bold text-slate-900">{explanation.headline}</span>

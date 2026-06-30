@@ -1341,7 +1341,7 @@ export const FinancialRecordsConsole: React.FC<FinancialRecordsConsoleProps> = (
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
                   <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
                 </span>
-                <span className="text-[10px] font-mono tracking-wide text-indigo-150 uppercase font-bold">
+                <span className="text-[10px] font-mono tracking-wide text-indigo-100 uppercase font-bold">
                   Sistem Aktif & Terisolasi
                 </span>
               </div>
@@ -1518,7 +1518,7 @@ export const FinancialRecordsConsole: React.FC<FinancialRecordsConsoleProps> = (
                   </div>
                   <div>
                     <span className="font-sans text-[10px] text-slate-400 block font-medium">Receivables Belum Kutip</span>
-                    <p className="text-lg font-mono font-bold text-indigo-650 tracking-tight mt-0.5">
+                    <p className="text-lg font-mono font-bold text-indigo-700 tracking-tight mt-0.5">
                       RM {outstandingReceivablesMyr.toLocaleString("en-MY", { minimumFractionDigits: 2 })}
                     </p>
                   </div>
@@ -1528,7 +1528,7 @@ export const FinancialRecordsConsole: React.FC<FinancialRecordsConsoleProps> = (
                 <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-2xs hover:border-slate-300 transition duration-150 flex flex-col justify-between min-h-[110px]">
                   <div className="flex justify-between items-center text-slate-400 text-[10px] uppercase font-bold tracking-wide">
                     <span>Tunggakan Pembekal</span>
-                    <AlertCircle className="w-3.5 h-3.5 text-amber-650 bg-amber-50 rounded p-0.5" />
+                    <AlertCircle className="w-3.5 h-3.5 text-amber-700 bg-amber-50 rounded p-0.5" />
                   </div>
                   <div>
                     <span className="font-sans text-[10px] text-slate-400 block font-medium">Payables Belum Selesai</span>
@@ -1693,22 +1693,22 @@ export const FinancialRecordsConsole: React.FC<FinancialRecordsConsoleProps> = (
                               <td className="px-5 py-3 font-mono font-bold text-slate-550">{event.referenceNumber || "N/A"}</td>
                               <td className="px-5 py-3">
                                 {event.type === "INCOME" && (
-                                  <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-800 border border-emerald-150 text-[9px] font-bold">
+                                  <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-800 border border-emerald-100 text-[9px] font-bold">
                                     📈 Pendapatan
                                   </span>
                                 )}
                                 {event.type === "EXPENSE" && (
-                                  <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-rose-50 text-rose-800 border border-rose-150 text-[9px] font-bold">
+                                  <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-rose-50 text-rose-800 border border-rose-100 text-[9px] font-bold">
                                     📉 Perbelanjaan
                                   </span>
                                 )}
                                 {event.type === "RECEIVABLE" && (
-                                  <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-800 border border-indigo-150 text-[9px] font-bold">
+                                  <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-800 border border-indigo-100 text-[9px] font-bold">
                                     💰 Aliran Tunai Masuk
                                   </span>
                                 )}
                                 {event.type === "PAYABLE" && (
-                                  <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-amber-50 text-amber-850 border border-amber-200/50 text-[9px] font-bold">
+                                  <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-amber-50 text-amber-800 border border-amber-200/50 text-[9px] font-bold">
                                     🗓️ Aliran Tunai Keluar
                                   </span>
                                 )}
@@ -1732,7 +1732,7 @@ export const FinancialRecordsConsole: React.FC<FinancialRecordsConsoleProps> = (
                               <td className="px-5 py-3 text-center">
                                 <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold ${
                                   event.isCompleted 
-                                    ? "bg-emerald-50 text-emerald-700 border border-emerald-150" 
+                                    ? "bg-emerald-50 text-emerald-700 border border-emerald-100"
                                     : "bg-amber-50 text-amber-700 border border-amber-200"
                                 }`}>
                                   {event.isCompleted ? "Selesai" : "Belum Dijelaskan"}
@@ -1994,7 +1994,7 @@ export const FinancialRecordsConsole: React.FC<FinancialRecordsConsoleProps> = (
                             <span className="font-mono font-semibold flex items-center"><Percent className="w-3 h-3 mr-1 text-slate-400" /> {debt.interestRateAnnualPercent}%</span>
                           </p>
                         )}
-                        <p className="flex justify-between font-mono bg-slate-50 rounded p-1.5 mt-2 border border-slate-150 text-[10px] uppercase font-bold text-slate-400 leading-tight">
+                        <p className="flex justify-between font-mono bg-slate-50 rounded p-1.5 mt-2 border border-slate-100 text-[10px] uppercase font-bold text-slate-400 leading-tight">
                           <span>Description:</span> 
                           <span className="font-sans normal-case text-slate-600 font-medium truncate max-w-[200px]" title={debt.description}>
                             {debt.description || "No specific details logged."}

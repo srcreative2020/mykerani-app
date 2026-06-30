@@ -586,7 +586,7 @@ export const CashflowForecastEngine: React.FC = () => {
                   </span>
                 </div>
               )}
-              <div className="p-2.5 border-2 border-dashed border-slate-150/80 rounded-xl flex items-center justify-between">
+              <div className="p-2.5 border-2 border-dashed border-slate-200/80 rounded-xl flex items-center justify-between">
                 <div className="space-y-0.5">
                   <span className="font-sans font-bold text-[10px] text-slate-500 uppercase tracking-wider block">Lowest cash level</span>
                   <span className="text-[9px] text-slate-400">Periodic cushion minimum floor</span>

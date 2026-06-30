@@ -340,7 +340,7 @@ export const FinancialCommitmentsManager: React.FC = () => {
               <CalendarIcon className="w-4 h-4 mr-2 text-indigo-500" />
               Commitment Calendar
             </h4>
-            <div className="flex items-center space-x-1 bg-slate-50 border border-slate-150 rounded-lg p-1">
+            <div className="flex items-center space-x-1 bg-slate-50 border border-slate-100 rounded-lg p-1">
               <button 
                 onClick={handlePrevMonth}
                 className="p-1 hover:bg-white rounded-md text-slate-600 hover:text-slate-900 transition cursor-pointer"
@@ -410,7 +410,7 @@ export const FinancialCommitmentsManager: React.FC = () => {
                             />
                           ))}
                           {day.commitments.length > 3 && (
-                            <span className={`text-[8px] font-mono leading-none ${isSelected ? "text-indigo-150" : "text-indigo-600 font-bold"}`}>
+                            <span className={`text-[8px] font-mono leading-none ${isSelected ? "text-indigo-100" : "text-indigo-600 font-bold"}`}>
                               +{day.commitments.length - 3}
                             </span>
                           )}
