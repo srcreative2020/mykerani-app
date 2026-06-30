@@ -1594,6 +1594,14 @@ export function OwnerDashboard() {
           : `Saya telah lampirkan ${label.toLowerCase()} "${file.name}". Sila semak dan bantu saya rekodkan jika berkaitan transaksi.`,
         evidenceAttachment
       );
+    } catch {
+      // Any unhandled failure anywhere above (upload, signed-URL fetch,
+      // saveChatMessage, etc.) must never silently drop the attachment —
+      // this was the root cause of "no attachment appears, no AI response,
+      // refresh required": uploadChatAttachment() is fire-and-forget at the
+      // call site, so without this catch a thrown error here vanished with
+      // no trace and no user-visible feedback.
+      setChatMessages(prev => [...prev, { id: `e-${Date.now()}`, sender: "ai", text: `Muat naik "${file.name}" gagal — sambungan terputus. Sila cuba lagi.` }]);
     } finally {
       setChatAttaching(false);
     }
