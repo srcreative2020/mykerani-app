@@ -296,6 +296,26 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         console.error("Workspace creation notification insert failed:", err.message);
       }
 
+      // GAP-M8: workspace creation must leave an audit trail, not just a
+      // notification. Written as a direct insert (mirroring AuditContext's
+      // own writeAuditLog shape) rather than via useAudit(), since
+      // AuditProvider is mounted inside WorkspaceProvider in the tree.
+      try {
+        await supabase.from("audit_logs").insert({
+          user_id: user.id,
+          user_email: user.email,
+          user_role: user.role,
+          tenant_id: activeTenant.id,
+          workspace_id: ws.id,
+          module: "Workspace",
+          action: "CREATE",
+          old_value: null,
+          new_value: ws
+        });
+      } catch (err: any) {
+        console.error("Workspace creation audit log insert failed:", err.message);
+      }
+
       return ws;
     }
   };

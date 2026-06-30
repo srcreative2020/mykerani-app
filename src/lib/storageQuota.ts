@@ -44,19 +44,6 @@ export interface StorageQuotaHook extends StorageQuotaState {
   touchActive: () => void;
 }
 
-export interface HQTenantStorageView {
-  tenantId: string;
-  tenantName: string;
-  usedBytes: number;
-  quotaBytes: number;
-  pctUsed: number;
-  isFrozen: boolean;
-  frozenReason: string;
-  lastActiveAt: string;
-  inactiveDays: number;
-  isInactive: boolean;
-}
-
 // ── Storage key helper ─────────────────────────────────────────────────────
 export function storageQuotaKey(tenantId: string): string {
   return `mykerani_storage_quota_${tenantId}`;
@@ -219,26 +206,4 @@ export function useStorageQuota(tenantId: string, workspaceId?: string): Storage
     fileCount, isLoading, refresh,
     setQuota, freeze, unfreeze, setInactiveDaysLimit, touchActive,
   };
-}
-
-// ── HQ helper: read all tenant storage snapshots ───────────────────────────
-export function readHQTenantStorage(
-  customers: { id: string; name: string; plan: string }[],
-  inactiveDaysLimit: number = 30
-): HQTenantStorageView[] {
-  return customers.map(c => {
-    const state = loadState(c.id);
-    const used = state.usedBytes === 0
-      ? Math.round((PLAN_QUOTAS[c.plan] || PLAN_QUOTAS.default) * (0.15 + Math.random() * 0.6))
-      : state.usedBytes;
-    const pctUsed = used / state.quotaBytes;
-    const inactiveDays = daysSince(state.lastActiveAt);
-    return {
-      tenantId: c.id, tenantName: c.name,
-      usedBytes: used, quotaBytes: state.quotaBytes,
-      pctUsed, isFrozen: state.isFrozen, frozenReason: state.frozenReason,
-      lastActiveAt: state.lastActiveAt, inactiveDays,
-      isInactive: inactiveDays >= inactiveDaysLimit,
-    };
-  });
 }

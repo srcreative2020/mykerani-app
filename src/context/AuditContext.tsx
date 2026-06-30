@@ -10,7 +10,7 @@ export interface AuditContextType {
   error: string | null;
   writeAuditLog: (log: {
     workspaceId?: string;
-    module: "Financial Records" | "Financial Commitments" | "Financial Evidence Package" | "Backup & Recovery" | "OCR Learning" | "Storage Provider" | "Notifications" | "Debt Records";
+    module: "Financial Records" | "Financial Commitments" | "Financial Evidence Package" | "Backup & Recovery" | "OCR Learning" | "Storage Provider" | "Notifications" | "Debt Records" | "Workspace";
     action: "CREATE" | "UPDATE" | "DELETE";
     oldValue: Record<string, any> | null;
     newValue: Record<string, any> | null;
@@ -158,7 +158,7 @@ export const AuditProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   // Append new trace lines securely
   const writeAuditLog = useCallback(async (log: {
     workspaceId?: string;
-    module: "Financial Records" | "Financial Commitments" | "Financial Evidence Package" | "Backup & Recovery" | "OCR Learning" | "Storage Provider" | "Notifications" | "Debt Records";
+    module: "Financial Records" | "Financial Commitments" | "Financial Evidence Package" | "Backup & Recovery" | "OCR Learning" | "Storage Provider" | "Notifications" | "Debt Records" | "Workspace";
     action: "CREATE" | "UPDATE" | "DELETE";
     oldValue: Record<string, any> | null;
     newValue: Record<string, any> | null;
