@@ -951,7 +951,7 @@ async function startServer() {
       }, "FILE_RETRIEVED");
     }
 
-    const hasCredit = await consumeResourceCredit(tenantId, workspaceId, "OCR", `OCR analyze: ${fileName || "document"}`);
+    const { ok: hasCredit, txnId: creditTxnId } = await consumeResourceCreditV2(tenantId, workspaceId, "OCR", `OCR analyze: ${fileName || "document"}`);
     if (!hasCredit) {
       throw new OcrApiError(402, {
         error: "Kredit OCR syarikat anda telah digunakan sepenuhnya untuk tempoh semasa. Sila naik taraf pelan atau tunggu pembaharuan bulanan.",
@@ -1169,6 +1169,7 @@ Provide your output precisely formatted as raw JSON matching exactly this shape,
         attempts: ocrAttempts,
         totalAttempts: ocrAttempts.length,
       });
+      updateTransactionMetadata(creditTxnId, { feature: "ocr", provider: usedCandidate?.provider, model: usedCandidate?.model });
 
       onProgress({ stage: "AI_ANALYSIS", overallProgress: OCR_STAGE_END_PCT.AI_ANALYSIS });
       onProgress({ stage: "CLASSIFICATION", overallProgress: OCR_STAGE_END_PCT.CLASSIFICATION });
@@ -1599,7 +1600,7 @@ Output ONLY raw JSON matching this shape exactly, no markdown fences, no extra t
       return res.status(403).json({ error: "Akaun anda telah disekat oleh pentadbir HQ." });
     }
 
-    const hasCredit = await consumeResourceCredit(tenantId, workspaceId, "OCR", `Bank Statement Import: ${fileName}`);
+    const { ok: hasCredit, txnId: creditTxnId } = await consumeResourceCreditV2(tenantId, workspaceId, "OCR", `Bank Statement Import: ${fileName}`);
     if (!hasCredit) {
       return res.status(402).json({ error: "Kredit OCR syarikat anda telah habis.", code: "OCR_CREDITS_EXHAUSTED" });
     }
@@ -1659,6 +1660,8 @@ Output ONLY raw JSON matching this shape exactly, no markdown fences, no extra t
     if (!jobId) {
       return res.status(500).json({ error: "Gagal mendapatkan ID import yang dibuat." });
     }
+
+    updateTransactionMetadata(creditTxnId, { feature: "bank_statement_import", file_name: fileName, job_id: jobId });
 
     // totalPages is display metadata only — not stored in DB, not used by engine.
     res.json({ jobId, totalPages: pdfPageCount });
@@ -1784,7 +1787,7 @@ Output ONLY raw JSON matching this shape exactly, no markdown fences, no extra t
         return res.status(503).json({ error: "Transkripsi nota suara belum dikonfigurasikan (perlukan pembekal OpenAI)." });
       }
 
-      const hasCredit = await consumeResourceCredit(tenantId, workspaceId, "AI", `Voice transcription: ${fileName || "nota-suara"}`);
+      const { ok: hasCredit, txnId: creditTxnId } = await consumeResourceCreditV2(tenantId, workspaceId, "AI", `Voice transcription: ${fileName || "nota-suara"}`);
       if (!hasCredit) {
         return res.status(402).json({ error: "Kredit AI syarikat anda telah digunakan sepenuhnya untuk tempoh semasa.", code: "AI_CREDITS_EXHAUSTED" });
       }
@@ -1813,6 +1816,7 @@ Output ONLY raw JSON matching this shape exactly, no markdown fences, no extra t
           return res.status(400).json({ error: errBody?.error?.message || "Gagal transkripsi nota suara." });
         }
         const result = await whisperRes.json() as any;
+        updateTransactionMetadata(creditTxnId, { feature: "voice_transcription", provider: "openai", model: "whisper-1", file_name: fileName });
         return res.json({ text: result.text || "" });
       } finally {
         clearTimeout(whisperTimeoutId);
@@ -1963,7 +1967,7 @@ Only include a "CONFIRM_TRANSACTION" suggestion entry when financialIntent.detec
         throw lastErr || new Error("All configured AI providers failed");
       }
 
-      const hasCredit = await consumeResourceCredit(tenantId, workspaceId, "AI", `AI assistant query: ${String(query).slice(0, 80)}`);
+      const { ok: hasCredit, txnId: creditTxnId } = await consumeResourceCreditV2(tenantId, workspaceId, "AI", `AI assistant query: ${String(query).slice(0, 80)}`);
       if (!hasCredit) {
         return res.status(402).json({
           error: "Kredit AI syarikat anda telah digunakan sepenuhnya untuk tempoh semasa. Sila naik taraf pelan atau tunggu pembaharuan bulanan.",
@@ -2015,6 +2019,7 @@ Only include a "CONFIRM_TRANSACTION" suggestion entry when financialIntent.detec
         ],
         totalAttempts: attemptErrors.length + 1,
       });
+      updateTransactionMetadata(creditTxnId, { feature: "assistant", provider: usedCandidate?.provider, model: usedCandidate?.model });
 
       if (parsedResponse?.financialIntent?.detected && knowledgeBankMatches.length === 0) {
         logKnowledgeBankGap(financialContext?.activeTenant?.id, financialContext?.activeWorkspace?.id, parsedResponse.financialIntent);
@@ -2523,6 +2528,62 @@ Only include a "CONFIRM_TRANSACTION" suggestion entry when financialIntent.detec
     } catch (err) {
       console.error("Failed to check/consume resource credit:", err);
       return false;
+    }
+  }
+
+  async function consumeResourceCreditV2(
+    tenantId: string | undefined | null,
+    workspaceId: string | undefined | null,
+    creditType: "AI" | "OCR",
+    description: string
+  ): Promise<{ ok: boolean; txnId: string | null }> {
+    if (!tenantId || !workspaceId) return { ok: true, txnId: null };
+    const supabaseUrl = process.env.VITE_SUPABASE_URL;
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    if (!supabaseUrl || !serviceRoleKey) return { ok: true, txnId: null };
+    try {
+      const resp = await fetch(`${supabaseUrl}/rest/v1/rpc/consume_resource_credit_v2`, {
+        method: "POST",
+        headers: { apikey: serviceRoleKey, Authorization: `Bearer ${serviceRoleKey}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          p_tenant_id: tenantId,
+          p_workspace_id: workspaceId,
+          p_credit_type: creditType,
+          p_amount: 1,
+          p_description: description,
+        }),
+      });
+      if (!resp.ok) return { ok: false, txnId: null };
+      const rows = await resp.json() as Array<{ ok: boolean; txn_id: string | null }>;
+      if (!Array.isArray(rows) || rows.length === 0) return { ok: false, txnId: null };
+      return { ok: rows[0].ok, txnId: rows[0].txn_id };
+    } catch (err) {
+      console.error("Failed to consume resource credit v2:", err);
+      return { ok: false, txnId: null };
+    }
+  }
+
+  async function updateTransactionMetadata(
+    txnId: string | null,
+    metadata: Record<string, unknown>
+  ): Promise<void> {
+    if (!txnId) return;
+    const supabaseUrl = process.env.VITE_SUPABASE_URL;
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    if (!supabaseUrl || !serviceRoleKey) return;
+    try {
+      await fetch(`${supabaseUrl}/rest/v1/resource_wallet_transactions?id=eq.${txnId}`, {
+        method: "PATCH",
+        headers: {
+          apikey: serviceRoleKey,
+          Authorization: `Bearer ${serviceRoleKey}`,
+          "Content-Type": "application/json",
+          Prefer: "return=minimal",
+        },
+        body: JSON.stringify({ metadata }),
+      });
+    } catch (err) {
+      console.error("Failed to update transaction metadata:", err);
     }
   }
 

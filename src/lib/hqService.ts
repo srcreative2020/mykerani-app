@@ -1736,6 +1736,54 @@ export async function submitCommercialConfigUpsert(
   });
 }
 
+export async function getHqCommercialPolicy(): Promise<CommercialConfigItem[]> {
+  return getCommercialConfigItems();
+}
+
+export async function updateHqCommercialPolicyKey(
+  configKey: string,
+  value: Record<string, unknown>
+): Promise<void> {
+  await submitCommercialConfigUpsert(configKey, "global", value);
+}
+
+export async function getTenantResourceLedger(
+  workspaceId: string,
+  creditType?: string,
+  limit = 50,
+  offset = 0
+): Promise<Array<{
+  txnId: string;
+  creditType: string;
+  activityType: string;
+  amount: number;
+  description: string;
+  metadata: Record<string, unknown>;
+  createdAt: string;
+  runningBalance: number;
+  jobRef: string | null;
+}>> {
+  if (!isSupabaseConfigured() || !supabase) return [];
+  const { data, error } = await supabase.rpc("get_tenant_resource_ledger", {
+    p_workspace_id: workspaceId,
+    p_credit_type: creditType ?? null,
+    p_limit: limit,
+    p_offset: offset,
+  });
+  if (error || !data) return [];
+  return (data as any[]).map(r => ({
+    txnId: r.txn_id,
+    creditType: r.credit_type,
+    activityType: r.activity_type,
+    amount: r.amount,
+    description: r.description,
+    metadata: r.metadata ?? {},
+    createdAt: r.created_at,
+    runningBalance: r.running_balance,
+    jobRef: r.job_ref ?? null,
+  }));
+}
+
 export interface CommercialApprovalThreshold {
   actionType: string;
   valueThresholdMyr: number;

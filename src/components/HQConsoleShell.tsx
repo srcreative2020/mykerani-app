@@ -4531,6 +4531,34 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
                     ))
                   )}
                 </div>
+
+                {/* Resource Pricing Policy */}
+                <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-3">
+                  <div>
+                    <h3 className="text-xs font-bold text-slate-700">Dasar Harga Sumber (Resource Pricing Policy)</h3>
+                    <p className="text-[11px] text-slate-400 mt-0.5">Konfigurasi billing tenant. Perubahan memerlukan kelulusan dual-approval HQ melalui Tindakan Belum Selesai.</p>
+                  </div>
+                  {commercialConfigItems.filter(i => [
+                    "billing_usd_myr_rate","markup_ai_pct","markup_ocr_pct",
+                    "credit_per_ai_call","credit_per_ocr_page","min_charge_ai_myr",
+                    "min_charge_ocr_myr","rounding_rule","free_allowance_ai","promo_multiplier_ai",
+                  ].includes(i.configKey)).length === 0 ? (
+                    <p className="text-[11px] text-slate-400 py-3 text-center">Tiada dasar harga dikonfigurasi lagi.</p>
+                  ) : (
+                    <div className="space-y-1.5">
+                      {commercialConfigItems.filter(i => [
+                        "billing_usd_myr_rate","markup_ai_pct","markup_ocr_pct",
+                        "credit_per_ai_call","credit_per_ocr_page","min_charge_ai_myr",
+                        "min_charge_ocr_myr","rounding_rule","free_allowance_ai","promo_multiplier_ai",
+                      ].includes(i.configKey)).map(item => (
+                        <div key={item.id} className="flex items-center justify-between p-2.5 bg-slate-50 rounded-xl">
+                          <span className="text-[11px] font-mono text-slate-600">{item.configKey}</span>
+                          <span className="text-[11px] font-bold text-slate-900 font-mono">{JSON.stringify(item.value)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
             )}
 

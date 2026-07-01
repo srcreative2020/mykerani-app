@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { FinancialEvidencePackageManager } from "../components/FinancialEvidencePackage";
 import { createTenantSupportTicket, getMyTenantSupportTickets, SupportTicket, updateTenantMasterProfile, SUPPORT_TICKET_TEMPLATES, uploadTicketAttachment, getTicketAttachmentUrl, ticketSlaState, TICKET_STATUS_LABEL_MS, TICKET_STATUS_STYLE, tenantAssignStaffRole, tenantRevokeStaffRole, tenantSubmitAppeal, tenantReplySupportTicket, getTenantMyHealthScore, TenantHealthScore, getTenantAiCostSummary, TenantAiCostSummary, getMyDataAccessLog, DataAccessLogEntry, getAddonPackages, AddonPackage, redeemPromotion, getTenantActivityFeed, getMyPromotionRedemptions, logTenantActivity } from "../lib/hqService";
+import { TenantResourceLedger } from "../components/TenantResourceLedger";
 import { FinancialReportsAnalytics } from "../components/FinancialReportsAnalytics";
 import { StorageBar } from "../components/StorageBar";
 import { DocumentsManager } from "../components/DocumentsManager";
@@ -4678,6 +4679,8 @@ export function OwnerDashboard() {
                     Pilihan storan luar bergantung kepada kebenaran yang ditetapkan HQ. Dokumen yang dimuat naik akan disimpan ke folder yang dipilih. MYKERANI tidak menyimpan salinan jika storan luar digunakan.
                   </p>
                 </div>
+
+                {wsId && <TenantResourceLedger workspaceId={wsId} />}
               </div>
             )}
           </div>
