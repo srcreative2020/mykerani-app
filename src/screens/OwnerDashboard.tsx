@@ -2011,7 +2011,7 @@ export function OwnerDashboard() {
   ];
 
   return (
-    <div className="h-screen flex flex-col overflow-hidden" id="owner_root" style={{background:"#F4F8F5"}}>
+    <div className="h-screen flex flex-col lg:flex-row overflow-hidden" id="owner_root" style={{background:"#F4F8F5"}}>
       <style>{`
         #owner_root .bg-emerald-700{background-color:#5A9E7A!important}
         #owner_root .bg-emerald-800{background-color:#3D7057!important}
@@ -2032,7 +2032,108 @@ export function OwnerDashboard() {
         #owner_root .to-emerald-800{--tw-gradient-to:#3D7057!important}
       `}</style>
 
-      {/* â"€â"€ HEADER â"€â"€ */}
+      {/* ═══════════════════════════════════════
+          DESKTOP SIDEBAR — hidden on mobile/tablet
+          ═══════════════════════════════════════ */}
+      <aside className="hidden lg:flex flex-col w-60 xl:w-64 bg-white border-r border-slate-100 shrink-0 z-20" id="owner_sidebar">
+        {/* Brand */}
+        <div className="px-4 py-4 border-b border-slate-100 shrink-0">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-xl bg-slate-900 flex items-center justify-center text-white font-bold text-sm shadow-sm shrink-0">MK</div>
+            <div className="min-w-0">
+              <div className="flex items-center gap-1.5">
+                <span className="font-bold text-slate-900 text-sm">MYKERANI</span>
+                <span className="text-3xs font-bold bg-slate-900 text-white px-1.5 py-0.5 rounded-md">V1.0</span>
+              </div>
+              {activeWorkspace && <p className="text-2xs text-slate-400 leading-none mt-0.5 truncate">{activeWorkspace.name}</p>}
+            </div>
+          </div>
+        </div>
+        {/* Nav items */}
+        <nav className="flex-1 overflow-y-auto p-3 space-y-0.5">
+          {([
+            { id: "home" as MainTab, label: "Home", icon: Home },
+            { id: "dashboard" as MainTab, label: "Dashboard", icon: LayoutDashboard },
+            { id: "documents" as MainTab, label: "Dokumen", icon: FileText },
+            { id: "reports" as MainTab, label: "Laporan", icon: BarChart3 },
+            { id: "more" as MainTab, label: "Lagi", icon: MoreHorizontal },
+          ]).map(({ id, label, icon: Icon }) => {
+            const active = activeTab === id;
+            return (
+              <button key={id}
+                onClick={() => { setActiveTab(id); if (id === "more") setMorePage("menu"); }}
+                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition cursor-pointer text-left ${
+                  active ? "bg-indigo-50 text-indigo-700" : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+                }`}>
+                <Icon className={`w-4 h-4 shrink-0 ${active ? "text-indigo-600" : "text-slate-400"}`} />
+                <span>{label}</span>
+              </button>
+            );
+          })}
+          {activeTab === "more" && morePage !== "menu" && (
+            <div className="mt-2 pt-2 border-t border-slate-100 space-y-0.5">
+              {([
+                { id: "myProfile" as MorePage, label: "Profil Saya", icon: User },
+                { id: "team" as MorePage, label: "Pasukan", icon: Users },
+                { id: "billing" as MorePage, label: "Bil & Langganan", icon: CreditCard },
+                { id: "settings" as MorePage, label: "Tetapan", icon: Settings },
+                { id: "resources" as MorePage, label: "Tetapan Sumber", icon: Cpu },
+                { id: "chatArchive" as MorePage, label: "Arkib Perbualan", icon: MessageCircle },
+                { id: "history" as MorePage, label: "Sejarah Aktiviti", icon: History },
+                { id: "activity" as MorePage, label: "Pusat Aktiviti", icon: Bell },
+                { id: "support" as MorePage, label: "Pusat Sokongan", icon: HelpCircle },
+                { id: "account360" as MorePage, label: "Akaun 360", icon: Star },
+              ]).map(({ id, label, icon: Icon }) => (
+                <button key={id} onClick={() => setMorePage(id)}
+                  className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold transition cursor-pointer text-left ${
+                    morePage === id ? "bg-indigo-100 text-indigo-700" : "text-slate-500 hover:bg-slate-50 hover:text-slate-700"
+                  }`}>
+                  <Icon className={`w-3.5 h-3.5 shrink-0 ${morePage === id ? "text-indigo-600" : "text-slate-400"}`} />
+                  <span>{label}</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </nav>
+        {/* User + workspace + actions */}
+        <div className="p-3 border-t border-slate-100 space-y-2 shrink-0">
+          {workspaces.length > 1 && (
+            <select value={activeWorkspace?.id || ""} onChange={e => selectWorkspace(e.target.value)}
+              className="w-full text-xs font-semibold border border-slate-200 rounded-lg px-2 py-1.5 bg-slate-50 outline-none cursor-pointer text-slate-700">
+              {workspaces.map(ws => <option key={ws.id} value={ws.id}>{ws.name}</option>)}
+            </select>
+          )}
+          <div className="flex items-center gap-2 px-1.5 py-1">
+            <div className="w-7 h-7 rounded-full bg-indigo-600 text-white flex items-center justify-center text-xs font-bold shrink-0">
+              {firstName.charAt(0).toUpperCase()}
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-xs font-semibold text-slate-800 truncate">{firstName}</p>
+              <p className="text-2xs text-indigo-500 font-medium">Pemilik</p>
+            </div>
+            <div className="flex items-center gap-1 shrink-0">
+              <button onClick={() => setShowNotifPanel(p => !p)}
+                className="relative p-1.5 hover:bg-slate-100 rounded-lg transition cursor-pointer text-slate-400 hover:text-slate-600">
+                <Bell className="w-3.5 h-3.5" />
+                {notif.unreadCount > 0 && (
+                  <span className="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 bg-red-500 text-white text-3xs font-bold rounded-full flex items-center justify-center">
+                    {notif.unreadCount > 9 ? "9+" : notif.unreadCount}
+                  </span>
+                )}
+              </button>
+              <button onClick={() => signOut()}
+                className="p-1.5 hover:bg-rose-50 rounded-lg transition cursor-pointer text-slate-400 hover:text-rose-500">
+                <LogOut className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </div>
+        </div>
+      </aside>
+
+      {/* Content column — full width on mobile, flex-1 on desktop */}
+      <div className="flex-1 flex flex-col overflow-hidden min-w-0">
+
+      {/* ── HEADER ── */}
       <header className="bg-white border-b border-slate-100 px-4 py-3 flex items-center justify-between shrink-0 z-30" id="owner_header">
         <div className="flex items-center space-x-2.5">
           <div className="w-8 h-8 rounded-xl bg-slate-900 flex items-center justify-center text-white font-bold text-sm shadow-sm">MK</div>
@@ -2627,7 +2728,7 @@ export function OwnerDashboard() {
 
         {/* â•â•â•â• DASHBOARD â•â•â•â• */}
         {activeTab === "dashboard" && (
-          <div className="flex-1 overflow-y-auto p-4 space-y-4 max-w-2xl mx-auto w-full pb-20" id="owner_dashboard_pane">
+          <div className="flex-1 overflow-y-auto p-4 lg:p-6 space-y-4 lg:space-y-5 w-full pb-6" id="owner_dashboard_pane">
             {/* Section 1 — Financial Overview: visible without scrolling */}
             <div className="flex items-center justify-between">
               <div>
@@ -2663,7 +2764,8 @@ export function OwnerDashboard() {
               </button>
             )}
 
-            <div className="grid grid-cols-2 gap-3">
+            {/* KPI cards — 2-col on mobile, 5-col on desktop */}
+            <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 lg:gap-4">
               <div className="bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-2xl p-4 text-white shadow">
                 <p className="text-xs text-emerald-100">Pendapatan</p>
                 <p className="text-xl font-bold mt-1">RM {incomeInPeriod.toLocaleString("ms-MY", { minimumFractionDigits: 2 })}</p>
@@ -2674,16 +2776,12 @@ export function OwnerDashboard() {
                 <p className="text-xl font-bold mt-1">RM {expenseInPeriod.toLocaleString("ms-MY", { minimumFractionDigits: 2 })}</p>
                 <TrendingDown className="w-4 h-4 text-rose-200 mt-1" />
               </div>
-            </div>
-
-            <div className={`rounded-2xl p-4 shadow-sm border bg-white ${(incomeInPeriod - expenseInPeriod) >= 0 ? "border-emerald-100" : "border-rose-100"}`}>
-              <p className="text-xs text-slate-500">Untung / Rugi ({periodRange.label})</p>
-              <p className={`text-2xl font-bold mt-1 ${(incomeInPeriod - expenseInPeriod) >= 0 ? "text-emerald-600" : "text-rose-500"}`}>
-                {(incomeInPeriod - expenseInPeriod) >= 0 ? "+" : "-"}RM {Math.abs(incomeInPeriod - expenseInPeriod).toLocaleString("ms-MY", { minimumFractionDigits: 2 })}
-              </p>
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
+              <div className={`col-span-2 lg:col-span-1 rounded-2xl p-4 shadow-sm border bg-white ${(incomeInPeriod - expenseInPeriod) >= 0 ? "border-emerald-100" : "border-rose-100"}`}>
+                <p className="text-xs text-slate-500">Untung / Rugi</p>
+                <p className={`text-xl font-bold mt-1 ${(incomeInPeriod - expenseInPeriod) >= 0 ? "text-emerald-600" : "text-rose-500"}`}>
+                  {(incomeInPeriod - expenseInPeriod) >= 0 ? "+" : "-"}RM {Math.abs(incomeInPeriod - expenseInPeriod).toLocaleString("ms-MY", { minimumFractionDigits: 2 })}
+                </p>
+              </div>
               <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
                 <p className="text-xs text-slate-500 mb-1">Perlu Dikutip</p>
                 <p className="text-lg font-bold text-amber-600">RM {totalReceivable.toLocaleString("ms-MY", { minimumFractionDigits: 2 })}</p>
@@ -2698,7 +2796,7 @@ export function OwnerDashboard() {
                 and quick actions only render below when expanded) */}
             <FinancialHealthSummary health={financialHealth} onExpand={() => setShowHealthDetail(v => !v)} />
 
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
               <button onClick={() => setDashboardTypeFilter(f => f === "INCOME" ? "ALL" : "INCOME")}
                 className={`flex items-center justify-center space-x-2 rounded-2xl px-4 py-3 transition cursor-pointer border ${dashboardTypeFilter === "INCOME" ? "bg-emerald-600 border-emerald-600 text-white shadow" : "bg-emerald-50 border-emerald-100 text-emerald-700 hover:bg-emerald-100"}`}>
                 <TrendingUp className={`w-4 h-4 ${dashboardTypeFilter === "INCOME" ? "text-white" : "text-emerald-600"}`} /><span className="text-xs font-bold">Rekod Pendapatan</span>
@@ -2732,7 +2830,7 @@ export function OwnerDashboard() {
                   <input type="date" value={txnFilterTo} onChange={e => setTxnFilterTo(e.target.value)}
                     className="flex-1 px-2.5 py-1.5 rounded-lg border border-slate-200 text-xs text-slate-600" />
                 </div>
-                <div className="grid grid-cols-3 gap-2">
+                <div className="grid grid-cols-3 gap-2 lg:gap-3">
                   <select value={txnFilterBusiness} onChange={e => setTxnFilterBusiness(e.target.value)}
                     className="px-2 py-1.5 rounded-lg border border-slate-200 text-2xs text-slate-600">
                     <option value="ALL">Semua Perniagaan</option>
@@ -3019,7 +3117,7 @@ export function OwnerDashboard() {
 
         {/* â•â•â•â• REPORTS â•â•â•â• */}
         {activeTab === "reports" && (
-          <div className="flex-1 overflow-y-auto p-4 space-y-4 max-w-2xl mx-auto w-full pb-20" id="owner_reports_pane">
+          <div className="flex-1 overflow-y-auto p-4 lg:p-6 space-y-4 w-full pb-6" id="owner_reports_pane">
             <h2 className="text-lg font-bold text-slate-900">Laporan</h2>
             <FinancialReportsAnalytics
               onNavigateToRecords={(recordIds, label) => {
@@ -3071,52 +3169,69 @@ export function OwnerDashboard() {
 
         {/* â•â•â•â• MORE â•â•â•â• */}
         {activeTab === "more" && (
-          <div className="flex-1 overflow-y-auto p-4 space-y-4 max-w-2xl mx-auto w-full pb-20" id="owner_more_pane">
+          <div className="flex-1 overflow-y-auto p-4 lg:p-6 space-y-4 lg:space-y-5 w-full pb-6" id="owner_more_pane">
 
-            {morePage === "menu" && (
-              <>
-                <h2 className="text-lg font-bold text-slate-900">Lagi</h2>
-                <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm divide-y divide-slate-100">
-                  {([
-                    { id: "myProfile" as MorePage, label: "Profil Saya & Kewangan AI", desc: user?.email || "Akaun, perniagaan & kenderaan", icon: User },
-                    { id: "team" as MorePage,      label: "Pasukan",           desc: "Tambah, edit & urus kakitangan",        icon: Users },
-                    { id: "billing" as MorePage,   label: "Bil & Langganan",   desc: "Plan, kredit AI & storan",              icon: CreditCard },
-                    { id: "settings" as MorePage,  label: "Tetapan",           desc: "Konfigurasi & peringatan",              icon: Settings },
-                    { id: "resources" as MorePage, label: "Tetapan Sumber",    desc: "AI & storan yang digunakan",            icon: Cpu },
-                    { id: "chatArchive" as MorePage, label: "Arkib Perbualan", desc: "Sejarah perbualan dengan MYKERANI ikut tarikh", icon: MessageCircle },
-                    { id: "history" as MorePage,   label: "Sejarah Aktiviti",  desc: "Log semua transaksi & aktiviti",        icon: History },
-                    { id: "activity" as MorePage,  label: "Pusat Aktiviti",    desc: "Pantau aktiviti staf", icon: Bell },
-                    { id: "support" as MorePage,   label: "Pusat Sokongan",    desc: "Bantuan, FAQ & tiket sokongan",         icon: HelpCircle },
-                    { id: "account360" as MorePage, label: "Akaun Saya 360",  desc: "Skor kesihatan, status langganan & akaun", icon: Star },
-                  ]).map(({ id, label, desc, icon: Icon }) => (
-                    <button key={id} onClick={() => setMorePage(id)}
-                      className="w-full flex items-center space-x-4 px-4 py-4 hover:bg-slate-50 transition cursor-pointer text-left">
-                      <div className="w-9 h-9 rounded-xl bg-slate-100 flex items-center justify-center">
-                        <Icon className="w-4 h-4 text-slate-600" />
-                      </div>
-                      <div className="flex-grow">
-                        <p className="text-sm font-semibold text-slate-900">{label}</p>
-                        <p className="text-xs text-slate-400 truncate">{desc}</p>
-                      </div>
-                      <ChevronRight className="w-4 h-4 text-slate-300" />
-                    </button>
-                  ))}
-                </div>
-                <button onClick={() => signOut()} className="w-full py-3 mt-2 border border-rose-200 text-rose-500 rounded-2xl text-sm font-semibold hover:bg-rose-50 transition cursor-pointer">
-                  Log Keluar
-                </button>
-              </>
-            )}
+            {morePage === "menu" && (() => {
+              const menuItems = [
+                { id: "myProfile" as MorePage, label: "Profil Saya & Kewangan AI", desc: user?.email || "Akaun, perniagaan & kenderaan", icon: User },
+                { id: "team" as MorePage,      label: "Pasukan",           desc: "Tambah, edit & urus kakitangan",        icon: Users },
+                { id: "billing" as MorePage,   label: "Bil & Langganan",   desc: "Plan, kredit AI & storan",              icon: CreditCard },
+                { id: "settings" as MorePage,  label: "Tetapan",           desc: "Konfigurasi & peringatan",              icon: Settings },
+                { id: "resources" as MorePage, label: "Tetapan Sumber",    desc: "AI & storan yang digunakan",            icon: Cpu },
+                { id: "chatArchive" as MorePage, label: "Arkib Perbualan", desc: "Sejarah perbualan dengan MYKERANI ikut tarikh", icon: MessageCircle },
+                { id: "history" as MorePage,   label: "Sejarah Aktiviti",  desc: "Log semua transaksi & aktiviti",        icon: History },
+                { id: "activity" as MorePage,  label: "Pusat Aktiviti",    desc: "Pantau aktiviti staf",                  icon: Bell },
+                { id: "support" as MorePage,   label: "Pusat Sokongan",    desc: "Bantuan, FAQ & tiket sokongan",         icon: HelpCircle },
+                { id: "account360" as MorePage, label: "Akaun Saya 360",  desc: "Skor kesihatan, status langganan & akaun", icon: Star },
+              ];
+              return (
+                <>
+                  <h2 className="text-lg font-bold text-slate-900 lg:text-xl">Lagi</h2>
+                  {/* Mobile: list */}
+                  <div className="lg:hidden bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm divide-y divide-slate-100">
+                    {menuItems.map(({ id, label, desc, icon: Icon }) => (
+                      <button key={id} onClick={() => setMorePage(id)}
+                        className="w-full flex items-center space-x-4 px-4 py-4 hover:bg-slate-50 transition cursor-pointer text-left">
+                        <div className="w-9 h-9 rounded-xl bg-slate-100 flex items-center justify-center">
+                          <Icon className="w-4 h-4 text-slate-600" />
+                        </div>
+                        <div className="flex-grow">
+                          <p className="text-sm font-semibold text-slate-900">{label}</p>
+                          <p className="text-xs text-slate-400 truncate">{desc}</p>
+                        </div>
+                        <ChevronRight className="w-4 h-4 text-slate-300" />
+                      </button>
+                    ))}
+                  </div>
+                  {/* Desktop: card grid */}
+                  <div className="hidden lg:grid grid-cols-3 xl:grid-cols-4 gap-4">
+                    {menuItems.map(({ id, label, desc, icon: Icon }) => (
+                      <button key={id} onClick={() => setMorePage(id)}
+                        className="flex flex-col items-start p-5 bg-white border border-slate-200 rounded-2xl hover:border-indigo-200 hover:shadow-md transition cursor-pointer shadow-sm text-left group">
+                        <div className="w-10 h-10 rounded-xl bg-slate-100 group-hover:bg-indigo-50 flex items-center justify-center mb-3 transition">
+                          <Icon className="w-5 h-5 text-slate-600 group-hover:text-indigo-600 transition" />
+                        </div>
+                        <p className="text-sm font-bold text-slate-900 mb-0.5 leading-tight">{label}</p>
+                        <p className="text-xs text-slate-400 leading-relaxed">{desc}</p>
+                      </button>
+                    ))}
+                  </div>
+                  <button onClick={() => signOut()} className="w-full lg:w-auto lg:px-6 py-3 mt-2 border border-rose-200 text-rose-500 rounded-2xl text-sm font-semibold hover:bg-rose-50 transition cursor-pointer">
+                    Log Keluar
+                  </button>
+                </>
+              );
+            })()}
 
             {morePage !== "menu" && (
-              <button onClick={() => setMorePage("menu")} className="flex items-center space-x-1.5 text-xs text-slate-400 hover:text-slate-600 cursor-pointer transition mb-2">
+              <button onClick={() => setMorePage("menu")} className="lg:hidden flex items-center space-x-1.5 text-xs text-slate-400 hover:text-slate-600 cursor-pointer transition mb-2">
                 <ChevronRight className="w-3.5 h-3.5 rotate-180" /><span>Kembali</span>
               </button>
             )}
 
             {/* Team */}
             {morePage === "team" && (
-              <div className="space-y-4">
+              <div className="space-y-4 lg:space-y-5">
                 <div className="flex items-center justify-between">
                   <h2 className="text-lg font-bold text-slate-900">Pasukan Saya</h2>
                   <button onClick={() => { setShowInvite(v => !v); setInviteResult(null); }}
@@ -4301,8 +4416,8 @@ export function OwnerDashboard() {
 
             {/* Settings */}
             {morePage === "settings" && (
-              <div className="space-y-4">
-                <h2 className="text-lg font-bold text-slate-900">Tetapan</h2>
+              <div className="space-y-4 lg:space-y-5">
+                <h2 className="text-lg font-bold text-slate-900 lg:text-xl">Tetapan</h2>
 
                 {/* Company info */}
                 <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-3">
@@ -5206,8 +5321,8 @@ export function OwnerDashboard() {
         )}
       </div>
 
-      {/* â"€â"€ BOTTOM NAV â"€â"€ */}
-      <nav className="bg-white border-t border-slate-200 flex items-center justify-around px-2 py-1.5 shrink-0 z-40" id="owner_bottom_nav">
+      {/* ── BOTTOM NAV — mobile/tablet only ── */}
+      <nav className="lg:hidden bg-white border-t border-slate-200 flex items-center justify-around px-2 py-1.5 shrink-0 z-40" id="owner_bottom_nav">
         {([
           { id: "home" as MainTab,      label: "Home",      icon: Home },
           { id: "dashboard" as MainTab, label: "Dashboard", icon: LayoutDashboard },
@@ -5225,6 +5340,7 @@ export function OwnerDashboard() {
           );
         })}
       </nav>
+      </div>{/* end content column */}
 
       {/* Storage Frozen Banner */}
       {storageQuota.isFrozen && activeTab === "documents" && (

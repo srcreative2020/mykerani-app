@@ -1178,7 +1178,7 @@ export function StaffHomeScreen() {
   ];
 
   return (
-    <div className="h-screen flex flex-col overflow-hidden" id="staff_root" style={{background:"#F4F8F5"}}>
+    <div className="h-screen flex flex-col lg:flex-row overflow-hidden" id="staff_root" style={{background:"#F4F8F5"}}>
       <style>{`
         #staff_root .bg-emerald-700{background-color:#5A9E7A!important}
         #staff_root .bg-emerald-800{background-color:#3D7057!important}
@@ -1198,6 +1198,60 @@ export function StaffHomeScreen() {
         #staff_root .from-emerald-600{--tw-gradient-from:#5A9E7A!important}
         #staff_root .to-emerald-800{--tw-gradient-to:#3D7057!important}
       `}</style>
+
+      {/* DESKTOP SIDEBAR */}
+      <aside className="hidden lg:flex flex-col w-60 xl:w-64 bg-white border-r border-slate-100 shrink-0 z-20" id="staff_sidebar">
+        <div className="px-4 py-4 border-b border-slate-100 shrink-0">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-xl bg-slate-900 flex items-center justify-center text-white font-bold text-sm shadow-sm shrink-0">MK</div>
+            <div className="min-w-0">
+              <div className="flex items-center gap-1.5">
+                <span className="font-bold text-slate-900 text-sm">MYKERANI</span>
+                <span className="text-3xs font-bold bg-slate-900 text-white px-1.5 py-0.5 rounded-md">V1.0</span>
+              </div>
+              {activeWorkspace && <p className="text-2xs text-slate-400 leading-none mt-0.5 truncate">{activeWorkspace.name}</p>}
+            </div>
+          </div>
+        </div>
+        <nav className="flex-1 overflow-y-auto p-3 space-y-0.5">
+          {([
+            { id: "home" as StaffTab, label: "Home", icon: Home },
+            { id: "dashboard" as StaffTab, label: "Rekod Saya", icon: LayoutDashboard },
+            { id: "documents" as StaffTab, label: "Dokumen", icon: FileText },
+            { id: "more" as StaffTab, label: "Lagi", icon: MoreHorizontal },
+          ]).map(({ id, label, icon: Icon }) => {
+            const active = activeTab === id;
+            return (
+              <button key={id}
+                onClick={() => setActiveTab(id)}
+                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition cursor-pointer text-left ${
+                  active ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+                }`}>
+                <Icon className={`w-4 h-4 shrink-0 ${active ? "text-white" : "text-slate-400"}`} />
+                <span>{label}</span>
+              </button>
+            );
+          })}
+        </nav>
+        <div className="p-3 border-t border-slate-100 space-y-2 shrink-0">
+          <div className="flex items-center gap-2 px-1.5 py-1">
+            <div className="w-7 h-7 rounded-full bg-slate-700 text-white flex items-center justify-center text-xs font-bold shrink-0">
+              {firstName.charAt(0).toUpperCase()}
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-xs font-semibold text-slate-800 truncate">{firstName}</p>
+              <p className="text-2xs text-slate-500 font-medium">Staf</p>
+            </div>
+            <button onClick={() => signOut()}
+              className="p-1.5 hover:bg-rose-50 rounded-lg transition cursor-pointer text-slate-400 hover:text-rose-500">
+              <LogOut className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
+      </aside>
+
+      {/* Content column */}
+      <div className="flex-1 flex flex-col overflow-hidden min-w-0">
 
       {/* â"€â"€ HEADER â"€â"€ */}
       <header className="bg-white border-b border-slate-100 px-4 py-3 flex items-center justify-between shrink-0" id="staff_header">
@@ -1745,7 +1799,7 @@ export function StaffHomeScreen() {
 
         {/* â•â•â•â• REKOD â•â•â•â• */}
         {activeTab === "dashboard" && (
-          <div className="flex-1 overflow-y-auto p-4 pb-24 max-w-lg mx-auto w-full space-y-3" id="staff_records_pane">
+          <div className="flex-1 overflow-y-auto p-4 lg:p-6 space-y-3 w-full pb-6" id="staff_records_pane">
             <div className="flex items-center justify-between">
               <div>
                 <h2 className="text-lg font-bold text-slate-900">Rekod Saya</h2>
@@ -1882,7 +1936,7 @@ export function StaffHomeScreen() {
 
         {/* MORE */}
         {activeTab === "more" && (
-          <div className="flex-1 overflow-y-auto p-4 pb-24 max-w-lg mx-auto w-full space-y-4" id="staff_profile_pane">
+          <div className="flex-1 overflow-y-auto p-4 lg:p-6 space-y-4 w-full pb-6" id="staff_profile_pane">
             <h2 className="text-lg font-bold text-slate-900">Profil Saya</h2>
 
             {/* Hero Profile Card — unified card replacing the old two-block layout */}
@@ -2007,7 +2061,7 @@ export function StaffHomeScreen() {
                 <X className="w-5 h-5 text-slate-500" />
               </button>
             </div>
-            <div className="flex-1 overflow-y-auto p-4 max-w-lg mx-auto w-full space-y-3">
+            <div className="flex-1 overflow-y-auto p-4 lg:p-6 space-y-3 w-full pb-6">
               {(() => {
                 const merged = new Map<string, typeof chatMessages[number]>();
                 chatHistoryAll.forEach(m => merged.set(m.id, m));
@@ -2419,7 +2473,7 @@ export function StaffHomeScreen() {
           audit readiness, export report) per MYKERANI role separation. The
           "Laporan" tab has been removed and "dashboard" now renders only the
           staff member's own record list (no totals/health score/readiness). */}
-      <nav className="bg-white border-t border-slate-200 flex items-center justify-around px-2 py-1.5 shrink-0 z-40" id="staff_bottom_nav">
+      <nav className="lg:hidden bg-white border-t border-slate-200 flex items-center justify-around px-2 py-1.5 shrink-0 z-40" id="staff_bottom_nav">
         {([
           { id: "home" as StaffTab,       label: "Home",      icon: Home },
           { id: "dashboard" as StaffTab,  label: "Rekod Saya", icon: LayoutDashboard },
@@ -2436,6 +2490,7 @@ export function StaffHomeScreen() {
           );
         })}
       </nav>
+      </div>{/* end content column */}
     </div>
   );
 }
