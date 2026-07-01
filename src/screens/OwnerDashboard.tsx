@@ -3406,324 +3406,428 @@ export function OwnerDashboard() {
             )}
 
             {morePage === "myProfile" && (
-              <div className="space-y-4">
-                <h2 className="text-lg font-bold text-slate-900">Profil Saya & Kewangan AI</h2>
-
-                <div className="bg-white border border-slate-200 rounded-2xl p-6 space-y-4 shadow-sm">
-                  <div className="flex items-center space-x-4">
-                    <div className="w-14 h-14 rounded-2xl bg-indigo-600 text-white flex items-center justify-center text-2xl font-bold shadow shrink-0">
-                      {firstName.charAt(0).toUpperCase()}
-                    </div>
-                    {!editingAccount ? (
-                      <div className="min-w-0">
-                        <p className="font-bold text-slate-900 truncate">{user?.fullName}</p>
-                        <p className="text-xs text-slate-500 truncate">{user?.email}</p>
-                        <span className="text-2xs bg-indigo-100 text-indigo-700 font-bold px-2 py-0.5 rounded-full mt-1 inline-block">Pemilik Syarikat</span>
-                      </div>
-                    ) : (
-                      <div className="min-w-0 flex-1 space-y-1.5">
-                        <input value={accountDraft.fullName} onChange={e => setAccountDraft(d => ({ ...d, fullName: e.target.value }))} placeholder="Nama penuh" className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg text-sm" />
-                        <input value={accountDraft.email} onChange={e => setAccountDraft(d => ({ ...d, email: e.target.value }))} placeholder="Email" type="email" className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg text-sm" />
-                        <input value={accountDraft.mobileNumber} onChange={e => setAccountDraft(d => ({ ...d, mobileNumber: e.target.value }))} placeholder="No. Telefon" className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg text-sm" />
-                        <input value={accountDraft.alternateNumber} onChange={e => setAccountDraft(d => ({ ...d, alternateNumber: e.target.value }))} placeholder="No. Telefon Alternatif" className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg text-sm" />
-                      </div>
-                    )}
+              <div className="space-y-5 pb-6">
+                {/* ── Page header ── */}
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h2 className="text-lg font-bold text-slate-900">Profil Saya</h2>
+                    <p className="text-xs text-slate-400 mt-0.5">Kewangan AI &amp; Maklumat Peribadi</p>
                   </div>
-
-                  {accountMsg && (
-                    <p className={`text-xs ${accountMsg.startsWith("Profil") || accountMsg.startsWith("Nama") ? "text-emerald-600" : "text-rose-500"}`}>{accountMsg}</p>
-                  )}
-
-                  {!editingAccount ? (
-                    <button onClick={startEditAccount} className="w-full py-2.5 border border-slate-200 text-slate-700 rounded-xl text-sm font-semibold hover:bg-slate-50 transition cursor-pointer">
-                      Edit Profil
-                    </button>
-                  ) : (
-                    <div className="flex gap-2">
-                      <button onClick={saveAccount} disabled={accountSaving} className="flex-1 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-semibold disabled:opacity-50 disabled:cursor-not-allowed transition active:scale-[0.98] cursor-pointer">
-                        {accountSaving ? "Menyimpan..." : "Simpan"}
-                      </button>
-                      <button onClick={() => setEditingAccount(false)} className="flex-1 py-2.5 bg-slate-200 hover:bg-slate-300 text-slate-800 rounded-xl text-sm font-semibold cursor-pointer">
-                        Batal
-                      </button>
-                    </div>
-                  )}
-
-                  <button onClick={() => signOut()} className="w-full py-3 border border-rose-200 text-rose-500 rounded-xl text-sm font-semibold hover:bg-rose-50 transition cursor-pointer">
-                    Log Keluar
-                  </button>
                 </div>
 
-                <p className="text-xs text-slate-500">Maklumat di bawah adalah <span className="font-semibold">pilihan (optional)</span> — boleh dilangkau atau dikemas kini bila-bila masa. Lebih lengkap maklumat, lebih pintar MYKERANI AI membantu anda.</p>
+                {/* ══════════════════════════════════════════════════
+                    DESKTOP / TABLET: two-column grid
+                    MOBILE: single column
+                    ══════════════════════════════════════════════════ */}
+                <div className="lg:grid lg:grid-cols-[340px_1fr] lg:gap-6 xl:grid-cols-[380px_1fr] space-y-5 lg:space-y-0">
 
-                <div className="bg-white border border-slate-200 rounded-2xl p-5 space-y-3 shadow-sm">
-                  <h3 className="text-sm font-bold text-slate-800">Profil Peribadi</h3>
-                  <input value={personalProfile.fullName} onChange={e => setPersonalProfile(p => ({ ...p, fullName: e.target.value }))} placeholder="Nama penuh" className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm" />
-                  <div className="grid grid-cols-2 gap-2">
-                    <input type="date" value={personalProfile.dateOfBirth} onChange={e => setPersonalProfile(p => ({ ...p, dateOfBirth: e.target.value }))} className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm" />
-                    <input value={personalProfile.maritalStatus} onChange={e => setPersonalProfile(p => ({ ...p, maritalStatus: e.target.value }))} placeholder="Status perkahwinan" className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm" />
-                  </div>
-                  <input value={personalProfile.occupation} onChange={e => setPersonalProfile(p => ({ ...p, occupation: e.target.value }))} placeholder="Pekerjaan" className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm" />
-                  <div className="grid grid-cols-2 gap-2">
-                    <input type="number" value={personalProfile.monthlyIncomeMyr} onChange={e => setPersonalProfile(p => ({ ...p, monthlyIncomeMyr: e.target.value }))} placeholder="Pendapatan bulanan (RM)" className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm" />
-                    <input type="number" value={personalProfile.dependentsCount} onChange={e => setPersonalProfile(p => ({ ...p, dependentsCount: e.target.value }))} placeholder="Bilangan tanggungan" className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm" />
-                  </div>
-                  <textarea value={personalProfile.notes} onChange={e => setPersonalProfile(p => ({ ...p, notes: e.target.value }))} placeholder="Nota tambahan (contoh: ada perniagaan sampingan, dll)" className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm" rows={2} />
-                </div>
+                  {/* ─── LEFT COLUMN (identity + personal + company account) ─── */}
+                  <div className="space-y-4">
 
-                <div className="bg-white border border-slate-200 rounded-2xl p-5 space-y-3 shadow-sm">
-                  <div className="flex items-center justify-between">
-                    <h3 className="text-sm font-bold text-slate-800">Profil Perniagaan</h3>
-                    {!addingBusiness && (
-                      <button onClick={() => setAddingBusiness(true)} className="text-xs font-semibold text-indigo-600 hover:text-indigo-700 cursor-pointer">+ Tambah Bisnes</button>
-                    )}
-                  </div>
-                  <p className="text-xs text-slate-500">Tambah setiap bisnes yang anda uruskan. Setiap bisnes boleh ada beberapa cawangan.</p>
-
-                  {businesses.length === 0 && !addingBusiness && (
-                    <p className="text-xs text-slate-400 italic">Belum ada bisnes ditambah.</p>
-                  )}
-
-                  {businesses.map(b => (
-                    <div key={b.id} className="bg-slate-50 border border-slate-100 rounded-xl p-3 space-y-2">
-                      {editingBusinessId === b.id ? (
-                        <div className="space-y-2">
-                          <input value={editBusinessForm.businessName} onChange={e => setEditBusinessForm(f => ({ ...f, businessName: e.target.value }))} placeholder="Nama bisnes" className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm" />
-                          <input value={editBusinessForm.industry} onChange={e => setEditBusinessForm(f => ({ ...f, industry: e.target.value }))} placeholder="Industri (contoh: F&B, Percetakan)" className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm" />
-                          <div className="grid grid-cols-2 gap-2">
-                            <input value={editBusinessForm.businessType} onChange={e => setEditBusinessForm(f => ({ ...f, businessType: e.target.value }))} placeholder="Jenis perniagaan (Sdn Bhd, Enterprise...)" className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm" />
-                            <input value={editBusinessForm.registrationNo} onChange={e => setEditBusinessForm(f => ({ ...f, registrationNo: e.target.value }))} placeholder="No. pendaftaran" className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm" />
+                    {/* 1. Identity card */}
+                    <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
+                      {/* Avatar banner */}
+                      <div className="h-16 bg-gradient-to-r from-indigo-600 to-indigo-500" />
+                      <div className="px-5 pb-5 -mt-8 space-y-4">
+                        <div className="flex items-end justify-between">
+                          <div className="w-16 h-16 rounded-2xl bg-white border-4 border-white shadow-md flex items-center justify-center text-2xl font-bold text-indigo-600 shrink-0">
+                            {firstName.charAt(0).toUpperCase()}
                           </div>
-                          <textarea value={editBusinessForm.notes} onChange={e => setEditBusinessForm(f => ({ ...f, notes: e.target.value }))} placeholder="Nota tambahan" className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm" rows={2} />
-                          <div className="flex space-x-2">
-                            <button onClick={submitEditBusiness} className="flex-1 px-3 py-2 bg-slate-900 text-white rounded-xl text-sm font-semibold cursor-pointer">Simpan</button>
-                            <button onClick={() => { setEditingBusinessId(null); setEditBusinessForm(EMPTY_BUSINESS_FORM); }} className="flex-1 px-3 py-2 bg-slate-200 text-slate-700 rounded-xl text-sm font-semibold cursor-pointer">Batal</button>
+                          <span className="text-2xs bg-indigo-100 text-indigo-700 font-bold px-2.5 py-1 rounded-full mb-1">Pemilik Syarikat</span>
+                        </div>
+
+                        {!editingAccount ? (
+                          <div className="space-y-0.5">
+                            <p className="font-bold text-slate-900 text-base">{user?.fullName}</p>
+                            <p className="text-xs text-slate-500">{user?.email}</p>
+                          </div>
+                        ) : (
+                          <div className="space-y-2">
+                            <input value={accountDraft.fullName} onChange={e => setAccountDraft(d => ({ ...d, fullName: e.target.value }))} placeholder="Nama penuh" className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400" />
+                            <input value={accountDraft.email} onChange={e => setAccountDraft(d => ({ ...d, email: e.target.value }))} placeholder="Email" type="email" className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400" />
+                            <div className="grid grid-cols-2 gap-2">
+                              <input value={accountDraft.mobileNumber} onChange={e => setAccountDraft(d => ({ ...d, mobileNumber: e.target.value }))} placeholder="No. Telefon" className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400" />
+                              <input value={accountDraft.alternateNumber} onChange={e => setAccountDraft(d => ({ ...d, alternateNumber: e.target.value }))} placeholder="No. Alternatif" className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400" />
+                            </div>
+                          </div>
+                        )}
+
+                        {accountMsg && (
+                          <p className={`text-xs font-medium ${accountMsg.startsWith("Profil") || accountMsg.startsWith("Nama") ? "text-emerald-600" : "text-rose-500"}`}>{accountMsg}</p>
+                        )}
+
+                        {!editingAccount ? (
+                          <button onClick={startEditAccount} className="w-full py-2 border border-slate-200 text-slate-700 rounded-xl text-sm font-semibold hover:bg-slate-50 transition cursor-pointer">
+                            Edit Profil
+                          </button>
+                        ) : (
+                          <div className="flex gap-2">
+                            <button onClick={saveAccount} disabled={accountSaving} className="flex-1 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-semibold disabled:opacity-50 transition active:scale-[0.98] cursor-pointer">
+                              {accountSaving ? "Menyimpan..." : "Simpan"}
+                            </button>
+                            <button onClick={() => setEditingAccount(false)} className="flex-1 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-sm font-semibold cursor-pointer">
+                              Batal
+                            </button>
+                          </div>
+                        )}
+
+                        <button onClick={() => signOut()} className="w-full py-2 border border-rose-200 text-rose-500 rounded-xl text-sm font-semibold hover:bg-rose-50 transition cursor-pointer">
+                          Log Keluar
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* AI context notice */}
+                    <div className="bg-indigo-50 border border-indigo-100 rounded-2xl px-4 py-3 flex gap-3 items-start">
+                      <div className="w-7 h-7 rounded-lg bg-indigo-100 flex items-center justify-center shrink-0 mt-0.5">
+                        <Brain className="w-3.5 h-3.5 text-indigo-600" />
+                      </div>
+                      <p className="text-xs text-indigo-700 leading-relaxed">Maklumat di bawah adalah <span className="font-bold">pilihan</span> — semakin lengkap, semakin pintar MYKERANI AI membantu anda.</p>
+                    </div>
+
+                    {/* 2. Maklumat Peribadi */}
+                    <div className="bg-white border border-slate-200 rounded-2xl shadow-sm">
+                      <div className="px-5 py-4 border-b border-slate-100">
+                        <h3 className="text-sm font-bold text-slate-800">Maklumat Peribadi</h3>
+                      </div>
+                      <div className="px-5 py-4 space-y-3">
+                        <input value={personalProfile.fullName} onChange={e => setPersonalProfile(p => ({ ...p, fullName: e.target.value }))} placeholder="Nama penuh" className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400" />
+                        <div className="grid grid-cols-2 gap-2">
+                          <div className="space-y-1">
+                            <label className="text-2xs font-semibold text-slate-400 uppercase tracking-wide pl-1">Tarikh Lahir</label>
+                            <input type="date" value={personalProfile.dateOfBirth} onChange={e => setPersonalProfile(p => ({ ...p, dateOfBirth: e.target.value }))} className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400" />
+                          </div>
+                          <div className="space-y-1">
+                            <label className="text-2xs font-semibold text-slate-400 uppercase tracking-wide pl-1">Status</label>
+                            <input value={personalProfile.maritalStatus} onChange={e => setPersonalProfile(p => ({ ...p, maritalStatus: e.target.value }))} placeholder="Kahwin / Bujang" className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400" />
                           </div>
                         </div>
-                      ) : (
-                        <>
-                          <div className="flex items-start justify-between">
-                            <div>
-                              <p className="text-sm font-semibold text-slate-800">{b.businessName}</p>
-                              <p className="text-xs text-slate-500">
-                                {[b.industry, b.businessType].filter(Boolean).join(" · ")}
-                                {b.registrationNo && <span className="text-slate-400"> · {b.registrationNo}</span>}
-                              </p>
-                            </div>
-                            <div className="flex items-center space-x-2">
-                              <button onClick={() => startEditBusiness(b)} className="text-slate-400 hover:text-indigo-600 cursor-pointer"><Edit3 className="w-4 h-4" /></button>
-                              <button onClick={() => setConfirmDeleteBusinessId(b.id)} className="text-rose-400 hover:text-rose-600 cursor-pointer"><Trash2 className="w-4 h-4" /></button>
-                            </div>
+                        <input value={personalProfile.occupation} onChange={e => setPersonalProfile(p => ({ ...p, occupation: e.target.value }))} placeholder="Pekerjaan / Jawatan" className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400" />
+                        <div className="grid grid-cols-2 gap-2">
+                          <div className="space-y-1">
+                            <label className="text-2xs font-semibold text-slate-400 uppercase tracking-wide pl-1">Pendapatan / Bulan</label>
+                            <input type="number" value={personalProfile.monthlyIncomeMyr} onChange={e => setPersonalProfile(p => ({ ...p, monthlyIncomeMyr: e.target.value }))} placeholder="RM" className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400" />
                           </div>
+                          <div className="space-y-1">
+                            <label className="text-2xs font-semibold text-slate-400 uppercase tracking-wide pl-1">Bil. Tanggungan</label>
+                            <input type="number" value={personalProfile.dependentsCount} onChange={e => setPersonalProfile(p => ({ ...p, dependentsCount: e.target.value }))} placeholder="0" className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400" />
+                          </div>
+                        </div>
+                        <textarea value={personalProfile.notes} onChange={e => setPersonalProfile(p => ({ ...p, notes: e.target.value }))} placeholder="Nota (contoh: ada perniagaan sampingan, dll)" className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400" rows={2} />
+                      </div>
+                    </div>
 
-                          {confirmDeleteBusinessId === b.id && (
-                            <div className="bg-rose-50 border border-rose-200 rounded-xl p-2 flex items-center justify-between">
-                              <span className="text-xs text-rose-700">Padam "{b.businessName}"?</span>
-                              <div className="flex space-x-2">
-                                <button onClick={() => removeBusiness(b.id)} className="px-2 py-1 bg-rose-600 text-white rounded-lg text-xs font-semibold cursor-pointer">Padam</button>
-                                <button onClick={() => setConfirmDeleteBusinessId(null)} className="px-2 py-1 bg-slate-200 text-slate-700 rounded-lg text-xs font-semibold cursor-pointer">Batal</button>
-                              </div>
-                            </div>
-                          )}
+                    {/* 3. Maklumat Syarikat (Akaun) */}
+                    <div className="bg-white border border-slate-200 rounded-2xl shadow-sm">
+                      <div className="px-5 py-4 border-b border-slate-100">
+                        <h3 className="text-sm font-bold text-slate-800">Maklumat Akaun Syarikat</h3>
+                        <p className="text-xs text-slate-400 mt-0.5">Untuk pengurusan bil &amp; sokongan HQ MyKerani</p>
+                      </div>
+                      <div className="px-5 py-4 space-y-3">
+                        <div className="grid grid-cols-2 gap-2">
+                          <input value={companyMasterForm.registrationNo} onChange={e => setCompanyMasterForm(f => ({ ...f, registrationNo: e.target.value }))} placeholder="No. SSM" className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400" />
+                          <input value={companyMasterForm.taxNumber} onChange={e => setCompanyMasterForm(f => ({ ...f, taxNumber: e.target.value }))} placeholder="No. Cukai" className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400" />
+                        </div>
+                        <input value={companyMasterForm.industry} onChange={e => setCompanyMasterForm(f => ({ ...f, industry: e.target.value }))} placeholder="Industri Utama" className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400" />
+                        <textarea value={companyMasterForm.address} onChange={e => setCompanyMasterForm(f => ({ ...f, address: e.target.value }))} placeholder="Alamat Syarikat" rows={2} className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400" />
+                        <div className="pt-1">
+                          <p className="text-2xs font-semibold text-slate-400 uppercase tracking-wide mb-2 pl-1">Kenalan</p>
+                          <div className="grid grid-cols-2 gap-2">
+                            <input value={companyMasterForm.billingContactName} onChange={e => setCompanyMasterForm(f => ({ ...f, billingContactName: e.target.value }))} placeholder="Nama Kontak Bil" className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400" />
+                            <input type="email" value={companyMasterForm.billingEmail} onChange={e => setCompanyMasterForm(f => ({ ...f, billingEmail: e.target.value }))} placeholder="E-mel Bil" className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400" />
+                            <input value={companyMasterForm.supportContactName} onChange={e => setCompanyMasterForm(f => ({ ...f, supportContactName: e.target.value }))} placeholder="Nama Kontak Sokongan" className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400" />
+                            <input type="email" value={companyMasterForm.supportEmail} onChange={e => setCompanyMasterForm(f => ({ ...f, supportEmail: e.target.value }))} placeholder="E-mel Sokongan" className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400" />
+                          </div>
+                        </div>
+                        {companyMasterMsg && <p className="text-xs text-emerald-600 font-medium">{companyMasterMsg}</p>}
+                      </div>
+                    </div>
 
-                          <button onClick={() => toggleBusinessBranches(b.id)} className="text-xs font-semibold text-slate-500 hover:text-slate-700 cursor-pointer">
-                            {expandedBusinessId === b.id ? "▼" : "▶"} Cawangan {businessBranches[b.id] ? `(${businessBranches[b.id].length})` : ""}
-                          </button>
-
-                          {expandedBusinessId === b.id && (
-                            <div className="ml-3 pl-3 border-l border-slate-200 space-y-2">
-                              {(businessBranches[b.id] || []).map(br => (
-                                <div key={br.id} className="flex items-center justify-between bg-white border border-slate-100 rounded-lg px-2 py-1.5">
-                                  <div>
-                                    <p className="text-xs font-semibold text-slate-700">{br.branchName}</p>
-                                    {br.location && <p className="text-2xs text-slate-400">{br.location}</p>}
-                                  </div>
-                                  <button onClick={() => removeBranch(b.id, br.id)} className="text-rose-400 hover:text-rose-600 cursor-pointer"><Trash2 className="w-3.5 h-3.5" /></button>
-                                </div>
-                              ))}
-                              <div className="grid grid-cols-2 gap-2">
-                                <input
-                                  value={newBranchByBusiness[b.id]?.branchName || ""}
-                                  onChange={e => setNewBranchByBusiness(prev => ({ ...prev, [b.id]: { branchName: e.target.value, location: prev[b.id]?.location || "" } }))}
-                                  placeholder="Nama cawangan"
-                                  className="px-2 py-1.5 border border-slate-200 rounded-lg text-xs"
-                                />
-                                <input
-                                  value={newBranchByBusiness[b.id]?.location || ""}
-                                  onChange={e => setNewBranchByBusiness(prev => ({ ...prev, [b.id]: { branchName: prev[b.id]?.branchName || "", location: e.target.value } }))}
-                                  placeholder="Lokasi"
-                                  className="px-2 py-1.5 border border-slate-200 rounded-lg text-xs"
-                                />
-                              </div>
-                              <button onClick={() => submitNewBranch(b.id)} className="px-2 py-1.5 bg-slate-900 text-white rounded-lg text-xs font-semibold cursor-pointer">+ Tambah Cawangan</button>
-                            </div>
-                          )}
-                        </>
+                    {/* ── SAVE ALL button (mobile / left-col on desktop) ── */}
+                    <div className="lg:sticky lg:bottom-4 space-y-2">
+                      <button
+                        onClick={async () => { await saveProfiles(); await saveCompanyMaster(); }}
+                        disabled={profileSaving || companyMasterSaving}
+                        className="w-full py-3.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl text-sm font-bold disabled:opacity-50 disabled:cursor-not-allowed transition active:scale-[0.98] cursor-pointer shadow-sm shadow-indigo-200"
+                      >
+                        {(profileSaving || companyMasterSaving) ? "Menyimpan..." : "Simpan Semua Perubahan"}
+                      </button>
+                      {(profileSavedAt || companyMasterMsg) && (
+                        <p className="text-center text-xs text-emerald-600 font-medium">Perubahan disimpan ✓</p>
                       )}
                     </div>
-                  ))}
+                  </div>
 
-                  {addingBusiness && (
-                    <div className="bg-slate-50 border border-slate-100 rounded-xl p-3 space-y-2">
-                      <input value={newBusiness.businessName} onChange={e => setNewBusiness(f => ({ ...f, businessName: e.target.value }))} placeholder="Nama bisnes (wajib)" className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm" />
-                      <input value={newBusiness.industry} onChange={e => setNewBusiness(f => ({ ...f, industry: e.target.value }))} placeholder="Industri (contoh: F&B, Percetakan)" className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm" />
-                      <div className="grid grid-cols-2 gap-2">
-                        <input value={newBusiness.businessType} onChange={e => setNewBusiness(f => ({ ...f, businessType: e.target.value }))} placeholder="Jenis perniagaan (Sdn Bhd, Enterprise...)" className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm" />
-                        <input value={newBusiness.registrationNo} onChange={e => setNewBusiness(f => ({ ...f, registrationNo: e.target.value }))} placeholder="No. pendaftaran" className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm" />
+                  {/* ─── RIGHT COLUMN (business + vehicles + dependents + assets + txn) ─── */}
+                  <div className="space-y-4">
+
+                    {/* 4. Profil Perniagaan */}
+                    <div className="bg-white border border-slate-200 rounded-2xl shadow-sm">
+                      <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
+                        <div>
+                          <h3 className="text-sm font-bold text-slate-800">Profil Perniagaan</h3>
+                          <p className="text-xs text-slate-400 mt-0.5">Setiap bisnes boleh ada beberapa cawangan</p>
+                        </div>
+                        {!addingBusiness && (
+                          <button onClick={() => setAddingBusiness(true)} className="shrink-0 px-3 py-1.5 bg-indigo-50 text-indigo-600 hover:bg-indigo-100 rounded-xl text-xs font-bold transition cursor-pointer">
+                            + Tambah
+                          </button>
+                        )}
                       </div>
-                      <textarea value={newBusiness.notes} onChange={e => setNewBusiness(f => ({ ...f, notes: e.target.value }))} placeholder="Nota tambahan" className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm" rows={2} />
-                      <div className="flex space-x-2">
-                        <button onClick={submitNewBusiness} className="flex-1 px-3 py-2 bg-slate-900 text-white rounded-xl text-sm font-semibold cursor-pointer">Tambah</button>
-                        <button onClick={() => { setAddingBusiness(false); setNewBusiness(EMPTY_BUSINESS_FORM); }} className="flex-1 px-3 py-2 bg-slate-200 text-slate-700 rounded-xl text-sm font-semibold cursor-pointer">Batal</button>
+                      <div className="px-5 py-4 space-y-3">
+                        {businesses.length === 0 && !addingBusiness && (
+                          <div className="text-center py-6">
+                            <p className="text-xs text-slate-400">Belum ada bisnes ditambah.</p>
+                          </div>
+                        )}
+
+                        {businesses.map(b => (
+                          <div key={b.id} className="border border-slate-100 rounded-xl overflow-hidden">
+                            {editingBusinessId === b.id ? (
+                              <div className="p-3 space-y-2 bg-slate-50">
+                                <input value={editBusinessForm.businessName} onChange={e => setEditBusinessForm(f => ({ ...f, businessName: e.target.value }))} placeholder="Nama bisnes" className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400" />
+                                <input value={editBusinessForm.industry} onChange={e => setEditBusinessForm(f => ({ ...f, industry: e.target.value }))} placeholder="Industri (contoh: F&B, Percetakan)" className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400" />
+                                <div className="grid grid-cols-2 gap-2">
+                                  <input value={editBusinessForm.businessType} onChange={e => setEditBusinessForm(f => ({ ...f, businessType: e.target.value }))} placeholder="Jenis (Sdn Bhd...)" className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400" />
+                                  <input value={editBusinessForm.registrationNo} onChange={e => setEditBusinessForm(f => ({ ...f, registrationNo: e.target.value }))} placeholder="No. Pendaftaran" className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400" />
+                                </div>
+                                <textarea value={editBusinessForm.notes} onChange={e => setEditBusinessForm(f => ({ ...f, notes: e.target.value }))} placeholder="Nota tambahan" className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400" rows={2} />
+                                <div className="flex gap-2">
+                                  <button onClick={submitEditBusiness} className="flex-1 px-3 py-2 bg-slate-900 text-white rounded-xl text-sm font-semibold cursor-pointer">Simpan</button>
+                                  <button onClick={() => { setEditingBusinessId(null); setEditBusinessForm(EMPTY_BUSINESS_FORM); }} className="flex-1 px-3 py-2 bg-slate-200 text-slate-700 rounded-xl text-sm font-semibold cursor-pointer">Batal</button>
+                                </div>
+                              </div>
+                            ) : (
+                              <div>
+                                <div className="flex items-start justify-between p-3">
+                                  <div className="min-w-0">
+                                    <p className="text-sm font-semibold text-slate-800 truncate">{b.businessName}</p>
+                                    <p className="text-xs text-slate-500 mt-0.5">
+                                      {[b.industry, b.businessType].filter(Boolean).join(" · ")}
+                                      {b.registrationNo && <span className="text-slate-400"> · {b.registrationNo}</span>}
+                                    </p>
+                                  </div>
+                                  <div className="flex items-center gap-1.5 shrink-0 ml-2">
+                                    <button onClick={() => startEditBusiness(b)} className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-slate-100 text-slate-400 hover:text-indigo-600 cursor-pointer transition"><Edit3 className="w-3.5 h-3.5" /></button>
+                                    <button onClick={() => setConfirmDeleteBusinessId(b.id)} className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-rose-50 text-slate-300 hover:text-rose-500 cursor-pointer transition"><Trash2 className="w-3.5 h-3.5" /></button>
+                                  </div>
+                                </div>
+
+                                {confirmDeleteBusinessId === b.id && (
+                                  <div className="mx-3 mb-3 bg-rose-50 border border-rose-100 rounded-xl p-2.5 flex items-center justify-between">
+                                    <span className="text-xs text-rose-700">Padam "{b.businessName}"?</span>
+                                    <div className="flex gap-2">
+                                      <button onClick={() => removeBusiness(b.id)} className="px-2.5 py-1 bg-rose-600 text-white rounded-lg text-xs font-semibold cursor-pointer">Padam</button>
+                                      <button onClick={() => setConfirmDeleteBusinessId(null)} className="px-2.5 py-1 bg-slate-200 text-slate-700 rounded-lg text-xs font-semibold cursor-pointer">Batal</button>
+                                    </div>
+                                  </div>
+                                )}
+
+                                <div className="border-t border-slate-100">
+                                  <button onClick={() => toggleBusinessBranches(b.id)} className="w-full flex items-center justify-between px-3 py-2 text-xs font-semibold text-slate-500 hover:text-slate-700 hover:bg-slate-50 cursor-pointer transition">
+                                    <span>Cawangan {businessBranches[b.id] ? `(${businessBranches[b.id].length})` : ""}</span>
+                                    <span className="text-slate-300">{expandedBusinessId === b.id ? "▲" : "▼"}</span>
+                                  </button>
+
+                                  {expandedBusinessId === b.id && (
+                                    <div className="px-3 pb-3 space-y-2 border-t border-slate-100 pt-2">
+                                      {(businessBranches[b.id] || []).map(br => (
+                                        <div key={br.id} className="flex items-center justify-between bg-white border border-slate-100 rounded-lg px-2.5 py-2">
+                                          <div>
+                                            <p className="text-xs font-semibold text-slate-700">{br.branchName}</p>
+                                            {br.location && <p className="text-2xs text-slate-400">{br.location}</p>}
+                                          </div>
+                                          <button onClick={() => removeBranch(b.id, br.id)} className="text-slate-300 hover:text-rose-500 cursor-pointer transition"><Trash2 className="w-3.5 h-3.5" /></button>
+                                        </div>
+                                      ))}
+                                      <div className="grid grid-cols-2 gap-2 pt-1">
+                                        <input value={newBranchByBusiness[b.id]?.branchName || ""} onChange={e => setNewBranchByBusiness(prev => ({ ...prev, [b.id]: { branchName: e.target.value, location: prev[b.id]?.location || "" } }))} placeholder="Nama cawangan" className="px-2.5 py-2 border border-slate-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400" />
+                                        <input value={newBranchByBusiness[b.id]?.location || ""} onChange={e => setNewBranchByBusiness(prev => ({ ...prev, [b.id]: { branchName: prev[b.id]?.branchName || "", location: e.target.value } }))} placeholder="Lokasi" className="px-2.5 py-2 border border-slate-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400" />
+                                      </div>
+                                      <button onClick={() => submitNewBranch(b.id)} className="px-3 py-1.5 bg-slate-900 text-white rounded-lg text-xs font-semibold cursor-pointer">+ Tambah Cawangan</button>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        ))}
+
+                        {addingBusiness && (
+                          <div className="border border-indigo-100 bg-indigo-50/40 rounded-xl p-3 space-y-2">
+                            <p className="text-xs font-bold text-indigo-700">Bisnes Baharu</p>
+                            <input value={newBusiness.businessName} onChange={e => setNewBusiness(f => ({ ...f, businessName: e.target.value }))} placeholder="Nama bisnes (wajib)" className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400" />
+                            <input value={newBusiness.industry} onChange={e => setNewBusiness(f => ({ ...f, industry: e.target.value }))} placeholder="Industri (contoh: F&B, Percetakan)" className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400" />
+                            <div className="grid grid-cols-2 gap-2">
+                              <input value={newBusiness.businessType} onChange={e => setNewBusiness(f => ({ ...f, businessType: e.target.value }))} placeholder="Jenis (Sdn Bhd...)" className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400" />
+                              <input value={newBusiness.registrationNo} onChange={e => setNewBusiness(f => ({ ...f, registrationNo: e.target.value }))} placeholder="No. Pendaftaran" className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400" />
+                            </div>
+                            <textarea value={newBusiness.notes} onChange={e => setNewBusiness(f => ({ ...f, notes: e.target.value }))} placeholder="Nota tambahan" className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400" rows={2} />
+                            <div className="flex gap-2">
+                              <button onClick={submitNewBusiness} className="flex-1 px-3 py-2 bg-slate-900 text-white rounded-xl text-sm font-semibold cursor-pointer">Tambah</button>
+                              <button onClick={() => { setAddingBusiness(false); setNewBusiness(EMPTY_BUSINESS_FORM); }} className="flex-1 px-3 py-2 bg-slate-200 text-slate-700 rounded-xl text-sm font-semibold cursor-pointer">Batal</button>
+                            </div>
+                          </div>
+                        )}
                       </div>
                     </div>
-                  )}
-                </div>
 
-                <div className="bg-white border border-slate-200 rounded-2xl p-5 space-y-3 shadow-sm">
-                  <h3 className="text-sm font-bold text-slate-800">Maklumat Syarikat (Akaun)</h3>
-                  <p className="text-xs text-slate-500">Maklumat ini dipaparkan kepada HQ MyKerani untuk pengurusan bil &amp; sokongan akaun anda.</p>
-                  <div className="grid grid-cols-2 gap-2">
-                    <input value={companyMasterForm.registrationNo} onChange={e => setCompanyMasterForm(f => ({ ...f, registrationNo: e.target.value }))} placeholder="No. Pendaftaran (SSM)" className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm" />
-                    <input value={companyMasterForm.taxNumber} onChange={e => setCompanyMasterForm(f => ({ ...f, taxNumber: e.target.value }))} placeholder="No. Cukai" className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm" />
-                  </div>
-                  <input value={companyMasterForm.industry} onChange={e => setCompanyMasterForm(f => ({ ...f, industry: e.target.value }))} placeholder="Industri Utama" className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm" />
-                  <textarea value={companyMasterForm.address} onChange={e => setCompanyMasterForm(f => ({ ...f, address: e.target.value }))} placeholder="Alamat Syarikat" rows={2} className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm" />
-                  <div className="grid grid-cols-2 gap-2">
-                    <input value={companyMasterForm.billingContactName} onChange={e => setCompanyMasterForm(f => ({ ...f, billingContactName: e.target.value }))} placeholder="Nama Kontak Bil" className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm" />
-                    <input type="email" value={companyMasterForm.billingEmail} onChange={e => setCompanyMasterForm(f => ({ ...f, billingEmail: e.target.value }))} placeholder="E-mel Bil" className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm" />
-                    <input value={companyMasterForm.supportContactName} onChange={e => setCompanyMasterForm(f => ({ ...f, supportContactName: e.target.value }))} placeholder="Nama Kontak Sokongan" className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm" />
-                    <input type="email" value={companyMasterForm.supportEmail} onChange={e => setCompanyMasterForm(f => ({ ...f, supportEmail: e.target.value }))} placeholder="E-mel Sokongan" className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm" />
-                  </div>
-                  <button onClick={saveCompanyMaster} disabled={companyMasterSaving} className="w-full py-2.5 bg-slate-900 text-white rounded-xl text-sm font-semibold disabled:opacity-50 disabled:cursor-not-allowed transition active:scale-[0.98] cursor-pointer">
-                    {companyMasterSaving ? "Menyimpan..." : "Simpan Maklumat Syarikat"}
-                  </button>
-                  {companyMasterMsg && <p className="text-xs text-emerald-600">{companyMasterMsg}</p>}
-                </div>
-
-                <button onClick={saveProfiles} disabled={profileSaving} className="w-full py-3 bg-indigo-600 text-white rounded-xl text-sm font-semibold disabled:opacity-50 disabled:cursor-not-allowed transition active:scale-[0.98] cursor-pointer">
-                  {profileSaving ? "Menyimpan..." : "Simpan Profil"}
-                </button>
-                {profileSavedAt && <p className="text-center text-xs text-emerald-600">Profil disimpan ✓</p>}
-
-                <div className="bg-white border border-slate-200 rounded-2xl p-5 space-y-3 shadow-sm">
-                  <h3 className="text-sm font-bold text-slate-800">Kenderaan</h3>
-                  <p className="text-xs text-slate-500">Tambah kenderaan supaya AI boleh tanya "Hilux atau Myvi?" bila anda rekod belian minyak/tol/servis.</p>
-                  {vehicles.map(v => (
-                    <div key={v.id} className="bg-slate-50 border border-slate-100 rounded-xl px-3 py-2 space-y-2">
-                      {editingVehicleId === v.id ? (
-                        <div className="space-y-2">
-                          <div className="grid grid-cols-2 gap-2">
-                            <input value={editVehicleForm.name} onChange={e => setEditVehicleForm(f => ({ ...f, name: e.target.value }))} placeholder="Nama (contoh: Hilux)" className="px-3 py-2 border border-slate-200 rounded-xl text-sm" />
-                            <input value={editVehicleForm.plateNumber} onChange={e => setEditVehicleForm(f => ({ ...f, plateNumber: e.target.value }))} placeholder="No. plat" className="px-3 py-2 border border-slate-200 rounded-xl text-sm" />
+                    {/* 5. Kenderaan */}
+                    <div className="bg-white border border-slate-200 rounded-2xl shadow-sm">
+                      <div className="px-5 py-4 border-b border-slate-100">
+                        <h3 className="text-sm font-bold text-slate-800">Kenderaan</h3>
+                        <p className="text-xs text-slate-400 mt-0.5">AI boleh tanya "Hilux atau Myvi?" bila anda rekod belian minyak/tol/servis</p>
+                      </div>
+                      <div className="px-5 py-4 space-y-3">
+                        {vehicles.map(v => (
+                          <div key={v.id} className="border border-slate-100 rounded-xl overflow-hidden">
+                            {editingVehicleId === v.id ? (
+                              <div className="p-3 space-y-2 bg-slate-50">
+                                <div className="grid grid-cols-2 gap-2">
+                                  <input value={editVehicleForm.name} onChange={e => setEditVehicleForm(f => ({ ...f, name: e.target.value }))} placeholder="Nama (Hilux)" className="px-3 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400" />
+                                  <input value={editVehicleForm.plateNumber} onChange={e => setEditVehicleForm(f => ({ ...f, plateNumber: e.target.value }))} placeholder="No. plat" className="px-3 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400" />
+                                </div>
+                                <div className="grid grid-cols-2 gap-2">
+                                  <select value={editVehicleForm.ownership} onChange={e => setEditVehicleForm(f => ({ ...f, ownership: e.target.value as "PERSONAL" | "BUSINESS" }))} className="px-3 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400">
+                                    <option value="BUSINESS">Perniagaan</option>
+                                    <option value="PERSONAL">Peribadi</option>
+                                  </select>
+                                  <input value={editVehicleForm.vehicleType} onChange={e => setEditVehicleForm(f => ({ ...f, vehicleType: e.target.value }))} placeholder="Jenis kenderaan" className="px-3 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400" />
+                                </div>
+                                <div className="flex gap-2">
+                                  <button onClick={submitEditVehicle} className="flex-1 px-3 py-2 bg-slate-900 text-white rounded-xl text-sm font-semibold cursor-pointer">Simpan</button>
+                                  <button onClick={() => setEditingVehicleId(null)} className="flex-1 px-3 py-2 bg-slate-200 text-slate-700 rounded-xl text-sm font-semibold cursor-pointer">Batal</button>
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="flex items-center justify-between p-3">
+                                <div>
+                                  <p className="text-sm font-semibold text-slate-800">{v.name}{v.plateNumber && <span className="text-slate-400 font-normal"> · {v.plateNumber}</span>}</p>
+                                  <span className={`text-2xs font-bold px-2 py-0.5 rounded-full mt-0.5 inline-block ${v.ownership === "BUSINESS" ? "bg-indigo-100 text-indigo-700" : "bg-amber-100 text-amber-700"}`}>{v.ownership === "BUSINESS" ? "Perniagaan" : "Peribadi"}</span>
+                                </div>
+                                <div className="flex items-center gap-1.5">
+                                  <button onClick={() => startEditVehicle(v)} className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-slate-100 text-slate-400 hover:text-indigo-600 cursor-pointer transition"><Edit3 className="w-3.5 h-3.5" /></button>
+                                  <button onClick={() => removeVehicle(v.id)} className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-rose-50 text-slate-300 hover:text-rose-500 cursor-pointer transition"><Trash2 className="w-3.5 h-3.5" /></button>
+                                </div>
+                              </div>
+                            )}
                           </div>
+                        ))}
+
+                        {/* Add new vehicle inline */}
+                        <div className="border border-dashed border-slate-200 rounded-xl p-3 space-y-2">
                           <div className="grid grid-cols-2 gap-2">
-                            <select value={editVehicleForm.ownership} onChange={e => setEditVehicleForm(f => ({ ...f, ownership: e.target.value as "PERSONAL" | "BUSINESS" }))} className="px-3 py-2 border border-slate-200 rounded-xl text-sm">
+                            <input value={newVehicle.name} onChange={e => setNewVehicle(v => ({ ...v, name: e.target.value }))} placeholder="Nama (Hilux)" className="px-3 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400" />
+                            <input value={newVehicle.plateNumber} onChange={e => setNewVehicle(v => ({ ...v, plateNumber: e.target.value }))} placeholder="No. plat" className="px-3 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400" />
+                          </div>
+                          <div className="flex gap-2">
+                            <select value={newVehicle.ownership} onChange={e => setNewVehicle(v => ({ ...v, ownership: e.target.value as "PERSONAL" | "BUSINESS" }))} className="flex-1 px-3 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400">
                               <option value="BUSINESS">Perniagaan</option>
                               <option value="PERSONAL">Peribadi</option>
                             </select>
-                            <input value={editVehicleForm.vehicleType} onChange={e => setEditVehicleForm(f => ({ ...f, vehicleType: e.target.value }))} placeholder="Jenis kenderaan" className="px-3 py-2 border border-slate-200 rounded-xl text-sm" />
-                          </div>
-                          <div className="flex space-x-2">
-                            <button onClick={submitEditVehicle} className="flex-1 px-3 py-2 bg-slate-900 text-white rounded-xl text-sm font-semibold cursor-pointer">Simpan</button>
-                            <button onClick={() => setEditingVehicleId(null)} className="flex-1 px-3 py-2 bg-slate-200 text-slate-700 rounded-xl text-sm font-semibold cursor-pointer">Batal</button>
+                            <button onClick={submitNewVehicle} className="px-4 py-2 bg-slate-900 text-white rounded-xl text-sm font-semibold cursor-pointer whitespace-nowrap">+ Tambah</button>
                           </div>
                         </div>
-                      ) : (
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <p className="text-sm font-semibold text-slate-800">{v.name} {v.plateNumber && <span className="text-slate-400 font-normal">· {v.plateNumber}</span>}</p>
-                            <span className={`text-2xs font-bold px-2 py-0.5 rounded-full ${v.ownership === "BUSINESS" ? "bg-indigo-100 text-indigo-700" : "bg-amber-100 text-amber-700"}`}>{v.ownership === "BUSINESS" ? "Perniagaan" : "Peribadi"}</span>
-                          </div>
-                          <div className="flex items-center space-x-2">
-                            <button onClick={() => startEditVehicle(v)} className="text-slate-400 hover:text-indigo-600 cursor-pointer"><Edit3 className="w-4 h-4" /></button>
-                            <button onClick={() => removeVehicle(v.id)} className="text-rose-400 hover:text-rose-600 cursor-pointer"><Trash2 className="w-4 h-4" /></button>
-                          </div>
-                        </div>
-                      )}
+                      </div>
                     </div>
-                  ))}
-                  <div className="grid grid-cols-2 gap-2">
-                    <input value={newVehicle.name} onChange={e => setNewVehicle(v => ({ ...v, name: e.target.value }))} placeholder="Nama (contoh: Hilux)" className="px-3 py-2 border border-slate-200 rounded-xl text-sm" />
-                    <input value={newVehicle.plateNumber} onChange={e => setNewVehicle(v => ({ ...v, plateNumber: e.target.value }))} placeholder="No. plat" className="px-3 py-2 border border-slate-200 rounded-xl text-sm" />
-                  </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <select value={newVehicle.ownership} onChange={e => setNewVehicle(v => ({ ...v, ownership: e.target.value as "PERSONAL" | "BUSINESS" }))} className="px-3 py-2 border border-slate-200 rounded-xl text-sm">
-                      <option value="BUSINESS">Perniagaan</option>
-                      <option value="PERSONAL">Peribadi</option>
-                    </select>
-                    <button onClick={submitNewVehicle} className="px-3 py-2 bg-slate-900 text-white rounded-xl text-sm font-semibold cursor-pointer">+ Tambah Kenderaan</button>
-                  </div>
-                </div>
 
-                <div className="bg-white border border-slate-200 rounded-2xl p-5 space-y-3 shadow-sm">
-                  <h3 className="text-sm font-bold text-slate-800">Tanggungan</h3>
-                  {dependents.map(d => (
-                    <div key={d.id} className="bg-slate-50 border border-slate-100 rounded-xl px-3 py-2 space-y-2">
-                      {editingDependentId === d.id ? (
-                        <div className="space-y-2">
+                    {/* 6. Tanggungan */}
+                    <div className="bg-white border border-slate-200 rounded-2xl shadow-sm">
+                      <div className="px-5 py-4 border-b border-slate-100">
+                        <h3 className="text-sm font-bold text-slate-800">Tanggungan</h3>
+                      </div>
+                      <div className="px-5 py-4 space-y-3">
+                        {dependents.map(d => (
+                          <div key={d.id} className="border border-slate-100 rounded-xl overflow-hidden">
+                            {editingDependentId === d.id ? (
+                              <div className="p-3 space-y-2 bg-slate-50">
+                                <div className="grid grid-cols-2 gap-2">
+                                  <input value={editDependentForm.name} onChange={e => setEditDependentForm(f => ({ ...f, name: e.target.value }))} placeholder="Nama" className="px-3 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400" />
+                                  <input value={editDependentForm.relationship} onChange={e => setEditDependentForm(f => ({ ...f, relationship: e.target.value }))} placeholder="Hubungan (anak, ibu...)" className="px-3 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400" />
+                                </div>
+                                <input type="date" value={editDependentForm.dateOfBirth} onChange={e => setEditDependentForm(f => ({ ...f, dateOfBirth: e.target.value }))} className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400" />
+                                <div className="flex gap-2">
+                                  <button onClick={submitEditDependent} className="flex-1 px-3 py-2 bg-slate-900 text-white rounded-xl text-sm font-semibold cursor-pointer">Simpan</button>
+                                  <button onClick={() => setEditingDependentId(null)} className="flex-1 px-3 py-2 bg-slate-200 text-slate-700 rounded-xl text-sm font-semibold cursor-pointer">Batal</button>
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="flex items-center justify-between p-3">
+                                <div>
+                                  <p className="text-sm font-semibold text-slate-800">{d.name}</p>
+                                  <span className="text-xs text-slate-500">{d.relationship}</span>
+                                </div>
+                                <div className="flex items-center gap-1.5">
+                                  <button onClick={() => startEditDependent(d)} className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-slate-100 text-slate-400 hover:text-indigo-600 cursor-pointer transition"><Edit3 className="w-3.5 h-3.5" /></button>
+                                  <button onClick={() => removeDependent(d.id)} className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-rose-50 text-slate-300 hover:text-rose-500 cursor-pointer transition"><Trash2 className="w-3.5 h-3.5" /></button>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        ))}
+
+                        {/* Add new dependent inline */}
+                        <div className="border border-dashed border-slate-200 rounded-xl p-3 space-y-2">
                           <div className="grid grid-cols-2 gap-2">
-                            <input value={editDependentForm.name} onChange={e => setEditDependentForm(f => ({ ...f, name: e.target.value }))} placeholder="Nama" className="px-3 py-2 border border-slate-200 rounded-xl text-sm" />
-                            <input value={editDependentForm.relationship} onChange={e => setEditDependentForm(f => ({ ...f, relationship: e.target.value }))} placeholder="Hubungan (anak, ibu...)" className="px-3 py-2 border border-slate-200 rounded-xl text-sm" />
+                            <input value={newDependent.name} onChange={e => setNewDependent(d => ({ ...d, name: e.target.value }))} placeholder="Nama" className="px-3 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400" />
+                            <input value={newDependent.relationship} onChange={e => setNewDependent(d => ({ ...d, relationship: e.target.value }))} placeholder="Hubungan (anak, ibu...)" className="px-3 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400" />
                           </div>
-                          <input type="date" value={editDependentForm.dateOfBirth} onChange={e => setEditDependentForm(f => ({ ...f, dateOfBirth: e.target.value }))} className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm" />
-                          <div className="flex space-x-2">
-                            <button onClick={submitEditDependent} className="flex-1 px-3 py-2 bg-slate-900 text-white rounded-xl text-sm font-semibold cursor-pointer">Simpan</button>
-                            <button onClick={() => setEditingDependentId(null)} className="flex-1 px-3 py-2 bg-slate-200 text-slate-700 rounded-xl text-sm font-semibold cursor-pointer">Batal</button>
-                          </div>
+                          <button onClick={submitNewDependent} className="w-full px-3 py-2 bg-slate-900 text-white rounded-xl text-sm font-semibold cursor-pointer">+ Tambah Tanggungan</button>
                         </div>
-                      ) : (
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <p className="text-sm font-semibold text-slate-800">{d.name}</p>
-                            <span className="text-xs text-slate-500">{d.relationship}</span>
-                          </div>
-                          <div className="flex items-center space-x-2">
-                            <button onClick={() => startEditDependent(d)} className="text-slate-400 hover:text-indigo-600 cursor-pointer"><Edit3 className="w-4 h-4" /></button>
-                            <button onClick={() => removeDependent(d.id)} className="text-rose-400 hover:text-rose-600 cursor-pointer"><Trash2 className="w-4 h-4" /></button>
-                          </div>
-                        </div>
-                      )}
+                      </div>
                     </div>
-                  ))}
-                  <div className="grid grid-cols-2 gap-2">
-                    <input value={newDependent.name} onChange={e => setNewDependent(d => ({ ...d, name: e.target.value }))} placeholder="Nama" className="px-3 py-2 border border-slate-200 rounded-xl text-sm" />
-                    <input value={newDependent.relationship} onChange={e => setNewDependent(d => ({ ...d, relationship: e.target.value }))} placeholder="Hubungan (anak, ibu...)" className="px-3 py-2 border border-slate-200 rounded-xl text-sm" />
+
+                    {/* 7. Belian Aset */}
+                    <div className="bg-white border border-slate-200 rounded-2xl shadow-sm">
+                      <div className="px-5 py-4 border-b border-slate-100">
+                        <h3 className="text-sm font-bold text-slate-800">Belian Aset</h3>
+                        <p className="text-xs text-slate-400 mt-0.5">Direkodkan automatik bila anda sahkan cadangan AI untuk belian peralatan/mesin/kenderaan</p>
+                      </div>
+                      <div className="px-5 py-4 space-y-2">
+                        {assetPurchases.length === 0 && (
+                          <div className="text-center py-5">
+                            <p className="text-xs text-slate-400">Tiada rekod belian aset lagi</p>
+                          </div>
+                        )}
+                        {assetPurchases.map(a => (
+                          <div key={a.id} className="flex items-center justify-between bg-slate-50 border border-slate-100 rounded-xl px-3 py-2.5">
+                            <div className="min-w-0">
+                              <p className="text-sm font-semibold text-slate-800 truncate">{a.assetName}</p>
+                              <p className="text-xs text-slate-500">RM{a.purchaseAmountMyr.toFixed(2)} · {a.purchaseDate}{a.vendorName ? ` · ${a.vendorName}` : ""}</p>
+                            </div>
+                            <button onClick={() => removeAssetPurchase(a.id)} className="shrink-0 w-7 h-7 flex items-center justify-center ml-2 rounded-lg hover:bg-rose-50 text-slate-300 hover:text-rose-500 cursor-pointer transition"><Trash2 className="w-3.5 h-3.5" /></button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* 8. Transaksi Pemilik */}
+                    <div className="bg-white border border-slate-200 rounded-2xl shadow-sm">
+                      <div className="px-5 py-4 border-b border-slate-100">
+                        <h3 className="text-sm font-bold text-slate-800">Transaksi Pemilik</h3>
+                        <p className="text-xs text-slate-400 mt-0.5">Modal masuk &amp; pengeluaran peribadi (Drawing) — direkodkan automatik</p>
+                      </div>
+                      <div className="px-5 py-4 space-y-2">
+                        {ownerTransactions.length === 0 && (
+                          <div className="text-center py-5">
+                            <p className="text-xs text-slate-400">Tiada rekod transaksi pemilik lagi</p>
+                          </div>
+                        )}
+                        {ownerTransactions.map(o => (
+                          <div key={o.id} className="flex items-center justify-between bg-slate-50 border border-slate-100 rounded-xl px-3 py-2.5">
+                            <div className="min-w-0">
+                              <p className="text-sm font-semibold text-slate-800">{o.type === "CAPITAL_INJECTION" ? "Modal Masuk" : "Pengeluaran (Drawing)"}</p>
+                              <p className="text-xs text-slate-500">RM{o.amountMyr.toFixed(2)} · {o.transactionDate}</p>
+                            </div>
+                            <button onClick={() => removeOwnerTransaction(o.id)} className="shrink-0 w-7 h-7 flex items-center justify-center ml-2 rounded-lg hover:bg-rose-50 text-slate-300 hover:text-rose-500 cursor-pointer transition"><Trash2 className="w-3.5 h-3.5" /></button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    <p className="text-xs text-slate-400 text-center pb-2">Maklumat pinjaman/loan diuruskan dalam modul Hutang &amp; Liabiliti.</p>
                   </div>
-                  <button onClick={submitNewDependent} className="w-full px-3 py-2 bg-slate-900 text-white rounded-xl text-sm font-semibold cursor-pointer">+ Tambah Tanggungan</button>
                 </div>
-
-                <div className="bg-white border border-slate-200 rounded-2xl p-5 space-y-3 shadow-sm">
-                  <h3 className="text-sm font-bold text-slate-800">Belian Aset</h3>
-                  <p className="text-xs text-slate-500">Direkodkan secara automatik bila anda sahkan cadangan AI untuk belian peralatan/mesin/kenderaan perniagaan.</p>
-                  {assetPurchases.length === 0 && <p className="text-xs text-slate-400 text-center py-2">Tiada rekod belian aset lagi</p>}
-                  {assetPurchases.map(a => (
-                    <div key={a.id} className="flex items-center justify-between bg-slate-50 border border-slate-100 rounded-xl px-3 py-2">
-                      <div>
-                        <p className="text-sm font-semibold text-slate-800">{a.assetName}</p>
-                        <span className="text-xs text-slate-500">RM{a.purchaseAmountMyr.toFixed(2)} · {a.purchaseDate}{a.vendorName ? ` · ${a.vendorName}` : ""}</span>
-                      </div>
-                      <button onClick={() => removeAssetPurchase(a.id)} className="text-rose-400 hover:text-rose-600 cursor-pointer"><Trash2 className="w-4 h-4" /></button>
-                    </div>
-                  ))}
-                </div>
-
-                <div className="bg-white border border-slate-200 rounded-2xl p-5 space-y-3 shadow-sm">
-                  <h3 className="text-sm font-bold text-slate-800">Transaksi Pemilik (Modal/Drawing)</h3>
-                  <p className="text-xs text-slate-500">Direkodkan secara automatik bila anda sahkan cadangan AI untuk modal masuk atau pengeluaran peribadi.</p>
-                  {ownerTransactions.length === 0 && <p className="text-xs text-slate-400 text-center py-2">Tiada rekod transaksi pemilik lagi</p>}
-                  {ownerTransactions.map(o => (
-                    <div key={o.id} className="flex items-center justify-between bg-slate-50 border border-slate-100 rounded-xl px-3 py-2">
-                      <div>
-                        <p className="text-sm font-semibold text-slate-800">{o.type === "CAPITAL_INJECTION" ? "Modal Masuk" : "Pengeluaran (Drawing)"}</p>
-                        <span className="text-xs text-slate-500">RM{o.amountMyr.toFixed(2)} · {o.transactionDate}</span>
-                      </div>
-                      <button onClick={() => removeOwnerTransaction(o.id)} className="text-rose-400 hover:text-rose-600 cursor-pointer"><Trash2 className="w-4 h-4" /></button>
-                    </div>
-                  ))}
-                </div>
-
-                <p className="text-xs text-slate-400 text-center">Maklumat pinjaman/loan diuruskan dalam modul Hutang & Liabiliti sedia ada.</p>
               </div>
             )}
 
