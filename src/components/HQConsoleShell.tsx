@@ -580,10 +580,12 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
   const [hqOperatingCosts, setHqOperatingCosts] = useState<hqService.HqOperatingCost[]>([]);
   const [newCostForm, setNewCostForm] = useState({ category: "infrastructure", description: "", amountMyr: "", incurredOn: new Date().toISOString().slice(0, 10) });
   const [hqProfitSummary, setHqProfitSummary] = useState<hqService.HqResourceProfitRow[]>([]);
+  const [hqStorageSummary, setHqStorageSummary] = useState<hqService.HqStorageSummaryRow[]>([]);
   const loadHqCostCenter = () => {
     hqService.getHqCostCenterSummary().then(setHqCostSummary);
     hqService.getHqOperatingCosts(50).then(setHqOperatingCosts);
     hqService.getHqResourceProfitSummary(30).then(setHqProfitSummary);
+    hqService.getHqStorageLedgerSummary().then(setHqStorageSummary);
   };
   useEffect(() => {
     if (!useRealData) return;
@@ -4538,25 +4540,51 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
                 {hqProfitSummary.length > 0 && (
                   <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-3">
                     <div>
-                      <h3 className="text-xs font-bold text-slate-700">Anggaran Keuntungan Sumber (30 Hari)</h3>
-                      <p className="text-[11px] text-slate-400 mt-0.5">Berdasarkan kos purata pembekal AI dan dasar markup HQ semasa.</p>
+                      <h3 className="text-xs font-bold text-slate-700">Untung Sumber — Anggaran 30 Hari</h3>
+                      <p className="text-[11px] text-slate-400 mt-0.5">Berdasarkan commercial_config_items (Single Source of Truth).</p>
                     </div>
                     <div className="space-y-2">
                       {hqProfitSummary.map(row => (
                         <div key={row.creditType} className="p-3 bg-slate-50 rounded-xl space-y-1.5">
                           <div className="flex items-center justify-between">
                             <span className="text-[11px] font-bold text-slate-700">{row.creditType} ({row.usageCount} penggunaan)</span>
-                            <span className={`text-[11px] font-bold ${row.estimatedMarginMyr >= 0 ? "text-emerald-700" : "text-red-600"}`}>Margin: RM{row.estimatedMarginMyr.toFixed(4)}</span>
+                            <span className={`text-[11px] font-bold ${row.estimatedMarginMyr >= 0 ? "text-emerald-700" : "text-red-600"}`}>Margin Sumber: RM{row.estimatedMarginMyr.toFixed(4)}</span>
                           </div>
-                          <div className="grid grid-cols-3 gap-2 text-[10px] text-slate-500">
-                            <div><p className="text-slate-400">Kos (MYR)</p><p className="font-semibold text-slate-700">RM{row.estimatedCostMyr.toFixed(4)}</p></div>
-                            <div><p className="text-slate-400">Hasil (MYR)</p><p className="font-semibold text-emerald-700">RM{row.estimatedRevenueMyr.toFixed(4)}</p></div>
+                          <div className="grid grid-cols-4 gap-2 text-[10px] text-slate-500">
+                            <div><p className="text-slate-400">Kos Pembekal (USD)</p><p className="font-semibold text-slate-700">${row.avgCostUsd.toFixed(4)}</p></div>
+                            <div><p className="text-slate-400">Kos Sumber (MYR)</p><p className="font-semibold text-slate-700">RM{row.estimatedCostMyr.toFixed(4)}</p></div>
+                            <div><p className="text-slate-400">Hasil Sumber (MYR)</p><p className="font-semibold text-emerald-700">RM{row.estimatedRevenueMyr.toFixed(4)}</p></div>
                             <div><p className="text-slate-400">Markup</p><p className="font-semibold text-slate-700">{row.markupPct}%</p></div>
                           </div>
                         </div>
                       ))}
                     </div>
-                    <p className="text-[10px] text-slate-400">Kadar USD/MYR: {hqProfitSummary[0]?.billingUsdMyrRate ?? 4.45} • Berdasarkan ai_cost_rates semasa.</p>
+                    <p className="text-[10px] text-slate-400">Kadar USD/MYR: {hqProfitSummary[0]?.billingUsdMyrRate ?? 4.45} • Berdasarkan commercial_config_items semasa.</p>
+                  </div>
+                )}
+
+                {/* WS3: Storage Ledger Summary */}
+                {hqStorageSummary.length > 0 && (
+                  <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-3">
+                    <div>
+                      <h3 className="text-xs font-bold text-slate-700">Ringkasan Storan Sumber (Storage Ledger)</h3>
+                      <p className="text-[11px] text-slate-400 mt-0.5">Berdasarkan resource_wallet_transactions — konsisten dengan Lejar Sumber Tenant.</p>
+                    </div>
+                    <div className="space-y-2">
+                      {hqStorageSummary.map(row => (
+                        <div key={row.workspaceId} className="p-3 bg-slate-50 rounded-xl space-y-1">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[11px] font-bold text-slate-700">{row.workspaceName}</span>
+                            <span className="text-[10px] text-slate-400">{row.tenantName ?? row.tenantId ?? "—"}</span>
+                          </div>
+                          <div className="grid grid-cols-3 gap-2 text-[10px] text-slate-500">
+                            <div><p className="text-slate-400">Muat Naik</p><p className="font-semibold text-slate-700">{(row.totalUploadBytes / 1048576).toFixed(2)} MB ({row.uploadCount})</p></div>
+                            <div><p className="text-slate-400">Padam</p><p className="font-semibold text-slate-700">{(Math.abs(row.totalDeleteBytes) / 1048576).toFixed(2)} MB ({row.deleteCount})</p></div>
+                            <div><p className="text-slate-400">Bersih</p><p className={`font-semibold ${row.netBytes >= 0 ? "text-slate-700" : "text-emerald-700"}`}>{(row.netBytes / 1048576).toFixed(2)} MB</p></div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 )}
 
@@ -4568,6 +4596,7 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
                   </div>
                   {commercialConfigItems.filter(i => [
                     "billing_usd_myr_rate","markup_ai_pct","markup_ocr_pct",
+                    "avg_ai_cost_usd","avg_ocr_cost_usd",
                     "credit_per_ai_call","credit_per_ocr_page","min_charge_ai_myr",
                     "min_charge_ocr_myr","rounding_rule","free_allowance_ai","promo_multiplier_ai",
                   ].includes(i.configKey)).length === 0 ? (
@@ -4576,6 +4605,7 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
                     <div className="space-y-1.5">
                       {commercialConfigItems.filter(i => [
                         "billing_usd_myr_rate","markup_ai_pct","markup_ocr_pct",
+                        "avg_ai_cost_usd","avg_ocr_cost_usd",
                         "credit_per_ai_call","credit_per_ocr_page","min_charge_ai_myr",
                         "min_charge_ocr_myr","rounding_rule","free_allowance_ai","promo_multiplier_ai",
                       ].includes(i.configKey)).map(item => (

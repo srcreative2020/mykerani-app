@@ -2072,3 +2072,32 @@ export async function getHqResourceProfitSummary(days = 30): Promise<HqResourceP
     estimatedMarginMyr: Number(r.estimated_margin_myr),
   }));
 }
+
+export type HqStorageSummaryRow = {
+  workspaceId: string;
+  workspaceName: string;
+  tenantId: string | null;
+  tenantName: string | null;
+  totalUploadBytes: number;
+  totalDeleteBytes: number;
+  netBytes: number;
+  uploadCount: number;
+  deleteCount: number;
+};
+
+export async function getHqStorageLedgerSummary(): Promise<HqStorageSummaryRow[]> {
+  if (!isSupabaseConfigured() || !supabase) return [];
+  const { data, error } = await supabase.rpc("get_hq_storage_ledger_summary");
+  if (error || !data) return [];
+  return (data as any[]).map(r => ({
+    workspaceId: r.workspace_id,
+    workspaceName: r.workspace_name,
+    tenantId: r.tenant_id ?? null,
+    tenantName: r.tenant_name ?? null,
+    totalUploadBytes: Number(r.total_upload_bytes),
+    totalDeleteBytes: Number(r.total_delete_bytes),
+    netBytes: Number(r.net_bytes),
+    uploadCount: Number(r.upload_count),
+    deleteCount: Number(r.delete_count),
+  }));
+}

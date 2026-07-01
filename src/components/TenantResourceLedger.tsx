@@ -81,12 +81,16 @@ export function TenantResourceLedger({ workspaceId }: { workspaceId: string }) {
       getConfigValue("billing_usd_myr_rate"),
       getConfigValue("markup_ai_pct"),
       getConfigValue("markup_ocr_pct"),
-    ]).then(([usdMyrVal, aiPctVal, ocrPctVal]) => {
+      getConfigValue("avg_ai_cost_usd"),
+      getConfigValue("avg_ocr_cost_usd"),
+    ]).then(([usdMyrVal, aiPctVal, ocrPctVal, avgAiVal, avgOcrVal]) => {
       setBillingRates(prev => ({
         ...prev,
         usdMyr: (usdMyrVal as any)?.rate ?? prev.usdMyr,
         markupAiPct: (aiPctVal as any)?.pct ?? prev.markupAiPct,
         markupOcrPct: (ocrPctVal as any)?.pct ?? prev.markupOcrPct,
+        avgAiCostUsd: (avgAiVal as any)?.cost ?? prev.avgAiCostUsd,
+        avgOcrCostUsd: (avgOcrVal as any)?.cost ?? prev.avgOcrCostUsd,
       }));
     }).catch(() => {});
   }, []);
