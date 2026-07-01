@@ -1410,6 +1410,11 @@ export function OwnerDashboard() {
         setChatLoading(false);
         return;
       }
+      if (res.status === 402) {
+        setChatMessages(prev => [...prev, { id: `a-${Date.now()}`, sender: "ai", text: data.error || "Kredit AI anda telah habis. Sila hubungi pentadbir untuk menambah kredit." }]);
+        setChatLoading(false);
+        return;
+      }
       let reply = data.text || "Saya sedang cuba membantu anda.";
       reply = reply.replace(/tenant/gi, "syarikat").replace(/sandbox/gi, "ujian");
       const aiMsgId = `a-${Date.now()}`;
