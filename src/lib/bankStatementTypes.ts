@@ -87,6 +87,7 @@ export interface StartImportRequest {
 // What the server returns from /api/statement/process/start on success.
 export interface StartImportResponse {
   jobId: string;
+  totalPages: number | null;   // UI display metadata only — not stored in DB
 }
 
 // Active statuses — used to decide whether a job counts as "in flight"

@@ -1568,6 +1568,7 @@ Output ONLY raw JSON matching this shape exactly, no markdown fences, no extra t
 
     // Extract PDF text server-side (same as runOcrAnalysis — reuses existing pdf-parse dep).
     let fileDataText: string;
+    let pdfPageCount: number | null = null;
     try {
       const matchPdf = (fileDataUrl as string).match(/^data:([^;]+);base64,(.+)$/);
       const mimeType = matchPdf ? matchPdf[1] : "";
@@ -1579,6 +1580,7 @@ Output ONLY raw JSON matching this shape exactly, no markdown fences, no extra t
       const parser = new PDFParse({ data: pdfBuffer });
       const result = await parser.getText();
       fileDataText = (result.text || "").trim();
+      pdfPageCount = (result as any).numpages ?? null;
       if (!fileDataText) {
         return res.status(422).json({
           error: "PDF ini tidak mengandungi teks yang boleh dibaca. Sila muat naik PDF dengan lapisan teks sebenar.",
@@ -1658,7 +1660,8 @@ Output ONLY raw JSON matching this shape exactly, no markdown fences, no extra t
       return res.status(500).json({ error: "Gagal mendapatkan ID import yang dibuat." });
     }
 
-    res.json({ jobId });
+    // totalPages is display metadata only — not stored in DB, not used by engine.
+    res.json({ jobId, totalPages: pdfPageCount });
 
     // Fire-and-forget background processing.
     runStatementAnalysis(jobId, workspaceId, tenantId, userId).catch((err) => {
