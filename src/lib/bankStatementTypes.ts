@@ -90,12 +90,16 @@ export interface StartImportResponse {
   totalPages: number | null;   // UI display metadata only — not stored in DB
 }
 
-// Active statuses — used to decide whether a job counts as "in flight"
+// Active statuses — used by getActiveImport() to restore state on remount.
+// COMPLETED is included so the draft review screen is restored after a tab
+// switch or browser refresh; the server's conflict check uses its own
+// hardcoded list and is not affected by this constant.
 export const ACTIVE_STATUSES: ReadonlyArray<StatementJobStatus> = [
   "PENDING",
   "PROCESSING",
   "PAUSED",
   "INTERRUPTED",
+  "COMPLETED",
 ];
 
 // Terminal statuses — job is done in some form; no background engine running.
