@@ -83,6 +83,9 @@ import type { ChatSuggestion, ChatSuggestionExtra, ChatSuggestionRecordType, Cha
 import { enrichChatSuggestionPayload } from "../lib/chatSuggestionMapper";
 import { useConfirmChatSuggestion } from "../hooks/useConfirmChatSuggestion";
 import { useCrossWorkspacePattern } from "../hooks/useCrossWorkspacePattern";
+import BankStatementProcessor from "../components/BankStatementProcessor";
+import { confirmFinancialRecord, type ConfirmInput } from "../lib/financialRecordConfirmation";
+import { type StatementTransaction } from "../lib/bankStatementTypes";
 
 interface ChatMsg {
   id: string;
@@ -187,6 +190,7 @@ export function OwnerDashboard() {
 
   const [activeTab, setActiveTab] = useState<MainTab>("home");
   const [morePage, setMorePage] = useState<MorePage>("menu");
+  const [showBankStatementImport, setShowBankStatementImport] = useState(false);
   const [quickAdd, setQuickAdd] = useState<"INCOME" | "EXPENSE" | null>(null);
   // Persisted (localStorage) so a confirmed/rejected suggestion is not re-actioned (and
   // duplicate-inserted) after a page refresh, remount, or chat history reload — the chat
@@ -2930,31 +2934,91 @@ export function OwnerDashboard() {
         )}
 
         {/* ═══ DOCUMENTS ═══ */}
-        {activeTab === "documents" && (
-          <DocumentsManager
-            workspaceId={wsId}
-            workspaceName={activeWorkspace?.name || ""}
-            tenantId={activeWorkspace?.tenantId}
-            currentUserId={user?.id}
-            currentUserEmail={user?.email}
-            currentUserRole="TENANT_OWNER"
-            currentUserFullName={user?.fullName}
-            isMockUser={isMockUser}
-            activeSessionId={activeSessionId}
-            userNameById={userNameById}
-            storageQuota={storageQuota}
-            financialEvents={financialEvents}
-            businesses={businesses}
-            businessBranches={businessBranches}
-            ocrLearnedPatterns={ocrLearnedPatterns}
-            addFinancialEventAwaited={addFinancialEventAwaited}
-            addFinancialEventsBatch={addFinancialEventsBatch}
-            addFinancialEvidencePackage={addFinancialEvidencePackage}
-            learnOcrPattern={learnOcrPattern}
-            learnOcrPatternsBatch={learnOcrPatternsBatch}
-            onBuyAddon={() => setShowAddonModal(true)}
-            docs={docs}
-            onDocsChange={setDocs}
+        {activeTab === "documents" && !showBankStatementImport && (
+          <div className="flex-1 overflow-y-auto">
+            <div className="max-w-2xl mx-auto px-4 pt-4">
+              <button
+                onClick={() => setShowBankStatementImport(true)}
+                className="w-full flex items-center gap-3 px-4 py-3 mb-4 rounded-xl border-2 border-dashed border-indigo-300 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 transition font-semibold text-sm"
+              >
+                <span className="text-xl">🏦</span>
+                <span>Import Penyata Bank</span>
+                <span className="ml-auto text-indigo-400">›</span>
+              </button>
+            </div>
+            <DocumentsManager
+              workspaceId={wsId}
+              workspaceName={activeWorkspace?.name || ""}
+              tenantId={activeWorkspace?.tenantId}
+              currentUserId={user?.id}
+              currentUserEmail={user?.email}
+              currentUserRole="TENANT_OWNER"
+              currentUserFullName={user?.fullName}
+              isMockUser={isMockUser}
+              activeSessionId={activeSessionId}
+              userNameById={userNameById}
+              storageQuota={storageQuota}
+              financialEvents={financialEvents}
+              businesses={businesses}
+              businessBranches={businessBranches}
+              ocrLearnedPatterns={ocrLearnedPatterns}
+              addFinancialEventAwaited={addFinancialEventAwaited}
+              addFinancialEventsBatch={addFinancialEventsBatch}
+              addFinancialEvidencePackage={addFinancialEvidencePackage}
+              learnOcrPattern={learnOcrPattern}
+              learnOcrPatternsBatch={learnOcrPatternsBatch}
+              onBuyAddon={() => setShowAddonModal(true)}
+              docs={docs}
+              onDocsChange={setDocs}
+            />
+          </div>
+        )}
+        {activeTab === "documents" && showBankStatementImport && (
+          <BankStatementProcessor
+            onBack={() => setShowBankStatementImport(false)}
+            onConfirmTransaction={async (tx: StatementTransaction, jobId: string) => {
+              const wsId2 = activeWorkspace?.id || "";
+              const tenantId2 = user?.tenantId || activeWorkspace?.tenantId || "";
+              const recordType = tx.type === "CREDIT" ? "INCOME" : "EXPENSE";
+              const fileName = `bank_statement_${jobId}`;
+              const fileUrl = "";
+              const input: ConfirmInput = {
+                workspaceId: wsId2,
+                tenantId: tenantId2,
+                userId: user?.id,
+                userEmail: user?.email,
+                userRole: user?.role,
+                transactionType: recordType as any,
+                amount: tx.amount,
+                category: tx.suggestedCategory || "Lain-lain",
+                relatedParty: tx.description,
+                date: tx.date,
+                confidenceScore: tx.confidenceScore ?? 0.8,
+                referenceNumber: `STMT-${jobId}-${tx.date}-${tx.amount}`,
+                description: `Linked automated OCR bank statement line item: ${tx.description}`,
+                pendingEvidence: { documentType: "STATEMENT", fileName, fileUrl },
+                evidenceAttached: true,
+                source: "BANK_STATEMENT",
+                sourceTitle: `bank statement transaction: ${tx.description}`,
+                auditDestination: "NONE",
+                precheckDuplicate: false,
+              };
+              await confirmFinancialRecord(input, {
+                addFinancialEventAwaited,
+                addFinancialEvent,
+                addDebtRecordAwaited,
+                addDebtRecord,
+                addFinancialCommitmentAwaited,
+                addFinancialCommitment,
+                addAssetPurchase: async () => undefined,
+                addOwnerTransaction: async () => undefined,
+                linkEvidenceToRecord: () => undefined,
+                learnOcrPattern,
+                scanForDuplicates: async () => [],
+                logEvent: () => undefined,
+                logTenantActivity: () => undefined,
+              });
+            }}
           />
         )}
 
