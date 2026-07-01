@@ -799,7 +799,7 @@ export function DocumentsManager({
 
   return (
     <>
-      <div className="flex-1 overflow-y-auto p-4 space-y-4 max-w-2xl mx-auto w-full pb-20" id="documents_manager_pane">
+      <div className="flex-1 overflow-y-auto p-4 lg:p-6 space-y-4 w-full pb-6" id="documents_manager_pane">
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-bold text-slate-900">Dokumen</h2>
           <span className="text-xs text-slate-400">{docs.length} fail</span>

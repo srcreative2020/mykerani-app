@@ -736,7 +736,7 @@ export const FinancialReportsAnalytics: React.FC<FinancialReportsAnalyticsProps>
   };
 
   return (
-    <div className="max-w-lg mx-auto w-full space-y-5" id="reports_foundation_root">
+    <div className="w-full space-y-5" id="reports_foundation_root">
 
       {/* Section 1 — Financial Snapshot, with Phase 2D.3's "Top 3 Actions
           Required" slotted in immediately below it and above Section 2
