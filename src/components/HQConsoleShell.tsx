@@ -232,6 +232,59 @@ const BLANK_CUSTOMER: Omit<Customer, "id" | "aiUsage" | "storageGB" | "attention
   billingContactName: "", billingEmail: "", supportContactName: "", supportEmail: "",
 };
 
+
+// ─── Config Value Formatter ─────────────────────────────────────────────────
+// Formats commercial_config_items values into human-readable display.
+// Values are still read from commercial_config_items — only the display is changed.
+function formatConfigValue(configKey: string, value: unknown): string {
+  if (value === null || value === undefined) return "—";
+  const v = value as Record<string, unknown>;
+  switch (configKey) {
+    case "avg_ai_cost_usd":
+    case "avg_ocr_cost_usd":
+      return `${v.cost ?? "?"} USD`;
+    case "billing_usd_myr_rate":
+      return String(v.rate ?? "?");
+    case "markup_ai_pct":
+    case "markup_ocr_pct":
+      return `${v.pct ?? "?"}%`;
+    case "credit_per_ai_call":
+    case "credit_per_ocr_page":
+    case "free_allowance_ai":
+      return `${v.credits ?? "?"} kredit`;
+    case "min_charge_ai_myr":
+    case "min_charge_ocr_myr":
+      return `RM${v.myr ?? "?"}`;
+    case "promo_multiplier_ai":
+      return `×${v.multiplier ?? "?"}`;
+    case "rounding_rule":
+      return v.rule === "ceil" ? "Ceiling" : v.rule === "floor" ? "Floor" : v.rule === "round" ? "Round" : String(v.rule ?? "?");
+    default:
+      if (typeof value === "object" && !Array.isArray(value)) {
+        return Object.entries(v).map(([k, val]) => `${k}: ${val}`).join(" | ");
+      }
+      return String(value);
+  }
+}
+
+function formatConfigKey(configKey: string): string {
+  const labels: Record<string, string> = {
+    avg_ai_cost_usd:       "Kos Purata AI (USD)",
+    avg_ocr_cost_usd:      "Kos Purata OCR (USD)",
+    billing_usd_myr_rate:  "Kadar USD/MYR",
+    markup_ai_pct:         "Markup AI",
+    markup_ocr_pct:        "Markup OCR",
+    credit_per_ai_call:    "Kredit per Panggilan AI",
+    credit_per_ocr_page:   "Kredit per Halaman OCR",
+    min_charge_ai_myr:     "Caj Minimum AI",
+    min_charge_ocr_myr:    "Caj Minimum OCR",
+    free_allowance_ai:     "Elaun Percuma AI",
+    promo_multiplier_ai:   "Pengganda Promosi AI",
+    rounding_rule:         "Peraturan Pembundaran",
+  };
+  return labels[configKey] ?? configKey;
+}
+
 // â"€â"€â"€ Main Component â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
   const { signOut, isMockUser } = useAuth();
@@ -4105,9 +4158,12 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
                   ) : (
                     <div className="space-y-2">
                       {commercialConfigItems.map((c) => (
-                        <div key={c.id} className="p-3 bg-slate-50 rounded-xl">
-                          <p className="text-xs font-bold text-slate-900">{c.configKey} <span className="text-slate-400 font-normal">({c.scope})</span></p>
-                          <p className="text-[11px] text-slate-500 break-all">{JSON.stringify(c.value)}</p>
+                        <div key={c.id} className="flex items-center justify-between p-3 bg-slate-50 rounded-xl">
+                          <div>
+                            <p className="text-xs font-bold text-slate-900">{formatConfigKey(c.configKey)}</p>
+                            <p className="text-2xs text-slate-400 font-mono">{c.configKey} ({c.scope})</p>
+                          </div>
+                          <p className="text-xs font-bold text-slate-700">{formatConfigValue(c.configKey, c.value)}</p>
                         </div>
                       ))}
                     </div>
@@ -4614,8 +4670,11 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
                         "min_charge_ocr_myr","rounding_rule","free_allowance_ai","promo_multiplier_ai",
                       ].includes(i.configKey)).map(item => (
                         <div key={item.id} className="flex items-center justify-between p-2.5 bg-slate-50 rounded-xl">
-                          <span className="text-[11px] font-mono text-slate-600">{item.configKey}</span>
-                          <span className="text-[11px] font-bold text-slate-900 font-mono">{JSON.stringify(item.value)}</span>
+                          <div>
+                            <p className="text-[11px] font-semibold text-slate-700">{formatConfigKey(item.configKey)}</p>
+                            <p className="text-2xs text-slate-400 font-mono">{item.configKey}</p>
+                          </div>
+                          <span className="text-[11px] font-bold text-slate-900">{formatConfigValue(item.configKey, item.value)}</span>
                         </div>
                       ))}
                     </div>
