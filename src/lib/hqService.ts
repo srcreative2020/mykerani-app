@@ -1747,6 +1747,30 @@ export async function updateHqCommercialPolicyKey(
   await submitCommercialConfigUpsert(configKey, "global", value);
 }
 
+export type WorkspaceWallet = {
+  aiCreditsBalance: number;
+  ocrCreditsBalance: number;
+  storageUsedBytes: number;
+  notificationCreditsBalance: number;
+};
+
+export async function getWorkspaceWallet(workspaceId: string): Promise<WorkspaceWallet | null> {
+  if (!isSupabaseConfigured() || !supabase) return null;
+  const { data, error } = await supabase
+    .from("resource_wallets")
+    .select("ai_credits_balance, ocr_credits_balance, storage_used_bytes, notification_credits_balance")
+    .eq("workspace_id", workspaceId)
+    .limit(1)
+    .maybeSingle();
+  if (error || !data) return null;
+  return {
+    aiCreditsBalance: Number(data.ai_credits_balance) || 0,
+    ocrCreditsBalance: Number(data.ocr_credits_balance) || 0,
+    storageUsedBytes: Number(data.storage_used_bytes) || 0,
+    notificationCreditsBalance: Number(data.notification_credits_balance) || 0,
+  };
+}
+
 export async function getTenantResourceLedger(
   workspaceId: string,
   creditType?: string,

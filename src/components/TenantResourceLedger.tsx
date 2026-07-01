@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from "react";
-import { getTenantResourceLedger, getConfigValue } from "../lib/hqService";
+import { getTenantResourceLedger, getConfigValue, getWorkspaceWallet, WorkspaceWallet } from "../lib/hqService";
 import { Zap, ScanLine, HardDrive, FileText, LayoutList } from "lucide-react";
 
 type LedgerRow = {
@@ -71,11 +71,14 @@ function estimateMyr(creditType: string, amount: number, rates: typeof DEFAULT_B
 
 export function TenantResourceLedger({ workspaceId }: { workspaceId: string }) {
   const [activeTab, setActiveTab] = useState<Tab>("ALL");
+  const [allRows, setAllRows] = useState<LedgerRow[]>([]);
   const [rows, setRows] = useState<LedgerRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [billingRates, setBillingRates] = useState(DEFAULT_BILLING_RATES);
+  const [wallet, setWallet] = useState<WorkspaceWallet | null>(null);
 
+  // 5.1 — Load all rates from commercial_config_items (Single Source of Truth)
   useEffect(() => {
     Promise.all([
       getConfigValue("billing_usd_myr_rate"),
@@ -95,14 +98,23 @@ export function TenantResourceLedger({ workspaceId }: { workspaceId: string }) {
     }).catch(() => {});
   }, []);
 
+  // 5.5 — Load wallet baki from resource_wallets (not recalculated from ledger)
+  useEffect(() => {
+    if (!workspaceId) return;
+    getWorkspaceWallet(workspaceId).then(setWallet).catch(() => {});
+  }, [workspaceId]);
+
   const load = useCallback(async (tab: Tab) => {
     if (!workspaceId) return;
     setLoading(true);
     setError(null);
     try {
+      // Always load ALL rows first to compute per-type badge counts (5.4)
+      const all = await getTenantResourceLedger(workspaceId, undefined, 200, 0);
+      setAllRows(all);
       const creditType = tab === "ALL" || tab === "BILLING" ? undefined : tab;
-      const data = await getTenantResourceLedger(workspaceId, creditType, 50, 0);
-      setRows(data);
+      const filtered = creditType ? all.filter(r => r.creditType === creditType) : all;
+      setRows(tab === "BILLING" ? all.filter(r => r.activityType === "USAGE") : filtered);
     } catch {
       setError("Gagal memuatkan data ledger.");
     } finally {
@@ -112,18 +124,48 @@ export function TenantResourceLedger({ workspaceId }: { workspaceId: string }) {
 
   useEffect(() => { load(activeTab); }, [activeTab, load]);
 
-  const displayRows = activeTab === "BILLING"
-    ? rows.filter(r => r.activityType === "USAGE")
-    : rows;
+  // 5.4 — Badge counts per tab from allRows
+  const counts: Record<Tab, number> = {
+    ALL:     allRows.length,
+    AI:      allRows.filter(r => r.creditType === "AI").length,
+    OCR:     allRows.filter(r => r.creditType === "OCR").length,
+    STORAGE: allRows.filter(r => r.creditType === "STORAGE").length,
+    BILLING: allRows.filter(r => r.activityType === "USAGE").length,
+  };
 
   return (
     <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
+
+      {/* 5.5 — Summary Bar: baki dari resource_wallets */}
+      {wallet && (
+        <div className="px-4 pt-4 pb-3 border-b border-slate-100 grid grid-cols-3 gap-3">
+          <div className="bg-amber-50 rounded-xl p-3 text-center">
+            <Zap className="w-4 h-4 text-amber-500 mx-auto mb-1" />
+            <p className="text-lg font-bold text-amber-700 leading-tight">{wallet.aiCreditsBalance.toLocaleString()}</p>
+            <p className="text-2xs text-amber-500 font-medium">Kredit AI</p>
+          </div>
+          <div className="bg-violet-50 rounded-xl p-3 text-center">
+            <ScanLine className="w-4 h-4 text-violet-500 mx-auto mb-1" />
+            <p className="text-lg font-bold text-violet-700 leading-tight">{wallet.ocrCreditsBalance.toLocaleString()}</p>
+            <p className="text-2xs text-violet-500 font-medium">Kredit OCR</p>
+          </div>
+          <div className="bg-blue-50 rounded-xl p-3 text-center">
+            <HardDrive className="w-4 h-4 text-blue-500 mx-auto mb-1" />
+            <p className="text-lg font-bold text-blue-700 leading-tight">{(wallet.storageUsedBytes / 1048576).toFixed(2)}</p>
+            <p className="text-2xs text-blue-500 font-medium">MB Digunakan</p>
+          </div>
+        </div>
+      )}
+
       <div className="px-4 pt-4 pb-0">
         <p className="text-sm font-bold text-slate-900 mb-3">Ledger Penggunaan Sumber</p>
+
+        {/* 5.4 — Tab Navigation with badge counts */}
         <div className="flex gap-1 overflow-x-auto scrollbar-none pb-3">
           {TAB_CONFIG.map(tab => {
             const Icon = tab.icon;
             const active = activeTab === tab.id;
+            const count = counts[tab.id];
             return (
               <button
                 key={tab.id}
@@ -136,6 +178,13 @@ export function TenantResourceLedger({ workspaceId }: { workspaceId: string }) {
               >
                 <Icon className={`w-3 h-3 ${active ? "text-white" : tab.color}`} />
                 {tab.label}
+                {count > 0 && (
+                  <span className={`text-2xs px-1 rounded-full font-bold ${
+                    active ? "bg-white/20 text-white" : "bg-slate-200 text-slate-600"
+                  }`}>
+                    {count}
+                  </span>
+                )}
               </button>
             );
           })}
@@ -149,14 +198,14 @@ export function TenantResourceLedger({ workspaceId }: { workspaceId: string }) {
         {error && (
           <div className="py-4 text-center text-xs text-red-500">{error}</div>
         )}
-        {!loading && !error && displayRows.length === 0 && (
+        {!loading && !error && rows.length === 0 && (
           <div className="py-8 text-center text-xs text-slate-400">
             Tiada rekod ledger untuk tempoh ini.
           </div>
         )}
-        {!loading && !error && displayRows.length > 0 && (
+        {!loading && !error && rows.length > 0 && (
           <div className="space-y-2 mt-1">
-            {displayRows.map(row => (
+            {rows.map(row => (
               <div
                 key={row.txnId}
                 className="flex items-start justify-between p-3 rounded-xl border border-slate-100 bg-slate-50/50 gap-2"
@@ -177,6 +226,7 @@ export function TenantResourceLedger({ workspaceId }: { workspaceId: string }) {
                   <p className="text-2xs text-slate-400 mt-0.5">{formatDate(row.createdAt)}</p>
                 </div>
                 <div className="text-right shrink-0">
+                  {/* 5.3 — STORAGE: formatBytes; 5.2 — AI/OCR USAGE: show MYR estimate */}
                   <p className={`text-sm font-bold ${row.amount < 0 ? "text-rose-600" : "text-emerald-600"}`}>
                     {row.creditType === "STORAGE"
                       ? (row.amount >= 0 ? "+" : "") + formatBytes(row.amount)
