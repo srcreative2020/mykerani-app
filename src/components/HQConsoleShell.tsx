@@ -4536,13 +4536,15 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
                   )}
                 </div>
 
-                {/* Resource Profit Summary */}
-                {hqProfitSummary.length > 0 && (
-                  <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-3">
-                    <div>
-                      <h3 className="text-xs font-bold text-slate-700">Untung Sumber — Anggaran 30 Hari</h3>
-                      <p className="text-[11px] text-slate-400 mt-0.5">Berdasarkan commercial_config_items (Single Source of Truth).</p>
-                    </div>
+                {/* WS4: Resource Profit Summary */}
+                <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-3">
+                  <div>
+                    <h3 className="text-xs font-bold text-slate-700">Untung Sumber — Anggaran 30 Hari</h3>
+                    <p className="text-[11px] text-slate-400 mt-0.5">Berdasarkan commercial_config_items (Single Source of Truth).</p>
+                  </div>
+                  {hqProfitSummary.length === 0 ? (
+                    <p className="text-[11px] text-slate-400 py-3 text-center">Tiada penggunaan AI/OCR dalam 30 hari lepas.</p>
+                  ) : (
                     <div className="space-y-2">
                       {hqProfitSummary.map(row => (
                         <div key={row.creditType} className="p-3 bg-slate-50 rounded-xl space-y-1.5">
@@ -4559,17 +4561,19 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
                         </div>
                       ))}
                     </div>
-                    <p className="text-[10px] text-slate-400">Kadar USD/MYR: {hqProfitSummary[0]?.billingUsdMyrRate ?? 4.45} • Berdasarkan commercial_config_items semasa.</p>
-                  </div>
-                )}
+                  )}
+                  <p className="text-[10px] text-slate-400">Kadar USD/MYR: {hqProfitSummary[0]?.billingUsdMyrRate ?? 4.45} • Berdasarkan commercial_config_items semasa.</p>
+                </div>
 
                 {/* WS3: Storage Ledger Summary */}
-                {hqStorageSummary.length > 0 && (
-                  <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-3">
-                    <div>
-                      <h3 className="text-xs font-bold text-slate-700">Ringkasan Storan Sumber (Storage Ledger)</h3>
-                      <p className="text-[11px] text-slate-400 mt-0.5">Berdasarkan resource_wallet_transactions — konsisten dengan Lejar Sumber Tenant.</p>
-                    </div>
+                <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-3">
+                  <div>
+                    <h3 className="text-xs font-bold text-slate-700">Ringkasan Storan Sumber (Storage Ledger)</h3>
+                    <p className="text-[11px] text-slate-400 mt-0.5">Berdasarkan resource_wallet_transactions — konsisten dengan Lejar Sumber Tenant.</p>
+                  </div>
+                  {hqStorageSummary.length === 0 ? (
+                    <p className="text-[11px] text-slate-400 py-3 text-center">Tiada rekod storan dalam lejar sumber.</p>
+                  ) : (
                     <div className="space-y-2">
                       {hqStorageSummary.map(row => (
                         <div key={row.workspaceId} className="p-3 bg-slate-50 rounded-xl space-y-1">
@@ -4585,8 +4589,8 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
                         </div>
                       ))}
                     </div>
-                  </div>
-                )}
+                  )}
+                </div>
 
                 {/* Resource Pricing Policy */}
                 <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-3">
