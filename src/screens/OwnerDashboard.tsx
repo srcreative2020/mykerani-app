@@ -2076,16 +2076,12 @@ export function OwnerDashboard() {
           {activeTab === "more" && morePage !== "menu" && (
             <div className="mt-2 pt-2 border-t border-slate-100 space-y-0.5">
               {([
-                { id: "myProfile" as MorePage, label: "Profil Saya", icon: User },
-                { id: "team" as MorePage, label: "Pasukan", icon: Users },
-                { id: "billing" as MorePage, label: "Bil & Langganan", icon: CreditCard },
-                { id: "settings" as MorePage, label: "Tetapan", icon: Settings },
-                { id: "resources" as MorePage, label: "Tetapan Sumber", icon: Cpu },
-                { id: "chatArchive" as MorePage, label: "Arkib Perbualan", icon: MessageCircle },
-                { id: "history" as MorePage, label: "Sejarah Aktiviti", icon: History },
-                { id: "activity" as MorePage, label: "Pusat Aktiviti", icon: Bell },
-                { id: "support" as MorePage, label: "Pusat Sokongan", icon: HelpCircle },
-                { id: "account360" as MorePage, label: "Akaun 360", icon: Star },
+                { id: "aktiviti" as MorePage, label: "Aktiviti",        icon: History },
+                { id: "akunSaya" as MorePage, label: "Akaun Saya",      icon: User },
+                { id: "team"     as MorePage, label: "Pasukan",          icon: Users },
+                { id: "billing"  as MorePage, label: "Bil & Langganan",  icon: CreditCard },
+                { id: "tetapan"  as MorePage, label: "Tetapan",          icon: Settings },
+                { id: "bantuan"  as MorePage, label: "Bantuan",          icon: HelpCircle },
               ]).map(({ id, label, icon: Icon }) => (
                 <button key={id} onClick={() => setMorePage(id)}
                   className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold transition cursor-pointer text-left ${
@@ -3172,16 +3168,12 @@ export function OwnerDashboard() {
 
             {morePage === "menu" && (() => {
               const menuItems = [
-                { id: "myProfile" as MorePage, label: "Profil Saya & Kewangan AI", desc: user?.email || "Akaun, perniagaan & kenderaan", icon: User },
-                { id: "team" as MorePage,      label: "Pasukan",           desc: "Tambah, edit & urus kakitangan",        icon: Users },
-                { id: "billing" as MorePage,   label: "Bil & Langganan",   desc: "Plan, kredit AI & storan",              icon: CreditCard },
-                { id: "settings" as MorePage,  label: "Tetapan",           desc: "Konfigurasi & peringatan",              icon: Settings },
-                { id: "resources" as MorePage, label: "Tetapan Sumber",    desc: "AI & storan yang digunakan",            icon: Cpu },
-                { id: "chatArchive" as MorePage, label: "Arkib Perbualan", desc: "Sejarah perbualan dengan MYKERANI ikut tarikh", icon: MessageCircle },
-                { id: "history" as MorePage,   label: "Sejarah Aktiviti",  desc: "Log semua transaksi & aktiviti",        icon: History },
-                { id: "activity" as MorePage,  label: "Pusat Aktiviti",    desc: "Pantau aktiviti staf",                  icon: Bell },
-                { id: "support" as MorePage,   label: "Pusat Sokongan",    desc: "Bantuan, FAQ & tiket sokongan",         icon: HelpCircle },
-                { id: "account360" as MorePage, label: "Akaun Saya 360",  desc: "Skor kesihatan, status langganan & akaun", icon: Star },
+                { id: "aktiviti" as MorePage, label: "Aktiviti",        desc: "Rekod kewangan, log sistem & arkib perbualan", icon: History },
+                { id: "akunSaya" as MorePage, label: "Akaun Saya",      desc: user?.email || "Profil, kewangan AI & skor kesihatan", icon: User },
+                { id: "team"     as MorePage, label: "Pasukan",          desc: "Tambah, edit & urus kakitangan",               icon: Users },
+                { id: "billing"  as MorePage, label: "Bil & Langganan",  desc: "Plan, kredit AI & storan",                     icon: CreditCard },
+                { id: "tetapan"  as MorePage, label: "Tetapan",          desc: "Konfigurasi, peringatan & tetapan sumber",     icon: Settings },
+                { id: "bantuan"  as MorePage, label: "Bantuan",          desc: "Bantuan, FAQ & tiket sokongan",                icon: HelpCircle },
               ];
               return (
                 <>
