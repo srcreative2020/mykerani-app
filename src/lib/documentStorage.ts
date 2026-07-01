@@ -1,4 +1,5 @@
 import { supabase } from "./supabase";
+import { logStorageLedgerEntry } from "./hqService";
 
 export type DocType = "RECEIPT" | "INVOICE" | "BANK_STATEMENT" | "CONTRACT" | "SUPPORTING_DOC";
 
@@ -151,6 +152,10 @@ export async function deleteDocument(doc: UploadedDoc): Promise<string | null> {
     .from("evidence_documents")
     .delete()
     .eq("id", doc.id);
+
+  if (!dbErr) {
+    logStorageLedgerEntry(doc.workspace_id, -doc.file_size_bytes, "REFUND", `Delete: ${doc.file_name}`, { file_name: doc.file_name, document_type: doc.document_type });
+  }
 
   return dbErr ? dbErr.message : null;
 }

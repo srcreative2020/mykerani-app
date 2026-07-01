@@ -579,9 +579,11 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
   const [hqCostSummary, setHqCostSummary] = useState<hqService.HqCostCenterSummary | null>(null);
   const [hqOperatingCosts, setHqOperatingCosts] = useState<hqService.HqOperatingCost[]>([]);
   const [newCostForm, setNewCostForm] = useState({ category: "infrastructure", description: "", amountMyr: "", incurredOn: new Date().toISOString().slice(0, 10) });
+  const [hqProfitSummary, setHqProfitSummary] = useState<hqService.HqResourceProfitRow[]>([]);
   const loadHqCostCenter = () => {
     hqService.getHqCostCenterSummary().then(setHqCostSummary);
     hqService.getHqOperatingCosts(50).then(setHqOperatingCosts);
+    hqService.getHqResourceProfitSummary(30).then(setHqProfitSummary);
   };
   useEffect(() => {
     if (!useRealData) return;
@@ -4531,6 +4533,32 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
                     ))
                   )}
                 </div>
+
+                {/* Resource Profit Summary */}
+                {hqProfitSummary.length > 0 && (
+                  <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-3">
+                    <div>
+                      <h3 className="text-xs font-bold text-slate-700">Anggaran Keuntungan Sumber (30 Hari)</h3>
+                      <p className="text-[11px] text-slate-400 mt-0.5">Berdasarkan kos purata pembekal AI dan dasar markup HQ semasa.</p>
+                    </div>
+                    <div className="space-y-2">
+                      {hqProfitSummary.map(row => (
+                        <div key={row.creditType} className="p-3 bg-slate-50 rounded-xl space-y-1.5">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[11px] font-bold text-slate-700">{row.creditType} ({row.usageCount} penggunaan)</span>
+                            <span className={`text-[11px] font-bold ${row.estimatedMarginMyr >= 0 ? "text-emerald-700" : "text-red-600"}`}>Margin: RM{row.estimatedMarginMyr.toFixed(4)}</span>
+                          </div>
+                          <div className="grid grid-cols-3 gap-2 text-[10px] text-slate-500">
+                            <div><p className="text-slate-400">Kos (MYR)</p><p className="font-semibold text-slate-700">RM{row.estimatedCostMyr.toFixed(4)}</p></div>
+                            <div><p className="text-slate-400">Hasil (MYR)</p><p className="font-semibold text-emerald-700">RM{row.estimatedRevenueMyr.toFixed(4)}</p></div>
+                            <div><p className="text-slate-400">Markup</p><p className="font-semibold text-slate-700">{row.markupPct}%</p></div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    <p className="text-[10px] text-slate-400">Kadar USD/MYR: {hqProfitSummary[0]?.billingUsdMyrRate ?? 4.45} • Berdasarkan ai_cost_rates semasa.</p>
+                  </div>
+                )}
 
                 {/* Resource Pricing Policy */}
                 <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-3">

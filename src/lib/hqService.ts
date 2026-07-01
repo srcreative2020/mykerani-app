@@ -2026,3 +2026,49 @@ export async function logTenantActivity(params: {
     p_metadata: params.metadata || null,
   });
 }
+
+export async function logStorageLedgerEntry(
+  workspaceId: string,
+  amountBytes: number,
+  activityType: "USAGE" | "REFUND",
+  description: string,
+  metadata?: Record<string, unknown>
+): Promise<void> {
+  if (!isSupabaseConfigured() || !supabase) return;
+  await supabase.rpc("log_storage_ledger_entry", {
+    p_workspace_id: workspaceId,
+    p_amount_bytes: amountBytes,
+    p_activity_type: activityType,
+    p_description: description,
+    p_metadata: metadata ?? {},
+  });
+}
+
+export type HqResourceProfitRow = {
+  creditType: string;
+  usageCount: number;
+  avgCostUsd: number;
+  totalCostUsd: number;
+  markupPct: number;
+  billingUsdMyrRate: number;
+  estimatedRevenueMyr: number;
+  estimatedCostMyr: number;
+  estimatedMarginMyr: number;
+};
+
+export async function getHqResourceProfitSummary(days = 30): Promise<HqResourceProfitRow[]> {
+  if (!isSupabaseConfigured() || !supabase) return [];
+  const { data, error } = await supabase.rpc("get_hq_resource_profit_summary", { p_days: days });
+  if (error || !data) return [];
+  return (data as any[]).map(r => ({
+    creditType: r.credit_type,
+    usageCount: Number(r.usage_count),
+    avgCostUsd: Number(r.avg_cost_usd),
+    totalCostUsd: Number(r.total_cost_usd),
+    markupPct: Number(r.markup_pct),
+    billingUsdMyrRate: Number(r.billing_usd_myr_rate),
+    estimatedRevenueMyr: Number(r.estimated_revenue_myr),
+    estimatedCostMyr: Number(r.estimated_cost_myr),
+    estimatedMarginMyr: Number(r.estimated_margin_myr),
+  }));
+}

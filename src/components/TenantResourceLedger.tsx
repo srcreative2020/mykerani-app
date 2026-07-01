@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from "react";
-import { getTenantResourceLedger } from "../lib/hqService";
+import { getTenantResourceLedger, getConfigValue } from "../lib/hqService";
 import { Zap, ScanLine, HardDrive, FileText, LayoutList } from "lucide-react";
 
 type LedgerRow = {
@@ -43,11 +43,53 @@ function formatDate(iso: string) {
     " " + d.toLocaleTimeString("ms-MY", { hour: "2-digit", minute: "2-digit" });
 }
 
+function formatBytes(bytes: number): string {
+  const abs = Math.abs(bytes);
+  if (abs >= 1073741824) return `${(bytes / 1073741824).toFixed(2)} GB`;
+  if (abs >= 1048576)    return `${(bytes / 1048576).toFixed(2)} MB`;
+  if (abs >= 1024)       return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${bytes} B`;
+}
+
+const DEFAULT_BILLING_RATES = {
+  usdMyr: 4.45,
+  markupAiPct: 300,
+  markupOcrPct: 500,
+  avgAiCostUsd: 0.002,
+  avgOcrCostUsd: 0.001,
+};
+
+function estimateMyr(creditType: string, amount: number, rates: typeof DEFAULT_BILLING_RATES): string {
+  if (creditType === "STORAGE" || amount >= 0) return "";
+  const credits = Math.abs(amount);
+  const costUsd = creditType === "AI"
+    ? credits * rates.avgAiCostUsd * (1 + rates.markupAiPct / 100)
+    : credits * rates.avgOcrCostUsd * (1 + rates.markupOcrPct / 100);
+  const myr = costUsd * rates.usdMyr;
+  return myr < 0.001 ? "<RM0.001" : `≈RM${myr.toFixed(4)}`;
+}
+
 export function TenantResourceLedger({ workspaceId }: { workspaceId: string }) {
   const [activeTab, setActiveTab] = useState<Tab>("ALL");
   const [rows, setRows] = useState<LedgerRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [billingRates, setBillingRates] = useState(DEFAULT_BILLING_RATES);
+
+  useEffect(() => {
+    Promise.all([
+      getConfigValue("billing_usd_myr_rate"),
+      getConfigValue("markup_ai_pct"),
+      getConfigValue("markup_ocr_pct"),
+    ]).then(([usdMyrVal, aiPctVal, ocrPctVal]) => {
+      setBillingRates(prev => ({
+        ...prev,
+        usdMyr: (usdMyrVal as any)?.rate ?? prev.usdMyr,
+        markupAiPct: (aiPctVal as any)?.pct ?? prev.markupAiPct,
+        markupOcrPct: (ocrPctVal as any)?.pct ?? prev.markupOcrPct,
+      }));
+    }).catch(() => {});
+  }, []);
 
   const load = useCallback(async (tab: Tab) => {
     if (!workspaceId) return;
@@ -132,9 +174,16 @@ export function TenantResourceLedger({ workspaceId }: { workspaceId: string }) {
                 </div>
                 <div className="text-right shrink-0">
                   <p className={`text-sm font-bold ${row.amount < 0 ? "text-rose-600" : "text-emerald-600"}`}>
-                    {row.amount < 0 ? "" : "+"}{row.amount}
+                    {row.creditType === "STORAGE"
+                      ? (row.amount >= 0 ? "+" : "") + formatBytes(row.amount)
+                      : (row.amount < 0 ? "" : "+") + row.amount}
                   </p>
-                  <p className="text-2xs text-slate-400">Baki: {row.runningBalance.toFixed(0)}</p>
+                  {row.creditType !== "STORAGE" && (
+                    <p className="text-2xs text-amber-600 font-medium">{estimateMyr(row.creditType, row.amount, billingRates)}</p>
+                  )}
+                  <p className="text-2xs text-slate-400">
+                    {row.creditType === "STORAGE" ? formatBytes(row.runningBalance) : `Baki: ${row.runningBalance.toFixed(0)}`}
+                  </p>
                 </div>
               </div>
             ))}

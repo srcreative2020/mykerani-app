@@ -31,9 +31,9 @@ BEGIN
   END IF;
 
   IF p_credit_type = 'AI' THEN
-    SELECT ai_credits INTO v_balance FROM resource_wallets WHERE id = v_wallet_id;
+    SELECT ai_credits_balance INTO v_balance FROM resource_wallets WHERE id = v_wallet_id;
   ELSIF p_credit_type = 'OCR' THEN
-    SELECT ocr_credits INTO v_balance FROM resource_wallets WHERE id = v_wallet_id;
+    SELECT ocr_credits_balance INTO v_balance FROM resource_wallets WHERE id = v_wallet_id;
   ELSE
     v_balance := 9999;
   END IF;
@@ -44,9 +44,9 @@ BEGIN
   END IF;
 
   IF p_credit_type = 'AI' THEN
-    UPDATE resource_wallets SET ai_credits = ai_credits - p_amount WHERE id = v_wallet_id;
+    UPDATE resource_wallets SET ai_credits_balance = ai_credits_balance - p_amount, updated_at = now() WHERE id = v_wallet_id;
   ELSIF p_credit_type = 'OCR' THEN
-    UPDATE resource_wallets SET ocr_credits = ocr_credits - p_amount WHERE id = v_wallet_id;
+    UPDATE resource_wallets SET ocr_credits_balance = ocr_credits_balance - p_amount, updated_at = now() WHERE id = v_wallet_id;
   END IF;
 
   INSERT INTO resource_wallet_transactions (wallet_id, credit_type, activity_type, amount, description)
