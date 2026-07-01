@@ -607,7 +607,10 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
     const result = await hqService.reviewPendingHqAction(actionId, approve);
     if (!result.ok) setApprovalActionError(result.error || "Tindakan gagal");
     await loadPendingHqActions(pendingHqActionsFilter);
-    if (approve) loadAddonPackages();
+    if (approve) {
+      loadAddonPackages();
+      loadCommercialGovernance();
+    }
     setApprovalActionBusy(null);
   };
   const requestStaffSuspension = async (userId: string, suspend: boolean) => {
@@ -4471,6 +4474,7 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
                                 : a.actionType === "tenant_reactivate" ? "Aktifkan Semula Pelanggan"
                                 : a.actionType === "addon_package_upsert" ? `Tambah/Kemaskini Pakej Add-On${(a.payload as any)?.label ? `: ${(a.payload as any).label}` : ""}`
                                 : a.actionType === "addon_package_deactivate" ? "Nyahaktifkan Pakej Add-On"
+                                : a.actionType === "commercial_config_upsert" ? `Kemaskini Konfigurasi Komersial${(a.payload as any)?.config_key ? `: ${(a.payload as any).config_key}` : ""}`
                                 : a.actionType}
                             </p>
                             <p className="text-[11px] text-slate-500 truncate">
