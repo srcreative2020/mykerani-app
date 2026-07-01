@@ -1178,7 +1178,7 @@ export function StaffHomeScreen() {
   ];
 
   return (
-    <div className="h-screen flex flex-col lg:flex-row overflow-hidden mk-dark" id="staff_root" style={{background:"#F7F6F2"}}>
+    <div className="h-screen flex flex-col lg:flex-row overflow-hidden mk-dark" id="staff_root" style={{background:"linear-gradient(160deg,#F8F7F3 0%,#F2F0EA 100%)"}}>
       <style>{`
         #staff_root .bg-emerald-700{background-color:#5A9E7A!important}
         #staff_root .bg-emerald-800{background-color:#3D7057!important}

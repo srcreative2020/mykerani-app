@@ -2011,7 +2011,7 @@ export function OwnerDashboard() {
   ];
 
   return (
-    <div className="h-screen flex flex-col lg:flex-row overflow-hidden mk-dark" id="owner_root" style={{background:"#F7F6F2"}}>
+    <div className="h-screen flex flex-col lg:flex-row overflow-hidden mk-dark" id="owner_root" style={{background:"linear-gradient(160deg,#F8F7F3 0%,#F2F0EA 100%)"}}>
       <style>{`
         #owner_root .bg-emerald-700{background-color:#5A9E7A!important}
         #owner_root .bg-emerald-800{background-color:#3D7057!important}
@@ -2767,28 +2767,28 @@ export function OwnerDashboard() {
             {/* KPI cards — 2-col on mobile, 5-col on desktop */}
             <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 lg:gap-4">
               <div className="bg-emerald-50 border border-emerald-100 rounded-2xl p-4 shadow-sm">
-                <p className="text-xs text-emerald-600 font-medium">Pendapatan</p>
-                <p className="text-xl font-bold mt-1 text-emerald-700">RM {incomeInPeriod.toLocaleString("ms-MY", { minimumFractionDigits: 2 })}</p>
-                <TrendingUp className="w-4 h-4 text-emerald-400 mt-1" />
+                <p className="text-2xs font-semibold uppercase tracking-wider text-emerald-600 mb-1">Pendapatan</p>
+                <p className="text-xl font-bold tracking-tight text-emerald-700">RM {incomeInPeriod.toLocaleString("ms-MY", { minimumFractionDigits: 2 })}</p>
+                <TrendingUp className="w-4 h-4 text-emerald-400 mt-1.5" />
               </div>
               <div className="bg-rose-50 border border-rose-100 rounded-2xl p-4 shadow-sm">
-                <p className="text-xs text-rose-500 font-medium">Perbelanjaan</p>
-                <p className="text-xl font-bold mt-1 text-rose-600">RM {expenseInPeriod.toLocaleString("ms-MY", { minimumFractionDigits: 2 })}</p>
-                <TrendingDown className="w-4 h-4 text-rose-300 mt-1" />
+                <p className="text-2xs font-semibold uppercase tracking-wider text-rose-500 mb-1">Perbelanjaan</p>
+                <p className="text-xl font-bold tracking-tight text-rose-600">RM {expenseInPeriod.toLocaleString("ms-MY", { minimumFractionDigits: 2 })}</p>
+                <TrendingDown className="w-4 h-4 text-rose-300 mt-1.5" />
               </div>
               <div className={`col-span-2 lg:col-span-1 rounded-2xl p-4 shadow-sm border bg-white ${(incomeInPeriod - expenseInPeriod) >= 0 ? "border-emerald-100" : "border-rose-100"}`}>
-                <p className="text-xs text-slate-500">Untung / Rugi</p>
-                <p className={`text-xl font-bold mt-1 ${(incomeInPeriod - expenseInPeriod) >= 0 ? "text-emerald-600" : "text-rose-500"}`}>
+                <p className="text-2xs font-semibold uppercase tracking-wider text-slate-400 mb-1">Untung / Rugi</p>
+                <p className={`text-xl font-bold tracking-tight ${(incomeInPeriod - expenseInPeriod) >= 0 ? "text-emerald-600" : "text-rose-500"}`}>
                   {(incomeInPeriod - expenseInPeriod) >= 0 ? "+" : "-"}RM {Math.abs(incomeInPeriod - expenseInPeriod).toLocaleString("ms-MY", { minimumFractionDigits: 2 })}
                 </p>
               </div>
               <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
-                <p className="text-xs text-slate-500 mb-1">Perlu Dikutip</p>
-                <p className="text-lg font-bold text-amber-600">RM {totalReceivable.toLocaleString("ms-MY", { minimumFractionDigits: 2 })}</p>
+                <p className="text-2xs font-semibold uppercase tracking-wider text-slate-400 mb-1">Perlu Dikutip</p>
+                <p className="text-lg font-bold tracking-tight text-amber-600">RM {totalReceivable.toLocaleString("ms-MY", { minimumFractionDigits: 2 })}</p>
               </div>
               <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
-                <p className="text-xs text-slate-500 mb-1">Perlu Dibayar</p>
-                <p className="text-lg font-bold text-indigo-600">RM {totalPayable.toLocaleString("ms-MY", { minimumFractionDigits: 2 })}</p>
+                <p className="text-2xs font-semibold uppercase tracking-wider text-slate-400 mb-1">Perlu Dibayar</p>
+                <p className="text-lg font-bold tracking-tight text-indigo-600">RM {totalPayable.toLocaleString("ms-MY", { minimumFractionDigits: 2 })}</p>
               </div>
             </div>
 

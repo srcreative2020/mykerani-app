@@ -11,21 +11,21 @@
   --text-2xs: 0.625rem;        /* 10px */
   --text-2xs--line-height: 0.875rem;  /* 14px */
 
-  /* ── MYKERANI TENANT THEME DESIGN TOKENS V2.0 (Soft Professional Light) ── */
-  --color-mk-bg:          #F7F6F2;
+  /* ── MYKERANI TENANT THEME DESIGN TOKENS V2.1 (Soft Professional Light) ── */
+  --color-mk-bg:          #F8F7F3;
   --color-mk-surface:     #FFFFFF;
-  --color-mk-surface-2:   #F3F2ED;
-  --color-mk-surface-3:   #ECEAE3;
-  --color-mk-border:      #E5E3DB;
-  --color-mk-border-2:    #D6D3C8;
+  --color-mk-surface-2:   #F5F4EF;
+  --color-mk-surface-3:   #EDEBE4;
+  --color-mk-border:      #E8E6DE;
+  --color-mk-border-2:    #DAD8CF;
   --color-mk-accent:      #22c55e;
   --color-mk-accent-dk:   #16a34a;
   --color-mk-accent-bg:   #F0FDF4;
-  --color-mk-accent-bdr:  #BBF7D0;
+  --color-mk-accent-bdr:  #BEF3CC;
   --color-mk-sage:        #8BA98B;
-  --color-mk-text:        #1A1A1A;
-  --color-mk-text-2:      #484848;
-  --color-mk-text-3:      #6B6B6B;
-  --color-mk-muted:       #9A9A9A;
+  --color-mk-text:        #18181B;
+  --color-mk-text-2:      #52525B;
+  --color-mk-text-3:      #71717A;
+  --color-mk-muted:       #A1A1AA;
   --color-mk-danger-bg:   #FFF1F2;
 }
