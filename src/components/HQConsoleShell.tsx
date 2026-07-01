@@ -250,11 +250,12 @@ function formatConfigValue(configKey: string, value: unknown): string {
       return `${v.pct ?? "?"}%`;
     case "credit_per_ai_call":
     case "credit_per_ocr_page":
+      return `${v.factor ?? "?"} kredit`;
     case "free_allowance_ai":
       return `${v.credits ?? "?"} kredit`;
     case "min_charge_ai_myr":
     case "min_charge_ocr_myr":
-      return `RM${v.myr ?? "?"}`;
+      return `RM${v.min ?? "?"}`;
     case "promo_multiplier_ai":
       return `×${v.multiplier ?? "?"}`;
     case "rounding_rule":
