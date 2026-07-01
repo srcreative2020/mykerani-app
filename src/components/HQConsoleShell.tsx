@@ -804,9 +804,6 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
 
   const [commercialConfigItems, setCommercialConfigItems] = useState<hqService.CommercialConfigItem[]>([]);
   const [approvalThresholds, setApprovalThresholds] = useState<hqService.CommercialApprovalThreshold[]>([]);
-  const [configForm, setConfigForm] = useState<{ configKey: string; value: string }>({ configKey: "", value: "" });
-  const [configSubmitBusy, setConfigSubmitBusy] = useState(false);
-  const [configSubmitError, setConfigSubmitError] = useState<string | null>(null);
 
   // Pricing policy editor state
   const [pricingForm, setPricingForm] = useState<Record<string, string>>({});
@@ -894,24 +891,6 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
     }
   };
 
-  const submitConfigItem = async () => {
-    setConfigSubmitError(null);
-    if (!configForm.configKey.trim() || !configForm.value.trim()) {
-      setConfigSubmitError("Sila isi kunci konfigurasi dan nilai.");
-      return;
-    }
-    setConfigSubmitBusy(true);
-    try {
-      let parsedValue: unknown = configForm.value;
-      try { parsedValue = JSON.parse(configForm.value); } catch { /* keep as raw string */ }
-      const id = await hqService.submitCommercialConfigUpsert(configForm.configKey.trim(), "global", parsedValue);
-      if (!id) { setConfigSubmitError("Gagal menghantar permintaan."); return; }
-      setConfigForm({ configKey: "", value: "" });
-      if (pendingHqActionsFilter === "pending") await loadPendingHqActions("pending");
-    } finally {
-      setConfigSubmitBusy(false);
-    }
-  };
 
   const [scheduledJobRuns, setScheduledJobRuns] = useState<hqService.ScheduledJobRun[]>([]);
   const loadScheduledJobRuns = () => hqService.getScheduledJobRuns(50).then(setScheduledJobRuns);
@@ -4232,40 +4211,24 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
                   </button>
                 </div>
 
-                {/* Commercial Governance: config items + approval thresholds */}
+                {/* Commercial Governance: config audit view + approval thresholds */}
                 <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-3">
-                  <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2"><ShieldAlert className="w-4 h-4 text-emerald-600" />Konfigurasi Komersial Global</h3>
+                  <div>
+                    <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2"><ShieldAlert className="w-4 h-4 text-emerald-600" />Nilai Konfigurasi Semasa</h3>
+                    <p className="text-[11px] text-slate-400 mt-0.5">Nilai aktif dalam sistem. Untuk mengubah, gunakan panel "Dasar Harga Sumber" di bawah.</p>
+                  </div>
                   {commercialConfigItems.length === 0 ? (
                     <p className="text-xs text-slate-400 text-center py-3">Tiada item konfigurasi.</p>
                   ) : (
-                    <div className="space-y-2">
+                    <div className="space-y-1.5">
                       {commercialConfigItems.map((c) => (
-                        <div key={c.id} className="flex items-center justify-between p-3 bg-slate-50 rounded-xl">
-                          <div>
-                            <p className="text-xs font-bold text-slate-900">{formatConfigKey(c.configKey)}</p>
-                            <p className="text-2xs text-slate-400 font-mono">{c.configKey} ({c.scope})</p>
-                          </div>
-                          <p className="text-xs font-bold text-slate-700">{formatConfigValue(c.configKey, c.value)}</p>
+                        <div key={c.id} className="flex items-center justify-between p-2.5 bg-slate-50 rounded-xl">
+                          <p className="text-[11px] font-semibold text-slate-700">{formatConfigKey(c.configKey)}</p>
+                          <p className="text-[11px] font-bold text-slate-900">{formatConfigValue(c.configKey, c.value)}</p>
                         </div>
                       ))}
                     </div>
                   )}
-                  {configSubmitError && (
-                    <div className="bg-red-50 border border-red-100 rounded-xl p-3 text-xs text-red-700 font-semibold">{configSubmitError}</div>
-                  )}
-                  <div className="grid grid-cols-2 gap-2">
-                    <input placeholder="Kunci konfigurasi (cth: trial_days_default)" value={configForm.configKey} onChange={e => setConfigForm({ ...configForm, configKey: e.target.value })}
-                      className="border border-slate-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:border-emerald-400" />
-                    <input placeholder='Nilai (cth: 14 atau "teks" atau {"a":1})' value={configForm.value} onChange={e => setConfigForm({ ...configForm, value: e.target.value })}
-                      className="border border-slate-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:border-emerald-400" />
-                  </div>
-                  <button
-                    disabled={configSubmitBusy}
-                    onClick={submitConfigItem}
-                    className="px-4 py-2 rounded-lg text-xs font-bold cursor-pointer transition bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50"
-                  >
-                    Hantar ke Pusat Kelulusan
-                  </button>
                   <div className="border-t border-slate-100 pt-3">
                     <p className="text-xs font-bold text-slate-900 mb-2">Ambang Kelulusan</p>
                     {approvalThresholds.length === 0 ? (
