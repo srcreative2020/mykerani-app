@@ -42,6 +42,8 @@ import { matchOwnBusinessAndBranch } from "../lib/businessMatching";
 import { computeFinancialHealth, type HealthBucketKey } from "../lib/financialHealthCenter";
 import { FinancialHealthCenter } from "../components/FinancialHealthCenter";
 import { FinancialHealthSummary } from "../components/FinancialHealthSummary";
+import { TenantAvatar } from "../components/TenantAvatar";
+import { TenantIdentitySection } from "../components/TenantIdentitySection";
 import { QuickActionsRow } from "../components/QuickActionsRow";
 import { DuplicateReviewQueue } from "../components/DuplicateReviewQueue";
 import { HistoricalRecoveryWorkspace } from "../components/HistoricalRecoveryWorkspace";
@@ -2104,9 +2106,7 @@ export function OwnerDashboard() {
             </select>
           )}
           <div className="flex items-center gap-2 px-1.5 py-1">
-            <div className="w-7 h-7 rounded-full bg-indigo-600 text-white flex items-center justify-center text-xs font-bold shrink-0">
-              {firstName.charAt(0).toUpperCase()}
-            </div>
+            <TenantAvatar size="sm" shape="circle" initial={firstName} ring />
             <div className="flex-1 min-w-0">
               <p className="text-xs font-semibold text-slate-800 truncate">{firstName}</p>
               <p className="text-2xs text-indigo-500 font-medium">Pemilik</p>
@@ -2153,9 +2153,7 @@ export function OwnerDashboard() {
             </select>
           )}
           <div className="flex items-center space-x-1.5 bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1.5">
-            <div className="w-5 h-5 rounded-full bg-indigo-600 text-white flex items-center justify-center text-3xs font-bold">
-              {firstName.charAt(0).toUpperCase()}
-            </div>
+            <TenantAvatar size="xs" shape="circle" initial={firstName} />
             <span className="text-xs font-semibold text-slate-700 hidden sm:block">{firstName}</span>
             <span className="text-2xs text-slate-400 hidden sm:block">·</span>
             <span className="text-2xs text-indigo-500 font-semibold hidden sm:block">Pemilik</span>
@@ -3266,9 +3264,7 @@ export function OwnerDashboard() {
                 )}
                 <div className="bg-white border border-slate-200 rounded-2xl p-5 space-y-3 shadow-sm">
                   <div className="flex items-center space-x-3 p-3 bg-indigo-50 rounded-xl">
-                    <div className="w-10 h-10 rounded-xl bg-indigo-600 text-white flex items-center justify-center font-bold">
-                      {firstName.charAt(0).toUpperCase()}
-                    </div>
+                    <TenantAvatar size="md" shape="rounded" initial={firstName} />
                     <div>
                       <p className="font-bold text-slate-900 text-sm">{user?.fullName}</p>
                       <p className="text-xs text-slate-500">{user?.email}</p>
@@ -3536,9 +3532,7 @@ export function OwnerDashboard() {
                       <div className="h-14 bg-gradient-to-r from-indigo-600 to-indigo-500" />
                       <div className="px-4 pb-5 -mt-7 space-y-3">
                         <div className="flex items-end justify-between">
-                          <div className="w-14 h-14 rounded-xl bg-white border-4 border-white shadow-md flex items-center justify-center text-xl font-bold text-indigo-600 shrink-0">
-                            {firstName.charAt(0).toUpperCase()}
-                          </div>
+                          <TenantAvatar size="lg" shape="rounded" initial={firstName} ring className="shadow-md" />
                           <span className="text-2xs bg-indigo-100 text-indigo-700 font-bold px-2 py-0.5 rounded-full mb-1">Pemilik Syarikat</span>
                         </div>
 
@@ -3603,6 +3597,9 @@ export function OwnerDashboard() {
                         <p className="text-xs text-slate-400 mt-0.5">Maklumat peribadi, perniagaan dan kewangan anda</p>
                       </div>
                     </div>
+
+                    {/* 0. IDENTITI TENANT */}
+                    <TenantIdentitySection initial={firstName} />
 
                     {/* 1. Maklumat Peribadi */}
                     <div className="bg-white border border-slate-200 rounded-2xl shadow-sm">
@@ -3954,9 +3951,7 @@ export function OwnerDashboard() {
                       <div className="h-16 bg-gradient-to-r from-indigo-600 to-indigo-500" />
                       <div className="px-5 pb-5 -mt-8 space-y-4">
                         <div className="flex items-end justify-between">
-                          <div className="w-16 h-16 rounded-2xl bg-white border-4 border-white shadow-md flex items-center justify-center text-2xl font-bold text-indigo-600 shrink-0">
-                            {firstName.charAt(0).toUpperCase()}
-                          </div>
+                          <TenantAvatar size="xl" shape="rounded" initial={firstName} ring className="shadow-md" />
                           <span className="text-2xs bg-indigo-100 text-indigo-700 font-bold px-2.5 py-1 rounded-full mb-1">Pemilik Syarikat</span>
                         </div>
 
@@ -4008,6 +4003,9 @@ export function OwnerDashboard() {
                       </div>
                       <p className="text-xs text-indigo-700 leading-relaxed">Maklumat di bawah adalah <span className="font-bold">pilihan</span> — semakin lengkap, semakin pintar MYKERANI AI membantu anda.</p>
                     </div>
+
+                    {/* IDENTITI TENANT */}
+                    <TenantIdentitySection initial={firstName} />
 
                     {/* 2. Maklumat Peribadi */}
                     <div className="bg-white border border-slate-200 rounded-2xl shadow-sm">

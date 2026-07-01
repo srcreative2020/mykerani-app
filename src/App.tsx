@@ -5,6 +5,7 @@ import { WorkspaceProvider, useWorkspace } from "./context/WorkspaceContext";
 import { PermissionProvider, usePermission } from "./context/PermissionContext";
 import { AuditProvider, useAudit } from "./context/AuditContext";
 import { StorageProvider } from "./context/StorageContext";
+import { TenantIdentityProvider } from "./context/TenantIdentityContext";
 import { NotificationProvider } from "./context/NotificationContext";
 import { Guard } from "./components/Guard";
 import { Loader2 } from "lucide-react";
@@ -1134,9 +1135,11 @@ export default function App() {
                 <AuditProvider>
                   <StorageProvider>
                     <FinancialRecordsProvider>
-                      <NotificationProvider>
-                        <RoleRouter />
-                      </NotificationProvider>
+                      <TenantIdentityProvider>
+                        <NotificationProvider>
+                          <RoleRouter />
+                        </NotificationProvider>
+                      </TenantIdentityProvider>
                     </FinancialRecordsProvider>
                   </StorageProvider>
                 </AuditProvider>

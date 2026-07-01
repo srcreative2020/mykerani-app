@@ -34,6 +34,8 @@ import { useCrossWorkspacePattern } from "../hooks/useCrossWorkspacePattern";
 import type { ChatSuggestion, ChatSuggestionExtra, ChatSuggestionRecordType, ChatSuggestionStatus, ChatSuggestionStatusValue, PendingChatEvidence } from "../lib/chatSuggestionTypes";
 import { enrichChatSuggestionPayload } from "../lib/chatSuggestionMapper";
 import BankStatementProcessor from "../components/BankStatementProcessor";
+import { TenantAvatar } from "../components/TenantAvatar";
+import { TenantIdentitySection } from "../components/TenantIdentitySection";
 import { confirmFinancialRecord, type ConfirmInput } from "../lib/financialRecordConfirmation";
 import { type StatementTransaction } from "../lib/bankStatementTypes";
 import {
@@ -1235,9 +1237,7 @@ export function StaffHomeScreen() {
         </nav>
         <div className="p-3 border-t border-slate-100 space-y-2 shrink-0">
           <div className="flex items-center gap-2 px-1.5 py-1">
-            <div className="w-7 h-7 rounded-full bg-slate-700 text-white flex items-center justify-center text-xs font-bold shrink-0">
-              {firstName.charAt(0).toUpperCase()}
-            </div>
+            <TenantAvatar size="sm" shape="circle" initial={firstName} ring />
             <div className="flex-1 min-w-0">
               <p className="text-xs font-semibold text-slate-800 truncate">{firstName}</p>
               <p className="text-2xs text-slate-500 font-medium">Staf</p>
@@ -1273,9 +1273,7 @@ export function StaffHomeScreen() {
             </select>
           )}
           <div className="flex items-center space-x-1.5 bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1.5">
-            <div className="w-5 h-5 rounded-full bg-slate-700 text-white flex items-center justify-center text-3xs font-bold">
-              {firstName.charAt(0).toUpperCase()}
-            </div>
+            <TenantAvatar size="xs" shape="circle" initial={firstName} />
             <span className="text-xs font-semibold text-slate-700 hidden sm:block">{firstName}</span>
             <span className="text-2xs text-slate-400 hidden sm:block">·</span>
             <span className="text-2xs text-slate-500 font-semibold hidden sm:block">Kakitangan</span>
@@ -1943,9 +1941,7 @@ export function StaffHomeScreen() {
             <div className="bg-white border border-slate-200 rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] overflow-hidden">
               {/* Header section with avatar + identity */}
               <div className="px-6 pt-6 pb-4 flex items-center space-x-4">
-                <div className="w-16 h-16 rounded-2xl bg-slate-800 text-white flex items-center justify-center text-2xl font-bold shadow shrink-0">
-                  {firstName.charAt(0).toUpperCase()}
-                </div>
+                <TenantAvatar size="xl" shape="rounded" initial={firstName} ring className="shadow" />
                 {!editingAccount ? (
                   <div className="min-w-0 flex-1">
                     <p className="font-bold text-slate-900 truncate text-base">{user?.fullName || "Kakitangan"}</p>
@@ -2037,6 +2033,9 @@ export function StaffHomeScreen() {
                   className="w-full py-3 border border-slate-200 text-slate-600 rounded-xl text-sm font-semibold hover:bg-slate-50 transition cursor-pointer flex items-center justify-center space-x-2">
                   <MessageCircle className="w-4 h-4" /><span>Arkib Perbualan</span>
                 </button>
+
+                {/* IDENTITI TENANT */}
+                <TenantIdentitySection initial={firstName} />
 
                 <button onClick={() => signOut()}
                   className="w-full py-3 border border-rose-200 text-rose-500 rounded-xl text-sm font-semibold hover:bg-rose-50 transition cursor-pointer">
