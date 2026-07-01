@@ -1334,6 +1334,406 @@ Provide your output precisely formatted as raw JSON matching exactly this shape,
     return res.json({ ok: true, message: "Job cancelled." });
   });
 
+  // ─────────────────────────────────────────────────────────────────────────────
+  // BANK STATEMENT IMPORT WORKFLOW
+  //
+  // Completely isolated from the OCR receipt/invoice flow above.
+  // These routes handle: upload → chunk extraction → per-chunk AI → draft.
+  // After CONFIRM the client calls the existing confirmFinancialRecord() path —
+  // NOTHING in this section writes to income_records / expense_records / etc.
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  // Helper: Supabase REST helper scoped to service_role for statement job ops.
+  const sbUrl  = () => process.env.VITE_SUPABASE_URL!;
+  const sbSrk  = () => process.env.SUPABASE_SERVICE_ROLE_KEY!;
+  const sbHdrs = () => ({
+    apikey: sbSrk(),
+    Authorization: `Bearer ${sbSrk()}`,
+    "Content-Type": "application/json",
+    Prefer: "return=representation",
+  });
+
+  // Fetch the active job for a workspace (status IN PENDING/PROCESSING/PAUSED/INTERRUPTED).
+  async function getActiveStatementJob(workspaceId: string): Promise<any | null> {
+    const resp = await fetch(
+      `${sbUrl()}/rest/v1/bank_statement_jobs?workspace_id=eq.${workspaceId}&status=in.(PENDING,PROCESSING,PAUSED,INTERRUPTED)&limit=1`,
+      { headers: sbHdrs() }
+    );
+    if (!resp.ok) return null;
+    const rows: any[] = await resp.json();
+    return rows[0] ?? null;
+  }
+
+  // Update a job record by id.
+  async function patchStatementJob(jobId: string, patch: Record<string, unknown>): Promise<void> {
+    await fetch(
+      `${sbUrl()}/rest/v1/bank_statement_jobs?id=eq.${jobId}`,
+      { method: "PATCH", headers: sbHdrs(), body: JSON.stringify(patch) }
+    );
+  }
+
+  // Insert or update a checkpoint row (upsert on statement_job_id + chunk_index).
+  async function upsertCheckpoint(row: {
+    statement_job_id: string; chunk_index: number; status: string;
+    chunk_text?: string; transactions_json?: any; attempt_count?: number;
+    ai_provider_used?: string; completed_at?: string; error_message?: string;
+  }): Promise<void> {
+    await fetch(
+      `${sbUrl()}/rest/v1/bank_statement_checkpoints`,
+      {
+        method: "POST",
+        headers: { ...sbHdrs(), Prefer: "resolution=merge-duplicates,return=minimal" },
+        body: JSON.stringify(row),
+      }
+    );
+  }
+
+  // Fetch all completed checkpoints for a job (for progress query and resume).
+  async function getJobCheckpoints(jobId: string): Promise<any[]> {
+    const resp = await fetch(
+      `${sbUrl()}/rest/v1/bank_statement_checkpoints?statement_job_id=eq.${jobId}&order=chunk_index.asc`,
+      { headers: sbHdrs() }
+    );
+    if (!resp.ok) return [];
+    return resp.json();
+  }
+
+  // Core chunk-processing engine for a bank statement job.
+  // Processes one chunk at a time, persisting each result to bank_statement_checkpoints.
+  // Honors the paused/cancelled state between chunks so pause/resume is immediate.
+  async function runStatementAnalysis(jobId: string, workspaceId: string, tenantId: string, userId: string): Promise<void> {
+    const supabaseUrl = sbUrl();
+    const serviceRoleKey = sbSrk();
+
+    // Fetch job record.
+    const jobResp = await fetch(
+      `${supabaseUrl}/rest/v1/bank_statement_jobs?id=eq.${jobId}&limit=1`,
+      { headers: sbHdrs() }
+    );
+    const jobs: any[] = jobResp.ok ? await jobResp.json() : [];
+    const job = jobs[0];
+    if (!job) { console.error(`[STMT] job ${jobId} not found`); return; }
+
+    const fileDataText: string | null = job.file_data_text;
+    const fileName: string = job.file_name;
+    if (!fileDataText) {
+      await patchStatementJob(jobId, { status: "FAILED", error_message: "PDF text missing — cannot process." });
+      return;
+    }
+
+    // Get AI candidates (reuse existing router — no change to that code).
+    const candidates = await getAiProviderCandidates();
+    if (candidates.length === 0) {
+      await patchStatementJob(jobId, { status: "FAILED", error_message: "Tiada pembekal AI dikonfigurasikan." });
+      return;
+    }
+
+    // Split into chunks.
+    const chunks = chunkStatementText(fileDataText);
+    const totalChunks = chunks.length;
+
+    // Load existing checkpoints so resume skips already-completed chunks.
+    const existingCheckpoints = await getJobCheckpoints(jobId);
+    const completedIndexes = new Set(
+      existingCheckpoints.filter(c => c.status === "COMPLETED").map((c: any) => c.chunk_index)
+    );
+
+    await patchStatementJob(jobId, {
+      status: "PROCESSING",
+      total_chunks: totalChunks,
+      updated_at: new Date().toISOString(),
+    });
+
+    const ocrPrompt = `Analyze this BANK STATEMENT segment (filename: ${fileName}) and extract ALL transaction lines into the "transactions" array. CREDIT = money in, DEBIT = money out.
+
+Output ONLY raw JSON matching this shape exactly, no markdown fences, no extra text:
+{
+  "merchantName": "string — bank or institution name if identifiable",
+  "documentNumber": "string — statement reference if found",
+  "date": "string — YYYY-MM-DD statement date if found",
+  "amount": 0,
+  "currency": "MYR",
+  "suggestedCategory": "Bank Statement",
+  "confidenceScore": 0.9,
+  "rawExtractedText": "string — brief summary of this segment",
+  "transactions": [{ "date": "YYYY-MM-DD", "description": "string", "amount": 0, "type": "CREDIT|DEBIT", "suggestedCategory": "string", "confidenceScore": 0.0 }]
+}`;
+
+    let chunksCompleted = completedIndexes.size;
+    let chunksFailed = existingCheckpoints.filter((c: any) => c.status === "FAILED").length;
+    let transactionsFound = existingCheckpoints
+      .filter((c: any) => c.status === "COMPLETED")
+      .reduce((acc: number, c: any) => acc + (Array.isArray(c.transactions_json) ? c.transactions_json.length : 0), 0);
+    let usedProvider: string | null = null;
+
+    for (let i = 0; i < chunks.length; i++) {
+      // Skip already-completed chunks (resume path).
+      if (completedIndexes.has(i)) continue;
+
+      // Check if paused or cancelled before each chunk.
+      const statusCheckResp = await fetch(
+        `${supabaseUrl}/rest/v1/bank_statement_jobs?id=eq.${jobId}&select=status&limit=1`,
+        { headers: sbHdrs() }
+      );
+      const statusRows: any[] = statusCheckResp.ok ? await statusCheckResp.json() : [];
+      const currentStatus = statusRows[0]?.status;
+      if (currentStatus === "PAUSED" || currentStatus === "CANCELLED") {
+        console.info(`[STMT] job ${jobId} ${currentStatus} at chunk ${i} — stopping.`);
+        return;
+      }
+
+      // Mark this chunk PENDING in checkpoints.
+      await upsertCheckpoint({ statement_job_id: jobId, chunk_index: i, status: "PENDING", chunk_text: chunks[i] });
+
+      const chunkPrompt = totalChunks > 1
+        ? `${ocrPrompt}\n\nNOTE: This is PART ${i + 1} of ${totalChunks} of the same bank statement. Extract ONLY transactions visible in THIS part.`
+        : ocrPrompt;
+
+      let chunkResult: any = null;
+      let lastChunkErr: any = null;
+      let attemptCount = 0;
+      let chunkProvider: string | null = null;
+
+      for (const candidate of candidates) {
+        attemptCount++;
+        try {
+          chunkResult = await callAiProviderTextOcr(candidate, chunks[i], chunkPrompt);
+          chunkProvider = `${candidate.provider}:${candidate.model}`;
+          usedProvider = chunkProvider;
+          break;
+        } catch (err: any) {
+          lastChunkErr = err;
+          console.error(`[STMT] chunk ${i + 1}/${totalChunks} candidate ${candidate.provider} failed:`, err?.message || err);
+        }
+      }
+
+      if (!chunkResult) {
+        chunksFailed++;
+        await upsertCheckpoint({
+          statement_job_id: jobId, chunk_index: i, status: "FAILED",
+          attempt_count: attemptCount, error_message: lastChunkErr?.message?.slice(0, 500) || "All providers failed",
+        });
+      } else {
+        const txns: any[] = Array.isArray(chunkResult.transactions) ? chunkResult.transactions : [];
+        chunksCompleted++;
+        transactionsFound += txns.length;
+        await upsertCheckpoint({
+          statement_job_id: jobId, chunk_index: i, status: "COMPLETED",
+          transactions_json: txns, attempt_count: attemptCount,
+          ai_provider_used: chunkProvider ?? undefined,
+          completed_at: new Date().toISOString(),
+        });
+      }
+
+      // Update job progress after each chunk.
+      await patchStatementJob(jobId, {
+        chunks_completed: chunksCompleted,
+        chunks_failed: chunksFailed,
+        transactions_found: transactionsFound,
+        ai_provider_used: usedProvider ?? undefined,
+        updated_at: new Date().toISOString(),
+      });
+    }
+
+    // All chunks done. Determine final status.
+    const finalStatus = chunksCompleted > 0 ? "COMPLETED" : "FAILED";
+    const errorMsg = chunksCompleted === 0 ? "Semua chunk gagal diproses oleh semua pembekal AI." : null;
+
+    await patchStatementJob(jobId, {
+      status: finalStatus,
+      error_message: errorMsg,
+      completed_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    });
+
+    if (finalStatus === "COMPLETED") {
+      logAiUsage(tenantId, workspaceId, userId, "ocr", usedProvider?.split(":")[0] || "unknown", usedProvider?.split(":")[1] || "unknown", {
+        strategy: "bank_statement_import",
+        candidateOrder: candidates.map(c => `${c.provider}:${c.model}`),
+        attempts: [],
+        totalAttempts: chunksCompleted + chunksFailed,
+      });
+    }
+  }
+
+  // POST /api/statement/process/start
+  // Accepts PDF extracted text (already decoded by client), creates a job row,
+  // returns jobId immediately, fires runStatementAnalysis() in background.
+  // Non-Negotiable Rule #4: blocks if another active import exists for this workspace.
+  app.post("/api/statement/process/start", async (req, res) => {
+    const { fileDataText, fileName, tenantId, workspaceId, userId } = req.body || {};
+    if (!fileDataText || !fileName) {
+      return res.status(400).json({ error: "fileDataText and fileName are required." });
+    }
+    const access = await verifyTenantAccess(req, tenantId, workspaceId);
+    if (!access.ok) {
+      return res.status(403).json({ error: "Sesi tidak sah atau tidak mempunyai akses kepada syarikat ini." });
+    }
+    if (await isUserSuspended(userId)) {
+      return res.status(403).json({ error: "Akaun anda telah disekat oleh pentadbir HQ." });
+    }
+
+    const hasCredit = await consumeResourceCredit(tenantId, workspaceId, "OCR", `Bank Statement Import: ${fileName}`);
+    if (!hasCredit) {
+      return res.status(402).json({ error: "Kredit OCR syarikat anda telah habis.", code: "OCR_CREDITS_EXHAUSTED" });
+    }
+
+    // Check for existing active import (Rule #4).
+    const existing = await getActiveStatementJob(workspaceId);
+    if (existing) {
+      return res.status(409).json({
+        error: "ACTIVE_IMPORT_EXISTS",
+        existingJobId: existing.id,
+        existingStatus: existing.status,
+        existingFileName: existing.file_name,
+        message: "Terdapat import bank statement yang sedang aktif untuk syarikat ini.",
+      });
+    }
+
+    // Create job row.
+    const jobPayload = {
+      workspace_id: workspaceId,
+      tenant_id: tenantId,
+      user_id: userId,
+      file_name: fileName,
+      file_data_text: fileDataText,
+      status: "PENDING",
+      total_chunks: 0,
+      chunks_completed: 0,
+      chunks_failed: 0,
+      transactions_found: 0,
+      transactions_confirmed: 0,
+      expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+    };
+
+    const createResp = await fetch(`${sbUrl()}/rest/v1/bank_statement_jobs`, {
+      method: "POST",
+      headers: sbHdrs(),
+      body: JSON.stringify(jobPayload),
+    });
+    if (!createResp.ok) {
+      const body = await createResp.text();
+      // Unique index violation = another active import snuck in concurrently.
+      if (body.includes("bank_statement_jobs_one_active_per_workspace")) {
+        const active = await getActiveStatementJob(workspaceId);
+        return res.status(409).json({
+          error: "ACTIVE_IMPORT_EXISTS",
+          existingJobId: active?.id ?? null,
+          existingStatus: active?.status ?? null,
+          existingFileName: active?.file_name ?? null,
+          message: "Terdapat import bank statement yang sedang aktif untuk syarikat ini.",
+        });
+      }
+      console.error("[STMT/start] Failed to create job:", body);
+      return res.status(500).json({ error: "Gagal membuat rekod import." });
+    }
+
+    const rows: any[] = await createResp.json();
+    const jobId: string = rows[0]?.id;
+    if (!jobId) {
+      return res.status(500).json({ error: "Gagal mendapatkan ID import yang dibuat." });
+    }
+
+    res.json({ jobId });
+
+    // Fire-and-forget background processing.
+    runStatementAnalysis(jobId, workspaceId, tenantId, userId).catch((err) => {
+      console.error(`[STMT] runStatementAnalysis unhandled error for job ${jobId}:`, err);
+      patchStatementJob(jobId, { status: "FAILED", error_message: err?.message?.slice(0, 500) || "Unexpected error" }).catch(() => {});
+    });
+  });
+
+  // GET /api/statement/process/progress/:jobId
+  // Returns current job state + chunk checkpoints for the progress panel.
+  app.get("/api/statement/process/progress/:jobId", async (req, res) => {
+    const { jobId } = req.params;
+    const jobResp = await fetch(
+      `${sbUrl()}/rest/v1/bank_statement_jobs?id=eq.${jobId}&limit=1`,
+      { headers: sbHdrs() }
+    );
+    const jobs: any[] = jobResp.ok ? await jobResp.json() : [];
+    const job = jobs[0];
+    if (!job) return res.status(404).json({ error: "Job tidak dijumpai." });
+
+    const access = await verifyTenantAccess(req, job.tenant_id, job.workspace_id);
+    if (!access.ok) return res.status(403).json({ error: "Akses dinafikan." });
+
+    const checkpoints = await getJobCheckpoints(jobId);
+    return res.json({ ...job, checkpoints });
+  });
+
+  // POST /api/statement/process/pause/:jobId
+  // Sets status to PAUSED — runStatementAnalysis checks this flag between chunks.
+  app.post("/api/statement/process/pause/:jobId", async (req, res) => {
+    const { jobId } = req.params;
+    const jobResp = await fetch(
+      `${sbUrl()}/rest/v1/bank_statement_jobs?id=eq.${jobId}&limit=1`,
+      { headers: sbHdrs() }
+    );
+    const jobs: any[] = jobResp.ok ? await jobResp.json() : [];
+    const job = jobs[0];
+    if (!job) return res.status(404).json({ error: "Job tidak dijumpai." });
+
+    const access = await verifyTenantAccess(req, job.tenant_id, job.workspace_id);
+    if (!access.ok) return res.status(403).json({ error: "Akses dinafikan." });
+
+    if (!["PENDING", "PROCESSING"].includes(job.status)) {
+      return res.status(400).json({ error: `Job tidak boleh dijeda dari status: ${job.status}` });
+    }
+    await patchStatementJob(jobId, { status: "PAUSED", updated_at: new Date().toISOString() });
+    return res.json({ ok: true, jobId, status: "PAUSED" });
+  });
+
+  // POST /api/statement/process/resume/:jobId
+  // Re-fires runStatementAnalysis which skips completed chunks via checkpoint table.
+  app.post("/api/statement/process/resume/:jobId", async (req, res) => {
+    const { jobId } = req.params;
+    const { userId } = req.body || {};
+    const jobResp = await fetch(
+      `${sbUrl()}/rest/v1/bank_statement_jobs?id=eq.${jobId}&limit=1`,
+      { headers: sbHdrs() }
+    );
+    const jobs: any[] = jobResp.ok ? await jobResp.json() : [];
+    const job = jobs[0];
+    if (!job) return res.status(404).json({ error: "Job tidak dijumpai." });
+
+    const access = await verifyTenantAccess(req, job.tenant_id, job.workspace_id);
+    if (!access.ok) return res.status(403).json({ error: "Akses dinafikan." });
+
+    if (!["PAUSED", "INTERRUPTED", "FAILED"].includes(job.status)) {
+      return res.status(400).json({ error: `Job tidak boleh disambung dari status: ${job.status}` });
+    }
+    // Reset status to PENDING so runStatementAnalysis sets it to PROCESSING.
+    await patchStatementJob(jobId, { status: "PENDING", error_message: null, updated_at: new Date().toISOString() });
+    res.json({ ok: true, jobId, status: "PENDING" });
+
+    runStatementAnalysis(jobId, job.workspace_id, job.tenant_id, userId || job.user_id).catch((err) => {
+      console.error(`[STMT] resume runStatementAnalysis error for job ${jobId}:`, err);
+      patchStatementJob(jobId, { status: "INTERRUPTED", error_message: err?.message?.slice(0, 500) || "Unexpected error" }).catch(() => {});
+    });
+  });
+
+  // POST /api/statement/process/cancel/:jobId
+  // Cancels an active or paused job — releases the one-active-per-workspace constraint.
+  app.post("/api/statement/process/cancel/:jobId", async (req, res) => {
+    const { jobId } = req.params;
+    const jobResp = await fetch(
+      `${sbUrl()}/rest/v1/bank_statement_jobs?id=eq.${jobId}&limit=1`,
+      { headers: sbHdrs() }
+    );
+    const jobs: any[] = jobResp.ok ? await jobResp.json() : [];
+    const job = jobs[0];
+    if (!job) return res.status(404).json({ error: "Job tidak dijumpai." });
+
+    const access = await verifyTenantAccess(req, job.tenant_id, job.workspace_id);
+    if (!access.ok) return res.status(403).json({ error: "Akses dinafikan." });
+
+    await patchStatementJob(jobId, { status: "CANCELLED", updated_at: new Date().toISOString() });
+    return res.json({ ok: true, jobId, status: "CANCELLED" });
+  });
+
+  // ─── END BANK STATEMENT IMPORT WORKFLOW ───────────────────────────────────────
+
 
   // Voice note transcription (Whisper) — lets a chat-attached audio recording
   // actually be understood instead of the assistant just saying it can't listen.
