@@ -22,8 +22,6 @@ Sprint Plan, Workstream, dan skop adalah LOCKED. Tiada pengubahan dibenarkan tan
 | Batch 2 | WS3       | Storage Ledger Logging             | COMPLETE   |
 | Batch 2 | WS4       | HQ Resource Profit Summary         | COMPLETE   |
 | Batch 3 | WS5       | Commercial Resource Display        | PENDING    |
-| Batch 4 | WS6       | Billing Statement & Export         | FUTURE     |
-| Batch 4 | WS7       | Admin Billing Controls (HQ)        | FUTURE     |
 
 ---
 
@@ -165,24 +163,6 @@ Sprint Plan, Workstream, dan skop adalah LOCKED. Tiada pengubahan dibenarkan tan
 - Export ledger ke CSV/PDF (WS6)
 - Invois billing
 - Pembayaran atau top-up dari tenant side
-
----
-
-## BATCH 4 — FUTURE
-
-### WS6: Billing Statement & Export
-
-**Tujuan:** Tenant boleh menjana dan mengeksport penyata billing bulanan.
-
-*(Skop terperinci akan ditentukan dalam sprint berikutnya)*
-
----
-
-### WS7: Admin Billing Controls (HQ)
-
-**Tujuan:** HQ boleh mengurus kredit tenant secara manual (tambah, tolak, laras) dengan audit trail lengkap.
-
-*(Skop terperinci akan ditentukan dalam sprint berikutnya)*
 
 ---
 
