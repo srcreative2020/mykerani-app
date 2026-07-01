@@ -3290,6 +3290,28 @@ Only include a "CONFIRM_TRANSACTION" suggestion entry when financialIntent.detec
         });
     }
 
+    // Bank Statement job recovery: mark any PROCESSING/PENDING jobs as INTERRUPTED
+    // on startup so they are resumable after a Railway restart.
+    if (process.env.VITE_SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY) {
+      const _sbUrl = process.env.VITE_SUPABASE_URL;
+      const _sbSrk = process.env.SUPABASE_SERVICE_ROLE_KEY;
+      const _hdrs = { apikey: _sbSrk, Authorization: `Bearer ${_sbSrk}`, "Content-Type": "application/json" };
+      fetch(`${_sbUrl}/rest/v1/bank_statement_jobs?status=in.(PROCESSING,PENDING)&select=id`, { headers: _hdrs })
+        .then(async (r) => {
+          if (!r.ok) return;
+          const rows: any[] = await r.json();
+          if (rows.length === 0) return;
+          const ids = rows.map((x: any) => x.id);
+          await fetch(`${_sbUrl}/rest/v1/bank_statement_jobs?id=in.(${ids.join(",")})`, {
+            method: "PATCH",
+            headers: { ..._hdrs, Prefer: "return=minimal" },
+            body: JSON.stringify({ status: "INTERRUPTED", error_message: "Server restarted — klik Sambung Semula untuk meneruskan.", updated_at: new Date().toISOString() }),
+          });
+          console.log(`[STMT] Startup recovery: marked ${ids.length} stuck job(s) as INTERRUPTED.`);
+        })
+        .catch((e) => console.warn("[STMT] Startup recovery check failed (non-blocking):", e?.message));
+    }
+
     // Renewal Framework: pg_cron is unavailable on this Supabase project, so
     // subscription renewals (process_due_subscription_renewals) are driven by
     // this interval instead of a native DB scheduler.
