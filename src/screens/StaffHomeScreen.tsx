@@ -10,6 +10,7 @@ import { isDemoWorkspace } from "../lib/seeder";
 import { uploadDocument, getDocumentUrl, type UploadedDoc } from "../lib/documentStorage";
 import { logEvent } from "../lib/eventLog";
 import { createTenantSupportTicket, getMyTenantSupportTickets, SupportTicket, SUPPORT_TICKET_TEMPLATES, uploadTicketAttachment, getTicketAttachmentUrl, ticketSlaState, TICKET_STATUS_LABEL_MS, TICKET_STATUS_STYLE, tenantSubmitAppeal, tenantReplySupportTicket, logTenantActivity } from "../lib/hqService";
+import { TenantResourceLedger } from "../components/TenantResourceLedger";
 import { usePermission } from "../context/PermissionContext";
 import { useStorageQuota } from "../lib/storageQuota";
 import { useAiCredits, useOcrCredits } from "../lib/aiCredits";
@@ -2374,6 +2375,8 @@ export function StaffHomeScreen() {
                 </div>
               </div>
             )}
+
+            {wsId && <TenantResourceLedger workspaceId={wsId} />}
           </div>
         )}
       </div>

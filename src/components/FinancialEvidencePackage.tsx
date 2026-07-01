@@ -7,6 +7,7 @@ import { useStorage } from "../context/StorageContext";
 import { supabase, isSupabaseConfigured } from "../lib/supabase";
 import { useAuth } from "../context/AuthContext";
 import { logEvent } from "../lib/eventLog";
+import { logStorageLedgerEntry } from "../lib/hqService";
 import { AnimatePresence, motion } from "../lib/motionCompat";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
@@ -375,6 +376,7 @@ export const FinancialEvidencePackageManager: React.FC = () => {
             description: `Uploaded ${documentType}: ${file.name}`,
             metadata: { fileName: file.name, fileSizeBytes: file.size, documentType },
           });
+          logStorageLedgerEntry(activeWorkspace.id, file.size, "USAGE", `Upload: ${file.name}`, { document_type: documentType, file_name: file.name });
         }
         setUploadNotes("");
         setLinkType("NONE");
