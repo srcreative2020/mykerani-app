@@ -807,11 +807,92 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
   const [configForm, setConfigForm] = useState<{ configKey: string; value: string }>({ configKey: "", value: "" });
   const [configSubmitBusy, setConfigSubmitBusy] = useState(false);
   const [configSubmitError, setConfigSubmitError] = useState<string | null>(null);
+
+  // Pricing policy editor state
+  const [pricingForm, setPricingForm] = useState<Record<string, string>>({});
+  const [pricingBusy, setPricingBusy] = useState(false);
+  const [pricingSuccess, setPricingSuccess] = useState<string | null>(null);
+  const [pricingError, setPricingError] = useState<string | null>(null);
+  const PRICING_KEYS = [
+    "avg_ai_cost_usd","avg_ocr_cost_usd","billing_usd_myr_rate",
+    "credit_per_ai_call","credit_per_ocr_page","free_allowance_ai",
+    "markup_ai_pct","markup_ocr_pct","min_charge_ai_myr","min_charge_ocr_myr",
+    "promo_multiplier_ai","rounding_rule",
+  ] as const;
+
+  // Extract raw value from DB JSON object for a given config key
+  const extractRawValue = (configKey: string, value: unknown): string => {
+    if (!value || typeof value !== "object") return "";
+    const v = value as Record<string, unknown>;
+    switch (configKey) {
+      case "avg_ai_cost_usd": case "avg_ocr_cost_usd": return String(v.cost ?? "");
+      case "billing_usd_myr_rate": return String(v.rate ?? "");
+      case "markup_ai_pct": case "markup_ocr_pct": return String(v.pct ?? "");
+      case "credit_per_ai_call": case "credit_per_ocr_page": return String(v.factor ?? "");
+      case "free_allowance_ai": return String(v.credits ?? "");
+      case "min_charge_ai_myr": case "min_charge_ocr_myr": return String(v.min ?? "");
+      case "promo_multiplier_ai": return String(v.multiplier ?? "");
+      case "rounding_rule": return String(v.rule ?? "ceil");
+      default: return JSON.stringify(value);
+    }
+  };
+
+  // Build DB JSON value from raw input for a given config key
+  const buildJsonValue = (configKey: string, raw: string): Record<string, unknown> => {
+    const n = parseFloat(raw);
+    switch (configKey) {
+      case "avg_ai_cost_usd": case "avg_ocr_cost_usd": return { cost: n };
+      case "billing_usd_myr_rate": return { rate: n };
+      case "markup_ai_pct": case "markup_ocr_pct": return { pct: n };
+      case "credit_per_ai_call": case "credit_per_ocr_page": return { factor: n };
+      case "free_allowance_ai": return { credits: n };
+      case "min_charge_ai_myr": case "min_charge_ocr_myr": return { min: n };
+      case "promo_multiplier_ai": return { multiplier: n };
+      case "rounding_rule": return { rule: raw };
+      default: return { value: raw };
+    }
+  };
+
   const loadCommercialGovernance = () => {
-    hqService.getCommercialConfigItems().then(setCommercialConfigItems);
+    hqService.getCommercialConfigItems().then(items => {
+      setCommercialConfigItems(items);
+      // Sync pricing form from loaded items
+      const initial: Record<string, string> = {};
+      items.forEach(item => {
+        if (PRICING_KEYS.includes(item.configKey as typeof PRICING_KEYS[number])) {
+          initial[item.configKey] = extractRawValue(item.configKey, item.value);
+        }
+      });
+      setPricingForm(prev => ({ ...prev, ...initial }));
+    });
     hqService.getCommercialApprovalThresholds().then(setApprovalThresholds);
   };
   useEffect(() => { if (useRealData) loadCommercialGovernance(); }, [useRealData]);
+
+  const submitPricingPolicy = async () => {
+    setPricingBusy(true);
+    setPricingSuccess(null);
+    setPricingError(null);
+    try {
+      const keys = PRICING_KEYS;
+      let submitted = 0;
+      for (const key of keys) {
+        const raw = pricingForm[key];
+        if (raw === undefined || raw === "") continue;
+        const jsonValue = buildJsonValue(key, raw);
+        const id = await hqService.submitCommercialConfigUpsert(key, "global", jsonValue);
+        if (id) submitted++;
+      }
+      if (submitted === 0) { setPricingError("Tiada perubahan untuk dihantar."); return; }
+      setPricingSuccess(`${submitted} perubahan telah dihantar untuk kelulusan dual-approval.`);
+      loadCommercialGovernance();
+      if (pendingHqActionsFilter === "pending") loadPendingHqActions("pending");
+    } catch {
+      setPricingError("Gagal menghantar perubahan.");
+    } finally {
+      setPricingBusy(false);
+    }
+  };
 
   const submitConfigItem = async () => {
     setConfigSubmitError(null);
@@ -4649,37 +4730,67 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
                   )}
                 </div>
 
-                {/* Resource Pricing Policy */}
-                <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-3">
+                {/* Resource Pricing Policy — Editable */}
+                <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-4">
                   <div>
                     <h3 className="text-xs font-bold text-slate-700">Dasar Harga Sumber (Resource Pricing Policy)</h3>
-                    <p className="text-[11px] text-slate-400 mt-0.5">Konfigurasi billing tenant. Perubahan memerlukan kelulusan dual-approval HQ melalui Tindakan Belum Selesai.</p>
+                    <p className="text-[11px] text-slate-400 mt-0.5">Konfigurasi billing tenant. Perubahan akan dihantar untuk kelulusan dual-approval HQ melalui Tindakan Belum Selesai.</p>
                   </div>
-                  {commercialConfigItems.filter(i => [
-                    "billing_usd_myr_rate","markup_ai_pct","markup_ocr_pct",
-                    "avg_ai_cost_usd","avg_ocr_cost_usd",
-                    "credit_per_ai_call","credit_per_ocr_page","min_charge_ai_myr",
-                    "min_charge_ocr_myr","rounding_rule","free_allowance_ai","promo_multiplier_ai",
-                  ].includes(i.configKey)).length === 0 ? (
-                    <p className="text-[11px] text-slate-400 py-3 text-center">Tiada dasar harga dikonfigurasi lagi.</p>
-                  ) : (
-                    <div className="space-y-1.5">
-                      {commercialConfigItems.filter(i => [
-                        "billing_usd_myr_rate","markup_ai_pct","markup_ocr_pct",
-                        "avg_ai_cost_usd","avg_ocr_cost_usd",
-                        "credit_per_ai_call","credit_per_ocr_page","min_charge_ai_myr",
-                        "min_charge_ocr_myr","rounding_rule","free_allowance_ai","promo_multiplier_ai",
-                      ].includes(i.configKey)).map(item => (
-                        <div key={item.id} className="flex items-center justify-between p-2.5 bg-slate-50 rounded-xl">
-                          <div>
-                            <p className="text-[11px] font-semibold text-slate-700">{formatConfigKey(item.configKey)}</p>
-                            <p className="text-2xs text-slate-400 font-mono">{item.configKey}</p>
-                          </div>
-                          <span className="text-[11px] font-bold text-slate-900">{formatConfigValue(item.configKey, item.value)}</span>
+                  <div className="space-y-2">
+                    {([
+                      { key: "avg_ai_cost_usd",       label: "Kos Purata AI (USD)",     type: "number", step: "0.0001" },
+                      { key: "avg_ocr_cost_usd",       label: "Kos Purata OCR (USD)",    type: "number", step: "0.0001" },
+                      { key: "billing_usd_myr_rate",   label: "Kadar USD/MYR",           type: "number", step: "0.01"   },
+                      { key: "markup_ai_pct",          label: "Markup AI (%)",           type: "number", step: "1"      },
+                      { key: "markup_ocr_pct",         label: "Markup OCR (%)",          type: "number", step: "1"      },
+                      { key: "credit_per_ai_call",     label: "Kredit per Panggilan AI", type: "number", step: "1"      },
+                      { key: "credit_per_ocr_page",    label: "Kredit per Halaman OCR",  type: "number", step: "1"      },
+                      { key: "min_charge_ai_myr",      label: "Caj Minimum AI (MYR)",    type: "number", step: "0.001"  },
+                      { key: "min_charge_ocr_myr",     label: "Caj Minimum OCR (MYR)",   type: "number", step: "0.001"  },
+                      { key: "free_allowance_ai",      label: "Elaun Percuma AI",        type: "number", step: "1"      },
+                      { key: "promo_multiplier_ai",    label: "Pengganda Promosi AI",    type: "number", step: "0.1"    },
+                    ] as { key: string; label: string; type: string; step: string }[]).map(({ key, label, step }) => (
+                      <div key={key} className="flex items-center gap-3">
+                        <div className="flex-1 min-w-0">
+                          <p className="text-[11px] font-semibold text-slate-700">{label}</p>
+                          <p className="text-2xs text-slate-400 font-mono">{key}</p>
                         </div>
-                      ))}
+                        <input
+                          type="number"
+                          step={step}
+                          min="0"
+                          value={pricingForm[key] ?? ""}
+                          onChange={e => setPricingForm(f => ({ ...f, [key]: e.target.value }))}
+                          className="w-28 text-xs border border-slate-200 rounded-lg px-2 py-1.5 text-right font-mono focus:outline-none focus:ring-1 focus:ring-slate-400"
+                        />
+                      </div>
+                    ))}
+                    {/* rounding_rule dropdown */}
+                    <div className="flex items-center gap-3">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[11px] font-semibold text-slate-700">Peraturan Pembundaran</p>
+                        <p className="text-2xs text-slate-400 font-mono">rounding_rule</p>
+                      </div>
+                      <select
+                        value={pricingForm["rounding_rule"] ?? "ceil"}
+                        onChange={e => setPricingForm(f => ({ ...f, rounding_rule: e.target.value }))}
+                        className="w-28 text-xs border border-slate-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-slate-400 bg-white"
+                      >
+                        <option value="ceil">Ceiling</option>
+                        <option value="floor">Floor</option>
+                        <option value="round">Round</option>
+                      </select>
                     </div>
-                  )}
+                  </div>
+                  {pricingSuccess && <p className="text-[11px] text-emerald-600 font-medium">{pricingSuccess}</p>}
+                  {pricingError && <p className="text-[11px] text-rose-600 font-medium">{pricingError}</p>}
+                  <button
+                    onClick={submitPricingPolicy}
+                    disabled={pricingBusy}
+                    className="w-full text-xs font-semibold bg-slate-900 text-white rounded-xl py-2 hover:bg-slate-700 transition disabled:opacity-50 cursor-pointer"
+                  >
+                    {pricingBusy ? "Menghantar..." : "Simpan Perubahan"}
+                  </button>
                 </div>
               </div>
             )}
