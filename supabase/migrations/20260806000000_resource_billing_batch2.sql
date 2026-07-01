@@ -34,8 +34,8 @@ BEGIN
   )
   VALUES (
     v_wallet_id,
-    'STORAGE',
-    p_activity_type,
+    'STORAGE'::credit_type,
+    p_activity_type::credit_activity_type,
     p_amount_bytes,
     p_description,
     p_metadata
@@ -86,9 +86,9 @@ BEGIN
   v_markup_ai  := COALESCE(v_markup_ai,  300);
   v_markup_ocr := COALESCE(v_markup_ocr, 500);
 
-  -- Avg AI cost per call from ai_cost_rates
-  SELECT COALESCE(AVG(cost_per_call_usd), 0) INTO v_avg_ai  FROM ai_cost_rates WHERE provider IN ('openai','anthropic','gemini','deepseek');
-  SELECT COALESCE(AVG(cost_per_call_usd), 0) INTO v_avg_ocr FROM ai_cost_rates WHERE provider IN ('openai','anthropic','gemini','deepseek');
+  -- Avg AI/OCR cost per call from ai_cost_rates
+  SELECT COALESCE(AVG(cost_per_call_usd), 0.002) INTO v_avg_ai  FROM ai_cost_rates WHERE provider IN ('openai','anthropic','gemini','deepseek');
+  SELECT COALESCE(AVG(cost_per_call_usd), 0.001) INTO v_avg_ocr FROM ai_cost_rates WHERE provider IN ('openai','anthropic','gemini','deepseek');
 
   RETURN QUERY
   WITH usage AS (
