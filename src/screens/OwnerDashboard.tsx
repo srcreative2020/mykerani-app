@@ -3406,22 +3406,431 @@ export function OwnerDashboard() {
             )}
 
             {morePage === "myProfile" && (
-              <div className="space-y-5 pb-6">
-                {/* ── Page header ── */}
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h2 className="text-lg font-bold text-slate-900">Profil Saya</h2>
-                    <p className="text-xs text-slate-400 mt-0.5">Kewangan AI &amp; Maklumat Peribadi</p>
+              <div className="pb-6">
+
+                {/* ══════════════════════════════════════════════════
+                    DESKTOP LAYOUT — hidden on mobile/tablet
+                    True sidebar: left=identity only, right=all forms
+                    ══════════════════════════════════════════════════ */}
+                <div className="hidden lg:grid lg:grid-cols-[260px_1fr] lg:gap-7 xl:grid-cols-[280px_1fr] xl:gap-8 lg:items-start">
+
+                  {/* ── DESKTOP LEFT SIDEBAR (identity + save only) ── */}
+                  <div className="sticky top-4 space-y-3">
+                    {/* Identity card */}
+                    <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
+                      <div className="h-14 bg-gradient-to-r from-indigo-600 to-indigo-500" />
+                      <div className="px-4 pb-5 -mt-7 space-y-3">
+                        <div className="flex items-end justify-between">
+                          <div className="w-14 h-14 rounded-xl bg-white border-4 border-white shadow-md flex items-center justify-center text-xl font-bold text-indigo-600 shrink-0">
+                            {firstName.charAt(0).toUpperCase()}
+                          </div>
+                          <span className="text-2xs bg-indigo-100 text-indigo-700 font-bold px-2 py-0.5 rounded-full mb-1">Pemilik Syarikat</span>
+                        </div>
+
+                        {!editingAccount ? (
+                          <div className="space-y-0.5">
+                            <p className="font-bold text-slate-900 text-sm leading-tight">{user?.fullName}</p>
+                            <p className="text-xs text-slate-500 truncate">{user?.email}</p>
+                          </div>
+                        ) : (
+                          <div className="space-y-1.5">
+                            <input value={accountDraft.fullName} onChange={e => setAccountDraft(d => ({ ...d, fullName: e.target.value }))} placeholder="Nama penuh" className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400" />
+                            <input value={accountDraft.email} onChange={e => setAccountDraft(d => ({ ...d, email: e.target.value }))} placeholder="Email" type="email" className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400" />
+                            <input value={accountDraft.mobileNumber} onChange={e => setAccountDraft(d => ({ ...d, mobileNumber: e.target.value }))} placeholder="No. Telefon" className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400" />
+                            <input value={accountDraft.alternateNumber} onChange={e => setAccountDraft(d => ({ ...d, alternateNumber: e.target.value }))} placeholder="No. Alternatif" className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400" />
+                          </div>
+                        )}
+
+                        {accountMsg && <p className={`text-xs font-medium ${accountMsg.startsWith("Profil") || accountMsg.startsWith("Nama") ? "text-emerald-600" : "text-rose-500"}`}>{accountMsg}</p>}
+
+                        {!editingAccount ? (
+                          <button onClick={startEditAccount} className="w-full py-2 border border-slate-200 text-slate-700 rounded-xl text-xs font-semibold hover:bg-slate-50 transition cursor-pointer">
+                            Edit Profil
+                          </button>
+                        ) : (
+                          <div className="flex gap-1.5">
+                            <button onClick={saveAccount} disabled={accountSaving} className="flex-1 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-semibold disabled:opacity-50 transition cursor-pointer">
+                              {accountSaving ? "..." : "Simpan"}
+                            </button>
+                            <button onClick={() => setEditingAccount(false)} className="flex-1 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-semibold cursor-pointer">Batal</button>
+                          </div>
+                        )}
+                        <button onClick={() => signOut()} className="w-full py-2 border border-rose-200 text-rose-500 rounded-xl text-xs font-semibold hover:bg-rose-50 transition cursor-pointer">Log Keluar</button>
+                      </div>
+                    </div>
+
+                    {/* AI context callout */}
+                    <div className="bg-indigo-50 border border-indigo-100 rounded-xl px-3 py-2.5 flex gap-2 items-start">
+                      <Brain className="w-3.5 h-3.5 text-indigo-500 shrink-0 mt-0.5" />
+                      <p className="text-xs text-indigo-700 leading-relaxed">Maklumat peribadi adalah <span className="font-bold">pilihan</span> — semakin lengkap, semakin pintar AI anda.</p>
+                    </div>
+
+                    {/* Primary CTA */}
+                    <button
+                      onClick={async () => { await saveProfiles(); await saveCompanyMaster(); }}
+                      disabled={profileSaving || companyMasterSaving}
+                      className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-bold disabled:opacity-50 disabled:cursor-not-allowed transition active:scale-[0.98] cursor-pointer shadow-sm shadow-indigo-200"
+                    >
+                      {(profileSaving || companyMasterSaving) ? "Menyimpan..." : "Simpan Semua Perubahan"}
+                    </button>
+                    {(profileSavedAt || companyMasterMsg) && (
+                      <p className="text-center text-xs text-emerald-600 font-medium">Perubahan disimpan ✓</p>
+                    )}
+                  </div>
+
+                  {/* ── DESKTOP RIGHT CONTENT (all form sections) ── */}
+                  <div className="space-y-5 min-w-0">
+
+                    {/* Page title (desktop only) */}
+                    <div className="flex items-center justify-between pb-1">
+                      <div>
+                        <h2 className="text-xl font-bold text-slate-900">Profil Saya &amp; Kewangan AI</h2>
+                        <p className="text-xs text-slate-400 mt-0.5">Maklumat peribadi, perniagaan dan kewangan anda</p>
+                      </div>
+                    </div>
+
+                    {/* 1. Maklumat Peribadi */}
+                    <div className="bg-white border border-slate-200 rounded-2xl shadow-sm">
+                      <div className="px-6 py-4 border-b border-slate-100">
+                        <h3 className="text-sm font-bold text-slate-800">Maklumat Peribadi</h3>
+                      </div>
+                      <div className="px-6 py-5 space-y-4">
+                        <div className="grid grid-cols-3 gap-4">
+                          <div className="col-span-3 space-y-1">
+                            <label className="text-2xs font-semibold text-slate-400 uppercase tracking-wide">Nama Penuh</label>
+                            <input value={personalProfile.fullName} onChange={e => setPersonalProfile(p => ({ ...p, fullName: e.target.value }))} placeholder="Nama penuh" className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400" />
+                          </div>
+                          <div className="space-y-1">
+                            <label className="text-2xs font-semibold text-slate-400 uppercase tracking-wide">Tarikh Lahir</label>
+                            <input type="date" value={personalProfile.dateOfBirth} onChange={e => setPersonalProfile(p => ({ ...p, dateOfBirth: e.target.value }))} className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400" />
+                          </div>
+                          <div className="space-y-1">
+                            <label className="text-2xs font-semibold text-slate-400 uppercase tracking-wide">Status Perkahwinan</label>
+                            <input value={personalProfile.maritalStatus} onChange={e => setPersonalProfile(p => ({ ...p, maritalStatus: e.target.value }))} placeholder="Kahwin / Bujang" className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400" />
+                          </div>
+                          <div className="space-y-1">
+                            <label className="text-2xs font-semibold text-slate-400 uppercase tracking-wide">Pekerjaan</label>
+                            <input value={personalProfile.occupation} onChange={e => setPersonalProfile(p => ({ ...p, occupation: e.target.value }))} placeholder="Pekerjaan / Jawatan" className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400" />
+                          </div>
+                          <div className="space-y-1">
+                            <label className="text-2xs font-semibold text-slate-400 uppercase tracking-wide">Pendapatan / Bulan (RM)</label>
+                            <input type="number" value={personalProfile.monthlyIncomeMyr} onChange={e => setPersonalProfile(p => ({ ...p, monthlyIncomeMyr: e.target.value }))} placeholder="0.00" className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400" />
+                          </div>
+                          <div className="space-y-1">
+                            <label className="text-2xs font-semibold text-slate-400 uppercase tracking-wide">Bil. Tanggungan</label>
+                            <input type="number" value={personalProfile.dependentsCount} onChange={e => setPersonalProfile(p => ({ ...p, dependentsCount: e.target.value }))} placeholder="0" className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400" />
+                          </div>
+                          <div className="col-span-3 space-y-1">
+                            <label className="text-2xs font-semibold text-slate-400 uppercase tracking-wide">Nota Tambahan</label>
+                            <textarea value={personalProfile.notes} onChange={e => setPersonalProfile(p => ({ ...p, notes: e.target.value }))} placeholder="Contoh: ada perniagaan sampingan, dll" className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400" rows={2} />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* 2. Maklumat Akaun Syarikat */}
+                    <div className="bg-white border border-slate-200 rounded-2xl shadow-sm">
+                      <div className="px-6 py-4 border-b border-slate-100">
+                        <h3 className="text-sm font-bold text-slate-800">Maklumat Akaun Syarikat</h3>
+                        <p className="text-xs text-slate-400 mt-0.5">Untuk pengurusan bil &amp; sokongan HQ MyKerani</p>
+                      </div>
+                      <div className="px-6 py-5 space-y-4">
+                        <div className="grid grid-cols-3 gap-4">
+                          <div className="space-y-1">
+                            <label className="text-2xs font-semibold text-slate-400 uppercase tracking-wide">No. Pendaftaran (SSM)</label>
+                            <input value={companyMasterForm.registrationNo} onChange={e => setCompanyMasterForm(f => ({ ...f, registrationNo: e.target.value }))} placeholder="e.g. 1234567-X" className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400" />
+                          </div>
+                          <div className="space-y-1">
+                            <label className="text-2xs font-semibold text-slate-400 uppercase tracking-wide">No. Cukai</label>
+                            <input value={companyMasterForm.taxNumber} onChange={e => setCompanyMasterForm(f => ({ ...f, taxNumber: e.target.value }))} placeholder="No. Cukai" className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400" />
+                          </div>
+                          <div className="space-y-1">
+                            <label className="text-2xs font-semibold text-slate-400 uppercase tracking-wide">Industri Utama</label>
+                            <input value={companyMasterForm.industry} onChange={e => setCompanyMasterForm(f => ({ ...f, industry: e.target.value }))} placeholder="Industri Utama" className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400" />
+                          </div>
+                          <div className="col-span-3 space-y-1">
+                            <label className="text-2xs font-semibold text-slate-400 uppercase tracking-wide">Alamat Syarikat</label>
+                            <textarea value={companyMasterForm.address} onChange={e => setCompanyMasterForm(f => ({ ...f, address: e.target.value }))} placeholder="Alamat Syarikat" rows={2} className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400" />
+                          </div>
+                        </div>
+                        <div>
+                          <p className="text-2xs font-semibold text-slate-400 uppercase tracking-wide mb-2">Kenalan Bil &amp; Sokongan</p>
+                          <div className="grid grid-cols-2 gap-3">
+                            <div className="space-y-1">
+                              <label className="text-2xs text-slate-400 pl-0.5">Nama Kontak Bil</label>
+                              <input value={companyMasterForm.billingContactName} onChange={e => setCompanyMasterForm(f => ({ ...f, billingContactName: e.target.value }))} placeholder="Nama" className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400" />
+                            </div>
+                            <div className="space-y-1">
+                              <label className="text-2xs text-slate-400 pl-0.5">E-mel Bil</label>
+                              <input type="email" value={companyMasterForm.billingEmail} onChange={e => setCompanyMasterForm(f => ({ ...f, billingEmail: e.target.value }))} placeholder="email@syarikat.com" className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400" />
+                            </div>
+                            <div className="space-y-1">
+                              <label className="text-2xs text-slate-400 pl-0.5">Nama Kontak Sokongan</label>
+                              <input value={companyMasterForm.supportContactName} onChange={e => setCompanyMasterForm(f => ({ ...f, supportContactName: e.target.value }))} placeholder="Nama" className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400" />
+                            </div>
+                            <div className="space-y-1">
+                              <label className="text-2xs text-slate-400 pl-0.5">E-mel Sokongan</label>
+                              <input type="email" value={companyMasterForm.supportEmail} onChange={e => setCompanyMasterForm(f => ({ ...f, supportEmail: e.target.value }))} placeholder="support@syarikat.com" className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400" />
+                            </div>
+                          </div>
+                        </div>
+                        {companyMasterMsg && <p className="text-xs text-emerald-600 font-medium">{companyMasterMsg}</p>}
+                      </div>
+                    </div>
+
+                    {/* 3. Profil Perniagaan */}
+                    <div className="bg-white border border-slate-200 rounded-2xl shadow-sm">
+                      <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+                        <div>
+                          <h3 className="text-sm font-bold text-slate-800">Profil Perniagaan</h3>
+                          <p className="text-xs text-slate-400 mt-0.5">Setiap bisnes boleh mempunyai beberapa cawangan</p>
+                        </div>
+                        {!addingBusiness && (
+                          <button onClick={() => setAddingBusiness(true)} className="px-3 py-1.5 bg-indigo-50 text-indigo-600 hover:bg-indigo-100 rounded-xl text-xs font-bold transition cursor-pointer">+ Tambah Bisnes</button>
+                        )}
+                      </div>
+                      <div className="px-6 py-5 space-y-3">
+                        {businesses.length === 0 && !addingBusiness && (
+                          <div className="text-center py-8 bg-slate-50 rounded-xl">
+                            <p className="text-sm text-slate-400">Belum ada bisnes ditambah.</p>
+                            <p className="text-xs text-slate-300 mt-1">Klik "+ Tambah Bisnes" untuk bermula.</p>
+                          </div>
+                        )}
+
+                        {businesses.map(b => (
+                          <div key={b.id} className="border border-slate-100 rounded-xl overflow-hidden">
+                            {editingBusinessId === b.id ? (
+                              <div className="p-4 space-y-3 bg-slate-50">
+                                <div className="grid grid-cols-2 gap-3">
+                                  <div className="col-span-2 space-y-1"><label className="text-2xs font-semibold text-slate-400 uppercase tracking-wide">Nama Bisnes</label><input value={editBusinessForm.businessName} onChange={e => setEditBusinessForm(f => ({ ...f, businessName: e.target.value }))} placeholder="Nama bisnes" className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400" /></div>
+                                  <div className="space-y-1"><label className="text-2xs font-semibold text-slate-400 uppercase tracking-wide">Industri</label><input value={editBusinessForm.industry} onChange={e => setEditBusinessForm(f => ({ ...f, industry: e.target.value }))} placeholder="F&B, Percetakan..." className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400" /></div>
+                                  <div className="space-y-1"><label className="text-2xs font-semibold text-slate-400 uppercase tracking-wide">Jenis</label><input value={editBusinessForm.businessType} onChange={e => setEditBusinessForm(f => ({ ...f, businessType: e.target.value }))} placeholder="Sdn Bhd, Enterprise..." className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400" /></div>
+                                  <div className="col-span-2 space-y-1"><label className="text-2xs font-semibold text-slate-400 uppercase tracking-wide">No. Pendaftaran</label><input value={editBusinessForm.registrationNo} onChange={e => setEditBusinessForm(f => ({ ...f, registrationNo: e.target.value }))} placeholder="No. pendaftaran" className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400" /></div>
+                                  <div className="col-span-2 space-y-1"><label className="text-2xs font-semibold text-slate-400 uppercase tracking-wide">Nota</label><textarea value={editBusinessForm.notes} onChange={e => setEditBusinessForm(f => ({ ...f, notes: e.target.value }))} placeholder="Nota tambahan" className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400" rows={2} /></div>
+                                </div>
+                                <div className="flex gap-2 pt-1">
+                                  <button onClick={submitEditBusiness} className="px-5 py-2 bg-slate-900 text-white rounded-xl text-sm font-semibold cursor-pointer">Simpan</button>
+                                  <button onClick={() => { setEditingBusinessId(null); setEditBusinessForm(EMPTY_BUSINESS_FORM); }} className="px-5 py-2 bg-slate-200 text-slate-700 rounded-xl text-sm font-semibold cursor-pointer">Batal</button>
+                                </div>
+                              </div>
+                            ) : (
+                              <div>
+                                <div className="flex items-start justify-between p-4">
+                                  <div className="min-w-0">
+                                    <p className="text-sm font-bold text-slate-800 truncate">{b.businessName}</p>
+                                    <p className="text-xs text-slate-500 mt-0.5">{[b.industry, b.businessType].filter(Boolean).join(" · ")}{b.registrationNo && <span className="text-slate-400"> · {b.registrationNo}</span>}</p>
+                                  </div>
+                                  <div className="flex items-center gap-1.5 shrink-0 ml-3">
+                                    <button onClick={() => startEditBusiness(b)} className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-slate-100 text-slate-400 hover:text-indigo-600 cursor-pointer transition"><Edit3 className="w-3.5 h-3.5" /></button>
+                                    <button onClick={() => setConfirmDeleteBusinessId(b.id)} className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-rose-50 text-slate-300 hover:text-rose-500 cursor-pointer transition"><Trash2 className="w-3.5 h-3.5" /></button>
+                                  </div>
+                                </div>
+                                {confirmDeleteBusinessId === b.id && (
+                                  <div className="mx-4 mb-3 bg-rose-50 border border-rose-100 rounded-xl p-2.5 flex items-center justify-between">
+                                    <span className="text-xs text-rose-700">Padam "{b.businessName}"?</span>
+                                    <div className="flex gap-2">
+                                      <button onClick={() => removeBusiness(b.id)} className="px-2.5 py-1 bg-rose-600 text-white rounded-lg text-xs font-semibold cursor-pointer">Padam</button>
+                                      <button onClick={() => setConfirmDeleteBusinessId(null)} className="px-2.5 py-1 bg-slate-200 text-slate-700 rounded-lg text-xs font-semibold cursor-pointer">Batal</button>
+                                    </div>
+                                  </div>
+                                )}
+                                <div className="border-t border-slate-100">
+                                  <button onClick={() => toggleBusinessBranches(b.id)} className="w-full flex items-center justify-between px-4 py-2.5 text-xs font-semibold text-slate-500 hover:text-slate-700 hover:bg-slate-50 cursor-pointer transition">
+                                    <span>Cawangan {businessBranches[b.id] ? `(${businessBranches[b.id].length})` : ""}</span>
+                                    <span className="text-slate-300">{expandedBusinessId === b.id ? "▲" : "▼"}</span>
+                                  </button>
+                                  {expandedBusinessId === b.id && (
+                                    <div className="px-4 pb-4 space-y-2 border-t border-slate-100 pt-3">
+                                      {(businessBranches[b.id] || []).map(br => (
+                                        <div key={br.id} className="flex items-center justify-between bg-white border border-slate-100 rounded-lg px-3 py-2">
+                                          <div><p className="text-xs font-semibold text-slate-700">{br.branchName}</p>{br.location && <p className="text-2xs text-slate-400">{br.location}</p>}</div>
+                                          <button onClick={() => removeBranch(b.id, br.id)} className="text-slate-300 hover:text-rose-500 cursor-pointer transition"><Trash2 className="w-3.5 h-3.5" /></button>
+                                        </div>
+                                      ))}
+                                      <div className="grid grid-cols-3 gap-2 pt-1">
+                                        <div className="col-span-2"><input value={newBranchByBusiness[b.id]?.branchName || ""} onChange={e => setNewBranchByBusiness(prev => ({ ...prev, [b.id]: { branchName: e.target.value, location: prev[b.id]?.location || "" } }))} placeholder="Nama cawangan" className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400" /></div>
+                                        <input value={newBranchByBusiness[b.id]?.location || ""} onChange={e => setNewBranchByBusiness(prev => ({ ...prev, [b.id]: { branchName: prev[b.id]?.branchName || "", location: e.target.value } }))} placeholder="Lokasi" className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400" />
+                                      </div>
+                                      <button onClick={() => submitNewBranch(b.id)} className="px-3 py-1.5 bg-slate-900 text-white rounded-lg text-xs font-semibold cursor-pointer">+ Tambah Cawangan</button>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        ))}
+
+                        {addingBusiness && (
+                          <div className="border border-indigo-100 bg-indigo-50/40 rounded-xl p-4 space-y-3">
+                            <p className="text-xs font-bold text-indigo-700">Bisnes Baharu</p>
+                            <div className="grid grid-cols-2 gap-3">
+                              <div className="col-span-2 space-y-1"><label className="text-2xs font-semibold text-slate-400 uppercase tracking-wide">Nama Bisnes *</label><input value={newBusiness.businessName} onChange={e => setNewBusiness(f => ({ ...f, businessName: e.target.value }))} placeholder="Nama bisnes (wajib)" className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400" /></div>
+                              <div className="space-y-1"><label className="text-2xs font-semibold text-slate-400 uppercase tracking-wide">Industri</label><input value={newBusiness.industry} onChange={e => setNewBusiness(f => ({ ...f, industry: e.target.value }))} placeholder="F&B, Percetakan..." className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400" /></div>
+                              <div className="space-y-1"><label className="text-2xs font-semibold text-slate-400 uppercase tracking-wide">Jenis</label><input value={newBusiness.businessType} onChange={e => setNewBusiness(f => ({ ...f, businessType: e.target.value }))} placeholder="Sdn Bhd, Enterprise..." className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400" /></div>
+                              <div className="col-span-2 space-y-1"><label className="text-2xs font-semibold text-slate-400 uppercase tracking-wide">No. Pendaftaran</label><input value={newBusiness.registrationNo} onChange={e => setNewBusiness(f => ({ ...f, registrationNo: e.target.value }))} placeholder="No. pendaftaran" className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400" /></div>
+                              <div className="col-span-2 space-y-1"><label className="text-2xs font-semibold text-slate-400 uppercase tracking-wide">Nota</label><textarea value={newBusiness.notes} onChange={e => setNewBusiness(f => ({ ...f, notes: e.target.value }))} placeholder="Nota tambahan" className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400" rows={2} /></div>
+                            </div>
+                            <div className="flex gap-2 pt-1">
+                              <button onClick={submitNewBusiness} className="px-5 py-2 bg-slate-900 text-white rounded-xl text-sm font-semibold cursor-pointer">Tambah</button>
+                              <button onClick={() => { setAddingBusiness(false); setNewBusiness(EMPTY_BUSINESS_FORM); }} className="px-5 py-2 bg-slate-200 text-slate-700 rounded-xl text-sm font-semibold cursor-pointer">Batal</button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* 4 + 5. Kenderaan & Tanggungan — side by side on xl */}
+                    <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
+
+                      {/* Kenderaan */}
+                      <div className="bg-white border border-slate-200 rounded-2xl shadow-sm">
+                        <div className="px-6 py-4 border-b border-slate-100">
+                          <h3 className="text-sm font-bold text-slate-800">Kenderaan</h3>
+                          <p className="text-xs text-slate-400 mt-0.5">AI boleh kenalpasti kenderaan anda secara automatik</p>
+                        </div>
+                        <div className="px-6 py-4 space-y-3">
+                          {vehicles.map(v => (
+                            <div key={v.id} className="border border-slate-100 rounded-xl overflow-hidden">
+                              {editingVehicleId === v.id ? (
+                                <div className="p-3 space-y-2 bg-slate-50">
+                                  <div className="grid grid-cols-2 gap-2">
+                                    <input value={editVehicleForm.name} onChange={e => setEditVehicleForm(f => ({ ...f, name: e.target.value }))} placeholder="Nama" className="px-3 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400" />
+                                    <input value={editVehicleForm.plateNumber} onChange={e => setEditVehicleForm(f => ({ ...f, plateNumber: e.target.value }))} placeholder="No. plat" className="px-3 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400" />
+                                    <select value={editVehicleForm.ownership} onChange={e => setEditVehicleForm(f => ({ ...f, ownership: e.target.value as "PERSONAL" | "BUSINESS" }))} className="px-3 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400"><option value="BUSINESS">Perniagaan</option><option value="PERSONAL">Peribadi</option></select>
+                                    <input value={editVehicleForm.vehicleType} onChange={e => setEditVehicleForm(f => ({ ...f, vehicleType: e.target.value }))} placeholder="Jenis" className="px-3 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400" />
+                                  </div>
+                                  <div className="flex gap-2">
+                                    <button onClick={submitEditVehicle} className="flex-1 px-3 py-2 bg-slate-900 text-white rounded-xl text-sm font-semibold cursor-pointer">Simpan</button>
+                                    <button onClick={() => setEditingVehicleId(null)} className="flex-1 px-3 py-2 bg-slate-200 text-slate-700 rounded-xl text-sm font-semibold cursor-pointer">Batal</button>
+                                  </div>
+                                </div>
+                              ) : (
+                                <div className="flex items-center justify-between p-3">
+                                  <div>
+                                    <p className="text-sm font-semibold text-slate-800">{v.name}{v.plateNumber && <span className="text-slate-400 font-normal"> · {v.plateNumber}</span>}</p>
+                                    <span className={`text-2xs font-bold px-2 py-0.5 rounded-full mt-0.5 inline-block ${v.ownership === "BUSINESS" ? "bg-indigo-100 text-indigo-700" : "bg-amber-100 text-amber-700"}`}>{v.ownership === "BUSINESS" ? "Perniagaan" : "Peribadi"}</span>
+                                  </div>
+                                  <div className="flex items-center gap-1.5">
+                                    <button onClick={() => startEditVehicle(v)} className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-slate-100 text-slate-400 hover:text-indigo-600 cursor-pointer transition"><Edit3 className="w-3.5 h-3.5" /></button>
+                                    <button onClick={() => removeVehicle(v.id)} className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-rose-50 text-slate-300 hover:text-rose-500 cursor-pointer transition"><Trash2 className="w-3.5 h-3.5" /></button>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                          <div className="border border-dashed border-slate-200 rounded-xl p-3 space-y-2">
+                            <div className="grid grid-cols-2 gap-2">
+                              <input value={newVehicle.name} onChange={e => setNewVehicle(v => ({ ...v, name: e.target.value }))} placeholder="Nama (Hilux)" className="px-3 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400" />
+                              <input value={newVehicle.plateNumber} onChange={e => setNewVehicle(v => ({ ...v, plateNumber: e.target.value }))} placeholder="No. plat" className="px-3 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400" />
+                            </div>
+                            <div className="flex gap-2">
+                              <select value={newVehicle.ownership} onChange={e => setNewVehicle(v => ({ ...v, ownership: e.target.value as "PERSONAL" | "BUSINESS" }))} className="flex-1 px-3 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400"><option value="BUSINESS">Perniagaan</option><option value="PERSONAL">Peribadi</option></select>
+                              <button onClick={submitNewVehicle} className="px-4 py-2 bg-slate-900 text-white rounded-xl text-sm font-semibold cursor-pointer">+ Tambah</button>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Tanggungan */}
+                      <div className="bg-white border border-slate-200 rounded-2xl shadow-sm">
+                        <div className="px-6 py-4 border-b border-slate-100">
+                          <h3 className="text-sm font-bold text-slate-800">Tanggungan</h3>
+                          <p className="text-xs text-slate-400 mt-0.5">Ahli keluarga yang bergantung kepada anda</p>
+                        </div>
+                        <div className="px-6 py-4 space-y-3">
+                          {dependents.map(d => (
+                            <div key={d.id} className="border border-slate-100 rounded-xl overflow-hidden">
+                              {editingDependentId === d.id ? (
+                                <div className="p-3 space-y-2 bg-slate-50">
+                                  <div className="grid grid-cols-2 gap-2">
+                                    <input value={editDependentForm.name} onChange={e => setEditDependentForm(f => ({ ...f, name: e.target.value }))} placeholder="Nama" className="px-3 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400" />
+                                    <input value={editDependentForm.relationship} onChange={e => setEditDependentForm(f => ({ ...f, relationship: e.target.value }))} placeholder="Hubungan" className="px-3 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400" />
+                                  </div>
+                                  <input type="date" value={editDependentForm.dateOfBirth} onChange={e => setEditDependentForm(f => ({ ...f, dateOfBirth: e.target.value }))} className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400" />
+                                  <div className="flex gap-2">
+                                    <button onClick={submitEditDependent} className="flex-1 px-3 py-2 bg-slate-900 text-white rounded-xl text-sm font-semibold cursor-pointer">Simpan</button>
+                                    <button onClick={() => setEditingDependentId(null)} className="flex-1 px-3 py-2 bg-slate-200 text-slate-700 rounded-xl text-sm font-semibold cursor-pointer">Batal</button>
+                                  </div>
+                                </div>
+                              ) : (
+                                <div className="flex items-center justify-between p-3">
+                                  <div><p className="text-sm font-semibold text-slate-800">{d.name}</p><span className="text-xs text-slate-500">{d.relationship}</span></div>
+                                  <div className="flex items-center gap-1.5">
+                                    <button onClick={() => startEditDependent(d)} className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-slate-100 text-slate-400 hover:text-indigo-600 cursor-pointer transition"><Edit3 className="w-3.5 h-3.5" /></button>
+                                    <button onClick={() => removeDependent(d.id)} className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-rose-50 text-slate-300 hover:text-rose-500 cursor-pointer transition"><Trash2 className="w-3.5 h-3.5" /></button>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                          <div className="border border-dashed border-slate-200 rounded-xl p-3 space-y-2">
+                            <div className="grid grid-cols-2 gap-2">
+                              <input value={newDependent.name} onChange={e => setNewDependent(d => ({ ...d, name: e.target.value }))} placeholder="Nama" className="px-3 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400" />
+                              <input value={newDependent.relationship} onChange={e => setNewDependent(d => ({ ...d, relationship: e.target.value }))} placeholder="Hubungan (anak, ibu...)" className="px-3 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400" />
+                            </div>
+                            <button onClick={submitNewDependent} className="w-full px-3 py-2 bg-slate-900 text-white rounded-xl text-sm font-semibold cursor-pointer">+ Tambah Tanggungan</button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* 6 + 7. Belian Aset & Transaksi Pemilik — side by side on xl */}
+                    <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
+
+                      {/* Belian Aset */}
+                      <div className="bg-white border border-slate-200 rounded-2xl shadow-sm">
+                        <div className="px-6 py-4 border-b border-slate-100">
+                          <h3 className="text-sm font-bold text-slate-800">Belian Aset</h3>
+                          <p className="text-xs text-slate-400 mt-0.5">Direkodkan automatik melalui pengesahan AI</p>
+                        </div>
+                        <div className="px-6 py-4 space-y-2">
+                          {assetPurchases.length === 0 && <div className="text-center py-6"><p className="text-xs text-slate-400">Tiada rekod belian aset lagi</p></div>}
+                          {assetPurchases.map(a => (
+                            <div key={a.id} className="flex items-center justify-between bg-slate-50 border border-slate-100 rounded-xl px-3 py-2.5">
+                              <div className="min-w-0"><p className="text-sm font-semibold text-slate-800 truncate">{a.assetName}</p><p className="text-xs text-slate-500">RM{a.purchaseAmountMyr.toFixed(2)} · {a.purchaseDate}{a.vendorName ? ` · ${a.vendorName}` : ""}</p></div>
+                              <button onClick={() => removeAssetPurchase(a.id)} className="shrink-0 w-7 h-7 flex items-center justify-center ml-2 rounded-lg hover:bg-rose-50 text-slate-300 hover:text-rose-500 cursor-pointer transition"><Trash2 className="w-3.5 h-3.5" /></button>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Transaksi Pemilik */}
+                      <div className="bg-white border border-slate-200 rounded-2xl shadow-sm">
+                        <div className="px-6 py-4 border-b border-slate-100">
+                          <h3 className="text-sm font-bold text-slate-800">Transaksi Pemilik</h3>
+                          <p className="text-xs text-slate-400 mt-0.5">Modal masuk &amp; pengeluaran — direkodkan automatik</p>
+                        </div>
+                        <div className="px-6 py-4 space-y-2">
+                          {ownerTransactions.length === 0 && <div className="text-center py-6"><p className="text-xs text-slate-400">Tiada rekod transaksi pemilik lagi</p></div>}
+                          {ownerTransactions.map(o => (
+                            <div key={o.id} className="flex items-center justify-between bg-slate-50 border border-slate-100 rounded-xl px-3 py-2.5">
+                              <div className="min-w-0"><p className="text-sm font-semibold text-slate-800">{o.type === "CAPITAL_INJECTION" ? "Modal Masuk" : "Pengeluaran (Drawing)"}</p><p className="text-xs text-slate-500">RM{o.amountMyr.toFixed(2)} · {o.transactionDate}</p></div>
+                              <button onClick={() => removeOwnerTransaction(o.id)} className="shrink-0 w-7 h-7 flex items-center justify-center ml-2 rounded-lg hover:bg-rose-50 text-slate-300 hover:text-rose-500 cursor-pointer transition"><Trash2 className="w-3.5 h-3.5" /></button>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+
+                    <p className="text-xs text-slate-400 text-center pb-2">Maklumat pinjaman/loan diuruskan dalam modul Hutang &amp; Liabiliti.</p>
                   </div>
                 </div>
 
                 {/* ══════════════════════════════════════════════════
-                    DESKTOP / TABLET: two-column grid
-                    MOBILE: single column
+                    MOBILE / TABLET LAYOUT — hidden on desktop (lg+)
+                    Exactly as approved — do not modify
                     ══════════════════════════════════════════════════ */}
-                <div className="lg:grid lg:grid-cols-[340px_1fr] lg:gap-6 xl:grid-cols-[380px_1fr] space-y-5 lg:space-y-0">
+                <div className="lg:hidden space-y-5 pb-6">
+                  {/* ── Page header ── */}
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h2 className="text-lg font-bold text-slate-900">Profil Saya</h2>
+                      <p className="text-xs text-slate-400 mt-0.5">Kewangan AI &amp; Maklumat Peribadi</p>
+                    </div>
+                  </div>
 
-                  {/* ─── LEFT COLUMN (identity + personal + company account) ─── */}
+                  <div className="space-y-5">
+
                   <div className="space-y-4">
 
                     {/* 1. Identity card */}
@@ -3543,8 +3952,8 @@ export function OwnerDashboard() {
                       </div>
                     </div>
 
-                    {/* ── SAVE ALL button (mobile / left-col on desktop) ── */}
-                    <div className="lg:sticky lg:bottom-4 space-y-2">
+                    {/* ── SAVE ALL button ── */}
+                    <div className="space-y-2">
                       <button
                         onClick={async () => { await saveProfiles(); await saveCompanyMaster(); }}
                         disabled={profileSaving || companyMasterSaving}
@@ -3558,7 +3967,7 @@ export function OwnerDashboard() {
                     </div>
                   </div>
 
-                  {/* ─── RIGHT COLUMN (business + vehicles + dependents + assets + txn) ─── */}
+                  {/* ─── Right section content (mobile) ─── */}
                   <div className="space-y-4">
 
                     {/* 4. Profil Perniagaan */}
@@ -3826,6 +4235,7 @@ export function OwnerDashboard() {
                     </div>
 
                     <p className="text-xs text-slate-400 text-center pb-2">Maklumat pinjaman/loan diuruskan dalam modul Hutang &amp; Liabiliti.</p>
+                  </div>
                   </div>
                 </div>
               </div>
