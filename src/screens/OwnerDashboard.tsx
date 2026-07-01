@@ -69,7 +69,7 @@ import {
 } from "../lib/paymentService";
 
 type MainTab = "home" | "dashboard" | "documents" | "reports" | "more";
-type MorePage = "menu" | "team" | "history" | "settings" | "myProfile" | "support" | "billing" | "resources" | "chatArchive" | "activity" | "account360";
+type MorePage = "menu" | "aktiviti" | "akunSaya" | "team" | "billing" | "tetapan" | "bantuan";
 
 // AI chat suggestions may carry a server-computed default date; if the AI
 // didn't extract a date from the user's message, normalize to the user's
@@ -305,6 +305,7 @@ export function OwnerDashboard() {
   const [supportInput, setSupportInput] = useState("");
   const [supportLoading, setSupportLoading] = useState(false);
   const [supportView, setSupportView] = useState<"chat" | "faq" | "ticket" | "ticket_status">("chat");
+  const [aktivitiTab, setAktivitiTab] = useState<"rekod" | "log" | "arkib">("rekod");
   const [ticketSubject, setTicketSubject] = useState("");
   const [ticketDesc, setTicketDesc] = useState("");
   const [ticketCategory, setTicketCategory] = useState("");
@@ -992,7 +993,7 @@ export function OwnerDashboard() {
     getMyTenantSupportTickets().then(tickets => setMyTickets(tickets));
   }, [isMockUser]);
   useEffect(() => {
-    if (morePage !== "support" || supportView !== "ticket_status" || isMockUser) return;
+    if (morePage !== "bantuan" || supportView !== "ticket_status" || isMockUser) return;
     let active = true;
     setMyTicketsLoading(true);
     getMyTenantSupportTickets().then(tickets => { if (active) { setMyTickets(tickets); setMyTicketsLoading(false); } });
@@ -1005,7 +1006,7 @@ export function OwnerDashboard() {
     return () => { active = false; };
   }, [isMockUser]);
   useEffect(() => {
-    if (isMockUser || morePage !== "resources") return;
+    if (isMockUser || morePage !== "tetapan") return;
     getTenantAiCostSummary().then(setAiCostSummary);
   }, [isMockUser, morePage]);
   useEffect(() => {
@@ -1013,7 +1014,7 @@ export function OwnerDashboard() {
     getMyDataAccessLog(tenantId).then(setDataAccessLog);
   }, [isMockUser, showDataAccessLog, tenantId]);
   useEffect(() => {
-    if (morePage !== 'activity' || !isSupabaseConfigured() || isMockUser) return;
+    if (morePage !== 'aktiviti' || !isSupabaseConfigured() || isMockUser) return;
     let active = true;
     setActivityLoading(true);
     getTenantActivityFeed(activeWorkspace?.id).then(data => {
@@ -2209,7 +2210,7 @@ export function OwnerDashboard() {
                   const severityBg  = n.read ? "bg-white" : n.severity === "critical" ? "bg-red-50" : n.severity === "warn" ? "bg-amber-50/60" : "bg-blue-50/40";
                   return (
                     <div key={n.id} className={`flex gap-3 px-4 py-3 border-b border-slate-50 cursor-pointer hover:bg-slate-50 transition ${severityBg}`}
-                      onClick={() => { notif.markRead(n.id); setShowNotifPanel(false); if (n.action === "billing") { setActiveTab("more"); setMorePage("billing"); } else if (n.action === "storage") { setActiveTab("more"); setMorePage("resources"); } else if (n.action === "support") { setActiveTab("more"); setMorePage("support"); } }}>
+                      onClick={() => { notif.markRead(n.id); setShowNotifPanel(false); if (n.action === "billing") { setActiveTab("more"); setMorePage("billing"); } else if (n.action === "storage") { setActiveTab("more"); setMorePage("tetapan"); } else if (n.action === "support") { setActiveTab("more"); setMorePage("bantuan"); } }}>
                       <div className={`w-1 rounded-full shrink-0 self-stretch ${severityBar}`} />
                       <div className="flex-1 min-w-0 space-y-0.5">
                         <div className="flex items-start justify-between gap-2">
@@ -2279,7 +2280,7 @@ export function OwnerDashboard() {
                         <p className="text-xs font-bold text-indigo-800">Bantu MYKERANI AI kenal anda lebih baik</p>
                         <p className="text-xs text-indigo-600 mt-0.5">Tambah profil peribadi, perniagaan & kenderaan (pilihan) supaya AI boleh bezakan transaksi peribadi & perniagaan dengan tepat — contoh: "isi minyak RM50" untuk Hilux atau Myvi?</p>
                         <div className="flex gap-2 mt-2">
-                          <button onClick={() => { setMorePage("myProfile"); setActiveTab("more"); }} className="px-3 py-1.5 bg-indigo-600 text-white rounded-lg text-xs font-bold cursor-pointer">Isi Profil</button>
+                          <button onClick={() => { setMorePage("akunSaya"); setActiveTab("more"); }} className="px-3 py-1.5 bg-indigo-600 text-white rounded-lg text-xs font-bold cursor-pointer">Isi Profil</button>
                           <button onClick={() => { setProfileNudgeDismissed(true); localStorage.setItem(`mk_profile_nudge_dismissed_${wsId}`, "1"); }} className="px-3 py-1.5 text-indigo-500 rounded-lg text-xs font-semibold cursor-pointer">Lain kali</button>
                         </div>
                       </div>
@@ -3359,10 +3360,25 @@ export function OwnerDashboard() {
             )}
 
             {/* History */}
-            {morePage === "history" && (
+            {morePage === "aktiviti" && (
               <div className="space-y-3">
-                <h2 className="text-lg font-bold text-slate-900">Sejarah Aktiviti</h2>
+                <h2 className="text-lg font-bold text-slate-900">Aktiviti</h2>
 
+                {/* Sub-tab nav */}
+                <div className="flex gap-1 bg-slate-100 rounded-xl p-1">
+                  {([
+                    { id: "rekod" as const, label: "Rekod Kewangan" },
+                    { id: "log"   as const, label: "Log Sistem" },
+                    { id: "arkib" as const, label: "Arkib Perbualan" },
+                  ]).map(({ id, label }) => (
+                    <button key={id} onClick={() => setAktivitiTab(id)}
+                      className={`flex-1 py-2 rounded-lg text-xs font-semibold transition cursor-pointer ${aktivitiTab === id ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}>
+                      {label}
+                    </button>
+                  ))}
+                </div>
+
+                {aktivitiTab === "rekod" && <>
                 <div className="bg-white border border-slate-200 rounded-2xl p-3 space-y-2 shadow-sm">
                   <input
                     type="text"
@@ -3513,10 +3529,12 @@ export function OwnerDashboard() {
                     </div>
                   </>
                 )}
+                </>
+                }
               </div>
             )}
 
-            {morePage === "myProfile" && (
+            {morePage === "akunSaya" && (
               <div className="pb-6">
 
                 {/* ══════════════════════════════════════════════════
@@ -3936,7 +3954,7 @@ export function OwnerDashboard() {
                   {/* ── Page header ── */}
                   <div className="flex items-center justify-between">
                     <div>
-                      <h2 className="text-lg font-bold text-slate-900">Profil Saya</h2>
+                      <h2 className="text-lg font-bold text-slate-900">Akaun Saya</h2>
                       <p className="text-xs text-slate-400 mt-0.5">Kewangan AI &amp; Maklumat Peribadi</p>
                     </div>
                   </div>
@@ -4006,6 +4024,31 @@ export function OwnerDashboard() {
 
                     {/* IDENTITI TENANT */}
                     <TenantIdentitySection initial={firstName} />
+
+                    {/* ── Skor Kesihatan Akaun ── */}
+                    {myHealthScore && (
+                      <div className="bg-white border border-slate-200 rounded-2xl px-4 py-4 shadow-sm">
+                        <p className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-3">Skor Kesihatan Akaun</p>
+                        <div className="flex items-center gap-4">
+                          <div style={{ fontSize: 36, fontWeight: 800, lineHeight: 1, color: (myHealthScore.score || 0) >= 70 ? '#22c55e' : (myHealthScore.score || 0) >= 40 ? '#f59e0b' : '#ef4444' }}>
+                            {myHealthScore.score ?? '--'}
+                          </div>
+                          <div>
+                            <p className="text-sm font-semibold text-slate-800">
+                              Tahap Risiko:{' '}
+                              {myHealthScore.riskLevel === 'low' ? 'Rendah' : myHealthScore.riskLevel === 'medium' ? 'Sederhana' : 'Tinggi'}
+                            </p>
+                            {myHealthScore.reasons.length > 0 && (
+                              <ul className="mt-1 space-y-0.5">
+                                {myHealthScore.reasons.map((r, i) => (
+                                  <li key={i} className="text-xs text-slate-400">• {r}</li>
+                                ))}
+                              </ul>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    )}
 
                     {/* 2. Maklumat Peribadi */}
                     <div className="bg-white border border-slate-200 rounded-2xl shadow-sm">
@@ -4354,7 +4397,7 @@ export function OwnerDashboard() {
               </div>
             )}
 
-            {morePage === "chatArchive" && (
+            {morePage === "aktiviti" && aktivitiTab === "arkib" && (
               <div className="space-y-3">
                 <h2 className="text-lg font-bold text-slate-900">Arkib Perbualan</h2>
                 {(() => {
@@ -4413,7 +4456,7 @@ export function OwnerDashboard() {
             )}
 
             {/* Settings */}
-            {morePage === "settings" && (
+            {morePage === "tetapan" && (
               <div className="space-y-4 lg:space-y-5">
                 <h2 className="text-lg font-bold text-slate-900 lg:text-xl">Tetapan</h2>
 
@@ -4443,7 +4486,7 @@ export function OwnerDashboard() {
                     { key: "subscription" as const, label: "Peringatan Langganan" },
                     { key: "bill" as const,         label: "Peringatan Bil" },
                     { key: "aiCredit" as const,     label: "Peringatan Kredit AI" },
-                    { key: "storage" as const,      label: "Peringatan Storan" },
+                    { key: "tetapan" as const,      label: "Peringatan Storan" },
                   ].map(({ key, label }) => (
                     <div key={key} className="flex items-center justify-between">
                       <span className="text-xs text-slate-600">{label}</span>
@@ -4494,9 +4537,9 @@ export function OwnerDashboard() {
 
             {/* â•â•â• SUPPORT CENTER â€" Feature 1 â•â•â• */}
             {/* Pusat Aktiviti */}
-            {morePage === "activity" && (
+            {morePage === "aktiviti" && aktivitiTab === "log" && (
               <div className="space-y-3">
-                <h2 className="text-lg font-bold text-slate-900">Pusat Aktiviti</h2>
+                <h2 className="text-lg font-bold text-slate-900">Log Sistem</h2>
                 {activityLoading && (
                   <div className="text-center text-slate-400 py-8">Memuatkan...</div>
                 )}
@@ -4524,7 +4567,7 @@ export function OwnerDashboard() {
               </div>
             )}
             {/* Account 360 View (H-04) */}
-            {morePage === "account360" && (
+            {false && (
               <div className="space-y-3">
                 <h2 className="text-lg font-bold text-slate-900">Akaun Saya 360</h2>
 
@@ -4575,9 +4618,9 @@ export function OwnerDashboard() {
                   <p className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-3">Pautan Pantas</p>
                   <div className="space-y-2">
                     {[
-                      { label: 'Profil Saya & Kewangan AI', page: 'myProfile' as MorePage },
-                      { label: 'Sejarah Aktiviti', page: 'history' as MorePage },
-                      { label: 'Pusat Sokongan', page: 'support' as MorePage },
+                      { label: 'Akaun Saya', page: 'akunSaya' as MorePage },
+                      { label: 'Aktiviti', page: 'aktiviti' as MorePage },
+                      { label: 'Bantuan', page: 'bantuan' as MorePage },
                     ].map(({ label, page }) => (
                       <button key={page} onClick={() => setMorePage(page)}
                         className="w-full flex items-center justify-between px-0 py-1 text-sm text-slate-700 hover:text-indigo-600 transition cursor-pointer text-left">
@@ -4590,9 +4633,9 @@ export function OwnerDashboard() {
               </div>
             )}
 
-            {morePage === "support" && (
+            {morePage === "bantuan" && (
               <div className="space-y-4">
-                <h2 className="text-lg font-bold text-slate-900">Pusat Sokongan</h2>
+                <h2 className="text-lg font-bold text-slate-900">Bantuan</h2>
 
                 {/* Sub-nav */}
                 <div className="flex gap-2 overflow-x-auto pb-1">
@@ -4977,7 +5020,7 @@ export function OwnerDashboard() {
                   </div>
                   <div className="grid grid-cols-2 gap-2">
                     <button onClick={() => setShowCreditModal("AI")} className="py-2.5 bg-amber-50 border border-amber-100 text-amber-700 rounded-xl text-xs font-bold cursor-pointer hover:bg-amber-100 transition">Beli Kredit</button>
-                    <button onClick={() => setMorePage("resources")} className="py-2.5 bg-slate-50 border border-slate-200 text-slate-600 rounded-xl text-xs font-bold cursor-pointer hover:bg-slate-100 transition">Lihat Penggunaan</button>
+                    <button onClick={() => setMorePage("tetapan")} className="py-2.5 bg-slate-50 border border-slate-200 text-slate-600 rounded-xl text-xs font-bold cursor-pointer hover:bg-slate-100 transition">Lihat Penggunaan</button>
                   </div>
                 </div>
 
@@ -5002,7 +5045,7 @@ export function OwnerDashboard() {
                   </div>
                   <div className="grid grid-cols-2 gap-2">
                     <button onClick={() => setShowCreditModal("OCR")} className="py-2.5 bg-violet-50 border border-violet-100 text-violet-700 rounded-xl text-xs font-bold cursor-pointer hover:bg-violet-100 transition">Beli Kredit</button>
-                    <button onClick={() => setMorePage("resources")} className="py-2.5 bg-slate-50 border border-slate-200 text-slate-600 rounded-xl text-xs font-bold cursor-pointer hover:bg-slate-100 transition">Lihat Penggunaan</button>
+                    <button onClick={() => setMorePage("tetapan")} className="py-2.5 bg-slate-50 border border-slate-200 text-slate-600 rounded-xl text-xs font-bold cursor-pointer hover:bg-slate-100 transition">Lihat Penggunaan</button>
                   </div>
                 </div>
 
@@ -5027,7 +5070,7 @@ export function OwnerDashboard() {
                   </div>
                   <div className="grid grid-cols-2 gap-2">
                     <button onClick={() => setShowAddonModal(true)} className="py-2.5 bg-blue-50 border border-blue-100 text-blue-700 rounded-xl text-xs font-bold cursor-pointer hover:bg-blue-100 transition">Beli Storan</button>
-                    <button onClick={() => setMorePage("resources")} className="py-2.5 bg-slate-50 border border-slate-200 text-slate-600 rounded-xl text-xs font-bold cursor-pointer hover:bg-slate-100 transition">Lihat Penggunaan</button>
+                    <button onClick={() => setMorePage("tetapan")} className="py-2.5 bg-slate-50 border border-slate-200 text-slate-600 rounded-xl text-xs font-bold cursor-pointer hover:bg-slate-100 transition">Lihat Penggunaan</button>
                   </div>
                 </div>
 
@@ -5145,9 +5188,9 @@ export function OwnerDashboard() {
             )}
 
             {/* â•â•â• RESOURCE SETTINGS â€" Feature 5 â•â•â• */}
-            {morePage === "resources" && (
+            {morePage === "tetapan" && (
               <div className="space-y-4">
-                <h2 className="text-lg font-bold text-slate-900">Tetapan Sumber</h2>
+                <h2 className="text-lg font-bold text-slate-900">Sumber &amp; Storan</h2>
 
                 {/* AI Source */}
                 <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm space-y-3">
