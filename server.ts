@@ -1557,13 +1557,37 @@ Output ONLY raw JSON matching this shape exactly, no markdown fences, no extra t
   }
 
   // POST /api/statement/process/start
-  // Accepts PDF extracted text (already decoded by client), creates a job row,
-  // returns jobId immediately, fires runStatementAnalysis() in background.
+  // Accepts raw PDF as fileDataUrl, extracts text server-side via pdf-parse,
+  // creates a job row, returns jobId immediately, fires runStatementAnalysis() in background.
   // Non-Negotiable Rule #4: blocks if another active import exists for this workspace.
   app.post("/api/statement/process/start", async (req, res) => {
-    const { fileDataText, fileName, tenantId, workspaceId, userId } = req.body || {};
-    if (!fileDataText || !fileName) {
-      return res.status(400).json({ error: "fileDataText and fileName are required." });
+    const { fileDataUrl, fileName, tenantId, workspaceId, userId } = req.body || {};
+    if (!fileDataUrl || !fileName) {
+      return res.status(400).json({ error: "fileDataUrl and fileName are required." });
+    }
+
+    // Extract PDF text server-side (same as runOcrAnalysis — reuses existing pdf-parse dep).
+    let fileDataText: string;
+    try {
+      const matchPdf = (fileDataUrl as string).match(/^data:([^;]+);base64,(.+)$/);
+      const mimeType = matchPdf ? matchPdf[1] : "";
+      const base64Data = matchPdf ? matchPdf[2] : (fileDataUrl as string);
+      if (!mimeType.includes("pdf") && !fileName.toLowerCase().endsWith(".pdf")) {
+        return res.status(400).json({ error: "Hanya fail PDF dibenarkan untuk Bank Statement Import.", code: "NOT_A_PDF" });
+      }
+      const pdfBuffer = Buffer.from(base64Data, "base64");
+      const parser = new PDFParse({ data: pdfBuffer });
+      const result = await parser.getText();
+      fileDataText = (result.text || "").trim();
+      if (!fileDataText) {
+        return res.status(422).json({
+          error: "PDF ini tidak mengandungi teks yang boleh dibaca. Sila muat naik PDF dengan lapisan teks sebenar.",
+          code: "PDF_NO_TEXT_LAYER",
+        });
+      }
+    } catch (pdfErr: any) {
+      console.error("[STMT/start] PDF extraction failed:", pdfErr?.message || pdfErr);
+      return res.status(422).json({ error: "Gagal membaca teks daripada PDF ini.", code: "PDF_EXTRACTION_FAILED" });
     }
     const access = await verifyTenantAccess(req, tenantId, workspaceId);
     if (!access.ok) {

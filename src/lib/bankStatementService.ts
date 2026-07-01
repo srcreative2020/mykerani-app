@@ -40,51 +40,12 @@ async function apiFetch(path: string, options: RequestInit = {}): Promise<Respon
   });
 }
 
-// ─── PDF text extraction (client-side, before upload) ─────────────────────────
-// The server never stores the raw base64 binary — only extracted text is stored
-// in file_data_text so that: (a) storage is minimal, (b) resume works without
-// re-uploading the file, (c) the user's file never needs to be re-read.
-
-export async function extractPdfText(fileDataUrl: string): Promise<{ text: string; pages: number | null }> {
-  // Dynamic import to avoid bundling pdf-parse on the server bundle.
-  // On the client we use pdfjs-dist which is already a dependency via OCREngineConsole.
-  const pdfjsLib = await import("pdfjs-dist");
-
-  // Set worker source — Vite exposes the worker URL via ?url import.
-  if (!pdfjsLib.GlobalWorkerOptions.workerSrc) {
-    pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
-      "pdfjs-dist/build/pdf.worker.mjs",
-      import.meta.url
-    ).toString();
-  }
-
-  const match = fileDataUrl.match(/^data:[^;]+;base64,(.+)$/);
-  const base64Data = match ? match[1] : fileDataUrl;
-  const binaryString = atob(base64Data);
-  const bytes = new Uint8Array(binaryString.length);
-  for (let i = 0; i < binaryString.length; i++) bytes[i] = binaryString.charCodeAt(i);
-
-  const loadingTask = pdfjsLib.getDocument({ data: bytes });
-  const pdf = await loadingTask.promise;
-  const pages = pdf.numPages;
-  const textParts: string[] = [];
-
-  for (let p = 1; p <= pages; p++) {
-    const page = await pdf.getPage(p);
-    const content = await page.getTextContent();
-    const pageText = content.items
-      .map((item: any) => ("str" in item ? item.str : ""))
-      .join(" ");
-    textParts.push(pageText);
-  }
-
-  return { text: textParts.join("\n").trim(), pages };
-}
-
 // ─── Start a new import ───────────────────────────────────────────────────────
 // ONLY called for a fresh file. Never call this for a resume.
 // Returns { jobId } on success, or an ActiveImportConflict if Rule #4 fires.
 
+// Sends raw fileDataUrl to the server; server extracts PDF text via pdf-parse
+// and stores it in file_data_text for resume without re-upload.
 export async function startImport(
   req: StartImportRequest
 ): Promise<StartImportResponse | ActiveImportConflict> {

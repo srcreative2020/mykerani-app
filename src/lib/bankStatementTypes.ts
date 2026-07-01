@@ -77,7 +77,7 @@ export interface ActiveImportConflict {
 
 // What the client must pass to /api/statement/process/start.
 export interface StartImportRequest {
-  fileDataText: string;   // PDF text extracted client-side
+  fileDataUrl: string;    // Raw PDF as data URL — server extracts text via pdf-parse
   fileName: string;
   tenantId: string;
   workspaceId: string;
