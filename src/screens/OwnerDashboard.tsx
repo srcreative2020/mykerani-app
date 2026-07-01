@@ -2011,7 +2011,7 @@ export function OwnerDashboard() {
   ];
 
   return (
-    <div className="h-screen flex flex-col lg:flex-row overflow-hidden mk-dark" id="owner_root" style={{background:"#07100a"}}>
+    <div className="h-screen flex flex-col lg:flex-row overflow-hidden mk-dark" id="owner_root" style={{background:"#F7F6F2"}}>
       <style>{`
         #owner_root .bg-emerald-700{background-color:#5A9E7A!important}
         #owner_root .bg-emerald-800{background-color:#3D7057!important}
@@ -2039,7 +2039,7 @@ export function OwnerDashboard() {
         {/* Brand */}
         <div className="px-4 py-4 border-b border-slate-100 shrink-0">
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-xl bg-emerald-600 flex items-center justify-center text-white font-bold text-sm shrink-0" style={{boxShadow:"0 0 12px rgba(34,197,94,0.35)"}}>MK</div>
+            <div className="w-8 h-8 rounded-xl bg-emerald-600 flex items-center justify-center text-white font-bold text-sm shrink-0" style={{boxShadow:"0 2px 8px rgba(34,197,94,0.20)"}}>MK</div>
             <div className="min-w-0">
               <div className="flex items-center gap-1.5">
                 <span className="font-bold text-slate-900 text-sm">MYKERANI</span>
@@ -2136,7 +2136,7 @@ export function OwnerDashboard() {
       {/* ── HEADER ── */}
       <header className="bg-white border-b border-slate-100 px-4 py-3 flex items-center justify-between shrink-0 z-30" id="owner_header">
         <div className="flex items-center space-x-2.5">
-          <div className="w-8 h-8 rounded-xl bg-emerald-600 flex items-center justify-center text-white font-bold text-sm shrink-0" style={{boxShadow:"0 0 10px rgba(34,197,94,0.3)"}}>MK</div>
+          <div className="w-8 h-8 rounded-xl bg-emerald-600 flex items-center justify-center text-white font-bold text-sm shrink-0" style={{boxShadow:"0 2px 6px rgba(34,197,94,0.18)"}}>MK</div>
           <div>
             <div className="flex items-center space-x-1.5">
               <span className="font-bold text-slate-900 text-sm">MYKERANI</span>
@@ -2766,15 +2766,15 @@ export function OwnerDashboard() {
 
             {/* KPI cards — 2-col on mobile, 5-col on desktop */}
             <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 lg:gap-4">
-              <div className="bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-2xl p-4 text-white shadow">
-                <p className="text-xs text-emerald-100">Pendapatan</p>
-                <p className="text-xl font-bold mt-1">RM {incomeInPeriod.toLocaleString("ms-MY", { minimumFractionDigits: 2 })}</p>
-                <TrendingUp className="w-4 h-4 text-emerald-200 mt-1" />
+              <div className="bg-emerald-50 border border-emerald-100 rounded-2xl p-4 shadow-sm">
+                <p className="text-xs text-emerald-600 font-medium">Pendapatan</p>
+                <p className="text-xl font-bold mt-1 text-emerald-700">RM {incomeInPeriod.toLocaleString("ms-MY", { minimumFractionDigits: 2 })}</p>
+                <TrendingUp className="w-4 h-4 text-emerald-400 mt-1" />
               </div>
-              <div className="bg-gradient-to-br from-rose-500 to-pink-600 rounded-2xl p-4 text-white shadow">
-                <p className="text-xs text-rose-100">Perbelanjaan</p>
-                <p className="text-xl font-bold mt-1">RM {expenseInPeriod.toLocaleString("ms-MY", { minimumFractionDigits: 2 })}</p>
-                <TrendingDown className="w-4 h-4 text-rose-200 mt-1" />
+              <div className="bg-rose-50 border border-rose-100 rounded-2xl p-4 shadow-sm">
+                <p className="text-xs text-rose-500 font-medium">Perbelanjaan</p>
+                <p className="text-xl font-bold mt-1 text-rose-600">RM {expenseInPeriod.toLocaleString("ms-MY", { minimumFractionDigits: 2 })}</p>
+                <TrendingDown className="w-4 h-4 text-rose-300 mt-1" />
               </div>
               <div className={`col-span-2 lg:col-span-1 rounded-2xl p-4 shadow-sm border bg-white ${(incomeInPeriod - expenseInPeriod) >= 0 ? "border-emerald-100" : "border-rose-100"}`}>
                 <p className="text-xs text-slate-500">Untung / Rugi</p>
