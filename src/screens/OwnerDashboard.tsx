@@ -2011,7 +2011,7 @@ export function OwnerDashboard() {
   ];
 
   return (
-    <div className="h-screen flex flex-col lg:flex-row overflow-hidden" id="owner_root" style={{background:"#F4F8F5"}}>
+    <div className="h-screen flex flex-col lg:flex-row overflow-hidden mk-dark" id="owner_root" style={{background:"#07100a"}}>
       <style>{`
         #owner_root .bg-emerald-700{background-color:#5A9E7A!important}
         #owner_root .bg-emerald-800{background-color:#3D7057!important}
@@ -2039,11 +2039,11 @@ export function OwnerDashboard() {
         {/* Brand */}
         <div className="px-4 py-4 border-b border-slate-100 shrink-0">
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-xl bg-slate-900 flex items-center justify-center text-white font-bold text-sm shadow-sm shrink-0">MK</div>
+            <div className="w-8 h-8 rounded-xl bg-emerald-600 flex items-center justify-center text-white font-bold text-sm shrink-0" style={{boxShadow:"0 0 12px rgba(34,197,94,0.35)"}}>MK</div>
             <div className="min-w-0">
               <div className="flex items-center gap-1.5">
                 <span className="font-bold text-slate-900 text-sm">MYKERANI</span>
-                <span className="text-3xs font-bold bg-slate-900 text-white px-1.5 py-0.5 rounded-md">V1.0</span>
+                <span className="text-3xs font-bold bg-emerald-600 text-white px-1.5 py-0.5 rounded-md">V1.0</span>
               </div>
               {activeWorkspace && <p className="text-2xs text-slate-400 leading-none mt-0.5 truncate">{activeWorkspace.name}</p>}
             </div>
@@ -2136,11 +2136,11 @@ export function OwnerDashboard() {
       {/* ── HEADER ── */}
       <header className="bg-white border-b border-slate-100 px-4 py-3 flex items-center justify-between shrink-0 z-30" id="owner_header">
         <div className="flex items-center space-x-2.5">
-          <div className="w-8 h-8 rounded-xl bg-slate-900 flex items-center justify-center text-white font-bold text-sm shadow-sm">MK</div>
+          <div className="w-8 h-8 rounded-xl bg-emerald-600 flex items-center justify-center text-white font-bold text-sm shrink-0" style={{boxShadow:"0 0 10px rgba(34,197,94,0.3)"}}>MK</div>
           <div>
             <div className="flex items-center space-x-1.5">
               <span className="font-bold text-slate-900 text-sm">MYKERANI</span>
-              <span className="text-3xs font-bold bg-slate-900 text-white px-1.5 py-0.5 rounded-md">V1.0</span>
+              <span className="text-3xs font-bold bg-emerald-600 text-white px-1.5 py-0.5 rounded-md">V1.0</span>
             </div>
             {activeWorkspace && <p className="text-2xs text-slate-400 leading-none mt-0.5">{activeWorkspace.name}</p>}
           </div>
@@ -5046,7 +5046,7 @@ export function OwnerDashboard() {
                     <div className="pt-2 border-t border-slate-100 space-y-1">
                       <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 4 }}>Histori Promosi</div>
                       {promoHistory.slice(0, 3).map((r: any) => (
-                        <div key={r.id} style={{ fontSize: 12, color: '#555', padding: '3px 0' }}>
+                        <div key={r.id} className="text-slate-500" style={{ fontSize: 12, padding: '3px 0' }}>
                           {r.promotions?.code} — {r.promotions?.kind === 'wallet_credit' ? `+${r.promotions?.amount} kredit` : `+${r.promotions?.amount} hari trial`} ({new Date(r.redeemed_at).toLocaleDateString('ms-MY')})
                         </div>
                       ))}

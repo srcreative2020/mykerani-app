@@ -1178,7 +1178,7 @@ export function StaffHomeScreen() {
   ];
 
   return (
-    <div className="h-screen flex flex-col lg:flex-row overflow-hidden" id="staff_root" style={{background:"#F4F8F5"}}>
+    <div className="h-screen flex flex-col lg:flex-row overflow-hidden mk-dark" id="staff_root" style={{background:"#07100a"}}>
       <style>{`
         #staff_root .bg-emerald-700{background-color:#5A9E7A!important}
         #staff_root .bg-emerald-800{background-color:#3D7057!important}
@@ -1203,11 +1203,11 @@ export function StaffHomeScreen() {
       <aside className="hidden lg:flex flex-col w-60 xl:w-64 bg-white border-r border-slate-100 shrink-0 z-20" id="staff_sidebar">
         <div className="px-4 py-4 border-b border-slate-100 shrink-0">
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-xl bg-slate-900 flex items-center justify-center text-white font-bold text-sm shadow-sm shrink-0">MK</div>
+            <div className="w-8 h-8 rounded-xl bg-emerald-600 flex items-center justify-center text-white font-bold text-sm shrink-0" style={{boxShadow:"0 0 12px rgba(34,197,94,0.35)"}}>MK</div>
             <div className="min-w-0">
               <div className="flex items-center gap-1.5">
                 <span className="font-bold text-slate-900 text-sm">MYKERANI</span>
-                <span className="text-3xs font-bold bg-slate-900 text-white px-1.5 py-0.5 rounded-md">V1.0</span>
+                <span className="text-3xs font-bold bg-emerald-600 text-white px-1.5 py-0.5 rounded-md">V1.0</span>
               </div>
               {activeWorkspace && <p className="text-2xs text-slate-400 leading-none mt-0.5 truncate">{activeWorkspace.name}</p>}
             </div>
@@ -1225,7 +1225,7 @@ export function StaffHomeScreen() {
               <button key={id}
                 onClick={() => setActiveTab(id)}
                 className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition cursor-pointer text-left ${
-                  active ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+                  active ? "bg-emerald-600 text-white" : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
                 }`}>
                 <Icon className={`w-4 h-4 shrink-0 ${active ? "text-white" : "text-slate-400"}`} />
                 <span>{label}</span>
@@ -1256,11 +1256,11 @@ export function StaffHomeScreen() {
       {/* â"€â"€ HEADER â"€â"€ */}
       <header className="bg-white border-b border-slate-100 px-4 py-3 flex items-center justify-between shrink-0" id="staff_header">
         <div className="flex items-center space-x-2.5">
-          <div className="w-8 h-8 rounded-xl bg-slate-900 flex items-center justify-center text-white font-bold text-sm shadow-sm">MK</div>
+          <div className="w-8 h-8 rounded-xl bg-emerald-600 flex items-center justify-center text-white font-bold text-sm shrink-0" style={{boxShadow:"0 0 10px rgba(34,197,94,0.3)"}}>MK</div>
           <div>
             <div className="flex items-center space-x-1.5">
               <span className="font-bold text-slate-900 text-sm">MYKERANI</span>
-              <span className="text-3xs font-bold bg-slate-900 text-white px-1.5 py-0.5 rounded-md">V1.0</span>
+              <span className="text-3xs font-bold bg-emerald-600 text-white px-1.5 py-0.5 rounded-md">V1.0</span>
             </div>
             {activeWorkspace && <p className="text-2xs text-slate-400 leading-none mt-0.5">{activeWorkspace.name}</p>}
           </div>

@@ -1,5 +1,6 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&family=Space+Grotesk:wght@400;500;600;700&display=swap');
 @import "tailwindcss";
+@import "./styles/mk-tenant-theme.css";
 
 @theme {
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
@@ -9,4 +10,21 @@
   --text-3xs--line-height: 0.75rem;   /* 12px */
   --text-2xs: 0.625rem;        /* 10px */
   --text-2xs--line-height: 0.875rem;  /* 14px */
+
+  /* ── MYKERANI TENANT THEME DESIGN TOKENS ── */
+  --color-mk-bg:          #07100a;
+  --color-mk-surface:     #0d1a10;
+  --color-mk-surface-2:   #112018;
+  --color-mk-surface-3:   #162b1c;
+  --color-mk-border:      #1c2e21;
+  --color-mk-border-2:    #253a28;
+  --color-mk-accent:      #22c55e;
+  --color-mk-accent-2:    #4ade80;
+  --color-mk-accent-3:    #16a34a;
+  --color-mk-accent-dim:  #052e16;
+  --color-mk-accent-mid:  #14532d;
+  --color-mk-text:        #e8f4ea;
+  --color-mk-text-2:      #a3bfa6;
+  --color-mk-text-muted:  #5d7a61;
+  --color-mk-danger-bg:   #1a0808;
 }
