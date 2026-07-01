@@ -102,6 +102,9 @@ export interface DocumentsManagerProps {
    * undefined) to hide the "buy addon" affordance for roles that cannot buy
    * storage — the document upload/OCR/review engine itself is unaffected. */
   onBuyAddon?: () => void;
+  /** When provided, shows the "Import Penyata Bank AI" entry card grouped with
+   * the existing "Penyata Bank" OCR upload button. */
+  onBankStatementImport?: () => void;
   /** Controlled docs list — the caller (Owner) keeps its own `docs` state in
    * sync because its notification engine also reads it outside this tab. */
   docs: UploadedDoc[];
@@ -113,7 +116,7 @@ export function DocumentsManager({
   currentUserFullName, isMockUser, activeSessionId, userNameById, storageQuota, financialEvents,
   businesses, businessBranches, ocrLearnedPatterns,
   addFinancialEventAwaited, addFinancialEventsBatch, addFinancialEvidencePackage,
-  learnOcrPattern, learnOcrPatternsBatch, onBuyAddon,
+  learnOcrPattern, learnOcrPatternsBatch, onBuyAddon, onBankStatementImport,
   docs, onDocsChange: setDocs,
 }: DocumentsManagerProps) {
   const [docsLoading, setDocsLoading] = useState(false);
@@ -821,11 +824,10 @@ export function DocumentsManager({
         )}
 
         {/* Upload buttons */}
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-2 gap-3">
           {([
             { label: "Muat Naik Resit",  docType: "RECEIPT" as DocType,        icon: Receipt,         bg: "bg-amber-50 border-amber-100 text-amber-500" },
             { label: "Muat Naik Invois", docType: "INVOICE" as DocType,        icon: FileSpreadsheet, bg: "bg-blue-50 border-blue-100 text-blue-500" },
-            { label: "Penyata Bank",     docType: "BANK_STATEMENT" as DocType, icon: Landmark,        bg: "bg-violet-50 border-violet-100 text-violet-500" },
           ]).map(({ label, docType, icon: Icon, bg }) => (
             <button key={docType} onClick={() => triggerUpload(docType)} disabled={!!uploadingDoc || storageQuota.isFrozen}
               className={`flex flex-col items-center space-y-2 p-4 bg-white border rounded-2xl shadow-sm hover:shadow-md transition cursor-pointer disabled:opacity-50 ${bg}`}>
@@ -837,6 +839,41 @@ export function DocumentsManager({
               <span className="text-xs font-semibold text-slate-700 text-center leading-tight">{label}</span>
             </button>
           ))}
+        </div>
+
+        {/* Penyata Bank — two options side-by-side so the user immediately sees both modes */}
+        <div className="rounded-2xl border border-violet-200 bg-violet-50 p-3 space-y-2">
+          <p className="text-xs font-bold text-violet-700 px-1">Penyata Bank</p>
+          <div className="grid grid-cols-2 gap-2">
+            {/* OCR Standard */}
+            <button
+              onClick={() => triggerUpload("BANK_STATEMENT")}
+              disabled={!!uploadingDoc || storageQuota.isFrozen}
+              className="flex flex-col gap-1 p-3 bg-white border border-violet-200 rounded-xl shadow-sm hover:shadow-md hover:border-violet-400 transition cursor-pointer disabled:opacity-50 text-left"
+            >
+              <div className="flex items-center gap-2">
+                {uploadingDoc === "BANK_STATEMENT"
+                  ? <RefreshCw className="w-4 h-4 text-violet-500 animate-spin" />
+                  : <Landmark className="w-4 h-4 text-violet-500" />}
+                <span className="text-xs font-bold text-slate-800">OCR Standard</span>
+              </div>
+              <p className="text-2xs text-slate-500 leading-snug">Sesuai untuk penyata biasa (1–100 halaman).</p>
+            </button>
+            {/* Import AI — only shown when caller wires the handler */}
+            {onBankStatementImport ? (
+              <button
+                onClick={onBankStatementImport}
+                className="flex flex-col gap-1 p-3 bg-indigo-600 border border-indigo-600 rounded-xl shadow-sm hover:bg-indigo-700 hover:shadow-md transition cursor-pointer text-left"
+              >
+                <div className="flex items-center gap-2">
+                  <span className="text-sm">🏦</span>
+                  <span className="text-xs font-bold text-white">Import AI</span>
+                  <span className="ml-auto text-2xs font-bold text-indigo-200 bg-indigo-500 rounded px-1 py-0.5">BARU</span>
+                </div>
+                <p className="text-2xs text-indigo-100 leading-snug">Direka untuk penyata besar (100+ halaman). Menyokong Jeda, Sambung &amp; Pemulihan Draf.</p>
+              </button>
+            ) : null}
+          </div>
         </div>
 
         {/* Lain-lain */}

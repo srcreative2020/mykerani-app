@@ -1662,42 +1662,31 @@ export function StaffHomeScreen() {
 
         {/* â•â•â•â• MUAT NAIK â•â•â•â• */}
         {activeTab === "documents" && !showBankStatementImport && (
-          <div className="flex-1 overflow-y-auto">
-            <div className="max-w-2xl mx-auto px-4 pt-4">
-              <button
-                onClick={() => setShowBankStatementImport(true)}
-                className="w-full flex items-center gap-3 px-4 py-3 mb-4 rounded-xl border-2 border-dashed border-indigo-300 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 transition font-semibold text-sm"
-              >
-                <span className="text-xl">🏦</span>
-                <span>Import Penyata Bank</span>
-                <span className="ml-auto text-indigo-400">›</span>
-              </button>
-            </div>
-            <DocumentsManager
-              workspaceId={wsId}
-              workspaceName={activeWorkspace?.name || ""}
-              tenantId={activeWorkspace?.tenantId}
-              currentUserId={user?.id}
-              currentUserEmail={user?.email}
-              currentUserRole="TENANT_STAFF"
-              currentUserFullName={user?.fullName}
-              isMockUser={isMockUser}
-              activeSessionId={activeSessionId}
-              userNameById={userNameById}
-              storageQuota={storageQuota}
-              financialEvents={financialEvents}
-              businesses={businesses}
-              businessBranches={businessBranches}
-              ocrLearnedPatterns={ocrLearnedPatterns}
-              addFinancialEventAwaited={addFinancialEventAwaited}
-              addFinancialEventsBatch={addFinancialEventsBatch}
-              addFinancialEvidencePackage={addFinancialEvidencePackage}
-              learnOcrPattern={learnOcrPattern}
-              learnOcrPatternsBatch={learnOcrPatternsBatch}
-              docs={docs}
-              onDocsChange={setDocs}
-            />
-          </div>
+          <DocumentsManager
+            workspaceId={wsId}
+            workspaceName={activeWorkspace?.name || ""}
+            tenantId={activeWorkspace?.tenantId}
+            currentUserId={user?.id}
+            currentUserEmail={user?.email}
+            currentUserRole="TENANT_STAFF"
+            currentUserFullName={user?.fullName}
+            isMockUser={isMockUser}
+            activeSessionId={activeSessionId}
+            userNameById={userNameById}
+            storageQuota={storageQuota}
+            financialEvents={financialEvents}
+            businesses={businesses}
+            businessBranches={businessBranches}
+            ocrLearnedPatterns={ocrLearnedPatterns}
+            addFinancialEventAwaited={addFinancialEventAwaited}
+            addFinancialEventsBatch={addFinancialEventsBatch}
+            addFinancialEvidencePackage={addFinancialEvidencePackage}
+            learnOcrPattern={learnOcrPattern}
+            learnOcrPatternsBatch={learnOcrPatternsBatch}
+            onBankStatementImport={() => setShowBankStatementImport(true)}
+            docs={docs}
+            onDocsChange={setDocs}
+          />
         )}
         {activeTab === "documents" && showBankStatementImport && (
           <BankStatementProcessor
