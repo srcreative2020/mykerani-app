@@ -235,6 +235,90 @@ Larangan berikut berkuat kuasa serta-merta dan tidak boleh dilanggar tanpa kelul
 
 ---
 
+## Addendum — Commercial Unit Definition (LOCKED 2026-07-02)
+
+> **Nota:** Seksyen ini ditambah pada tarikh yang sama dengan versi asal sebagai tambahan kepada Prinsip 4. Ia mengunci secara rasmi definisi unit bagi setiap komponen komersial MYKERANI. Sebarang sistem, AI, atau pembangun yang berhadapan dengan dokumen ini **WAJIB** menggunakan definisi ini sebagai rujukan mutlak — bukan andaian atau logik lain.
+
+### Jadual Definisi Unit Rasmi
+
+| Komponen | Definisi Rasmi | Cara Kira | Nota Larangan |
+|---|---|---|---|
+| **Resit** | 1 fail = 1 kuota | Bilangan fail | ❌ Jangan kira ikut saiz fail, token, atau muka surat |
+| **Invois** | 1 fail = 1 kuota | Bilangan fail | ❌ Jangan kira ikut saiz fail, token, atau muka surat |
+| **Bil** | 1 fail = 1 kuota | Bilangan fail | ❌ Jangan kira ikut saiz fail, token, atau muka surat |
+| **Penyata Bank** | 1 muka surat = 1 kuota | Bilangan muka surat PDF | ❌ **JANGAN kira ikut bilangan fail** — 1 fail PDF 20 muka surat = 20 kuota, bukan 1 |
+| **AI Financial Assistant** | Tidak dipaparkan sebagai kuota | Dikawal oleh Cost Engine | ❌ Jangan tunjuk token, kredit, atau had kepada tenant |
+| **Storan** | Dipaparkan dalam GB | `storage_limit_bytes ÷ 1,073,741,824` | ❌ Jangan papar dalam MB, KB, atau bytes kepada tenant |
+| **Pengguna** | Dipaparkan sebagai bilangan bulat | `features->>'maxUsers'` dari `subscription_plans` | ❌ Jangan sebut "seats" atau "licences" dalam bahasa tenant |
+
+### Rasional Kira Penyata Bank Ikut Muka Surat
+
+Keputusan mengira penyata bank berdasarkan **muka surat** (bukan fail) adalah keputusan perniagaan yang sedar:
+
+1. **Melindungi kos OCR** — setiap muka surat diproses secara berasingan oleh enjin OCR
+2. **Melindungi kos AI** — lebih banyak teks = lebih banyak token AI digunakan
+3. **Adil kepada tenant** — tenant dengan penyata 5 muka surat membayar 5×, bukan sama dengan tenant yang ada penyata 200 muka surat
+4. **Mudah dijelaskan** — "anda ada 500 muka surat penyata bank" lebih jelas daripada "anda ada 500 OCR credits"
+
+**Keputusan ini adalah muktamad.** Jika terdapat sistem lain, cadangan lain, atau AI lain yang mencadangkan kira penyata bank ikut fail — cadangan itu SALAH dan WAJIB ditolak.
+
+---
+
+## Addendum — Future Commercial Rule (LOCKED 2026-07-02)
+
+> **Nota:** Seksyen ini mengunci prinsip kekal bagi evolusi model komersial MYKERANI pada masa hadapan, termasuk apabila strategi pemasaran, harga, atau pakej berubah.
+
+### Peraturan Evolusi Komersial
+
+**Commercial Layer BOLEH berubah.** Harga, nama pakej, jumlah resit per plan, tempoh trial, jenis promosi — semua ini boleh diubah mengikut keperluan perniagaan dan strategi pemasaran tanpa memerlukan perubahan kepada dokumen ini, selagi perubahan tersebut tidak melanggar prinsip di bawah.
+
+**Internal Engine TIDAK BOLEH berubah tanpa proses ADR baharu.** Enjin-enjin berikut kekal sebagai **Single Source of Truth** dalaman untuk semua pengiraan, tanpa mengira bagaimana Commercial Layer berubah:
+
+```
+KEKAL TIDAK BERUBAH (Internal Engine — Single Source of Truth):
+┌─────────────────────────────────────────────────────────────┐
+│  Cost Engine        → sumber kos sebenar (USD per unit)     │
+│  AI Ledger          → log sebenar penggunaan AI             │
+│  OCR Ledger         → log sebenar penggunaan OCR            │
+│  Resource Wallet    → baki kredit sebenar per workspace      │
+│  Billing Engine     → rekod bayaran dan langganan           │
+│  Storage Ledger     → penggunaan storan sebenar             │
+└─────────────────────────────────────────────────────────────┘
+                              ↑
+          Lapisan ini tidak berubah walaupun:
+          - Nama pakej bertukar
+          - Harga naik atau turun
+          - Jenis promosi baharu ditambah
+          - Mata wang bertukar
+          - Model AI berganti
+          - Gateway pembayaran bertukar
+
+BOLEH BERUBAH (Commercial Layer — ikut strategi):
+┌─────────────────────────────────────────────────────────────┐
+│  Nama pakej (Starter → Basic → Lite)                        │
+│  Harga (RM29 → RM39)                                        │
+│  Kuantiti resit per plan (100 → 200)                        │
+│  Tempoh trial (14 hari → 30 hari)                           │
+│  Jenis promosi (% diskaun, kredit bonus)                    │
+│  Bahasa paparan tenant                                      │
+│  Struktur add-on                                            │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Panduan untuk Pembangun Masa Hadapan
+
+Apabila anda membaca dokumen ini dan ingin membuat perubahan kepada sistem komersial MYKERANI, tanya soalan-soalan ini dahulu:
+
+| Soalan | Jawapan Yang Selamat | Amaran |
+|---|---|---|
+| Adakah perubahan ini menyentuh Internal Engine? | Tidak — hanya Commercial Layer | ⚠️ Jika ya, wajib buka ADR baharu |
+| Adakah paparan baharu mendedahkan istilah dalaman kepada tenant? | Tidak | ❌ Jika ya, tolak dan gunakan CTL |
+| Adakah unit kuota mengikut definisi dalam Jadual Definisi Unit Rasmi? | Ya | ❌ Jika tidak, definisi perlu kelulusan pemilik |
+| Adakah nilai plan dibaca dari `subscription_plans` dalam Supabase? | Ya | ❌ Jika hardcode, ia mesti dihapuskan |
+| Adakah `commercial_config_items` atau `hq_feature_flags` yang sepatutnya mengawal polisi ini? | Ya | ❌ Jika nilai hardcode dalam kod, ia mesti dipindahkan |
+
+---
+
 ## Sebab Keputusan Ini
 
 1. **Melindungi margin:** Jika tenant tahu kos sebenar AI per call, mereka boleh bandingkan dengan harga pasaran dan mempersoalkan margin.
