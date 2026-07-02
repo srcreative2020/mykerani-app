@@ -772,6 +772,7 @@ export function OwnerDashboard() {
     id: string; name: string; price: number;
     features: string[]; limitations: string[]; isTrial: boolean; isCustomPricing: boolean;
     maxUsers: number | null;
+    storageMb: number | null;  // W4.4: storage_credits_allowance_mb for downgrade check
   }
   const [availablePlans, setAvailablePlans] = useState<PlanOption[]>([]);
   const [currentSub, setCurrentSub] = useState<{ planId: string; planName: string; price: number; status: string; renewal: string; periodEndRaw: string | null; maxUsersAllowed: number | null } | null>(null);
@@ -792,12 +793,13 @@ export function OwnerDashboard() {
   useEffect(() => {
     if (!isSupabaseConfigured() || !supabase || !activeTenant?.id) return;
     let active = true;
-    supabase.from("subscription_plans").select("id,name,monthly_price_myr,features").order("monthly_price_myr", { ascending: true })
+    supabase.from("subscription_plans").select("id,name,monthly_price_myr,features,storage_credits_allowance_mb").order("monthly_price_myr", { ascending: true })
       .then(({ data }) => { if (active) setAvailablePlans((data || []).map((p: any) => ({
         id: p.id, name: p.name, price: Number(p.monthly_price_myr) || 0,
         features: p.features?.featureList ?? [], limitations: p.features?.limitations ?? [],
         isTrial: p.features?.isTrial ?? false, isCustomPricing: p.features?.isCustomPricing ?? false,
         maxUsers: typeof p.features?.maxUsers === 'number' ? p.features.maxUsers : null,
+        storageMb: typeof p.storage_credits_allowance_mb === 'number' ? p.storage_credits_allowance_mb : null,
       }))); });
     supabase.from("payment_gateway_settings").select("chip_asia_enabled,manual_payment_enabled").eq("id", "global").maybeSingle()
       .then(({ data }) => { if (active && data) setPaymentMethods({ chipAsiaEnabled: Boolean(data.chip_asia_enabled), manualPaymentEnabled: Boolean(data.manual_payment_enabled) }); });
@@ -885,15 +887,28 @@ export function OwnerDashboard() {
     if (!paymentModalPlanId) return;
     const plan = availablePlans.find(p => p.id === paymentModalPlanId);
     if (!plan) return;
-    // W3.5 — Plan downgrade pre-condition checklist
+    // W3.5 / W4.4 — Plan downgrade pre-condition checklist (staff count + storage)
     if (currentSub) {
       const currentPlanOption = availablePlans.find(p => p.id === currentSub.planId);
       const isDowngrade = currentPlanOption && plan.price < currentPlanOption.price;
-      if (isDowngrade && plan.maxUsers != null) {
-        const activeStaff = userRoles.filter(r => r.role === 'TENANT_STAFF').length;
-        if (activeStaff > plan.maxUsers) {
-          setPaymentError(`Tidak dapat turun taraf: pelan "${plan.name}" hanya membenarkan ${plan.maxUsers} staf, tetapi anda kini mempunyai ${activeStaff} staf aktif. Sila kurangkan bilangan staf terlebih dahulu.`);
-          return;
+      if (isDowngrade) {
+        // W3.5: staff count vs new plan maxUsers
+        if (plan.maxUsers != null) {
+          const activeStaff = userRoles.filter(r => r.role === 'TENANT_STAFF').length;
+          if (activeStaff > plan.maxUsers) {
+            setPaymentError(`Tidak dapat turun taraf: pelan "${plan.name}" hanya membenarkan ${plan.maxUsers} staf, tetapi anda kini mempunyai ${activeStaff} staf aktif. Sila kurangkan bilangan staf terlebih dahulu.`);
+            return;
+          }
+        }
+        // W4.4: storage usage vs new plan storage allowance
+        if (plan.storageMb != null) {
+          const newPlanStorageBytes = plan.storageMb * 1024 * 1024;
+          if (storageQuota.usedBytes > newPlanStorageBytes) {
+            const usedGb = (storageQuota.usedBytes / (1024 * 1024 * 1024)).toFixed(2);
+            const allowedGb = (plan.storageMb / 1024).toFixed(1);
+            setPaymentError(`Tidak dapat turun taraf: penggunaan storan semasa anda (${usedGb} GB) melebihi had pelan "${plan.name}" (${allowedGb} GB). Sila padam fail lama sebelum menukar pelan.`);
+            return;
+          }
         }
       }
     }
