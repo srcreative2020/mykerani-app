@@ -771,9 +771,10 @@ export function OwnerDashboard() {
   interface PlanOption {
     id: string; name: string; price: number;
     features: string[]; limitations: string[]; isTrial: boolean; isCustomPricing: boolean;
+    maxUsers: number | null;
   }
   const [availablePlans, setAvailablePlans] = useState<PlanOption[]>([]);
-  const [currentSub, setCurrentSub] = useState<{ planId: string; planName: string; price: number; status: string; renewal: string; periodEndRaw: string | null } | null>(null);
+  const [currentSub, setCurrentSub] = useState<{ planId: string; planName: string; price: number; status: string; renewal: string; periodEndRaw: string | null; maxUsersAllowed: number | null } | null>(null);
   const [paymentSuccessToast, setPaymentSuccessToast] = useState<string | null>(null);
   const [paymentMethods, setPaymentMethods] = useState({ chipAsiaEnabled: false, manualPaymentEnabled: true });
   const [paymentTxs, setPaymentTxs] = useState<TenantPaymentTransaction[]>([]);
@@ -796,10 +797,11 @@ export function OwnerDashboard() {
         id: p.id, name: p.name, price: Number(p.monthly_price_myr) || 0,
         features: p.features?.featureList ?? [], limitations: p.features?.limitations ?? [],
         isTrial: p.features?.isTrial ?? false, isCustomPricing: p.features?.isCustomPricing ?? false,
+        maxUsers: typeof p.features?.maxUsers === 'number' ? p.features.maxUsers : null,
       }))); });
     supabase.from("payment_gateway_settings").select("chip_asia_enabled,manual_payment_enabled").eq("id", "global").maybeSingle()
       .then(({ data }) => { if (active && data) setPaymentMethods({ chipAsiaEnabled: Boolean(data.chip_asia_enabled), manualPaymentEnabled: Boolean(data.manual_payment_enabled) }); });
-    supabase.from("tenant_subscriptions").select("plan_id,status,current_period_end,subscription_plans(name,monthly_price_myr)").eq("tenant_id", activeTenant.id).maybeSingle()
+    supabase.from("tenant_subscriptions").select("plan_id,status,current_period_end,subscription_plans(name,monthly_price_myr,features)").eq("tenant_id", activeTenant.id).maybeSingle()
       .then(({ data }: any) => {
         if (!active) return;
         if (data) {
@@ -810,6 +812,7 @@ export function OwnerDashboard() {
             status: data.status,
             renewal: data.current_period_end ? new Date(data.current_period_end).toLocaleDateString("ms-MY", { day: "numeric", month: "short", year: "numeric" }) : "",
             periodEndRaw: data.current_period_end || null,
+            maxUsersAllowed: typeof data.subscription_plans?.features?.maxUsers === 'number' ? data.subscription_plans.features.maxUsers : null,
           });
         }
       });
@@ -882,6 +885,18 @@ export function OwnerDashboard() {
     if (!paymentModalPlanId) return;
     const plan = availablePlans.find(p => p.id === paymentModalPlanId);
     if (!plan) return;
+    // W3.5 — Plan downgrade pre-condition checklist
+    if (currentSub) {
+      const currentPlanOption = availablePlans.find(p => p.id === currentSub.planId);
+      const isDowngrade = currentPlanOption && plan.price < currentPlanOption.price;
+      if (isDowngrade && plan.maxUsers != null) {
+        const activeStaff = userRoles.filter(r => r.role === 'TENANT_STAFF').length;
+        if (activeStaff > plan.maxUsers) {
+          setPaymentError(`Tidak dapat turun taraf: pelan "${plan.name}" hanya membenarkan ${plan.maxUsers} staf, tetapi anda kini mempunyai ${activeStaff} staf aktif. Sila kurangkan bilangan staf terlebih dahulu.`);
+          return;
+        }
+      }
+    }
     setPaymentSubmitting(true);
     setPaymentError(null);
     try {
@@ -1386,6 +1401,18 @@ export function OwnerDashboard() {
         };
         check();
       });
+    }
+    // W3.2/W3.3 — Subscription/trial expiry gate (before AI credit check)
+    const subExpired = currentSub?.status === 'expired' ||
+      (currentSub?.status === 'trialing' && currentSub?.periodEndRaw != null && new Date(currentSub.periodEndRaw) < new Date());
+    if (subExpired) {
+      setChatMessages(prev => [...prev, {
+        id: `a-${Date.now()}`, sender: "ai",
+        text: currentSub?.status === 'trialing'
+          ? "Tempoh percubaan percuma syarikat anda telah tamat. Sila pilih pelan berbayar untuk meneruskan."
+          : "Langganan syarikat anda telah tamat tempoh. Sila perbaharui pelan untuk meneruskan.",
+      }]);
+      return;
     }
     // W2.3 — Client-side AI credit pre-check (mirrors StaffHomeScreen:581)
     if (aiCredits.total > 0 && aiCredits.used >= aiCredits.total) {
@@ -1964,6 +1991,12 @@ export function OwnerDashboard() {
 
   const handleInviteSubmit = async () => {
     if (!inviteEmail.trim() || !inviteName.trim()) return;
+    // W3.1 — Client-side staff user limit pre-check
+    const activeStaffCount = userRoles.filter(r => r.role === 'TENANT_STAFF').length;
+    if (currentSub?.maxUsersAllowed != null && activeStaffCount >= currentSub.maxUsersAllowed) {
+      setInviteResult({ success: false, message: `Had pengguna staf pelan anda (${currentSub.maxUsersAllowed} orang) telah penuh. Sila naik taraf pelan untuk menambah lebih ramai staf.` });
+      return;
+    }
     setInviteLoading(true);
     setInviteResult(null);
     try {
@@ -3296,9 +3329,10 @@ export function OwnerDashboard() {
                 <div className="flex items-center justify-between">
                   <div>
                     <h2 className="text-lg font-bold text-slate-900">Pasukan Saya</h2>
-                    {/* W1.4 — Staff Slot Indicator */}
+                    {/* W1.4 / W3.1 — Staff Slot Indicator with plan limit */}
                     <p className="text-2xs text-slate-400 mt-0.5">
-                      {userRoles.filter(r => r.role === 'TENANT_STAFF' && !revokedMemberIds[r.id]).length} pengguna aktif
+                      {userRoles.filter(r => r.role === 'TENANT_STAFF' && !revokedMemberIds[r.id]).length}
+                      {currentSub?.maxUsersAllowed != null ? ` / ${currentSub.maxUsersAllowed}` : ""} pengguna aktif
                     </p>
                   </div>
                   <button onClick={() => { setShowInvite(v => !v); setInviteResult(null); }}
@@ -5162,6 +5196,24 @@ export function OwnerDashboard() {
                     </div>
                   )}
                 </div>
+
+                {/* W3.4 — Add-on Pending Status Display */}
+                {(() => {
+                  const pendingAddons = paymentTxs.filter(t => t.kind === "addon" && t.status === "pending");
+                  if (!pendingAddons.length) return null;
+                  return (
+                    <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 space-y-2">
+                      <p className="text-xs font-bold text-amber-800">Tambahan Menunggu Pengesahan ({pendingAddons.length})</p>
+                      {pendingAddons.map(tx => (
+                        <div key={tx.id} className="flex items-center justify-between text-xs">
+                          <span className="text-amber-700">{tx.addonLabel || "Tambahan"}</span>
+                          <span className="font-semibold text-amber-800">RM {tx.amountMyr.toLocaleString()} · Menunggu HQ</span>
+                        </div>
+                      ))}
+                      <p className="text-2xs text-amber-600">Tambahan akan diaktifkan selepas pengesahan HQ. Sila hubungi sokongan jika perlu perhatian segera.</p>
+                    </div>
+                  );
+                })()}
 
                 {/* Invoices / payment history */}
                 <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-3">
