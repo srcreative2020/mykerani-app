@@ -171,7 +171,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLogin, onRegister })
   const [openFaq, setOpenFaq] = useState<string | null>(null);
   const [landingContent, setLandingContent] = useState<LandingSection[]>([]);
 
-  useScrollReveal(plans.length);
+  useScrollReveal(`${plans.length}-${landingContent.length}-${faqs.length}-${settings ? 1 : 0}`);
   const activeSection = useActiveSection(NAV_SECTIONS);
 
   useEffect(() => {
