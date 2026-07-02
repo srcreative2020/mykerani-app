@@ -2733,54 +2733,77 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
             {/* â•â•â•â• SETTINGS (HQ_OWNER only) â•â•â•â• */}
             {activePage === "website" && !isStaff && (
               <div className="space-y-5" id="hq_website">
+                {/* Page title */}
                 <div className="flex items-center justify-between">
                   <h1 className="text-xl font-bold text-slate-900">Tapak Web Awam</h1>
                   {siteSettingsSaved && <span className="text-xs text-emerald-600 font-bold bg-emerald-50 border border-emerald-200 px-3 py-1.5 rounded-xl">Tersimpan</span>}
                 </div>
 
-                <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-3">
-                  <h3 className="text-sm font-bold text-slate-900">Jenama & Hero</h3>
-                  <div>
-                    <label className="text-xs font-semibold text-slate-500 mb-1 block">Nama Syarikat</label>
-                    <input value={siteSettings.companyName} onChange={e => setSiteSettings(s => ({ ...s, companyName: e.target.value }))}
-                      className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-emerald-400" />
-                  </div>
-                  <div>
-                    <label className="text-xs font-semibold text-slate-500 mb-1 block">URL Logo</label>
-                    <input value={siteSettings.logoUrl} onChange={e => setSiteSettings(s => ({ ...s, logoUrl: e.target.value }))}
-                      placeholder="https://..."
-                      className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-emerald-400" />
-                    <div className="flex items-center gap-3 mt-2">
-                      {siteSettings.logoUrl && (
-                        <img src={siteSettings.logoUrl} alt="Logo" className="w-12 h-12 rounded-xl object-contain border border-slate-100 bg-slate-50" />
-                      )}
-                      <label className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold cursor-pointer transition">
-                        {logoUploading ? "Memuat naik..." : "Muat Naik Logo"}
-                        <input type="file" accept="image/*" className="hidden" disabled={logoUploading} onChange={handleLogoFileChange} />
-                      </label>
+                {/* ── Jenama & Hero ── */}
+                <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-4">
+                  <div className="flex items-center gap-2.5">
+                    <Star className="w-4 h-4 text-emerald-600 shrink-0" />
+                    <div>
+                      <h3 className="text-sm font-bold text-slate-900">Jenama & Hero</h3>
+                      <p className="text-[11px] text-slate-400">Nama syarikat, logo, dan teks utama landing page</p>
                     </div>
                   </div>
-                  <div>
-                    <label className="text-xs font-semibold text-slate-500 mb-1 block">Tajuk Utama (Hero Headline)</label>
-                    <textarea rows={2} value={siteSettings.heroHeadline} onChange={e => setSiteSettings(s => ({ ...s, heroHeadline: e.target.value }))}
-                      className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-emerald-400" />
+                  <div className="space-y-3">
+                    <div>
+                      <label className="text-xs font-semibold text-slate-500 mb-1 block">Nama Syarikat</label>
+                      <input value={siteSettings.companyName} onChange={e => setSiteSettings(s => ({ ...s, companyName: e.target.value }))}
+                        className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-emerald-400" />
+                    </div>
+                    <div>
+                      <label className="text-xs font-semibold text-slate-500 mb-1 block">Logo</label>
+                      <div className="flex items-center gap-3">
+                        {siteSettings.logoUrl
+                          ? <img src={siteSettings.logoUrl} alt="Logo" className="w-12 h-12 rounded-xl object-contain border border-slate-100 bg-slate-50 shrink-0" />
+                          : <div className="w-12 h-12 rounded-xl bg-slate-100 border border-slate-200 flex items-center justify-center shrink-0"><Star className="w-5 h-5 text-slate-300" /></div>}
+                        <div className="flex-1 space-y-2">
+                          <input value={siteSettings.logoUrl} onChange={e => setSiteSettings(s => ({ ...s, logoUrl: e.target.value }))}
+                            placeholder="https://..."
+                            className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-emerald-400" />
+                          <label className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-semibold cursor-pointer transition">
+                            {logoUploading ? "Memuat naik..." : "Muat Naik Logo"}
+                            <input type="file" accept="image/*" className="hidden" disabled={logoUploading} onChange={handleLogoFileChange} />
+                          </label>
+                        </div>
+                      </div>
+                    </div>
+                    <div>
+                      <label className="text-xs font-semibold text-slate-500 mb-1 block">Tajuk Utama</label>
+                      <textarea rows={2} value={siteSettings.heroHeadline} onChange={e => setSiteSettings(s => ({ ...s, heroHeadline: e.target.value }))}
+                        className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-emerald-400 resize-none" />
+                    </div>
+                    <div>
+                      <label className="text-xs font-semibold text-slate-500 mb-1 block">Sub-tajuk</label>
+                      <textarea rows={2} value={siteSettings.heroSubheadline} onChange={e => setSiteSettings(s => ({ ...s, heroSubheadline: e.target.value }))}
+                        className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-emerald-400 resize-none" />
+                    </div>
+                    <div>
+                      <label className="text-xs font-semibold text-slate-500 mb-1 block">URL Video Demo</label>
+                      <input value={siteSettings.demoVideoUrl} onChange={e => setSiteSettings(s => ({ ...s, demoVideoUrl: e.target.value }))}
+                        placeholder="https://..."
+                        className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-emerald-400" />
+                    </div>
                   </div>
-                  <div>
-                    <label className="text-xs font-semibold text-slate-500 mb-1 block">Sub-tajuk (Hero Subheadline)</label>
-                    <textarea rows={2} value={siteSettings.heroSubheadline} onChange={e => setSiteSettings(s => ({ ...s, heroSubheadline: e.target.value }))}
-                      className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-emerald-400" />
-                  </div>
-                  <div>
-                    <label className="text-xs font-semibold text-slate-500 mb-1 block">URL Video Demo</label>
-                    <input value={siteSettings.demoVideoUrl} onChange={e => setSiteSettings(s => ({ ...s, demoVideoUrl: e.target.value }))}
-                      placeholder="https://..."
-                      className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-emerald-400" />
-                  </div>
+                  <button onClick={saveSiteSettingsNow} disabled={siteSettingsSaving}
+                    className="px-4 py-2.5 bg-emerald-700 text-white rounded-xl text-xs font-bold cursor-pointer hover:bg-emerald-800 transition disabled:opacity-40">
+                    {siteSettingsSaving ? "Menyimpan..." : "Simpan"}
+                  </button>
                 </div>
 
-                <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-3">
-                  <h3 className="text-sm font-bold text-slate-900">Maklumat Hubungan</h3>
-                  <div className="grid grid-cols-2 gap-3">
+                {/* ── Maklumat Hubungan ── */}
+                <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-4">
+                  <div className="flex items-center gap-2.5">
+                    <MessageSquare className="w-4 h-4 text-emerald-600 shrink-0" />
+                    <div>
+                      <h3 className="text-sm font-bold text-slate-900">Maklumat Hubungan</h3>
+                      <p className="text-[11px] text-slate-400">E-mel, telefon, WhatsApp, alamat dan waktu operasi</p>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
                       <label className="text-xs font-semibold text-slate-500 mb-1 block">E-mel</label>
                       <input value={siteSettings.contactEmail} onChange={e => setSiteSettings(s => ({ ...s, contactEmail: e.target.value }))}
@@ -2797,11 +2820,11 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
                         className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-emerald-400" />
                     </div>
                     <div>
-                      <label className="text-xs font-semibold text-slate-500 mb-1 block">Waktu Perniagaan</label>
+                      <label className="text-xs font-semibold text-slate-500 mb-1 block">Waktu Operasi</label>
                       <input value={siteSettings.businessHours} onChange={e => setSiteSettings(s => ({ ...s, businessHours: e.target.value }))}
                         className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-emerald-400" />
                     </div>
-                    <div className="col-span-2">
+                    <div className="sm:col-span-2">
                       <label className="text-xs font-semibold text-slate-500 mb-1 block">Alamat</label>
                       <input value={siteSettings.contactAddress} onChange={e => setSiteSettings(s => ({ ...s, contactAddress: e.target.value }))}
                         className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-emerald-400" />
@@ -2809,66 +2832,109 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
                   </div>
                   <button onClick={saveSiteSettingsNow} disabled={siteSettingsSaving}
                     className="px-4 py-2.5 bg-emerald-700 text-white rounded-xl text-xs font-bold cursor-pointer hover:bg-emerald-800 transition disabled:opacity-40">
-                    {siteSettingsSaving ? "Menyimpan..." : "Simpan Tapak Web"}
+                    {siteSettingsSaving ? "Menyimpan..." : "Simpan"}
                   </button>
                 </div>
 
-                <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-3">
-                  <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2"><Globe className="w-4 h-4 text-sky-500" /> Pautan Media Sosial</h3>
+                {/* ── Media Sosial ── */}
+                <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-4">
+                  <div className="flex items-center gap-2.5">
+                    <Globe className="w-4 h-4 text-emerald-600 shrink-0" />
+                    <div>
+                      <h3 className="text-sm font-bold text-slate-900">Pautan Media Sosial</h3>
+                      <p className="text-[11px] text-slate-400">Facebook, Instagram, TikTok dan lain-lain</p>
+                    </div>
+                  </div>
                   <div className="space-y-2">
                     {Object.entries(siteSettings.socialLinks || {}).map(([platform, url]) => (
-                      <div key={platform} className="flex items-center justify-between gap-3 p-3 border border-slate-100 rounded-xl">
-                        <div className="min-w-0">
-                          <p className="text-xs font-bold text-slate-800">{platform}</p>
-                          <p className="text-[11px] text-slate-400 truncate">{url}</p>
+                      <div key={platform} className="flex items-center justify-between gap-3 p-3 bg-slate-50 border border-slate-100 rounded-xl">
+                        <div className="min-w-0 flex-1">
+                          <p className="text-xs font-bold text-slate-900">{platform}</p>
+                          <p className="text-[11px] text-slate-400 truncate">{url as string}</p>
                         </div>
-                        <button onClick={() => removeSocialLink(platform)} className="text-rose-400 hover:text-rose-600 cursor-pointer shrink-0"><Trash2 className="w-3.5 h-3.5" /></button>
+                        <button onClick={() => removeSocialLink(platform)}
+                          className="p-1.5 rounded-lg text-rose-400 hover:text-rose-600 hover:bg-rose-50 cursor-pointer transition shrink-0">
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
                       </div>
                     ))}
-                    {Object.keys(siteSettings.socialLinks || {}).length === 0 && <p className="text-xs text-slate-400 text-center py-3">Tiada pautan media sosial lagi.</p>}
+                    {Object.keys(siteSettings.socialLinks || {}).length === 0 && (
+                      <div className="text-center py-6 border border-dashed border-slate-200 rounded-xl space-y-1">
+                        <p className="text-sm font-semibold text-slate-400">Tiada pautan lagi.</p>
+                        <p className="text-xs text-slate-300">Tambah pautan media sosial di bawah.</p>
+                      </div>
+                    )}
                   </div>
-                  <div className="flex items-center gap-2 pt-2 border-t border-slate-100">
-                    <input value={socialDraft.platform} onChange={e => setSocialDraft(d => ({ ...d, platform: e.target.value }))}
-                      placeholder="Platform (cth: Facebook)"
-                      className="w-1/3 border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-emerald-400" />
-                    <input value={socialDraft.url} onChange={e => setSocialDraft(d => ({ ...d, url: e.target.value }))}
-                      placeholder="https://..."
-                      className="flex-1 border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-emerald-400" />
-                    <button onClick={addSocialLink} className="px-4 py-2 bg-indigo-600 text-white rounded-xl text-xs font-bold cursor-pointer hover:bg-indigo-700 transition shrink-0">Tambah</button>
+                  <div className="pt-3 border-t border-slate-100 space-y-2">
+                    <div className="flex gap-2">
+                      <input value={socialDraft.platform} onChange={e => setSocialDraft(d => ({ ...d, platform: e.target.value }))}
+                        placeholder="Platform (cth: Facebook)"
+                        className="w-2/5 border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-emerald-400" />
+                      <input value={socialDraft.url} onChange={e => setSocialDraft(d => ({ ...d, url: e.target.value }))}
+                        placeholder="https://..."
+                        className="flex-1 border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-emerald-400" />
+                    </div>
+                    <div className="flex gap-2">
+                      <button onClick={addSocialLink} disabled={!socialDraft.platform.trim() || !socialDraft.url.trim()}
+                        className="flex items-center gap-1.5 px-4 py-2.5 bg-emerald-700 text-white rounded-xl text-xs font-bold cursor-pointer hover:bg-emerald-800 transition disabled:opacity-40">
+                        <Plus className="w-3.5 h-3.5" /> Tambah Pautan
+                      </button>
+                      <button onClick={saveSiteSettingsNow} disabled={siteSettingsSaving}
+                        className="px-4 py-2.5 bg-slate-100 text-slate-700 rounded-xl text-xs font-bold cursor-pointer hover:bg-slate-200 transition disabled:opacity-40">
+                        {siteSettingsSaving ? "Menyimpan..." : "Simpan"}
+                      </button>
+                    </div>
                   </div>
-                  <button onClick={saveSiteSettingsNow} disabled={siteSettingsSaving}
-                    className="px-4 py-2.5 bg-emerald-700 text-white rounded-xl text-xs font-bold cursor-pointer hover:bg-emerald-800 transition disabled:opacity-40">
-                    {siteSettingsSaving ? "Menyimpan..." : "Simpan Tapak Web"}
-                  </button>
                 </div>
 
-                <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-3">
-                  <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2"><HelpCircle className="w-4 h-4 text-indigo-500" /> Soalan Lazim (FAQ)</h3>
+                {/* ── FAQ ── */}
+                <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-2.5">
+                      <HelpCircle className="w-4 h-4 text-emerald-600 shrink-0" />
+                      <div>
+                        <h3 className="text-sm font-bold text-slate-900">Soalan Lazim (FAQ)</h3>
+                        <p className="text-[11px] text-slate-400">{faqItems.length} soalan · {faqItems.filter(f => f.isPublished).length} tersiar</p>
+                      </div>
+                    </div>
+                  </div>
                   <div className="space-y-2">
                     {faqItems.map(f => (
-                      <div key={f.id} className="flex items-start justify-between gap-3 p-3 border border-slate-100 rounded-xl">
-                        <div className="min-w-0">
-                          <p className="text-xs font-bold text-slate-800">{f.question}</p>
-                          <p className="text-[11px] text-slate-400 mt-0.5">{f.answer}</p>
+                      <div key={f.id} className="flex items-start justify-between gap-3 p-3 bg-slate-50 border border-slate-100 rounded-xl">
+                        <div className="min-w-0 flex-1">
+                          <p className="text-xs font-bold text-slate-900">{f.question}</p>
+                          <p className="text-[11px] text-slate-400 mt-0.5 line-clamp-2">{f.answer}</p>
                         </div>
-                        <div className="flex items-center gap-2 shrink-0">
-                          <button onClick={() => toggleFaqPublished(f)} className={`text-[10px] font-bold px-2 py-1 rounded-full cursor-pointer ${f.isPublished ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-400"}`}>
-                            {f.isPublished ? "Tersiar" : "Disembunyikan"}
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <button onClick={() => toggleFaqPublished(f)}
+                            className={`text-[10px] font-bold px-2.5 py-1 rounded-full cursor-pointer transition ${f.isPublished ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-200" : "bg-slate-200 text-slate-500 hover:bg-slate-300"}`}>
+                            {f.isPublished ? "Tersiar" : "Tersembunyi"}
                           </button>
-                          <button onClick={() => removeFaqItem(f.id)} className="text-rose-400 hover:text-rose-600 cursor-pointer"><Trash2 className="w-3.5 h-3.5" /></button>
+                          <button onClick={() => removeFaqItem(f.id)}
+                            className="p-1.5 rounded-lg text-rose-400 hover:text-rose-600 hover:bg-rose-50 cursor-pointer transition">
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
                         </div>
                       </div>
                     ))}
-                    {faqItems.length === 0 && <p className="text-xs text-slate-400 text-center py-3">Tiada soalan lazim lagi.</p>}
+                    {faqItems.length === 0 && (
+                      <div className="text-center py-6 border border-dashed border-slate-200 rounded-xl space-y-1">
+                        <p className="text-sm font-semibold text-slate-400">Tiada soalan lazim lagi.</p>
+                        <p className="text-xs text-slate-300">Tambah soalan pertama di bawah.</p>
+                      </div>
+                    )}
                   </div>
-                  <div className="space-y-2 pt-2 border-t border-slate-100">
+                  <div className="pt-3 border-t border-slate-100 space-y-2">
                     <input value={faqDraft.question} onChange={e => setFaqDraft(d => ({ ...d, question: e.target.value }))}
-                      placeholder="Soalan baru..."
-                      className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-emerald-400" />
+                      placeholder="Soalan baharu..."
+                      className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-emerald-400" />
                     <textarea rows={2} value={faqDraft.answer} onChange={e => setFaqDraft(d => ({ ...d, answer: e.target.value }))}
                       placeholder="Jawapan..."
-                      className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-emerald-400" />
-                    <button onClick={addFaqItem} className="px-4 py-2 bg-indigo-600 text-white rounded-xl text-xs font-bold cursor-pointer hover:bg-indigo-700 transition">Tambah Soalan</button>
+                      className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-emerald-400 resize-none" />
+                    <button onClick={addFaqItem} disabled={!faqDraft.question.trim() || !faqDraft.answer.trim()}
+                      className="flex items-center gap-1.5 px-4 py-2.5 bg-emerald-700 text-white rounded-xl text-xs font-bold cursor-pointer hover:bg-emerald-800 transition disabled:opacity-40">
+                      <Plus className="w-3.5 h-3.5" /> Tambah Soalan
+                    </button>
                   </div>
                 </div>
 
