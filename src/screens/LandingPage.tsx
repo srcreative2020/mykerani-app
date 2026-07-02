@@ -72,7 +72,7 @@ const DEMO_QA: { label: string; q: string; a: string }[] = [
   },
 ];
 
-function useScrollReveal() {
+function useScrollReveal(dep?: unknown) {
   useEffect(() => {
     const els = document.querySelectorAll<HTMLElement>(".sr-fade");
     if (!els.length) return;
@@ -82,7 +82,8 @@ function useScrollReveal() {
     );
     els.forEach(el => observer.observe(el));
     return () => observer.disconnect();
-  }, []);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dep]);
 }
 
 function useActiveSection(ids: string[]) {
@@ -204,7 +205,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLogin, onRegister })
   const [plansError, setPlansError] = useState(false);
   const [openFaq, setOpenFaq] = useState<string | null>(null);
 
-  useScrollReveal();
+  useScrollReveal(plans.length);
   const activeSection = useActiveSection(NAV_SECTIONS);
 
   useEffect(() => {
@@ -478,7 +479,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLogin, onRegister })
             {plans.map(p => (
               <div
                 key={p.id}
-                className={`sr-fade rounded-2xl p-5 space-y-4 border hover:-translate-y-1 hover:shadow-lg transition-all ${
+                className={`rounded-2xl p-5 space-y-4 border hover:-translate-y-1 hover:shadow-lg transition-all ${
                   p.featured
                     ? "border-[#22c55e] bg-[#F0FDF4] shadow-md"
                     : "border-[#E8E6DE] bg-white"
