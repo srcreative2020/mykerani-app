@@ -812,7 +812,7 @@ export default function BankStatementProcessor({ onBack, onConfirmTransaction }:
               <StatRow label="Checkpoint" value={`${job.checkpoints?.filter(c => c.status === "COMPLETED").length ?? 0} disimpan`} />
               <StatRow label="Retry Count" value={job.checkpoints?.reduce((a, c) => a + (c.attempt_count ?? 0), 0) ?? 0} />
               <StatRow label="AI Provider" value={job.ai_provider_used} />
-              <StatRow label="OCR Credit" value="1 (dicaj semasa mula sahaja)" />
+              <StatRow label="Muka Surat Penyata Bank" value="Dicaj semasa mula (1 muka surat = 1 kuota)" />
               <StatRow label="Resume Status" value={
                 job.status === "PAUSED" ? "Checkpoint disimpan — siap disambung" :
                 job.status === "INTERRUPTED" ? "Dijeda oleh server restart" :
