@@ -8,7 +8,7 @@ import {
   ArrowUpRight, Menu, X, Activity, Package, Receipt, ToggleLeft,
   ToggleRight, AlertTriangle, Circle, FileText, MessageSquare,
   User, Send, Star, Repeat, Archive, Globe, HelpCircle, Trash2, ShieldAlert,
-  Paperclip, MessageCircle,
+  Paperclip, MessageCircle, Copy,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { useNotifications, buildHQNotifs, fmtNotifTime } from "../lib/notifications";
@@ -389,7 +389,7 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
   const [landingActiveSection, setLandingActiveSection] = useState<string>("problem");
   const [landingItemForm, setLandingItemForm] = useState({ label: "", description: "", iconEmoji: "", sectionKey: "problem" });
   const [editingLandingId, setEditingLandingId] = useState<string | null>(null);
-  const [landingFormOpen, setLandingFormOpen] = useState(false);
+  const [landingModalOpen, setLandingModalOpen] = useState(false);
   const [logoUploading, setLogoUploading] = useState(false);
   const [socialDraft, setSocialDraft] = useState<{ platform: string; url: string }>({ platform: "", url: "" });
 
@@ -437,9 +437,22 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
       sortOrder: editingLandingId ? landingContent.find(i => i.id === editingLandingId)?.sortOrder ?? maxOrder + 1 : maxOrder + 1,
       isVisible: true,
     });
-    setLandingFormOpen(false);
+    setLandingModalOpen(false);
     setEditingLandingId(null);
     setLandingItemForm({ label: "", description: "", iconEmoji: "", sectionKey: landingActiveSection });
+    reloadLandingContent();
+  };
+
+  const duplicateLandingItem = async (item: hqService.LandingSection) => {
+    const sectionItems = landingContent.filter(i => i.sectionKey === item.sectionKey);
+    await hqService.upsertLandingItem({
+      sectionKey: item.sectionKey,
+      label: item.label + " (Salinan)",
+      description: item.description,
+      iconEmoji: item.iconEmoji,
+      sortOrder: sectionItems.length + 1,
+      isVisible: false,
+    });
     reloadLandingContent();
   };
 
@@ -2861,75 +2874,145 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
 
                 {/* Landing Page Content CMS */}
                 <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-4">
-                  <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-                    <Globe className="w-4 h-4 text-emerald-600" /> Kandungan Landing Page
-                  </h3>
+                  <div className="flex items-center justify-between flex-wrap gap-2">
+                    <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                      <Globe className="w-4 h-4 text-emerald-600" /> Kandungan Landing Page
+                    </h3>
+                    <button
+                      onClick={() => { setLandingItemForm({ label: "", description: "", iconEmoji: "", sectionKey: landingActiveSection }); setEditingLandingId(null); setLandingModalOpen(true); }}
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-700 text-white rounded-xl text-xs font-bold cursor-pointer hover:bg-emerald-800 transition">
+                      <Plus className="w-3.5 h-3.5" /> Tambah Item
+                    </button>
+                  </div>
+
                   {/* Section tabs */}
                   <div className="flex flex-wrap gap-1.5">
                     {Object.entries(LANDING_SECTION_LABELS).map(([key, label]) => (
                       <button key={key}
-                        onClick={() => { setLandingActiveSection(key); setLandingFormOpen(false); setEditingLandingId(null); }}
+                        onClick={() => { setLandingActiveSection(key); setEditingLandingId(null); }}
                         className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${landingActiveSection === key ? "bg-emerald-700 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}>
                         {label}
                       </button>
                     ))}
                   </div>
 
-                  {/* Items list */}
+                  {/* Card grid */}
                   {(() => {
                     const items = landingContent.filter(i => i.sectionKey === landingActiveSection).sort((a, b) => a.sortOrder - b.sortOrder);
+                    if (items.length === 0) return (
+                      <p className="text-xs text-slate-400 text-center py-8">Tiada item lagi untuk seksyen ini. Klik "Tambah Item" untuk bermula.</p>
+                    );
                     return (
-                      <div className="space-y-2">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                         {items.map((item, idx) => (
-                          <div key={item.id} className={`flex items-center gap-3 p-3 border rounded-xl ${item.isVisible ? "border-slate-100 bg-slate-50" : "border-dashed border-slate-200 bg-slate-50/50 opacity-60"}`}>
-                            {item.iconEmoji && <span className="text-lg shrink-0">{item.iconEmoji}</span>}
-                            <div className="flex-1 min-w-0">
-                              <p className="text-xs font-semibold text-slate-800">{item.label}</p>
-                              {item.description && <p className="text-[10px] text-slate-400">{item.description}</p>}
-                            </div>
-                            <div className="flex items-center gap-1 shrink-0">
-                              <button onClick={() => moveLandingItemInList(item.id, items, -1)} disabled={idx === 0} className="p-1 text-slate-400 hover:text-slate-700 disabled:opacity-30 cursor-pointer">↑</button>
-                              <button onClick={() => moveLandingItemInList(item.id, items, 1)} disabled={idx === items.length - 1} className="p-1 text-slate-400 hover:text-slate-700 disabled:opacity-30 cursor-pointer">↓</button>
-                              <button onClick={() => toggleLandingVisibility(item.id, item.isVisible)} className={`px-2 py-0.5 rounded-lg text-[10px] font-bold cursor-pointer ${item.isVisible ? "bg-emerald-100 text-emerald-700" : "bg-slate-200 text-slate-500"}`}>
+                          <div key={item.id} className={`flex flex-col rounded-2xl border transition-all ${item.isVisible ? "border-slate-200 bg-white shadow-sm" : "border-dashed border-slate-200 bg-slate-50 opacity-60"}`}>
+                            {/* Card header: icon preview + status badge */}
+                            <div className="flex items-start justify-between p-4 pb-2">
+                              <div className="w-12 h-12 rounded-xl bg-slate-100 flex items-center justify-center shrink-0">
+                                {item.iconEmoji
+                                  ? <span className="text-2xl">{item.iconEmoji}</span>
+                                  : <span className="text-lg text-slate-300 font-bold">#</span>}
+                              </div>
+                              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${item.isVisible ? "bg-emerald-100 text-emerald-700" : "bg-slate-200 text-slate-500"}`}>
                                 {item.isVisible ? "Aktif" : "Tersembunyi"}
-                              </button>
-                              <button onClick={() => { setEditingLandingId(item.id); setLandingItemForm({ label: item.label, description: item.description, iconEmoji: item.iconEmoji, sectionKey: item.sectionKey }); setLandingFormOpen(true); }} className="p-1 text-slate-400 hover:text-indigo-600 cursor-pointer"><Edit3 className="w-3.5 h-3.5" /></button>
-                              <button onClick={() => deleteLandingItemById(item.id)} className="p-1 text-slate-400 hover:text-rose-500 cursor-pointer"><Trash2 className="w-3.5 h-3.5" /></button>
+                              </span>
+                            </div>
+                            {/* Card body: title + description */}
+                            <div className="px-4 pb-3 flex-1">
+                              <p className="text-xs font-bold text-slate-900 leading-snug">{item.label}</p>
+                              {item.description && <p className="text-[10px] text-slate-400 mt-1 leading-snug">{item.description}</p>}
+                              <p className="text-[10px] text-slate-300 mt-1.5">Urutan: {idx + 1}</p>
+                            </div>
+                            {/* Card footer: actions */}
+                            <div className="flex items-center justify-between gap-1 px-3 py-2.5 border-t border-slate-100">
+                              <div className="flex items-center gap-0.5">
+                                <button title="Naik" onClick={() => moveLandingItemInList(item.id, items, -1)} disabled={idx === 0}
+                                  className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 disabled:opacity-25 cursor-pointer transition text-xs">↑</button>
+                                <button title="Turun" onClick={() => moveLandingItemInList(item.id, items, 1)} disabled={idx === items.length - 1}
+                                  className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 disabled:opacity-25 cursor-pointer transition text-xs">↓</button>
+                              </div>
+                              <div className="flex items-center gap-0.5">
+                                <button title={item.isVisible ? "Sembunyikan" : "Aktifkan"} onClick={() => toggleLandingVisibility(item.id, item.isVisible)}
+                                  className={`p-1.5 rounded-lg cursor-pointer transition ${item.isVisible ? "text-emerald-600 hover:bg-emerald-50" : "text-slate-400 hover:bg-slate-100"}`}>
+                                  <CheckCircle2 className="w-3.5 h-3.5" />
+                                </button>
+                                <button title="Edit" onClick={() => { setEditingLandingId(item.id); setLandingItemForm({ label: item.label, description: item.description, iconEmoji: item.iconEmoji, sectionKey: item.sectionKey }); setLandingModalOpen(true); }}
+                                  className="p-1.5 rounded-lg text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 cursor-pointer transition">
+                                  <Edit3 className="w-3.5 h-3.5" />
+                                </button>
+                                <button title="Duplikasi" onClick={() => duplicateLandingItem(item)}
+                                  className="p-1.5 rounded-lg text-slate-400 hover:text-amber-600 hover:bg-amber-50 cursor-pointer transition">
+                                  <Copy className="w-3.5 h-3.5" />
+                                </button>
+                                <button title="Padam" onClick={() => deleteLandingItemById(item.id)}
+                                  className="p-1.5 rounded-lg text-slate-400 hover:text-rose-500 hover:bg-rose-50 cursor-pointer transition">
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
                             </div>
                           </div>
                         ))}
-                        {items.length === 0 && <p className="text-xs text-slate-400 text-center py-4">Tiada item lagi untuk seksyen ini.</p>}
                       </div>
                     );
                   })()}
+                </div>
 
-                  {/* Add / Edit form */}
-                  {landingFormOpen ? (
-                    <div className="border border-emerald-100 bg-emerald-50/30 rounded-xl p-4 space-y-3">
-                      <p className="text-xs font-bold text-slate-700">{editingLandingId ? "Edit Item" : "Tambah Item Baharu"}</p>
-                      <div className="grid grid-cols-4 gap-2">
-                        <input value={landingItemForm.iconEmoji} onChange={e => setLandingItemForm(f => ({ ...f, iconEmoji: e.target.value }))}
-                          placeholder="Emoji (cth: 🧾)"
-                          className="col-span-1 border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-emerald-400" />
-                        <input value={landingItemForm.label} onChange={e => setLandingItemForm(f => ({ ...f, label: e.target.value }))}
-                          placeholder="Label / Tajuk *"
-                          className="col-span-3 border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-emerald-400" />
+                {/* Landing CMS Edit/Add Modal */}
+                {landingModalOpen && (
+                  <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm" onClick={e => { if (e.target === e.currentTarget) { setLandingModalOpen(false); setEditingLandingId(null); } }}>
+                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md border border-slate-200 overflow-hidden">
+                      <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
+                        <p className="text-sm font-bold text-slate-900">{editingLandingId ? "Edit Item" : "Tambah Item Baharu"}</p>
+                        <button onClick={() => { setLandingModalOpen(false); setEditingLandingId(null); setLandingItemForm({ label: "", description: "", iconEmoji: "", sectionKey: landingActiveSection }); }}
+                          className="p-1.5 rounded-lg text-slate-400 hover:bg-slate-100 cursor-pointer transition">
+                          <X className="w-4 h-4" />
+                        </button>
                       </div>
-                      <input value={landingItemForm.description} onChange={e => setLandingItemForm(f => ({ ...f, description: e.target.value }))}
-                        placeholder="Penerangan ringkas (pilihan)"
-                        className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-emerald-400" />
-                      <div className="flex gap-2">
-                        <button onClick={saveLandingItem} disabled={!landingItemForm.label.trim()} className="px-4 py-2 bg-emerald-700 text-white rounded-xl text-xs font-bold cursor-pointer hover:bg-emerald-800 transition disabled:opacity-40">Simpan</button>
-                        <button onClick={() => { setLandingFormOpen(false); setEditingLandingId(null); setLandingItemForm({ label: "", description: "", iconEmoji: "", sectionKey: landingActiveSection }); }} className="px-4 py-2 bg-slate-100 text-slate-700 rounded-xl text-xs font-bold cursor-pointer hover:bg-slate-200 transition">Batal</button>
+                      <div className="p-5 space-y-4">
+                        {/* Icon preview */}
+                        <div className="flex items-center gap-4">
+                          <div className="w-16 h-16 rounded-2xl bg-slate-100 flex items-center justify-center shrink-0">
+                            {landingItemForm.iconEmoji
+                              ? <span className="text-3xl">{landingItemForm.iconEmoji}</span>
+                              : <span className="text-slate-300 text-xs font-bold">IKON</span>}
+                          </div>
+                          <div className="flex-1">
+                            <label className="text-[10px] font-semibold text-slate-500 mb-1 block">Emoji / Ikon</label>
+                            <input value={landingItemForm.iconEmoji}
+                              onChange={e => setLandingItemForm(f => ({ ...f, iconEmoji: e.target.value }))}
+                              placeholder="cth: 🧾 📋 💸"
+                              className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-emerald-400" />
+                          </div>
+                        </div>
+                        <div>
+                          <label className="text-[10px] font-semibold text-slate-500 mb-1 block">Tajuk <span className="text-rose-500">*</span></label>
+                          <input value={landingItemForm.label}
+                            onChange={e => setLandingItemForm(f => ({ ...f, label: e.target.value }))}
+                            placeholder="Masukkan tajuk item..."
+                            className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-emerald-400" />
+                        </div>
+                        <div>
+                          <label className="text-[10px] font-semibold text-slate-500 mb-1 block">Penerangan <span className="text-slate-400">(pilihan)</span></label>
+                          <textarea value={landingItemForm.description}
+                            onChange={e => setLandingItemForm(f => ({ ...f, description: e.target.value }))}
+                            placeholder="Huraian ringkas tentang item ini..."
+                            rows={3}
+                            className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-emerald-400 resize-none" />
+                        </div>
+                        <div className="flex gap-2 pt-1">
+                          <button onClick={saveLandingItem} disabled={!landingItemForm.label.trim()}
+                            className="flex-1 py-2.5 bg-emerald-700 text-white rounded-xl text-xs font-bold cursor-pointer hover:bg-emerald-800 transition disabled:opacity-40">
+                            Simpan
+                          </button>
+                          <button onClick={() => { setLandingModalOpen(false); setEditingLandingId(null); setLandingItemForm({ label: "", description: "", iconEmoji: "", sectionKey: landingActiveSection }); }}
+                            className="flex-1 py-2.5 bg-slate-100 text-slate-700 rounded-xl text-xs font-bold cursor-pointer hover:bg-slate-200 transition">
+                            Batal
+                          </button>
+                        </div>
                       </div>
                     </div>
-                  ) : (
-                    <button onClick={() => { setLandingItemForm({ label: "", description: "", iconEmoji: "", sectionKey: landingActiveSection }); setLandingFormOpen(true); setEditingLandingId(null); }}
-                      className="flex items-center gap-1 px-3 py-2 bg-emerald-700 text-white rounded-xl text-xs font-bold cursor-pointer hover:bg-emerald-800 transition">
-                      <Plus className="w-3.5 h-3.5" /> Tambah Item
-                    </button>
-                  )}
-                </div>
+                  </div>
+                )}
               </div>
             )}
 
