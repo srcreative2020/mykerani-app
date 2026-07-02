@@ -36,11 +36,22 @@
 >   is NOT complete just because the page/UI/API/DB works — it must verify
 >   both the Owner and Staff side of every rule in that document before
 >   being marked COMPLETE.
+> - `docs/architecture/ADR-001-MYKERANI-Commercial-Resource-Model-V1.0.md`
+>   (STATUS: LOCKED, V1.0) is the master commercial resource model — defines
+>   the Commercial Translation Layer separating internal HQ metrics (AI
+>   Credits, OCR Credits, Resource Wallet, Token) from tenant-facing language
+>   (Bilangan Resit, Muka Surat Penyata Bank, Kapasiti Storan GB, AI
+>   Financial Assistant). ANY change touching Subscription Plans, Billing,
+>   Resource Wallet, Trial, Promotion, Add-on, Tenant UI resource display,
+>   Landing Page pricing, or Dashboard usage meters MUST comply with this
+>   ADR. Key rule: tenants NEVER see AI Credits, OCR Credits, Token, or
+>   Resource Wallet — only business-language equivalents via the CTL.
 > - Where these overlap: the vision document defines WHY/intent, the
 >   constitution defines WHAT is in/out of scope, the parity rule and the
 >   tenant ecosystem governance principle define HOW multi-user logic must
->   be structured and verified, and this file adds implementation-level
->   detail on top of all four.
+>   be structured and verified, ADR-001 defines HOW the commercial and
+>   resource layer is presented, and this file adds implementation-level
+>   detail on top of all five.
 
 ## Data Ownership Rule
 
