@@ -455,7 +455,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLogin, onRegister })
                 <div>
                   <p className="font-display font-bold text-zinc-900">{p.name}</p>
                   {p.aiCredits > 0 && (
-                    <p className="text-[10px] text-zinc-400 mt-0.5">AI {p.aiCredits.toLocaleString()} kredit · Storan {p.storageGB} GB</p>
+                    <p className="text-[10px] text-zinc-400 mt-0.5">AI Financial Assistant {p.aiCredits.toLocaleString()} penggunaan · Storan {p.storageGB} GB</p>
                   )}
                 </div>
                 {p.isCustomPricing ? (
