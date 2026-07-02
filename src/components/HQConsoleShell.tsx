@@ -1431,41 +1431,34 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
   };
 
   // â"€â"€ Nav items (grouped for the simplified, section-based sidebar) â"€â"€
+  // ── Nav items — V2.1 consolidated structure (12 Owner, 5 Staff) ──
+  const tindakanBadge = hqActivityUnseenCount + hqAlerts.filter(a => !a.resolvedAt).length;
   const ownerNav = [
-    { id: "dashboard" as HQPage,   label: "Dashboard",      icon: LayoutDashboard, section: "Utama" },
-    { id: "customers" as HQPage,   label: "Pelanggan",      icon: Users, section: "Utama" },
-    { id: "customer360" as HQPage,       label: "Customer 360",         icon: UserCheck, section: "Utama" },
-    { id: "healthScores" as HQPage,      label: "Skor Kesihatan",       icon: Activity, section: "Utama" },
-    { id: "billing" as HQPage,     label: "Pengebilan",     icon: CreditCard, section: "Operasi" },
-    { id: "usage" as HQPage,       label: "Penggunaan",     icon: Activity, section: "Operasi" },
-    { id: "support" as HQPage,     label: "Sokongan",       icon: Headphones, badge: openCases, section: "Operasi" },
-    { id: "revenue" as HQPage,     label: "Hasil",          icon: DollarSign, section: "Operasi" },
-    { id: "alertCenter" as HQPage,       label: "Pusat Amaran",         icon: Bell, badge: hqAlerts.filter(a => !a.resolvedAt).length, section: "Tadbir Urus" },
-    { id: "walletDashboard" as HQPage,   label: "Dompet Sumber",        icon: Package, section: "Tadbir Urus" },
-    { id: "governance" as HQPage,        label: "Tadbir Urus",          icon: ShieldAlert, section: "Tadbir Urus" },
-    { id: "paymentGovernance" as HQPage, label: "Tadbir Bayaran",       icon: CreditCard, section: "Tadbir Urus" },
-    { id: "storageGovernance" as HQPage, label: "Tadbir Storan",        icon: HardDrive, section: "Tadbir Urus" },
-    { id: "aiCostGovernance" as HQPage,      label: "Tadbir Kos AI",        icon: DollarSign, section: "Tadbir Urus" },
-    { id: "addonCatalog" as HQPage,      label: "Katalog Add-On",       icon: Package, section: "Tadbir Urus" },
-    { id: "phase4Ops" as HQPage,         label: "Promosi & Analitik",   icon: TrendingUp, section: "Tadbir Urus" },
-    { id: "dataMaskingGovernance" as HQPage, label: "Tadbir Topeng Data",   icon: Shield, section: "Tadbir Urus" },
-    { id: "approvalCenter" as HQPage, label: "Pusat Kelulusan",   icon: ShieldAlert, section: "Tadbir Urus" },
-    { id: "activityCenter" as HQPage, label: "Pusat Aktiviti",    icon: Clock, badge: hqActivityUnseenCount, section: "Tadbir Urus" },
-    { id: "costCenter" as HQPage,     label: "Pusat Kos",         icon: TrendingUp, section: "Tadbir Urus" },
-    { id: "knowledgeCenter" as HQPage, label: "Pusat Pengetahuan", icon: FileText, section: "Tadbir Urus" },
-    { id: "website" as HQPage,     label: "Tapak Web",      icon: Globe, section: "Sistem" },
-    { id: "system" as HQPage,      label: "Pusat Sistem",   icon: Server, section: "Sistem" },
-    { id: "settings" as HQPage,    label: "Tetapan",        icon: Settings, section: "Sistem" },
+    // ── OPERASI HARIAN ──
+    { id: "dashboard" as HQPage,         label: "Papan Pemuka",           icon: LayoutDashboard, section: "Operasi Harian" },
+    { id: "customers" as HQPage,         label: "Pelanggan",              icon: Users,           section: "Operasi Harian" },
+    { id: "support" as HQPage,           label: "Sokongan",               icon: Headphones,      badge: openCases, section: "Operasi Harian" },
+    { id: "approvalCenter" as HQPage,    label: "Tindakan",               icon: CheckCircle2,    badge: tindakanBadge, section: "Operasi Harian" },
+    // ── KEWANGAN ──
+    { id: "billing" as HQPage,           label: "Kewangan",               icon: BarChart3,       section: "Kewangan" },
+    { id: "costCenter" as HQPage,        label: "Kos Operasi",            icon: TrendingDown,    section: "Kewangan" },
+    { id: "phase4Ops" as HQPage,         label: "Jualan & Promosi",       icon: TrendingUp,      section: "Kewangan" },
+    // ── PENGURUSAN PLATFORM ──
+    { id: "paymentGovernance" as HQPage, label: "Keselamatan & Kawalan",  icon: Shield,          section: "Pengurusan Platform" },
+    { id: "website" as HQPage,           label: "Tapak Web",              icon: Globe,           section: "Pengurusan Platform" },
+    { id: "knowledgeCenter" as HQPage,   label: "Pusat Bantuan",          icon: HelpCircle,      section: "Pengurusan Platform" },
+    { id: "system" as HQPage,            label: "Kesihatan Sistem",       icon: Server,          section: "Pengurusan Platform" },
+    { id: "settings" as HQPage,          label: "Tetapan",                icon: Settings,        section: "Pengurusan Platform" },
   ];
 
   const staffNav = [
-    { id: "dashboard" as HQPage,     label: "Dashboard",      icon: LayoutDashboard, section: "Utama" },
-    { id: "customers" as HQPage,     label: "Pelanggan",      icon: Users, section: "Utama" },
-    { id: "subscriptions" as HQPage, label: "Langganan",      icon: Repeat, section: "Utama" },
-    { id: "support" as HQPage,       label: "Sokongan",       icon: Headphones, badge: openCases, section: "Utama" },
-    { id: "approvalCenter" as HQPage, label: "Pusat Kelulusan", icon: ShieldAlert, section: "Utama" },
-    { id: "activityCenter" as HQPage, label: "Pusat Aktiviti",  icon: Clock, badge: hqActivityUnseenCount, section: "Utama" },
-    { id: "knowledgeCenter" as HQPage, label: "Pusat Pengetahuan", icon: FileText, section: "Utama" },
+    // ── OPERASI ──
+    { id: "dashboard" as HQPage,         label: "Papan Pemuka",           icon: LayoutDashboard, section: "Operasi" },
+    { id: "customers" as HQPage,         label: "Pelanggan",              icon: Users,           section: "Operasi" },
+    { id: "support" as HQPage,           label: "Sokongan",               icon: Headphones,      badge: openCases, section: "Operasi" },
+    { id: "approvalCenter" as HQPage,    label: "Tindakan",               icon: CheckCircle2,    badge: tindakanBadge, section: "Operasi" },
+    // ── PANDUAN ──
+    { id: "knowledgeCenter" as HQPage,   label: "Pusat Bantuan",          icon: HelpCircle,      section: "Panduan" },
   ];
 
   const navItems = isStaff ? staffNav : ownerNav;
@@ -1521,7 +1514,7 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-xs font-semibold text-slate-800 truncate">{user?.fullName || "HQ User"}</p>
-            <p className="text-[10px] text-slate-400">{isStaff ? "HQ_STAFF" : "HQ_OWNER"}</p>
+            <p className="text-[10px] text-slate-400">{isStaff ? "Kakitangan" : "Pemilik"}</p>
           </div>
           <button onClick={() => signOut()} title="Log Keluar"
             className="p-1 hover:bg-rose-50 hover:text-rose-500 text-slate-300 rounded-lg transition cursor-pointer">
@@ -1574,7 +1567,7 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
           {/* Bell */}
           <div className="relative">
             <button onClick={() => setShowNotifPanel(p => !p)}
-              className="relative p-1.5 rounded-xl border border-slate-200 text-slate-400 hover:text-indigo-500 bg-white cursor-pointer transition">
+              className="relative p-1.5 rounded-xl border border-slate-200 text-slate-400 hover:text-emerald-600 bg-white cursor-pointer transition">
               <Bell className="w-3.5 h-3.5" />
               {notif.unreadCount > 0 && (
                 <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center">
@@ -1601,7 +1594,7 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
                   <span className="text-[10px] font-bold text-red-600 bg-red-50 border border-red-200 px-1.5 py-0.5 rounded-full">{notif.unreadCount} baru</span>
                 )}
               </div>
-              <button onClick={notif.markAllRead} className="text-[11px] text-indigo-500 font-semibold cursor-pointer hover:text-indigo-700">Tandai semua</button>
+              <button onClick={notif.markAllRead} className="text-[11px] text-emerald-600 font-semibold cursor-pointer hover:text-emerald-800">Tandai semua</button>
             </div>
             <div className="overflow-y-auto flex-1">
               {notif.notifs.length === 0 ? (
