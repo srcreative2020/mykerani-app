@@ -156,13 +156,13 @@ const MetricCard = ({ label, value, sub, icon: Icon, color = "teal", trend }: {
   };
   const c = colors[color];
   return (
-    <div className={`bg-white rounded-2xl border ${c.border} p-4 shadow-sm flex items-start space-x-3`}>
-      <div className={`w-9 h-9 rounded-xl ${c.bg} flex items-center justify-center shrink-0`}>
+    <div className={`bg-white rounded-2xl border ${c.border} p-4 shadow-sm flex items-start space-x-3 min-h-[92px]`}>
+      <div className={`w-10 h-10 rounded-xl ${c.bg} flex items-center justify-center shrink-0`}>
         <Icon className={`w-4.5 h-4.5 ${c.icon}`} />
       </div>
       <div className="min-w-0">
-        <p className="text-[11px] text-slate-400 font-medium">{label}</p>
-        <p className="text-xl font-bold text-slate-900 leading-tight">{value}</p>
+        <p className="text-[10px] text-slate-500 font-semibold uppercase tracking-wide">{label}</p>
+        <p className="text-2xl font-black text-slate-900 leading-tight tracking-tight">{value}</p>
         {sub && <p className="text-[10px] text-slate-400 mt-0.5">{sub}</p>}
       </div>
       {trend && (
@@ -295,12 +295,12 @@ function WorkspaceTabBar({
   onChange: (id: string) => void;
 }) {
   return (
-    <div className="flex gap-0.5 border-b border-slate-200 mb-1">
+    <div className="flex border-b border-slate-200 mb-5">
       {tabs.map(t => (
         <button
           key={t.id}
           onClick={() => onChange(t.id)}
-          className={`px-4 py-2 text-xs font-semibold rounded-t-lg border-b-2 -mb-px transition cursor-pointer ${
+          className={`px-5 py-2.5 text-xs font-semibold rounded-t-lg border-b-2 -mb-px transition cursor-pointer whitespace-nowrap ${
             active === t.id
               ? "border-emerald-600 text-emerald-700 bg-emerald-50/40"
               : "border-transparent text-slate-500 hover:text-slate-700 hover:bg-slate-50"
@@ -1518,20 +1518,20 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
       </div>
 
       {/* Nav, grouped */}
-      <nav className="flex-1 px-3 py-4 space-y-4 overflow-y-auto">
+      <nav className="flex-1 px-3 py-3 space-y-5 overflow-y-auto">
         {navSections.map(section => (
           <div key={section} className="space-y-0.5">
-            <p className="px-3 mb-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">{section}</p>
+            <p className="px-3 mb-1.5 text-[9px] font-black uppercase tracking-widest text-slate-400/80">{section}</p>
             {navItems.filter((n: any) => n.section === section).map(({ id, label, icon: Icon, badge }: any) => {
               const active = activePage === id;
               return (
                 <button key={id} onClick={() => { setActivePage(id); setSidebarOpen(false); }}
-                  className={`w-full flex items-center space-x-3 px-3 py-2.5 rounded-xl text-sm font-medium transition cursor-pointer relative ${active ? "bg-emerald-50 text-emerald-800 font-semibold" : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"}`}>
-                  {active && <div className="absolute left-0 top-1.5 bottom-1.5 w-1 rounded-full bg-emerald-600" />}
+                  className={`w-full flex items-center space-x-3 px-3 py-2.5 rounded-xl text-sm font-medium transition cursor-pointer relative ${active ? "bg-emerald-50 text-emerald-800 font-semibold shadow-sm" : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"}`}>
+                  {active && <div className="absolute left-1 top-2 bottom-2 w-[3px] rounded-full bg-emerald-600" />}
                   <Icon className={`w-4 h-4 shrink-0 ${active ? "text-emerald-700" : "text-slate-400"}`} />
                   <span className="flex-1 text-left">{label}</span>
                   {badge > 0 && (
-                    <span className="bg-red-500 text-white text-[9px] font-bold rounded-full w-4 h-4 flex items-center justify-center shrink-0">{badge}</span>
+                    <span className="bg-red-500 text-white text-[9px] font-bold rounded-full min-w-[18px] h-[18px] px-1 flex items-center justify-center shrink-0">{badge > 9 ? "9+" : badge}</span>
                   )}
                 </button>
               );
@@ -1541,17 +1541,17 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
       </nav>
 
       {/* User footer */}
-      <div className="px-3 py-4 border-t border-slate-100">
-        <div className="flex items-center space-x-3 px-3 py-2.5 rounded-xl bg-emerald-50/40">
-          <div className="w-7 h-7 rounded-full bg-emerald-700 text-white flex items-center justify-center text-xs font-bold shrink-0">
+      <div className="px-3 py-3 border-t border-slate-100">
+        <div className="flex items-center space-x-3 px-3 py-2.5 rounded-xl bg-slate-50 hover:bg-slate-100 transition">
+          <div className="w-8 h-8 rounded-full bg-emerald-700 text-white flex items-center justify-center text-xs font-bold shrink-0 shadow-sm">
             {firstName.charAt(0).toUpperCase()}
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-xs font-semibold text-slate-800 truncate">{user?.fullName || "HQ User"}</p>
-            <p className="text-[10px] text-slate-400">{isStaff ? "Kakitangan" : "Pemilik"}</p>
+            <p className="text-[10px] text-slate-500">{isStaff ? "Kakitangan HQ" : "Pemilik HQ"}</p>
           </div>
           <button onClick={() => signOut()} title="Log Keluar"
-            className="p-1 hover:bg-rose-50 hover:text-rose-500 text-slate-300 rounded-lg transition cursor-pointer">
+            className="p-1.5 hover:bg-rose-50 hover:text-rose-500 text-slate-400 rounded-lg transition cursor-pointer">
             <LogOut className="w-3.5 h-3.5" />
           </button>
         </div>
@@ -1619,7 +1619,7 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
       {/* HQ Notification Panel */}
       {showNotifPanel && (
         <div className="fixed inset-0 z-50" onClick={() => setShowNotifPanel(false)}>
-          <div className="absolute top-14 right-3 w-80 max-h-[75vh] bg-white rounded-2xl shadow-2xl border border-slate-200 flex flex-col overflow-hidden"
+          <div className="absolute top-14 right-3 w-80 max-h-[75vh] bg-white rounded-3xl shadow-2xl border border-slate-100 flex flex-col overflow-hidden"
             onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
               <div className="flex items-center gap-2">
@@ -1686,7 +1686,7 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
 
         {/* Main content */}
         <main className="flex-1 overflow-y-auto" id="hq_main">
-          <div className="max-w-5xl mx-auto p-4 md:p-5 pb-28 md:pb-10 space-y-4 md:space-y-5">
+          <div className="max-w-5xl mx-auto p-4 md:p-6 pb-28 md:pb-12 space-y-4 md:space-y-6">
 
             {/* â•â•â•â• DASHBOARD â•â•â•â• */}
             {activePage === "dashboard" && (() => {
@@ -1806,7 +1806,7 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
                   <div className="space-y-1.5">
                     {briefing.map((b, i) => (
                       <button key={i} onClick={b.action}
-                        className={`w-full flex items-center gap-3 text-left rounded-xl px-3 py-2.5 cursor-pointer transition group ${b.urgent ? "bg-red-500/15 hover:bg-red-500/25" : i === 0 ? "bg-white/10 hover:bg-white/15" : "hover:bg-white/5"}`}>
+                        className={`w-full flex items-center gap-3 text-left rounded-xl px-3 py-2 cursor-pointer transition group ${b.urgent ? "bg-red-500/15 hover:bg-red-500/25" : i === 0 ? "bg-white/10 hover:bg-white/15" : "hover:bg-white/5"}`}>
                         <div className={`w-5 h-5 rounded-md flex items-center justify-center text-[9px] font-black shrink-0 ${b.urgent ? "bg-red-500 text-white" : "bg-emerald-600/80 text-white"}`}>
                           {b.icon}
                         </div>
@@ -2000,12 +2000,12 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                     {[
                       { label: "Tambah Pelanggan", icon: Plus,       action: () => { setActivePage("customers"); openAddCustomer(); }, color: "bg-emerald-700 text-white" },
-                      { label: "Urus Sokongan",    icon: Headphones, action: () => setActivePage("support"),    color: "bg-white border border-slate-200 text-slate-700" },
-                      { label: "Lihat Pendapatan",    icon: TrendingUp, action: () => setActivePage("revenue"),    color: "bg-white border border-slate-200 text-slate-700" },
-                      { label: "Konfigurasi AI",        icon: Zap,        action: () => setActivePage("system"),     color: "bg-white border border-slate-200 text-slate-700" },
+                      { label: "Urus Sokongan",    icon: Headphones, action: () => setActivePage("support"),    color: "bg-white border border-slate-200 text-slate-700 hover:border-emerald-300 hover:text-emerald-700 hover:bg-emerald-50/40" },
+                      { label: "Lihat Pendapatan",    icon: TrendingUp, action: () => setActivePage("revenue"),    color: "bg-white border border-slate-200 text-slate-700 hover:border-emerald-300 hover:text-emerald-700 hover:bg-emerald-50/40" },
+                      { label: "Konfigurasi AI",        icon: Zap,        action: () => setActivePage("system"),     color: "bg-white border border-slate-200 text-slate-700 hover:border-emerald-300 hover:text-emerald-700 hover:bg-emerald-50/40" },
                     ].map(({ label, icon: Icon, action, color }) => (
                       <button key={label} onClick={action}
-                        className={`flex items-center gap-2 px-4 py-3 rounded-xl text-xs font-bold shadow-sm transition cursor-pointer ${color}`}>
+                        className={`flex items-center gap-2 px-4 h-11 rounded-xl text-xs font-bold shadow-sm transition cursor-pointer hover:shadow-md ${color}`}>
                         <Icon className="w-4 h-4 shrink-0" /><span>{label}</span>
                       </button>
                     ))}
@@ -2025,8 +2025,10 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
               />
               {pelangganTab === "senarai" && (<>
                 <div className="flex items-center justify-between">
-                  <h1 className="text-xl font-bold text-slate-900">Pelanggan</h1>
+                  <div>
+                    <h1 className="text-xl font-bold text-slate-900">Pelanggan</h1>
                     <p className="text-[11px] text-slate-400 mt-0.5">Senarai, profil dan status kesihatan semua tenant.</p>
+                  </div>
                   <div className="flex items-center gap-2">
                     <div className="relative">
                       <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
@@ -2080,7 +2082,7 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
                       </div>
                     </div>
                   <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-                    <div className="grid grid-cols-12 px-5 py-3 bg-slate-50 border-b border-slate-100 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                    <div className="grid grid-cols-12 px-5 py-3 bg-slate-50/80 border-b border-slate-100 text-[10px] font-bold text-slate-500 uppercase tracking-wider">
                       <div className="col-span-3">Pelanggan</div>
                       <div className="col-span-2">Plan</div>
                       <div className="col-span-1">Status</div>
@@ -2090,7 +2092,7 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
                       <div className="col-span-2">Tindakan</div>
                     </div>
                     {pageRows.map(c => (
-                        <div key={c.id} className="grid grid-cols-12 px-5 py-4 border-b border-slate-50 hover:bg-slate-50 transition items-center">
+                        <div key={c.id} className="grid grid-cols-12 px-5 py-4 border-b border-slate-50 hover:bg-emerald-50/20 transition-colors duration-150 items-center">
                           <div className="col-span-3 flex items-center space-x-3">
                             <div className="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-700 font-bold text-sm flex items-center justify-center shrink-0">
                               {c.name.charAt(0).toUpperCase()}
