@@ -2203,8 +2203,8 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
                             <p className="text-2xl font-bold text-slate-900">RM {p.price.toLocaleString()}<span className="text-xs text-slate-400 font-normal">/bln</span></p>
                           )}
                           <div className="text-[11px] text-slate-400 space-y-0.5">
-                            <p>AI: {p.aiCredits.toLocaleString()} kredit/bln</p>
-                            <p>OCR: {(p.ocrCredits ?? 0).toLocaleString()} kredit/bln</p>
+                            <p>AI Financial Assistant: {p.aiCredits.toLocaleString()} penggunaan/bln</p>
+                            <p>Muka Surat Penyata Bank: {(p.ocrCredits ?? 0).toLocaleString()} muka surat/bln</p>
                             <p>Storan: {p.storageGB} GB</p>
                             <p>Pengguna: sehingga {p.maxUsers}</p>
                             {p.isTrial && p.trialDays > 0 && <p>Tempoh percubaan: {p.trialDays} hari</p>}
