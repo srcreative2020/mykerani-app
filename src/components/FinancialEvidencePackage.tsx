@@ -8,6 +8,7 @@ import { supabase, isSupabaseConfigured } from "../lib/supabase";
 import { useAuth } from "../context/AuthContext";
 import { logEvent } from "../lib/eventLog";
 import { logStorageLedgerEntry } from "../lib/hqService";
+import { useStorageQuota } from "../lib/storageQuota";
 import { AnimatePresence, motion } from "../lib/motionCompat";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
@@ -49,6 +50,8 @@ export const FinancialEvidencePackageManager: React.FC = () => {
   const { activeTenant } = useTenant();
   const { user, isMockUser } = useAuth();
   const { activeProvider } = useStorage();
+  // W2.4 — storage quota for frozen check before upload
+  const storageQuota = useStorageQuota(activeTenant?.id ?? "", activeWorkspace?.id);
 
   // Selected state for previewing or editing packages
   const [selectedPackage, setSelectedPackage] = useState<FinancialEvidencePackage | null>(null);
@@ -289,6 +292,21 @@ export const FinancialEvidencePackageManager: React.FC = () => {
     // Limit size check (10MB for safety)
     if (file.size > 10 * 1024 * 1024) {
       setErrorText("File size exceeds 10MB limit.");
+      return;
+    }
+
+    // W2.4 — Storage frozen check (mirrors server-side storage enforcement)
+    if (storageQuota.isFrozen || !storageQuota.canUpload) {
+      setErrorText("Storan workspace anda telah penuh. Sila naik taraf pelan atau padam fail lama sebelum memuat naik.");
+      return;
+    }
+
+    // W2.6 — Client-side duplicate detection (filename + size match against loaded packages)
+    const isDuplicateFile = financialEvidencePackages.some(
+      p => p.fileName === file.name && (p.fileSizeBytes === undefined || p.fileSizeBytes === file.size)
+    );
+    if (isDuplicateFile) {
+      setErrorText(`Dokumen "${file.name}" ini sudah wujud dalam sistem. Sila semak senarai dokumen sebelum memuat naik semula.`);
       return;
     }
 

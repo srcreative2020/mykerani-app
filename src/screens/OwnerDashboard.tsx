@@ -1387,6 +1387,15 @@ export function OwnerDashboard() {
         check();
       });
     }
+    // W2.3 — Client-side AI credit pre-check (mirrors StaffHomeScreen:581)
+    if (aiCredits.total > 0 && aiCredits.used >= aiCredits.total) {
+      setChatMessages(prev => [...prev, {
+        id: `a-${Date.now()}`, sender: "ai",
+        text: "Kredit AI Financial Assistant pelan anda telah digunakan sepenuhnya. Sila naik taraf pelan untuk meneruskan.",
+      }]);
+      setShowCreditModal("AI");
+      return;
+    }
     setChatInput("");
     const userMsg: ChatMsg = { id: `u-${Date.now()}`, sender: "user", text: q, createdAt: new Date().toISOString() };
     setChatMessages(prev => [...prev, userMsg]);
@@ -1586,6 +1595,10 @@ export function OwnerDashboard() {
               if (text) extractedContext = `Transkripsi nota suara: "${text}"`;
             }
           } else {
+            // W2.5 — OCR client pre-check before sending to server
+            if (ocrCredits.total > 0 && ocrCredits.used >= ocrCredits.total) {
+              extractedContext = "Kuota Muka Surat Penyata Bank pelan anda telah digunakan sepenuhnya — dokumen tidak diproses melalui OCR. Sila naik taraf pelan.";
+            } else {
             const fileDataUrl = await fileToDataUrl(file);
             const { getAuthHeader } = await import("../lib/supabase");
             const res = await fetch("/api/ocr/analyze", {
@@ -1598,6 +1611,7 @@ export function OwnerDashboard() {
               const payload = await res.json();
               extractedContext = `Maklumat dibaca daripada dokumen: merchant=${payload.merchantName || "-"}, tarikh=${payload.date || "-"}, jumlah=${payload.amount ?? "-"}, kategori cadangan=${payload.suggestedCategory || "-"}.`;
             }
+            } // end W2.5 OCR pre-check else
           }
         } finally {
           clearTimeout(attachmentTimeoutId);
