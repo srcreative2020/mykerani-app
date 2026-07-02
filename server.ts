@@ -954,6 +954,13 @@ async function startServer() {
     if (await isUserSuspended(userId)) {
       throw new OcrApiError(403, { error: "Akaun anda telah disekat oleh pentadbir HQ. Sila hubungi sokongan." }, "UPLOAD_COMPLETE");
     }
+    // W4.3 — Server-side storage freeze enforcement before any OCR processing
+    if (!await checkStorageNotFrozen(workspaceId)) {
+      throw new OcrApiError(402, {
+        error: "Storan workspace anda telah mencapai had maksimum. Sila naik taraf pelan atau padam fail lama sebelum memuat naik dokumen baharu.",
+        code: "STORAGE_FROZEN",
+      }, "UPLOAD_COMPLETE");
+    }
 
     onProgress({ stage: "UPLOAD_COMPLETE", overallProgress: OCR_STAGE_END_PCT.UPLOAD_COMPLETE });
 
@@ -1155,6 +1162,8 @@ Provide your output precisely formatted as raw JSON matching exactly this shape,
             ? `All ${chunksTotal} chunk(s) failed across all providers. Distinct errors seen: ${Array.from(distinctChunkErrors).join(" | ")}`
             : null;
           logAiFallback(tenantId, workspaceId, userId, ocrAttempts.map(a => ({ provider: a.provider, model: a.model, error: a.error || "unknown" })), summary || (lastErr?.message || "All chunks failed"), candidates[0]?.strategy, "ocr");
+          // W4.2 — Roll back OCR credit: all AI candidates failed for chunked OCR
+          void reverseResourceCredit(creditTxnId);
           throw (summary ? new Error(summary) : (lastErr || new Error("All configured AI providers failed for OCR on every chunk")));
         }
 
@@ -1180,6 +1189,8 @@ Provide your output precisely formatted as raw JSON matching exactly this shape,
 
         if (!parsedResult) {
           logAiFallback(tenantId, workspaceId, userId, ocrAttempts.map(a => ({ provider: a.provider, model: a.model, error: a.error || "unknown" })), lastErr?.message || "All configured AI providers failed for OCR", candidates[0]?.strategy, "ocr");
+          // W4.2 — Roll back OCR credit: all AI candidates failed for single-pass OCR
+          void reverseResourceCredit(creditTxnId);
           throw lastErr || new Error("All configured AI providers failed for OCR");
         }
         estimatedOutputTokens += estimateTokens(JSON.stringify(parsedResult));
@@ -1627,10 +1638,24 @@ Output ONLY raw JSON matching this shape exactly, no markdown fences, no extra t
     if (await isUserSuspended(userId)) {
       return res.status(403).json({ error: "Akaun anda telah disekat oleh pentadbir HQ." });
     }
+    // W4.3 — Storage server enforcement before bank statement import
+    if (!await checkStorageNotFrozen(workspaceId)) {
+      return res.status(402).json({
+        error: "Storan workspace anda telah mencapai had maksimum. Sila naik taraf pelan atau padam fail lama sebelum mengimport penyata bank.",
+        code: "STORAGE_FROZEN",
+      });
+    }
 
-    const { ok: hasCredit, txnId: creditTxnId } = await consumeResourceCreditV2(tenantId, workspaceId, "OCR", `Bank Statement Import: ${fileName}`);
+    // W4.1 — Per-page quota: deduct pdfPageCount credits instead of 1.
+    // pdfPageCount is set above from PDF extraction result; falls back to 1 if unavailable.
+    const pageCredits = Math.max(1, pdfPageCount ?? 1);
+    const { ok: hasCredit, txnId: creditTxnId } = await consumeResourceCreditV2(
+      tenantId, workspaceId, "OCR",
+      `Bank Statement Import: ${fileName} (${pageCredits} muka surat)`,
+      pageCredits
+    );
     if (!hasCredit) {
-      return res.status(402).json({ error: "Kredit OCR syarikat anda telah habis.", code: "OCR_CREDITS_EXHAUSTED" });
+      return res.status(402).json({ error: "Kredit OCR syarikat anda tidak mencukupi untuk penyata bank ini. Sila naik taraf pelan atau tambah kredit.", code: "OCR_CREDITS_EXHAUSTED" });
     }
 
     // Check for existing active import (Rule #4).
@@ -1670,6 +1695,8 @@ Output ONLY raw JSON matching this shape exactly, no markdown fences, no extra t
       const body = await createResp.text();
       // Unique index violation = another active import snuck in concurrently.
       if (body.includes("bank_statement_jobs_one_active_per_workspace")) {
+        // W4.2 — Roll back OCR credit: active import conflict, job not created
+        void reverseResourceCredit(creditTxnId);
         const active = await getActiveStatementJob(workspaceId);
         return res.status(409).json({
           error: "ACTIVE_IMPORT_EXISTS",
@@ -1680,12 +1707,16 @@ Output ONLY raw JSON matching this shape exactly, no markdown fences, no extra t
         });
       }
       console.error("[STMT/start] Failed to create job:", body);
+      // W4.2 — Roll back OCR credit: job creation failed
+      void reverseResourceCredit(creditTxnId);
       return res.status(500).json({ error: "Gagal membuat rekod import." });
     }
 
     const rows: any[] = await createResp.json();
     const jobId: string = rows[0]?.id;
     if (!jobId) {
+      // W4.2 — Roll back OCR credit: job row created but ID missing
+      void reverseResourceCredit(creditTxnId);
       return res.status(500).json({ error: "Gagal mendapatkan ID import yang dibuat." });
     }
 
@@ -2597,11 +2628,15 @@ Only include a "CONFIRM_TRANSACTION" suggestion entry when financialIntent.detec
     }
   }
 
+  // W4.1: added optional `amount` parameter so bank statement import can deduct
+  // p_amount = pdfPageCount instead of the hardcoded 1. Default remains 1 so all
+  // existing callers (regular OCR, voice, AI assistant) are unaffected.
   async function consumeResourceCreditV2(
     tenantId: string | undefined | null,
     workspaceId: string | undefined | null,
     creditType: "AI" | "OCR",
-    description: string
+    description: string,
+    amount = 1
   ): Promise<{ ok: boolean; txnId: string | null }> {
     if (!tenantId || !workspaceId) return { ok: true, txnId: null };
     const supabaseUrl = process.env.VITE_SUPABASE_URL;
@@ -2615,7 +2650,7 @@ Only include a "CONFIRM_TRANSACTION" suggestion entry when financialIntent.detec
           p_tenant_id: tenantId,
           p_workspace_id: workspaceId,
           p_credit_type: creditType,
-          p_amount: 1,
+          p_amount: Math.max(1, amount),
           p_description: description,
         }),
       });
@@ -2626,6 +2661,49 @@ Only include a "CONFIRM_TRANSACTION" suggestion entry when financialIntent.detec
     } catch (err) {
       console.error("Failed to consume resource credit v2:", err);
       return { ok: false, txnId: null };
+    }
+  }
+
+  // W4.2 — OCR credit rollback: calls the reverse_resource_credit RPC to insert a
+  // compensating REFUND row and restore the wallet balance. Fire-and-forget;
+  // a logging failure must never surface to the caller.
+  async function reverseResourceCredit(txnId: string | null): Promise<void> {
+    if (!txnId) return;
+    const supabaseUrl = process.env.VITE_SUPABASE_URL;
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    if (!supabaseUrl || !serviceRoleKey) return;
+    try {
+      await fetch(`${supabaseUrl}/rest/v1/rpc/reverse_resource_credit`, {
+        method: "POST",
+        headers: { apikey: serviceRoleKey, Authorization: `Bearer ${serviceRoleKey}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ p_txn_id: txnId }),
+      });
+    } catch (err) {
+      console.error("reverseResourceCredit failed (non-fatal):", err);
+    }
+  }
+
+  // W4.3 — Storage server enforcement: checks resource_wallets for this workspace
+  // to determine if storage is frozen (used >= limit). Returns true if storage is
+  // OK to proceed, false if frozen. Fails open (returns true) on DB errors.
+  async function checkStorageNotFrozen(workspaceId: string | undefined | null): Promise<boolean> {
+    if (!workspaceId) return true;
+    const supabaseUrl = process.env.VITE_SUPABASE_URL;
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    if (!supabaseUrl || !serviceRoleKey) return true;
+    try {
+      const resp = await fetch(
+        `${supabaseUrl}/rest/v1/resource_wallets?workspace_id=eq.${workspaceId}&select=storage_used_bytes,storage_limit_bytes`,
+        { headers: { apikey: serviceRoleKey, Authorization: `Bearer ${serviceRoleKey}` } }
+      );
+      if (!resp.ok) return true;
+      const rows: any[] = await resp.json();
+      if (!rows.length) return true;
+      const { storage_used_bytes, storage_limit_bytes } = rows[0];
+      if (storage_limit_bytes > 0 && storage_used_bytes >= storage_limit_bytes) return false;
+      return true;
+    } catch {
+      return true;
     }
   }
 
