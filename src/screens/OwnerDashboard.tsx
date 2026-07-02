@@ -89,6 +89,7 @@ import { useCrossWorkspacePattern } from "../hooks/useCrossWorkspacePattern";
 import BankStatementProcessor from "../components/BankStatementProcessor";
 import { confirmFinancialRecord, type ConfirmInput } from "../lib/financialRecordConfirmation";
 import { type StatementTransaction } from "../lib/bankStatementTypes";
+import PlanCard, { type PlanCardProps } from "../components/PlanCard";
 
 interface ChatMsg {
   id: string;
@@ -5080,36 +5081,31 @@ export function OwnerDashboard() {
                   <p className="text-sm font-bold text-slate-900">Plan Tersedia</p>
                   {trialError && <p className="text-xs text-red-600">{trialError}</p>}
                   <div className="grid sm:grid-cols-2 gap-3">
-                    {availablePlans.map(p => (
-                      <div key={p.id} className={`border rounded-2xl p-4 space-y-2 ${currentSub?.planId === p.id ? "border-indigo-300 bg-indigo-50/40" : "border-slate-200"}`}>
-                        <p className="font-bold text-slate-900">{p.name}</p>
-                        {p.isCustomPricing ? (
-                          <p className="text-lg font-bold text-slate-900">Harga Tersuai</p>
-                        ) : (
-                          <p className="text-xl font-bold text-slate-900">RM {p.price.toLocaleString()}<span className="text-xs text-slate-400 font-normal">/bln</span></p>
-                        )}
-                        {p.features.length > 0 && (
-                          <ul className="text-2xs text-emerald-700 space-y-0.5">
-                            {p.features.slice(0, 5).map((f, i) => <li key={i}>+ {f}</li>)}
-                          </ul>
-                        )}
-                        {p.isTrial ? (
-                          <button onClick={startTrial} disabled={trialSubmitting || !!currentSub}
-                            className="w-full py-2 bg-indigo-600 text-white rounded-xl text-xs font-bold cursor-pointer hover:bg-indigo-700 transition disabled:opacity-40 disabled:cursor-not-allowed">
-                            {trialSubmitting ? "Mengaktifkan..." : "Mulakan Percubaan Percuma"}
-                          </button>
-                        ) : p.isCustomPricing ? (
-                          <a href="mailto:sales@mykerani.com" className="w-full block text-center py-2 bg-slate-900 text-white rounded-xl text-xs font-bold cursor-pointer hover:bg-slate-800 transition">
-                            Hubungi Jualan
-                          </a>
-                        ) : (
-                          <button onClick={() => openPaymentModal(p.id)}
-                            className="w-full py-2 bg-emerald-50 border border-emerald-100 text-emerald-700 rounded-xl text-xs font-bold cursor-pointer hover:bg-emerald-100 transition">
-                            Pilih Plan
-                          </button>
-                        )}
-                      </div>
-                    ))}
+                    {availablePlans.map(p => {
+                      const cta: PlanCardProps["cta"] = p.isTrial
+                        ? {
+                            label: "Mulakan Percubaan Percuma",
+                            onClick: startTrial,
+                            variant: "primary",
+                            disabled: trialSubmitting || !!currentSub,
+                            loading: trialSubmitting,
+                            loadingLabel: "Mengaktifkan...",
+                          }
+                        : p.isCustomPricing
+                        ? { label: "Hubungi Jualan", href: "mailto:sales@mykerani.com", variant: "secondary" }
+                        : { label: "Pilih Plan", onClick: () => openPaymentModal(p.id), variant: "outline" };
+                      return (
+                        <PlanCard
+                          key={p.id}
+                          title={p.name}
+                          price={p.isCustomPricing ? "Harga Tersuai" : `RM ${p.price.toLocaleString()}/bln`}
+                          features={p.features.slice(0, 5)}
+                          highlighted={currentSub?.planId === p.id}
+                          featureIcon="plus"
+                          cta={cta}
+                        />
+                      );
+                    })}
                   </div>
                 </div>
 
