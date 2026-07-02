@@ -1205,6 +1205,68 @@ export async function deleteFaqItem(id: string): Promise<boolean> {
   return !error;
 }
 
+// --- Landing Page CMS ---
+
+export interface LandingSection {
+  id: string;
+  sectionKey: string;
+  label: string;
+  description: string;
+  iconEmoji: string;
+  sortOrder: number;
+  isVisible: boolean;
+}
+
+export async function getLandingContent(): Promise<LandingSection[]> {
+  if (!isSupabaseConfigured() || !supabase) return [];
+  const { data, error } = await supabase
+    .from("landing_page_sections")
+    .select("*")
+    .order("sort_order", { ascending: true });
+  if (error || !data) return [];
+  return data.map((row: any) => ({
+    id: row.id,
+    sectionKey: row.section_key,
+    label: row.label,
+    description: row.description,
+    iconEmoji: row.icon_emoji,
+    sortOrder: row.sort_order,
+    isVisible: row.is_visible,
+  }));
+}
+
+export async function upsertLandingItem(item: Omit<LandingSection, "id"> & { id?: string }): Promise<void> {
+  if (!isSupabaseConfigured() || !supabase) return;
+  const row = {
+    section_key: item.sectionKey,
+    label: item.label,
+    description: item.description,
+    icon_emoji: item.iconEmoji,
+    sort_order: item.sortOrder,
+    is_visible: item.isVisible,
+  };
+  if (item.id) {
+    await supabase.from("landing_page_sections").update(row).eq("id", item.id);
+  } else {
+    await supabase.from("landing_page_sections").insert(row);
+  }
+}
+
+export async function deleteLandingItem(id: string): Promise<void> {
+  if (!isSupabaseConfigured() || !supabase) return;
+  await supabase.from("landing_page_sections").delete().eq("id", id);
+}
+
+export async function toggleLandingItemVisibility(id: string, isVisible: boolean): Promise<void> {
+  if (!isSupabaseConfigured() || !supabase) return;
+  await supabase.from("landing_page_sections").update({ is_visible: isVisible }).eq("id", id);
+}
+
+export async function moveLandingItem(id: string, newSortOrder: number): Promise<void> {
+  if (!isSupabaseConfigured() || !supabase) return;
+  await supabase.from("landing_page_sections").update({ sort_order: newSortOrder }).eq("id", id);
+}
+
 // --- HQ Approval Center ---
 // Generic dual-approval inbox built on pending_hq_actions. Any HQ action
 // that should require a second approver (never auto-applied) is submitted

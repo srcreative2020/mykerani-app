@@ -1,9 +1,9 @@
 import React, { useEffect, useRef, useState } from "react";
-import { getSiteSettings, getFaqItems, getPlans, type HqPlan, type SiteSettings, type FaqItem } from "../lib/hqService";
+import { getSiteSettings, getFaqItems, getPlans, getLandingContent, type HqPlan, type SiteSettings, type FaqItem, type LandingSection } from "../lib/hqService";
 import {
-  ArrowRight, PlayCircle, Receipt, FileWarning, HelpCircle, Mail, Phone,
-  MessageCircle, MapPin, Clock, ChevronDown, Sparkles, Upload, Wand2,
-  CheckCircle2, FileSpreadsheet, Building2, Banknote, Send, Bot,
+  ArrowRight, PlayCircle, HelpCircle, Mail, Phone,
+  MessageCircle, MapPin, Clock, ChevronDown, Sparkles,
+  CheckCircle2, Send, Bot,
 } from "lucide-react";
 
 interface LandingPageProps {
@@ -11,41 +11,6 @@ interface LandingPageProps {
   onRegister: () => void;
 }
 
-const BUSINESS_TYPES = [
-  "Freelancer", "Penjual Online", "Perniagaan Makanan", "Kontraktor",
-  "Kedai Runcit", "Perniagaan Servis", "Agensi", "PKS", "Syarikat Berkembang",
-];
-
-const COST_CARDS = [
-  { icon: Receipt, label: "Resit Hilang" },
-  { icon: FileWarning, label: "Bil Tertinggal" },
-  { icon: Banknote, label: "Aliran Tunai Tidak Diketahui" },
-  { icon: FileSpreadsheet, label: "Dokumen Tidak Tersusun" },
-  { icon: FileWarning, label: "Sukar Sediakan Laporan" },
-  { icon: Building2, label: "Sukar Mohon Pembiayaan" },
-  { icon: Receipt, label: "Bayar Untuk Rekod Manual" },
-];
-
-const HOW_IT_WORKS = [
-  { icon: Upload, label: "Muat Naik Dokumen" },
-  { icon: Wand2, label: "AI Ekstrak Maklumat" },
-  { icon: Sparkles, label: "AI Cadangkan Rekod" },
-  { icon: CheckCircle2, label: "Pengguna Sahkan" },
-  { icon: FileSpreadsheet, label: "Rekod Disimpan" },
-  { icon: FileSpreadsheet, label: "Laporan Sedia" },
-];
-
-const WHAT_CAN_BE_MANAGED = [
-  "Pendapatan", "Perbelanjaan", "Resit", "Invois", "Penyata Bank",
-  "Belum Terima", "Belum Bayar", "Hutang", "Bil", "Komitmen",
-  "Aliran Tunai", "Laporan", "Dokumen Kewangan",
-];
-
-const BENEFITS = [
-  "Jimat Masa", "Kurangkan Kerja Manual", "Kurangkan Kos Rekod Kewangan",
-  "Susun Dokumen Kewangan", "Sedia Untuk Keperluan Cukai",
-  "Sedia Untuk Permohonan Pembiayaan", "Tingkatkan Penglihatan Kewangan",
-];
 
 interface DemoMsg { role: "user" | "ai"; text: string; }
 
@@ -204,6 +169,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLogin, onRegister })
   const [plansLoading, setPlansLoading] = useState(true);
   const [plansError, setPlansError] = useState(false);
   const [openFaq, setOpenFaq] = useState<string | null>(null);
+  const [landingContent, setLandingContent] = useState<LandingSection[]>([]);
 
   useScrollReveal(plans.length);
   const activeSection = useActiveSection(NAV_SECTIONS);
@@ -211,10 +177,13 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLogin, onRegister })
   useEffect(() => {
     getSiteSettings().then(setSettings);
     getFaqItems().then(setFaqs);
+    getLandingContent().then(setLandingContent);
     getPlans()
       .then(data => { setPlans(data); setPlansLoading(false); })
       .catch(() => { setPlansError(true); setPlansLoading(false); });
   }, []);
+
+  const sectionItems = (key: string) => landingContent.filter(i => i.sectionKey === key).sort((a, b) => a.sortOrder - b.sortOrder);
 
   const companyName = settings?.companyName || "MyKerani";
 
@@ -303,13 +272,11 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLogin, onRegister })
           <p className="text-xs text-zinc-400">Banyak perniagaan kehilangan masa dan wang akibat rekod yang tidak diuruskan.</p>
         </div>
         <div className="grid sm:grid-cols-3 md:grid-cols-4 gap-3">
-          {COST_CARDS.map((c, i) => (
-            <div
-              key={i}
-              className="sr-fade bg-white border border-[#E8E6DE] rounded-2xl p-4 text-center space-y-2 hover:-translate-y-0.5 hover:shadow-md transition-all"
-            >
-              <c.icon className="w-5 h-5 text-rose-500 mx-auto" />
-              <p className="text-[11px] font-semibold text-zinc-700">{c.label}</p>
+          {sectionItems("problem").map((item, i) => (
+            <div key={i} className="sr-fade bg-white border border-[#E8E6DE] rounded-2xl p-4 text-center space-y-2 hover:-translate-y-0.5 hover:shadow-md transition-all">
+              {item.iconEmoji ? <span className="text-2xl block">{item.iconEmoji}</span> : <div className="w-5 h-5 bg-rose-100 rounded mx-auto" />}
+              <p className="text-[11px] font-semibold text-zinc-700">{item.label}</p>
+              {item.description && <p className="text-[10px] text-zinc-400">{item.description}</p>}
             </div>
           ))}
         </div>
@@ -330,17 +297,15 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLogin, onRegister })
           <p className="text-xs text-zinc-400">Tiga langkah mudah — Cakap. Upload. Sahkan.</p>
         </div>
         <div className="flex flex-wrap justify-center items-center gap-3">
-          {HOW_IT_WORKS.map((s, i) => (
+          {sectionItems("how_it_works").map((item, i, arr) => (
             <React.Fragment key={i}>
               <div className="sr-fade flex flex-col items-center gap-2 w-28 text-center group">
                 <div className="w-11 h-11 rounded-xl bg-[#F0FDF4] border border-[#BEF3CC] flex items-center justify-center group-hover:bg-[#22c55e] transition">
-                  <s.icon className="w-5 h-5 text-[#16a34a] group-hover:text-white transition" />
+                  <span className="text-xl group-hover:scale-110 transition-transform">{item.iconEmoji || "✦"}</span>
                 </div>
-                <p className="text-[10px] font-semibold text-zinc-600 leading-tight">{s.label}</p>
+                <p className="text-[10px] font-semibold text-zinc-600 leading-tight">{item.label}</p>
               </div>
-              {i < HOW_IT_WORKS.length - 1 && (
-                <ArrowRight className="w-4 h-4 text-[#BEF3CC] hidden sm:block" />
-              )}
+              {i < arr.length - 1 && <ArrowRight className="w-4 h-4 text-[#BEF3CC] hidden sm:block" />}
             </React.Fragment>
           ))}
         </div>
@@ -361,12 +326,9 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLogin, onRegister })
           <p className="text-xs text-zinc-400">Untuk pemilik perniagaan yang tidak mahu belajar perakaunan.</p>
         </div>
         <div className="flex flex-wrap justify-center gap-2.5">
-          {BUSINESS_TYPES.map((b, i) => (
-            <span
-              key={i}
-              className="sr-fade px-4 py-2 bg-white border border-[#E8E6DE] hover:border-[#22c55e] hover:text-[#16a34a] rounded-full text-xs font-semibold text-zinc-700 transition cursor-default"
-            >
-              {b}
+          {sectionItems("target_users").map((item, i) => (
+            <span key={i} className="sr-fade px-4 py-2 bg-white border border-[#E8E6DE] hover:border-[#22c55e] hover:text-[#16a34a] rounded-full text-xs font-semibold text-zinc-700 transition cursor-default">
+              {item.label}
             </span>
           ))}
         </div>
@@ -378,9 +340,9 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLogin, onRegister })
           <h2 className="text-xl font-display font-bold text-zinc-900">Apa Yang Boleh Diuruskan</h2>
         </div>
         <div className="flex flex-wrap justify-center gap-2.5">
-          {WHAT_CAN_BE_MANAGED.map((b, i) => (
+          {sectionItems("what_managed").map((item, i) => (
             <span key={i} className="sr-fade px-4 py-2 bg-[#F0FDF4] border border-[#BEF3CC] text-[#16a34a] rounded-full text-xs font-semibold">
-              {b}
+              {item.label}
             </span>
           ))}
         </div>
@@ -392,13 +354,10 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLogin, onRegister })
           <h2 className="text-xl font-display font-bold text-zinc-900">Mengapa Pemilik Perniagaan Pilih MyKerani</h2>
         </div>
         <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-3">
-          {BENEFITS.map((b, i) => (
-            <div
-              key={i}
-              className="sr-fade flex items-center gap-3 p-4 bg-white border border-[#E8E6DE] rounded-xl hover:shadow-sm hover:-translate-y-0.5 transition-all"
-            >
-              <CheckCircle2 className="w-4 h-4 text-[#22c55e] shrink-0" />
-              <span className="text-xs font-semibold text-zinc-700">{b}</span>
+          {sectionItems("benefits").map((item, i) => (
+            <div key={i} className="sr-fade flex items-center gap-3 p-4 bg-white border border-[#E8E6DE] rounded-xl hover:shadow-sm hover:-translate-y-0.5 transition-all">
+              <span className="text-lg shrink-0">{item.iconEmoji || "✓"}</span>
+              <span className="text-xs font-semibold text-zinc-700">{item.label}</span>
             </div>
           ))}
         </div>

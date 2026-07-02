@@ -384,6 +384,12 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
   const [siteSettingsSaved, setSiteSettingsSaved] = useState(false);
   const [faqItems, setFaqItems] = useState<hqService.FaqItem[]>([]);
   const [faqDraft, setFaqDraft] = useState<{ question: string; answer: string }>({ question: "", answer: "" });
+  // Landing CMS state
+  const [landingContent, setLandingContent] = useState<hqService.LandingSection[]>([]);
+  const [landingActiveSection, setLandingActiveSection] = useState<string>("problem");
+  const [landingItemForm, setLandingItemForm] = useState({ label: "", description: "", iconEmoji: "", sectionKey: "problem" });
+  const [editingLandingId, setEditingLandingId] = useState<string | null>(null);
+  const [landingFormOpen, setLandingFormOpen] = useState(false);
   const [logoUploading, setLogoUploading] = useState(false);
   const [socialDraft, setSocialDraft] = useState<{ platform: string; url: string }>({ platform: "", url: "" });
 
@@ -391,6 +397,7 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
     if (!useRealData) return;
     hqService.getSiteSettings().then(s => { if (s) setSiteSettings(s); });
     hqService.getFaqItems(true).then(setFaqItems);
+    hqService.getLandingContent().then(setLandingContent);
   };
   useEffect(() => { reloadSiteCms(); }, [useRealData]);
 
@@ -415,6 +422,57 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
   const removeFaqItem = async (id: string) => {
     await hqService.deleteFaqItem(id);
     reloadSiteCms();
+  };
+
+  const reloadLandingContent = () => hqService.getLandingContent().then(setLandingContent);
+
+  const saveLandingItem = async () => {
+    const maxOrder = landingContent.filter(i => i.sectionKey === landingItemForm.sectionKey).length;
+    await hqService.upsertLandingItem({
+      id: editingLandingId || undefined,
+      sectionKey: landingItemForm.sectionKey,
+      label: landingItemForm.label.trim(),
+      description: landingItemForm.description,
+      iconEmoji: landingItemForm.iconEmoji,
+      sortOrder: editingLandingId ? landingContent.find(i => i.id === editingLandingId)?.sortOrder ?? maxOrder + 1 : maxOrder + 1,
+      isVisible: true,
+    });
+    setLandingFormOpen(false);
+    setEditingLandingId(null);
+    setLandingItemForm({ label: "", description: "", iconEmoji: "", sectionKey: landingActiveSection });
+    reloadLandingContent();
+  };
+
+  const deleteLandingItemById = async (id: string) => {
+    await hqService.deleteLandingItem(id);
+    reloadLandingContent();
+  };
+
+  const toggleLandingVisibility = async (id: string, current: boolean) => {
+    await hqService.toggleLandingItemVisibility(id, !current);
+    reloadLandingContent();
+  };
+
+  const moveLandingItemInList = async (id: string, items: hqService.LandingSection[], dir: -1 | 1) => {
+    const idx = items.findIndex(i => i.id === id);
+    if (idx < 0) return;
+    const swapIdx = idx + dir;
+    if (swapIdx < 0 || swapIdx >= items.length) return;
+    const a = items[idx];
+    const b = items[swapIdx];
+    await Promise.all([
+      hqService.moveLandingItem(a.id, b.sortOrder),
+      hqService.moveLandingItem(b.id, a.sortOrder),
+    ]);
+    reloadLandingContent();
+  };
+
+  const LANDING_SECTION_LABELS: Record<string, string> = {
+    problem: "Masalah Pelanggan",
+    how_it_works: "Cara MyKerani Berfungsi",
+    target_users: "Sasaran Pengguna",
+    what_managed: "Apa Yang Boleh Diuruskan",
+    benefits: "Kelebihan MyKerani",
   };
 
   const handleLogoFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -2799,6 +2857,78 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
                       className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-emerald-400" />
                     <button onClick={addFaqItem} className="px-4 py-2 bg-indigo-600 text-white rounded-xl text-xs font-bold cursor-pointer hover:bg-indigo-700 transition">Tambah Soalan</button>
                   </div>
+                </div>
+
+                {/* Landing Page Content CMS */}
+                <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-4">
+                  <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                    <Globe className="w-4 h-4 text-emerald-600" /> Kandungan Landing Page
+                  </h3>
+                  {/* Section tabs */}
+                  <div className="flex flex-wrap gap-1.5">
+                    {Object.entries(LANDING_SECTION_LABELS).map(([key, label]) => (
+                      <button key={key}
+                        onClick={() => { setLandingActiveSection(key); setLandingFormOpen(false); setEditingLandingId(null); }}
+                        className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${landingActiveSection === key ? "bg-emerald-700 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}>
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Items list */}
+                  {(() => {
+                    const items = landingContent.filter(i => i.sectionKey === landingActiveSection).sort((a, b) => a.sortOrder - b.sortOrder);
+                    return (
+                      <div className="space-y-2">
+                        {items.map((item, idx) => (
+                          <div key={item.id} className={`flex items-center gap-3 p-3 border rounded-xl ${item.isVisible ? "border-slate-100 bg-slate-50" : "border-dashed border-slate-200 bg-slate-50/50 opacity-60"}`}>
+                            {item.iconEmoji && <span className="text-lg shrink-0">{item.iconEmoji}</span>}
+                            <div className="flex-1 min-w-0">
+                              <p className="text-xs font-semibold text-slate-800">{item.label}</p>
+                              {item.description && <p className="text-[10px] text-slate-400">{item.description}</p>}
+                            </div>
+                            <div className="flex items-center gap-1 shrink-0">
+                              <button onClick={() => moveLandingItemInList(item.id, items, -1)} disabled={idx === 0} className="p-1 text-slate-400 hover:text-slate-700 disabled:opacity-30 cursor-pointer">↑</button>
+                              <button onClick={() => moveLandingItemInList(item.id, items, 1)} disabled={idx === items.length - 1} className="p-1 text-slate-400 hover:text-slate-700 disabled:opacity-30 cursor-pointer">↓</button>
+                              <button onClick={() => toggleLandingVisibility(item.id, item.isVisible)} className={`px-2 py-0.5 rounded-lg text-[10px] font-bold cursor-pointer ${item.isVisible ? "bg-emerald-100 text-emerald-700" : "bg-slate-200 text-slate-500"}`}>
+                                {item.isVisible ? "Aktif" : "Tersembunyi"}
+                              </button>
+                              <button onClick={() => { setEditingLandingId(item.id); setLandingItemForm({ label: item.label, description: item.description, iconEmoji: item.iconEmoji, sectionKey: item.sectionKey }); setLandingFormOpen(true); }} className="p-1 text-slate-400 hover:text-indigo-600 cursor-pointer"><Edit3 className="w-3.5 h-3.5" /></button>
+                              <button onClick={() => deleteLandingItemById(item.id)} className="p-1 text-slate-400 hover:text-rose-500 cursor-pointer"><Trash2 className="w-3.5 h-3.5" /></button>
+                            </div>
+                          </div>
+                        ))}
+                        {items.length === 0 && <p className="text-xs text-slate-400 text-center py-4">Tiada item lagi untuk seksyen ini.</p>}
+                      </div>
+                    );
+                  })()}
+
+                  {/* Add / Edit form */}
+                  {landingFormOpen ? (
+                    <div className="border border-emerald-100 bg-emerald-50/30 rounded-xl p-4 space-y-3">
+                      <p className="text-xs font-bold text-slate-700">{editingLandingId ? "Edit Item" : "Tambah Item Baharu"}</p>
+                      <div className="grid grid-cols-4 gap-2">
+                        <input value={landingItemForm.iconEmoji} onChange={e => setLandingItemForm(f => ({ ...f, iconEmoji: e.target.value }))}
+                          placeholder="Emoji (cth: 🧾)"
+                          className="col-span-1 border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-emerald-400" />
+                        <input value={landingItemForm.label} onChange={e => setLandingItemForm(f => ({ ...f, label: e.target.value }))}
+                          placeholder="Label / Tajuk *"
+                          className="col-span-3 border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-emerald-400" />
+                      </div>
+                      <input value={landingItemForm.description} onChange={e => setLandingItemForm(f => ({ ...f, description: e.target.value }))}
+                        placeholder="Penerangan ringkas (pilihan)"
+                        className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-emerald-400" />
+                      <div className="flex gap-2">
+                        <button onClick={saveLandingItem} disabled={!landingItemForm.label.trim()} className="px-4 py-2 bg-emerald-700 text-white rounded-xl text-xs font-bold cursor-pointer hover:bg-emerald-800 transition disabled:opacity-40">Simpan</button>
+                        <button onClick={() => { setLandingFormOpen(false); setEditingLandingId(null); setLandingItemForm({ label: "", description: "", iconEmoji: "", sectionKey: landingActiveSection }); }} className="px-4 py-2 bg-slate-100 text-slate-700 rounded-xl text-xs font-bold cursor-pointer hover:bg-slate-200 transition">Batal</button>
+                      </div>
+                    </div>
+                  ) : (
+                    <button onClick={() => { setLandingItemForm({ label: "", description: "", iconEmoji: "", sectionKey: landingActiveSection }); setLandingFormOpen(true); setEditingLandingId(null); }}
+                      className="flex items-center gap-1 px-3 py-2 bg-emerald-700 text-white rounded-xl text-xs font-bold cursor-pointer hover:bg-emerald-800 transition">
+                      <Plus className="w-3.5 h-3.5" /> Tambah Item
+                    </button>
+                  )}
                 </div>
               </div>
             )}
