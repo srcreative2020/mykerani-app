@@ -585,6 +585,34 @@ async function startServer() {
         return res.status(400).json({ success: false, error: "Tiada tenant dikesan untuk akaun anda. Sila log masuk semula." });
       }
 
+      // W3.1 — Server-side staff user limit enforcement (uses existing subscription_plans.features.maxUsers field)
+      if (role === "TENANT_STAFF") {
+        const w31Url = process.env.VITE_SUPABASE_URL;
+        const w31Key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+        if (w31Url && w31Key) {
+          const planResp = await fetch(
+            `${w31Url}/rest/v1/tenant_subscriptions?tenant_id=eq.${newStaffTenantId}&select=subscription_plans(features)`,
+            { headers: { apikey: w31Key, Authorization: `Bearer ${w31Key}` } }
+          );
+          if (planResp.ok) {
+            const planRows: any[] = await planResp.json();
+            const maxUsers: number | null = planRows[0]?.subscription_plans?.features?.maxUsers ?? null;
+            if (maxUsers !== null) {
+              const countResp = await fetch(
+                `${w31Url}/rest/v1/user_role_assignments?tenant_id=eq.${newStaffTenantId}&role=eq.TENANT_STAFF&select=id`,
+                { headers: { apikey: w31Key, Authorization: `Bearer ${w31Key}` } }
+              );
+              if (countResp.ok) {
+                const existingStaff: any[] = await countResp.json();
+                if (existingStaff.length >= maxUsers) {
+                  return res.status(403).json({ success: false, error: `Had pengguna staf pelan semasa (${maxUsers} orang) telah penuh. Sila naik taraf pelan terlebih dahulu.` });
+                }
+              }
+            }
+          }
+        }
+      }
+
       // AUTH-02B: prefer Supabase Auth's native invite-by-email flow over the
       // old admin.createUser()+share-a-temp-password approach. POST
       // /auth/v1/invite creates the auth user AND (when the project has an
@@ -1838,6 +1866,11 @@ Output ONLY raw JSON matching this shape exactly, no markdown fences, no extra t
       if (await isUserSuspended(userId)) {
         return res.status(403).json({ error: "Akaun anda telah disekat oleh pentadbir HQ. Sila hubungi sokongan." });
       }
+      // W3.2/W3.3 — Trial/subscription expiry runtime gate (checked before any AI provider call)
+      const subStatus = await checkSubscriptionActive(financialContext?.activeTenant?.id);
+      if (!subStatus.ok) {
+        return res.status(402).json({ error: subStatus.error, code: "SUBSCRIPTION_EXPIRED" });
+      }
 
       candidates = await getAiProviderCandidates();
       // TEMP RUNTIME VERIFICATION LOGGING — remove after diagnosis.
@@ -2371,6 +2404,37 @@ Only include a "CONFIRM_TRANSACTION" suggestion entry when financialIntent.detec
   // HQ can suspend an individual user's access to AI features (see
   // set_user_suspended RPC). Checked server-side so a suspended user can't
   // bypass it by calling the API directly.
+  // W3.2/W3.3 — Check whether a tenant's subscription/trial is still valid at request time.
+  // Returns { ok: false } when the subscription is expired or trial has lapsed.
+  // Fails open (ok: true) if config is missing or DB is unreachable — guards must never
+  // block legitimate requests due to infrastructure issues.
+  async function checkSubscriptionActive(tenantId: string | undefined | null): Promise<{ ok: boolean; error: string }> {
+    if (!tenantId) return { ok: true, error: "" };
+    const supabaseUrl = process.env.VITE_SUPABASE_URL;
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    if (!supabaseUrl || !serviceRoleKey) return { ok: true, error: "" };
+    try {
+      const resp = await fetch(
+        `${supabaseUrl}/rest/v1/tenant_subscriptions?tenant_id=eq.${tenantId}&select=status,current_period_end`,
+        { headers: { apikey: serviceRoleKey, Authorization: `Bearer ${serviceRoleKey}` } }
+      );
+      if (!resp.ok) return { ok: true, error: "" };
+      const rows: any[] = await resp.json();
+      if (!rows.length) return { ok: true, error: "" }; // no subscription record = unmanaged / free
+      const { status, current_period_end } = rows[0];
+      if (status === "expired") {
+        return { ok: false, error: "Langganan syarikat anda telah tamat tempoh. Sila perbaharui pelan untuk meneruskan penggunaan AI Financial Assistant." };
+      }
+      if (status === "trialing" && current_period_end && new Date(current_period_end) < new Date()) {
+        return { ok: false, error: "Tempoh percubaan percuma syarikat anda telah tamat. Sila pilih pelan berbayar untuk meneruskan." };
+      }
+      return { ok: true, error: "" };
+    } catch (err) {
+      console.error("checkSubscriptionActive error:", err);
+      return { ok: true, error: "" };
+    }
+  }
+
   async function isUserSuspended(userId: string | undefined | null): Promise<boolean> {
     if (!userId) return false;
     const supabaseUrl = process.env.VITE_SUPABASE_URL;
