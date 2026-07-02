@@ -19,7 +19,7 @@ import {
 } from "lucide-react";
 import { FinancialEvidencePackageManager } from "../components/FinancialEvidencePackage";
 import { createTenantSupportTicket, getMyTenantSupportTickets, SupportTicket, updateTenantMasterProfile, SUPPORT_TICKET_TEMPLATES, uploadTicketAttachment, getTicketAttachmentUrl, ticketSlaState, TICKET_STATUS_LABEL_MS, TICKET_STATUS_STYLE, tenantAssignStaffRole, tenantRevokeStaffRole, tenantSubmitAppeal, tenantReplySupportTicket, getTenantMyHealthScore, TenantHealthScore, getTenantAiCostSummary, TenantAiCostSummary, getMyDataAccessLog, DataAccessLogEntry, getAddonPackages, AddonPackage, redeemPromotion, getTenantActivityFeed, getMyPromotionRedemptions, logTenantActivity } from "../lib/hqService";
-import { TenantResourceLedger } from "../components/TenantResourceLedger";
+import { UsageHistory } from "../components/UsageHistory";
 import { FinancialReportsAnalytics } from "../components/FinancialReportsAnalytics";
 import { StorageBar } from "../components/StorageBar";
 import { DocumentsManager } from "../components/DocumentsManager";
@@ -1433,7 +1433,7 @@ export function OwnerDashboard() {
     if (aiCredits.total > 0 && aiCredits.used >= aiCredits.total) {
       setChatMessages(prev => [...prev, {
         id: `a-${Date.now()}`, sender: "ai",
-        text: "Kredit AI Financial Assistant pelan anda telah digunakan sepenuhnya. Sila naik taraf pelan untuk meneruskan.",
+        text: "Kuota AI Financial Assistant pelan anda telah digunakan sepenuhnya. Sila naik taraf pelan untuk meneruskan.",
       }]);
       setShowCreditModal("AI");
       return;
@@ -1472,7 +1472,7 @@ export function OwnerDashboard() {
         return;
       }
       if (res.status === 402) {
-        setChatMessages(prev => [...prev, { id: `a-${Date.now()}`, sender: "ai", text: data.error || "Kredit AI anda telah habis. Sila hubungi pentadbir untuk menambah kredit." }]);
+        setChatMessages(prev => [...prev, { id: `a-${Date.now()}`, sender: "ai", text: data.error || "Kuota AI Financial Assistant anda telah habis. Sila hubungi pentadbir untuk menambah kuota." }]);
         setChatLoading(false);
         return;
       }
@@ -3289,7 +3289,7 @@ export function OwnerDashboard() {
                 { id: "aktiviti" as MorePage, label: "Aktiviti",        desc: "Rekod kewangan, log sistem & arkib perbualan", icon: History },
                 { id: "akunSaya" as MorePage, label: "Akaun Saya",      desc: user?.email || "Profil, kewangan AI & skor kesihatan", icon: User },
                 { id: "team"     as MorePage, label: "Pasukan",          desc: "Tambah, edit & urus kakitangan",               icon: Users },
-                { id: "billing"  as MorePage, label: "Bil & Langganan",  desc: "Plan, kredit AI & storan",                     icon: CreditCard },
+                { id: "billing"  as MorePage, label: "Bil & Langganan",  desc: "Plan, kuota & storan",                         icon: CreditCard },
                 { id: "tetapan"  as MorePage, label: "Tetapan",          desc: "Konfigurasi, peringatan & tetapan sumber",     icon: Settings },
                 { id: "bantuan"  as MorePage, label: "Bantuan",          desc: "Bantuan, FAQ & tiket sokongan",                icon: HelpCircle },
               ];
@@ -4602,7 +4602,7 @@ export function OwnerDashboard() {
                   {[
                     { key: "subscription" as const, label: "Peringatan Langganan" },
                     { key: "bill" as const,         label: "Peringatan Bil" },
-                    { key: "aiCredit" as const,     label: "Peringatan Kredit AI" },
+                    { key: "aiCredit" as const,     label: "Peringatan AI Financial Assistant" },
                     { key: "tetapan" as const,      label: "Peringatan Storan" },
                   ].map(({ key, label }) => (
                     <div key={key} className="flex items-center justify-between">
@@ -4722,7 +4722,7 @@ export function OwnerDashboard() {
                 <div className="bg-white border border-slate-200 rounded-2xl px-4 py-4 shadow-sm">
                   <p className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-2">Status Langganan</p>
                   <p className="text-sm text-slate-600">
-                    Maklumat plan, kredit AI & storan tersedia di bahagian <strong className="text-slate-800">Bil &amp; Langganan</strong>.
+                    Maklumat plan, kuota & storan tersedia di bahagian <strong className="text-slate-800">Bil &amp; Langganan</strong>.
                   </p>
                   <button onClick={() => setMorePage('billing')}
                     className="mt-3 text-xs font-semibold text-indigo-600 hover:text-indigo-800 transition cursor-pointer">
@@ -4841,7 +4841,7 @@ export function OwnerDashboard() {
                       { q: "Bagaimana cara jemput kakitangan?", a: "Pergi ke Lagi â†' Pasukan â†' klik 'Jemput Staf' â†' masukkan nama dan email." },
                       { q: "Bagaimana cara lihat laporan?", a: "Klik tab 'Laporan' di bawah navigasi untuk lihat P&L, Cashflow dan ringkasan kewangan." },
                       { q: "Boleh saya guna AI saya sendiri?", a: "Ya, jika HQ mengizinkan. Pergi ke Lagi â†' Tetapan Sumber untuk tukar ke AI anda sendiri." },
-                      { q: "Apa itu kredit AI?", a: "Kredit AI digunakan apabila anda bertanya kepada MYKERANI. Semak baki di Lagi â†' Bil & Langganan." },
+                      { q: "Apa itu AI Financial Assistant?", a: "AI Financial Assistant digunakan apabila anda bertanya kepada MYKERANI. Semak kuota di Lagi â†' Bil & Langganan." },
                     ].map(({ q, a }) => (
                       <details key={q} className="bg-white border border-slate-200 rounded-xl shadow-sm group">
                         <summary className="px-4 py-3.5 text-xs font-semibold text-slate-800 cursor-pointer list-none flex items-center justify-between">
@@ -5121,22 +5121,22 @@ export function OwnerDashboard() {
                   <div className="flex items-center justify-between">
                     <div className="flex items-center space-x-2">
                       <Zap className="w-4 h-4 text-amber-500" />
-                      <p className="text-sm font-bold text-slate-900">Kredit AI</p>
+                      <p className="text-sm font-bold text-slate-900">AI Financial Assistant</p>
                     </div>
                     <span className="text-xs text-slate-400">Paket {aiCredits.planName}</span>
                   </div>
                   <div className="space-y-1">
                     <div className="flex justify-between text-xs">
                       <span className="text-slate-500">Digunakan</span>
-                      <span className="font-semibold text-slate-800">{aiCredits.used} / {aiCredits.total} kredit</span>
+                      <span className="font-semibold text-slate-800">{aiCredits.used} / {aiCredits.total} penggunaan</span>
                     </div>
                     <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
                       <div className="h-full bg-amber-400 rounded-full" style={{ width: `${Math.min(100, (aiCredits.used / Math.max(1, aiCredits.total)) * 100)}%` }} />
                     </div>
-                    <p className="text-2xs text-slate-400">{Math.max(0, aiCredits.total - aiCredits.used)} kredit berbaki</p>
+                    <p className="text-2xs text-slate-400">{Math.max(0, aiCredits.total - aiCredits.used)} penggunaan berbaki</p>
                   </div>
                   <div className="grid grid-cols-2 gap-2">
-                    <button onClick={() => setShowCreditModal("AI")} className="py-2.5 bg-amber-50 border border-amber-100 text-amber-700 rounded-xl text-xs font-bold cursor-pointer hover:bg-amber-100 transition">Beli Kredit</button>
+                    <button onClick={() => setShowCreditModal("AI")} className="py-2.5 bg-amber-50 border border-amber-100 text-amber-700 rounded-xl text-xs font-bold cursor-pointer hover:bg-amber-100 transition">Tambah Kuota</button>
                     <button onClick={() => setMorePage("tetapan")} className="py-2.5 bg-slate-50 border border-slate-200 text-slate-600 rounded-xl text-xs font-bold cursor-pointer hover:bg-slate-100 transition">Lihat Penggunaan</button>
                   </div>
                 </div>
@@ -5146,22 +5146,22 @@ export function OwnerDashboard() {
                   <div className="flex items-center justify-between">
                     <div className="flex items-center space-x-2">
                       <ScanLine className="w-4 h-4 text-violet-500" />
-                      <p className="text-sm font-bold text-slate-900">Kredit OCR</p>
+                      <p className="text-sm font-bold text-slate-900">Muka Surat Penyata Bank</p>
                     </div>
                     <span className="text-xs text-slate-400">Paket {ocrCredits.planName}</span>
                   </div>
                   <div className="space-y-1">
                     <div className="flex justify-between text-xs">
                       <span className="text-slate-500">Digunakan</span>
-                      <span className="font-semibold text-slate-800">{ocrCredits.used} / {ocrCredits.total} kredit</span>
+                      <span className="font-semibold text-slate-800">{ocrCredits.used} / {ocrCredits.total} muka surat</span>
                     </div>
                     <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
                       <div className="h-full bg-violet-400 rounded-full" style={{ width: `${Math.min(100, (ocrCredits.used / Math.max(1, ocrCredits.total)) * 100)}%` }} />
                     </div>
-                    <p className="text-2xs text-slate-400">{Math.max(0, ocrCredits.total - ocrCredits.used)} kredit berbaki</p>
+                    <p className="text-2xs text-slate-400">{Math.max(0, ocrCredits.total - ocrCredits.used)} muka surat berbaki</p>
                   </div>
                   <div className="grid grid-cols-2 gap-2">
-                    <button onClick={() => setShowCreditModal("OCR")} className="py-2.5 bg-violet-50 border border-violet-100 text-violet-700 rounded-xl text-xs font-bold cursor-pointer hover:bg-violet-100 transition">Beli Kredit</button>
+                    <button onClick={() => setShowCreditModal("OCR")} className="py-2.5 bg-violet-50 border border-violet-100 text-violet-700 rounded-xl text-xs font-bold cursor-pointer hover:bg-violet-100 transition">Tambah Kuota</button>
                     <button onClick={() => setMorePage("tetapan")} className="py-2.5 bg-slate-50 border border-slate-200 text-slate-600 rounded-xl text-xs font-bold cursor-pointer hover:bg-slate-100 transition">Lihat Penggunaan</button>
                   </div>
                 </div>
@@ -5334,8 +5334,8 @@ export function OwnerDashboard() {
                     <p className="text-sm font-bold text-slate-900">Sumber AI</p>
                   </div>
                   {([
-                    { id: "mykerani" as const, label: "MYKERANI AI", desc: "AI rasmi MYKERANI — kredit AI daripada plan anda" },
-                    { id: "own" as const,      label: "AI Sendiri",  desc: "Guna API key anda sendiri — tanpa had kredit" },
+                    { id: "mykerani" as const, label: "MYKERANI AI", desc: "AI rasmi MYKERANI — kuota daripada plan anda" },
+                    { id: "own" as const,      label: "AI Sendiri",  desc: "Guna API key anda sendiri — tanpa had kuota" },
                   ] as const).map(({ id, label, desc }) => (
                     <button key={id} onClick={() => setResAI(id)}
                       className={`w-full flex items-center gap-3 p-3.5 rounded-xl border-2 transition cursor-pointer ${resAI === id ? "border-indigo-500 bg-indigo-50" : "border-slate-100 hover:border-slate-200"}`}>
@@ -5490,7 +5490,7 @@ export function OwnerDashboard() {
                   </p>
                 </div>
 
-                {wsId && <TenantResourceLedger workspaceId={wsId} />}
+                {wsId && <UsageHistory workspaceId={wsId} />}
               </div>
             )}
           </div>
@@ -5574,12 +5574,12 @@ export function OwnerDashboard() {
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 backdrop-blur-sm">
           <div className="bg-white rounded-t-3xl sm:rounded-2xl w-full max-w-sm shadow-2xl p-5 space-y-4">
             <div className="flex items-center justify-between">
-              <h3 className="font-bold text-slate-900">Tambah Kredit {showCreditModal === "AI" ? "AI" : "OCR"}</h3>
+              <h3 className="font-bold text-slate-900">Tambah Kuota {showCreditModal === "AI" ? "AI Financial Assistant" : "Muka Surat Penyata Bank"}</h3>
               <button onClick={() => setShowCreditModal(null)} className="p-1.5 rounded-xl hover:bg-slate-100 cursor-pointer">
                 <X className="w-4 h-4 text-slate-400" />
               </button>
             </div>
-            <p className="text-xs text-slate-500">Pilih pakej kredit tambahan. Kredit ditambah ke wallet selepas pembayaran disahkan.</p>
+            <p className="text-xs text-slate-500">Pilih pakej tambahan. Kuota ditambah ke pelan anda selepas pembayaran disahkan.</p>
             <div className="space-y-2">
               {(showCreditModal === "AI" ? aiCreditPackages : ocrCreditPackages).length === 0 ? (
                 <p className="text-xs text-slate-400 text-center py-3">Tiada pakej tersedia.</p>

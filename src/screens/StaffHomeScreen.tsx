@@ -10,7 +10,7 @@ import { isDemoWorkspace } from "../lib/seeder";
 import { uploadDocument, getDocumentUrl, type UploadedDoc } from "../lib/documentStorage";
 import { logEvent } from "../lib/eventLog";
 import { createTenantSupportTicket, getMyTenantSupportTickets, SupportTicket, SUPPORT_TICKET_TEMPLATES, uploadTicketAttachment, getTicketAttachmentUrl, ticketSlaState, TICKET_STATUS_LABEL_MS, TICKET_STATUS_STYLE, tenantSubmitAppeal, tenantReplySupportTicket, logTenantActivity } from "../lib/hqService";
-import { TenantResourceLedger } from "../components/TenantResourceLedger";
+import { UsageHistory } from "../components/UsageHistory";
 import { usePermission } from "../context/PermissionContext";
 import { useStorageQuota } from "../lib/storageQuota";
 import { useAiCredits, useOcrCredits } from "../lib/aiCredits";
@@ -579,7 +579,7 @@ export function StaffHomeScreen() {
     if (!q || chatLoading) return;
     // Gap H-07: enforce AI credit quota before consuming credits
     if (aiCredits.total > 0 && aiCredits.used >= aiCredits.total) {
-      setChatMessages(prev => [...prev, { id: `e-${Date.now()}`, sender: "ai", text: "Kredit AI habis. Sila hubungi pemilik untuk menambah kredit." }]);
+      setChatMessages(prev => [...prev, { id: `e-${Date.now()}`, sender: "ai", text: "Kuota AI Financial Assistant habis. Sila hubungi pemilik untuk menambah kuota." }]);
       return;
     }
     if (profileLoading) {
@@ -635,7 +635,7 @@ export function StaffHomeScreen() {
         return;
       }
       if (res.status === 402) {
-        setChatMessages(prev => [...prev, { id: `a-${Date.now()}`, sender: "ai", text: data.error || "Kredit AI anda telah habis. Sila hubungi pentadbir untuk menambah kredit." }]);
+        setChatMessages(prev => [...prev, { id: `a-${Date.now()}`, sender: "ai", text: data.error || "Kuota AI Financial Assistant anda telah habis. Sila hubungi pentadbir untuk menambah kuota." }]);
         setChatLoading(false);
         return;
       }
@@ -1063,7 +1063,7 @@ export function StaffHomeScreen() {
           } else {
             // Gap H-07: enforce OCR credit quota before consuming credits
             if (ocrCredits.total > 0 && ocrCredits.used >= ocrCredits.total) {
-              setChatMessages(prev => [...prev, { id: `e-${Date.now()}`, sender: "ai", text: "Kredit OCR habis. Sila hubungi pemilik untuk menambah kredit." }]);
+              setChatMessages(prev => [...prev, { id: `e-${Date.now()}`, sender: "ai", text: "Kuota Muka Surat Penyata Bank habis. Sila hubungi pemilik untuk menambah kuota." }]);
               return;
             }
             const fileDataUrl = await fileToDataUrl(file);
@@ -2448,7 +2448,7 @@ export function StaffHomeScreen() {
               </div>
             )}
 
-            {wsId && <TenantResourceLedger workspaceId={wsId} />}
+            {wsId && <UsageHistory workspaceId={wsId} />}
           </div>
         )}
       </div>
