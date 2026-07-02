@@ -244,18 +244,18 @@ export default function LoginScreen({ initialMode = "login", onBack, forceHQ = f
 
   return (
     <div
-      className={`min-h-screen flex flex-col justify-center items-center p-4 md:p-8 font-sans select-none ${forceHQ ? "bg-slate-950" : "bg-slate-50"}`}
+      className={`min-h-screen flex flex-col justify-center items-center p-4 md:p-8 font-sans select-none ${forceHQ ? "bg-slate-950" : "bg-[#F8F7F3]"}`}
       id="login_screen_container"
     >
       <div
-        className={`w-full max-w-md border rounded-3xl p-6 md:p-8 shadow-[0_8px_30px_rgb(0,0,0,0.04)] space-y-6 ${forceHQ ? "bg-slate-900 border-slate-700/80" : "bg-white border-slate-200/80"}`}
+        className={`w-full max-w-md border rounded-3xl p-6 md:p-8 shadow-[0_8px_40px_rgb(0,0,0,0.06)] space-y-6 ${forceHQ ? "bg-slate-900 border-slate-700/80" : "bg-white border-[#E8E6DE]"}`}
         id="login_card_wrapper"
       >
         {onBack && (
           <button
             type="button"
             onClick={onBack}
-            className={`text-xs transition cursor-pointer flex items-center gap-1 ${forceHQ ? "text-slate-500 hover:text-slate-300" : "text-slate-400 hover:text-slate-700"}`}
+            className={`text-xs transition cursor-pointer flex items-center gap-1 ${forceHQ ? "text-slate-500 hover:text-slate-300" : "text-zinc-400 hover:text-zinc-700"}`}
             id="back_to_landing_btn"
           >
             ← Kembali ke Laman Utama
@@ -264,14 +264,14 @@ export default function LoginScreen({ initialMode = "login", onBack, forceHQ = f
         {/* Branding — visually distinct for the HQ Console entry point so it
             never reads as the same screen a tenant would see. */}
         <div className="flex flex-col items-center text-center space-y-3" id="login_branding_header">
-          <div className={`w-14 h-14 rounded-2xl flex items-center justify-center shadow-lg ${forceHQ ? "bg-rose-700" : "bg-slate-900"}`}>
+          <div className={`w-14 h-14 rounded-2xl flex items-center justify-center shadow-lg ${forceHQ ? "bg-rose-700" : "bg-[#22c55e]"}`}>
             {forceHQ ? <ShieldCheck className="w-7 h-7 text-white" /> : <span className="font-display font-extrabold text-white text-xl tracking-tight">MK</span>}
           </div>
           <div>
-            <h1 className={`text-2xl font-display font-bold tracking-tight ${forceHQ ? "text-white" : "text-slate-900"}`}>
+            <h1 className={`text-2xl font-display font-bold tracking-tight ${forceHQ ? "text-white" : "text-zinc-900"}`}>
               {forceHQ ? "MYKERANI HQ CONSOLE" : "MYKERANI"}
             </h1>
-            <p className={`text-xs font-semibold tracking-widest uppercase mt-0.5 ${forceHQ ? "text-rose-400" : "text-slate-400"}`}>
+            <p className={`text-xs font-semibold tracking-widest uppercase mt-0.5 ${forceHQ ? "text-rose-400" : "text-[#22c55e]"}`}>
               {forceHQ ? "Akses Pentadbiran HQ Sahaja" : "Pembantu Kewangan Pintar Anda"}
             </p>
           </div>
@@ -295,10 +295,10 @@ export default function LoginScreen({ initialMode = "login", onBack, forceHQ = f
             ].map(f => (
               <div
                 key={f.label}
-                className="p-3 bg-slate-50 border border-slate-100 rounded-2xl flex items-center space-x-2"
+                className="p-3 bg-[#F8F7F3] border border-[#E8E6DE] rounded-2xl flex items-center space-x-2"
               >
                 <span className="text-base">{f.emoji}</span>
-                <span className="text-[11px] font-semibold text-slate-700 leading-tight">{f.label}</span>
+                <span className="text-[11px] font-semibold text-zinc-700 leading-tight">{f.label}</span>
               </div>
             ))}
           </div>
@@ -307,8 +307,8 @@ export default function LoginScreen({ initialMode = "login", onBack, forceHQ = f
         {/* Step 2 — Semak Email Anda (selepas signUp() berjaya tapi belum sah emel) */}
         {pendingVerificationEmail ? (
           <div className="space-y-4 text-center" id="email_verification_screen">
-            <div className="w-12 h-12 rounded-2xl bg-emerald-50 border border-emerald-100 flex items-center justify-center mx-auto">
-              <MailCheck className="w-6 h-6 text-emerald-600" />
+            <div className="w-12 h-12 rounded-2xl bg-[#F0FDF4] border border-[#BEF3CC] flex items-center justify-center mx-auto">
+              <MailCheck className="w-6 h-6 text-[#22c55e]" />
             </div>
             <div className="space-y-1">
               <h2 className="font-bold text-slate-800 text-sm">Semak Email Anda</h2>
@@ -318,7 +318,7 @@ export default function LoginScreen({ initialMode = "login", onBack, forceHQ = f
             </div>
 
             {resendMsg && (
-              <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-700 text-center font-medium">
+              <div className="p-3 bg-[#F0FDF4] border border-[#BEF3CC] rounded-xl text-xs text-[#16a34a] text-center font-medium">
                 {resendMsg}
               </div>
             )}
@@ -327,7 +327,7 @@ export default function LoginScreen({ initialMode = "login", onBack, forceHQ = f
               href="https://mail.google.com"
               target="_blank"
               rel="noreferrer"
-              className="w-full min-h-11 py-3 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-semibold shadow-sm transition flex items-center justify-center cursor-pointer"
+              className="w-full min-h-11 py-3 bg-[#22c55e] hover:bg-[#16a34a] text-white rounded-xl text-xs font-semibold shadow-sm transition flex items-center justify-center cursor-pointer"
               id="open_gmail_btn"
             >
               Buka Gmail
@@ -387,7 +387,7 @@ export default function LoginScreen({ initialMode = "login", onBack, forceHQ = f
                 <button
                   type="submit"
                   disabled={formLoading}
-                  className="w-full py-2.5 bg-slate-900 hover:bg-slate-800 disabled:opacity-50 text-white rounded-xl text-xs font-semibold shadow-sm transition flex items-center justify-center cursor-pointer"
+                  className="w-full py-2.5 bg-[#22c55e] hover:bg-[#16a34a] disabled:opacity-50 text-white rounded-xl text-xs font-semibold shadow-sm transition flex items-center justify-center cursor-pointer"
                 >
                   {formLoading ? <span className="animate-pulse">Sila tunggu...</span> : "Hantar E-mel Tetapan Semula"}
                 </button>
@@ -446,7 +446,7 @@ export default function LoginScreen({ initialMode = "login", onBack, forceHQ = f
                 <button
                   type="button"
                   onClick={() => { setIsForgotMode(true); setCustomError(null); clearError(); }}
-                  className="text-[11px] text-indigo-500 hover:text-indigo-700 font-medium cursor-pointer transition"
+                  className="text-[11px] text-[#22c55e] hover:text-[#16a34a] font-medium cursor-pointer transition"
                 >
                   Lupa Kata Laluan?
                 </button>
@@ -476,7 +476,7 @@ export default function LoginScreen({ initialMode = "login", onBack, forceHQ = f
           <button
             type="submit"
             disabled={formLoading}
-            className="w-full py-2.5 bg-slate-900 hover:bg-slate-800 disabled:opacity-50 text-white rounded-xl text-xs font-semibold shadow-sm transition flex items-center justify-center cursor-pointer"
+            className={`w-full py-2.5 disabled:opacity-50 text-white rounded-xl text-xs font-semibold shadow-sm transition flex items-center justify-center cursor-pointer ${forceHQ ? "bg-slate-800 hover:bg-slate-700" : "bg-[#22c55e] hover:bg-[#16a34a]"}`}
             id="auth_submit_btn"
           >
             {formLoading ? (

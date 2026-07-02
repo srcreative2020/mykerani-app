@@ -1,11 +1,10 @@
-import React, { useEffect, useState } from "react";
-import { useAuth } from "../context/AuthContext";
+import React, { useEffect, useRef, useState } from "react";
 import { supabase, isSupabaseConfigured } from "../lib/supabase";
 import { getSiteSettings, getFaqItems, type SiteSettings, type FaqItem } from "../lib/hqService";
 import {
   ArrowRight, PlayCircle, Receipt, FileWarning, HelpCircle, Mail, Phone,
   MessageCircle, MapPin, Clock, ChevronDown, Sparkles, Upload, Wand2,
-  CheckCircle2, FileSpreadsheet, Building2, Banknote,
+  CheckCircle2, FileSpreadsheet, Building2, Banknote, Send, Bot,
 } from "lucide-react";
 
 interface PlanRow {
@@ -13,7 +12,6 @@ interface PlanRow {
   name: string;
   price: number;
   features: string[];
-  limitations: string[];
   isTrial: boolean;
   isCustomPricing: boolean;
   featured: boolean;
@@ -40,12 +38,12 @@ const COST_CARDS = [
 ];
 
 const HOW_IT_WORKS = [
-  { icon: Upload, label: "Muat Naik Resit" },
+  { icon: Upload, label: "Muat Naik Dokumen" },
   { icon: Wand2, label: "AI Ekstrak Maklumat" },
   { icon: Sparkles, label: "AI Cadangkan Rekod" },
   { icon: CheckCircle2, label: "Pengguna Sahkan" },
-  { icon: FileSpreadsheet, label: "Rekod Kewangan Disimpan" },
-  { icon: FileSpreadsheet, label: "Laporan Sedia Bila-bila" },
+  { icon: FileSpreadsheet, label: "Rekod Disimpan" },
+  { icon: FileSpreadsheet, label: "Laporan Sedia" },
 ];
 
 const WHAT_CAN_BE_MANAGED = [
@@ -60,198 +58,475 @@ const BENEFITS = [
   "Sedia Untuk Permohonan Pembiayaan", "Tingkatkan Penglihatan Kewangan",
 ];
 
+interface DemoMsg { role: "user" | "ai"; text: string; }
+
+const DEMO_QA: { label: string; q: string; a: string }[] = [
+  {
+    label: "Rekod resit",
+    q: "Saya bayar minyak RM80 tadi",
+    a: "Rekod dicadangkan: Perbelanjaan · Pengangkutan · RM80.00 · Hari ini. Sahkan untuk simpan ke rekod kewangan anda?",
+  },
+  {
+    label: "Semak bil",
+    q: "Apa bil perlu dibayar minggu ini?",
+    a: "2 bil tertunggak ditemui: Sewa Pejabat RM1,200 dan Internet RM99 — jatuh tempoh 3 hari lagi. Mahu saya sediakan peringatan?",
+  },
+  {
+    label: "Ringkasan bulan",
+    q: "Ringkaskan prestasi bulan ini",
+    a: "Jun 2026 · Pendapatan RM12,400 · Perbelanjaan RM7,850 · Untung Bersih RM4,550 · Aliran tunai: Sihat ✓",
+  },
+  {
+    label: "Analisa penyata",
+    q: "Analisa penyata bank saya",
+    a: "47 transaksi ditemui. 12 belum dikategorikan. Tiada duplikasi dikesan. Sedia untuk semakan dan pengesahan anda.",
+  },
+];
+
+function useScrollReveal() {
+  useEffect(() => {
+    const els = document.querySelectorAll<HTMLElement>(".sr-fade");
+    if (!els.length) return;
+    const observer = new IntersectionObserver(
+      entries => entries.forEach(e => { if (e.isIntersecting) e.target.classList.add("sr-visible"); }),
+      { threshold: 0.12 }
+    );
+    els.forEach(el => observer.observe(el));
+    return () => observer.disconnect();
+  }, []);
+}
+
+function useActiveSection(ids: string[]) {
+  const [active, setActive] = useState("");
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      entries => {
+        entries.forEach(e => { if (e.isIntersecting) setActive(e.target.id); });
+      },
+      { rootMargin: "-40% 0px -55% 0px" }
+    );
+    ids.forEach(id => {
+      const el = document.getElementById(id);
+      if (el) observer.observe(el);
+    });
+    return () => observer.disconnect();
+  }, [ids]);
+  return active;
+}
+
+function InteractiveDemo() {
+  const [msgs, setMsgs] = useState<DemoMsg[]>([
+    { role: "ai", text: "Selamat datang! Cuba tanya saya tentang kewangan perniagaan anda." },
+  ]);
+  const [typing, setTyping] = useState(false);
+  const [used, setUsed] = useState<Set<number>>(new Set());
+  const bottomRef = useRef<HTMLDivElement>(null);
+
+  const handlePrompt = (idx: number) => {
+    if (typing || used.has(idx)) return;
+    const qa = DEMO_QA[idx];
+    setUsed(prev => new Set(prev).add(idx));
+    setMsgs(prev => [...prev, { role: "user", text: qa.q }]);
+    setTyping(true);
+    setTimeout(() => {
+      setTyping(false);
+      setMsgs(prev => [...prev, { role: "ai", text: qa.a }]);
+    }, 900);
+  };
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [msgs, typing]);
+
+  return (
+    <div className="bg-white rounded-3xl shadow-xl overflow-hidden border border-[#E8E6DE]">
+      {/* Header */}
+      <div className="flex items-center gap-2.5 px-4 py-3 border-b border-[#E8E6DE] bg-[#F8F7F3]">
+        <div className="w-8 h-8 rounded-xl bg-[#22c55e] flex items-center justify-center shrink-0">
+          <Bot className="w-4 h-4 text-white" />
+        </div>
+        <div>
+          <p className="text-xs font-bold text-zinc-800">Kerani Kewangan AI</p>
+          <p className="text-[10px] text-[#22c55e] font-semibold">Demo • Tidak menyimpan maklumat anda</p>
+        </div>
+      </div>
+
+      {/* Messages */}
+      <div className="h-48 overflow-y-auto px-4 py-3 space-y-2.5 bg-white">
+        {msgs.map((m, i) => (
+          <div key={i} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
+            <div
+              className={`max-w-[82%] text-xs rounded-2xl px-3 py-2 leading-relaxed ${
+                m.role === "user"
+                  ? "bg-zinc-900 text-white rounded-tr-sm"
+                  : "bg-[#F8F7F3] text-zinc-800 border border-[#E8E6DE] rounded-tl-sm"
+              }`}
+            >
+              {m.text}
+            </div>
+          </div>
+        ))}
+        {typing && (
+          <div className="flex justify-start">
+            <div className="bg-[#F8F7F3] border border-[#E8E6DE] rounded-2xl rounded-tl-sm px-3 py-2">
+              <span className="inline-flex gap-1">
+                {[0, 1, 2].map(i => (
+                  <span key={i} className="w-1.5 h-1.5 rounded-full bg-zinc-400 animate-bounce" style={{ animationDelay: `${i * 0.15}s` }} />
+                ))}
+              </span>
+            </div>
+          </div>
+        )}
+        <div ref={bottomRef} />
+      </div>
+
+      {/* Prompts */}
+      <div className="px-4 pb-4 pt-3 border-t border-[#E8E6DE] bg-[#F8F7F3]">
+        <p className="text-[10px] text-zinc-400 font-semibold mb-2">Cuba tanya:</p>
+        <div className="flex flex-wrap gap-1.5">
+          {DEMO_QA.map((qa, i) => (
+            <button
+              key={i}
+              onClick={() => handlePrompt(i)}
+              disabled={typing || used.has(i)}
+              className={`flex items-center gap-1 px-3 py-1.5 rounded-full text-[11px] font-semibold border transition cursor-pointer ${
+                used.has(i)
+                  ? "bg-[#F0FDF4] border-[#BEF3CC] text-[#16a34a] opacity-60"
+                  : "bg-white border-[#E8E6DE] text-zinc-700 hover:border-[#22c55e] hover:text-[#16a34a]"
+              } disabled:cursor-not-allowed`}
+            >
+              <Send className="w-3 h-3" />
+              {qa.label}
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+const NAV_SECTIONS = ["features", "who", "pricing", "faq", "contact"];
+
 export const LandingPage: React.FC<LandingPageProps> = ({ onLogin, onRegister }) => {
-  const { signIn } = useAuth();
   const [settings, setSettings] = useState<SiteSettings | null>(null);
   const [faqs, setFaqs] = useState<FaqItem[]>([]);
   const [plans, setPlans] = useState<PlanRow[]>([]);
   const [openFaq, setOpenFaq] = useState<string | null>(null);
-  const [demoLoading, setDemoLoading] = useState(false);
-  const [demoChat] = useState([
-    { q: "Saya bayar minyak RM80", a: "Kategori dicadangkan: Pengangkutan · Jumlah: RM80.00 · Simpan rekod?" },
-    { q: "Apa bil yang perlu dibayar?", a: "Anda ada 2 bil tertunggak: Sewa Pejabat (RM1,200) dan Internet (RM99), jatuh tempoh minggu ini." },
-    { q: "Ringkaskan bulan ini", a: "Pendapatan RM12,400 · Perbelanjaan RM7,850 · Untung Bersih RM4,550 · Aliran tunai sihat." },
-  ]);
+
+  useScrollReveal();
+  const activeSection = useActiveSection(NAV_SECTIONS);
 
   useEffect(() => {
     getSiteSettings().then(setSettings);
     getFaqItems().then(setFaqs);
     if (isSupabaseConfigured() && supabase) {
-      supabase.from("subscription_plans").select("*").order("monthly_price_myr", { ascending: true })
-        .then(({ data }) => setPlans((data || []).map((row: any) => ({
-          id: row.id, name: row.name, price: Number(row.monthly_price_myr) || 0,
-          features: row.features?.featureList ?? [], limitations: row.features?.limitations ?? [],
-          isTrial: row.features?.isTrial ?? false, isCustomPricing: row.features?.isCustomPricing ?? false,
-          featured: row.features?.featured ?? false,
-        }))));
+      supabase
+        .from("subscription_plans")
+        .select("*")
+        .order("monthly_price_myr", { ascending: true })
+        .then(({ data }) =>
+          setPlans(
+            (data || []).map((row: any) => ({
+              id: row.id,
+              name: row.name,
+              price: Number(row.monthly_price_myr) || 0,
+              features: row.features?.featureList ?? [],
+              isTrial: row.features?.isTrial ?? false,
+              isCustomPricing: row.features?.isCustomPricing ?? false,
+              featured: row.features?.featured ?? false,
+            }))
+          )
+        );
     }
   }, []);
 
   const companyName = settings?.companyName || "MyKerani";
 
-  const handleTryDemo = async () => {
-    setDemoLoading(true);
-    try {
-      await signIn("owner@mykerani.demo", "");
-    } finally {
-      setDemoLoading(false);
-    }
-  };
+  const navLinkCls = (id: string) =>
+    `text-xs font-semibold transition cursor-pointer ${
+      activeSection === id ? "text-[#16a34a]" : "text-zinc-500 hover:text-zinc-900"
+    }`;
 
   return (
-    <div className="min-h-screen bg-white text-slate-900 font-sans" id="landing_page_root">
-      {/* Top Nav */}
-      <header className="sticky top-0 z-30 bg-white/90 backdrop-blur border-b border-slate-100">
+    <div className="min-h-screen bg-[#F8F7F3] text-zinc-800 font-sans" id="landing_page_root">
+      {/* ── Top Nav ── */}
+      <header className="sticky top-0 z-30 bg-[#F8F7F3]/95 backdrop-blur border-b border-[#E8E6DE]">
         <div className="max-w-6xl mx-auto px-5 py-3 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-xl bg-slate-900 flex items-center justify-center shrink-0 overflow-hidden">
-              {settings?.logoUrl ? <img src={settings.logoUrl} alt={companyName} className="w-full h-full object-cover" /> : <span className="text-white font-extrabold text-xs">MK</span>}
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-xl bg-zinc-900 flex items-center justify-center shrink-0 overflow-hidden">
+              {settings?.logoUrl ? (
+                <img src={settings.logoUrl} alt={companyName} className="w-full h-full object-cover" />
+              ) : (
+                <span className="text-white font-extrabold text-xs">MK</span>
+              )}
             </div>
-            <span className="font-display font-bold text-sm tracking-tight">{companyName.toUpperCase()}</span>
+            <span className="font-display font-bold text-sm tracking-tight text-zinc-900">{companyName.toUpperCase()}</span>
           </div>
-          <nav className="hidden md:flex items-center gap-6 text-xs font-semibold text-slate-500">
-            <a href="#features" className="hover:text-slate-900">Ciri-ciri</a>
-            <a href="#who" className="hover:text-slate-900">Untuk Siapa</a>
-            <a href="#pricing" className="hover:text-slate-900">Harga</a>
-            <a href="#faq" className="hover:text-slate-900">FAQ</a>
-            <a href="#contact" className="hover:text-slate-900">Hubungi</a>
+          <nav className="hidden md:flex items-center gap-6">
+            <a href="#features" className={navLinkCls("features")}>Ciri-ciri</a>
+            <a href="#who" className={navLinkCls("who")}>Untuk Siapa</a>
+            <a href="#pricing" className={navLinkCls("pricing")}>Harga</a>
+            <a href="#faq" className={navLinkCls("faq")}>FAQ</a>
+            <a href="#contact" className={navLinkCls("contact")}>Hubungi</a>
           </nav>
           <div className="flex items-center gap-2">
-            <button onClick={onLogin} className="px-3 py-2 text-xs font-bold text-slate-700 hover:text-slate-900 cursor-pointer">Log Masuk</button>
-            <button onClick={onRegister} className="px-3.5 py-2 bg-slate-900 text-white rounded-xl text-xs font-bold cursor-pointer hover:bg-slate-800 transition">Daftar</button>
+            <button
+              onClick={onLogin}
+              className="px-3 py-2 text-xs font-bold text-zinc-600 hover:text-zinc-900 cursor-pointer transition"
+            >
+              Log Masuk
+            </button>
+            <button
+              onClick={onRegister}
+              className="px-4 py-2 bg-[#22c55e] hover:bg-[#16a34a] text-white rounded-xl text-xs font-bold cursor-pointer transition shadow-sm"
+            >
+              Daftar Percuma
+            </button>
           </div>
         </div>
       </header>
 
-      {/* Hero */}
-      <section className="max-w-6xl mx-auto px-5 pt-14 pb-16 grid md:grid-cols-2 gap-10 items-center">
-        <div className="space-y-5">
-          <h1 className="text-3xl md:text-4xl font-display font-bold tracking-tight leading-tight">
+      {/* ── Hero ── */}
+      <section className="max-w-6xl mx-auto px-5 pt-14 pb-16 grid md:grid-cols-2 gap-12 items-center">
+        <div className="space-y-6">
+          <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-[#F0FDF4] border border-[#BEF3CC] rounded-full">
+            <Sparkles className="w-3.5 h-3.5 text-[#16a34a]" />
+            <span className="text-[11px] font-bold text-[#16a34a]">AI Finansial untuk PKS Malaysia</span>
+          </div>
+          <h1 className="text-3xl md:text-4xl font-display font-bold tracking-tight leading-tight text-zinc-900">
             {settings?.heroHeadline || "Urus Kewangan Perniagaan Anda Tanpa Mengupah Kerani Sepenuh Masa"}
           </h1>
-          <p className="text-sm text-slate-500 leading-relaxed">
-            {settings?.heroSubheadline || "Jejak pendapatan, perbelanjaan, resit, invois dan dokumen kewangan dengan bantuan AI. Sentiasa tersusun untuk laporan, persediaan cukai, permohonan pembiayaan dan keputusan perniagaan masa depan."}
+          <p className="text-sm text-zinc-500 leading-relaxed">
+            {settings?.heroSubheadline ||
+              "Jejak pendapatan, perbelanjaan, resit, invois dan dokumen kewangan dengan bantuan AI. Sentiasa tersusun untuk laporan, cukai, dan permohonan pembiayaan."}
           </p>
           <div className="flex flex-wrap gap-3">
-            <button onClick={onRegister} className="flex items-center gap-2 px-5 py-3 bg-indigo-600 text-white rounded-2xl text-sm font-bold cursor-pointer hover:bg-indigo-700 transition shadow-sm">
+            <button
+              onClick={onRegister}
+              className="flex items-center gap-2 px-5 py-3 bg-[#22c55e] hover:bg-[#16a34a] text-white rounded-2xl text-sm font-bold cursor-pointer transition shadow-sm"
+            >
               Mula Percubaan Percuma <ArrowRight className="w-4 h-4" />
             </button>
-            <button onClick={handleTryDemo} disabled={demoLoading} className="flex items-center gap-2 px-5 py-3 border border-slate-200 rounded-2xl text-sm font-bold text-slate-700 cursor-pointer hover:bg-slate-50 transition disabled:opacity-50">
-              <PlayCircle className="w-4 h-4" /> {demoLoading ? "Memuatkan..." : "Lihat Demo (Tanpa Daftar)"}
+            <button
+              onClick={onLogin}
+              className="flex items-center gap-2 px-5 py-3 bg-white border border-[#E8E6DE] hover:border-[#22c55e] rounded-2xl text-sm font-bold text-zinc-700 cursor-pointer transition shadow-sm"
+            >
+              <PlayCircle className="w-4 h-4 text-[#22c55e]" /> Cuba Demo AI
             </button>
           </div>
         </div>
-        <div className="bg-slate-900 rounded-3xl p-5 shadow-2xl">
-          <div className="bg-white rounded-2xl p-4 space-y-3">
-            <div className="flex items-center gap-2 text-indigo-600 font-bold text-xs">
-              <Sparkles className="w-4 h-4" /> Kerani Kewangan AI
-            </div>
-            {demoChat.map((c, i) => (
-              <div key={i} className="space-y-1.5">
-                <div className="self-end bg-indigo-600 text-white text-xs rounded-2xl rounded-tr-sm px-3 py-2 inline-block max-w-[85%]">{c.q}</div>
-                <div className="bg-slate-50 border border-slate-100 text-slate-700 text-xs rounded-2xl rounded-tl-sm px-3 py-2 max-w-[90%]">{c.a}</div>
-              </div>
-            ))}
-          </div>
+        <div className="sr-fade">
+          <InteractiveDemo />
         </div>
       </section>
 
-      {/* Cost of poor records */}
-      <section className="max-w-6xl mx-auto px-5 py-14 border-t border-slate-100">
-        <h2 className="text-xl font-display font-bold text-center mb-2">Kos Rekod Kewangan Yang Tidak Tersusun</h2>
-        <p className="text-xs text-slate-400 text-center mb-8">Banyak perniagaan kehilangan masa dan wang akibat rekod yang tidak diuruskan.</p>
+      {/* ── Cost of poor records ── */}
+      <section className="max-w-6xl mx-auto px-5 py-14 border-t border-[#E8E6DE]">
+        <div className="sr-fade text-center mb-8 space-y-2">
+          <h2 className="text-xl font-display font-bold text-zinc-900">Kos Rekod Kewangan Yang Tidak Tersusun</h2>
+          <p className="text-xs text-zinc-400">Banyak perniagaan kehilangan masa dan wang akibat rekod yang tidak diuruskan.</p>
+        </div>
         <div className="grid sm:grid-cols-3 md:grid-cols-4 gap-3">
           {COST_CARDS.map((c, i) => (
-            <div key={i} className="border border-slate-100 rounded-2xl p-4 text-center space-y-2 bg-slate-50/50">
+            <div
+              key={i}
+              className="sr-fade bg-white border border-[#E8E6DE] rounded-2xl p-4 text-center space-y-2 hover:-translate-y-0.5 hover:shadow-md transition-all"
+            >
               <c.icon className="w-5 h-5 text-rose-500 mx-auto" />
-              <p className="text-[11px] font-semibold text-slate-700">{c.label}</p>
+              <p className="text-[11px] font-semibold text-zinc-700">{c.label}</p>
             </div>
           ))}
         </div>
+        <div className="mt-8 text-center">
+          <button
+            onClick={onRegister}
+            className="px-5 py-2.5 bg-zinc-900 hover:bg-zinc-800 text-white rounded-xl text-xs font-bold cursor-pointer transition"
+          >
+            Selesaikan Masalah Ini Sekarang
+          </button>
+        </div>
       </section>
 
-      {/* How it works */}
-      <section id="features" className="max-w-6xl mx-auto px-5 py-14 border-t border-slate-100">
-        <h2 className="text-xl font-display font-bold text-center mb-8">Bagaimana MyKerani Berfungsi</h2>
+      {/* ── How it works ── */}
+      <section id="features" className="max-w-6xl mx-auto px-5 py-14 border-t border-[#E8E6DE]">
+        <div className="sr-fade text-center mb-10 space-y-2">
+          <h2 className="text-xl font-display font-bold text-zinc-900">Bagaimana MyKerani Berfungsi</h2>
+          <p className="text-xs text-zinc-400">Tiga langkah mudah — Cakap. Upload. Sahkan.</p>
+        </div>
         <div className="flex flex-wrap justify-center items-center gap-3">
           {HOW_IT_WORKS.map((s, i) => (
             <React.Fragment key={i}>
-              <div className="flex flex-col items-center gap-2 w-28 text-center">
-                <div className="w-10 h-10 rounded-xl bg-indigo-50 flex items-center justify-center"><s.icon className="w-5 h-5 text-indigo-600" /></div>
-                <p className="text-[10px] font-semibold text-slate-600 leading-tight">{s.label}</p>
+              <div className="sr-fade flex flex-col items-center gap-2 w-28 text-center group">
+                <div className="w-11 h-11 rounded-xl bg-[#F0FDF4] border border-[#BEF3CC] flex items-center justify-center group-hover:bg-[#22c55e] transition">
+                  <s.icon className="w-5 h-5 text-[#16a34a] group-hover:text-white transition" />
+                </div>
+                <p className="text-[10px] font-semibold text-zinc-600 leading-tight">{s.label}</p>
               </div>
-              {i < HOW_IT_WORKS.length - 1 && <ArrowRight className="w-4 h-4 text-slate-300 hidden sm:block" />}
+              {i < HOW_IT_WORKS.length - 1 && (
+                <ArrowRight className="w-4 h-4 text-[#BEF3CC] hidden sm:block" />
+              )}
             </React.Fragment>
           ))}
         </div>
+        <div className="mt-10 text-center">
+          <button
+            onClick={onRegister}
+            className="flex items-center gap-2 px-5 py-3 bg-[#22c55e] hover:bg-[#16a34a] text-white rounded-2xl text-sm font-bold cursor-pointer transition mx-auto"
+          >
+            Cuba Sekarang — Percuma <ArrowRight className="w-4 h-4" />
+          </button>
+        </div>
       </section>
 
-      {/* Who should use */}
-      <section id="who" className="max-w-6xl mx-auto px-5 py-14 border-t border-slate-100">
-        <h2 className="text-xl font-display font-bold text-center mb-8">Siapa Patut Guna MyKerani</h2>
+      {/* ── Who should use ── */}
+      <section id="who" className="max-w-6xl mx-auto px-5 py-14 border-t border-[#E8E6DE]">
+        <div className="sr-fade text-center mb-8 space-y-2">
+          <h2 className="text-xl font-display font-bold text-zinc-900">Siapa Patut Guna MyKerani</h2>
+          <p className="text-xs text-zinc-400">Untuk pemilik perniagaan yang tidak mahu belajar perakaunan.</p>
+        </div>
         <div className="flex flex-wrap justify-center gap-2.5">
           {BUSINESS_TYPES.map((b, i) => (
-            <span key={i} className="px-4 py-2 bg-slate-50 border border-slate-100 rounded-full text-xs font-semibold text-slate-700">{b}</span>
+            <span
+              key={i}
+              className="sr-fade px-4 py-2 bg-white border border-[#E8E6DE] hover:border-[#22c55e] hover:text-[#16a34a] rounded-full text-xs font-semibold text-zinc-700 transition cursor-default"
+            >
+              {b}
+            </span>
           ))}
         </div>
       </section>
 
-      {/* What can be managed */}
-      <section className="max-w-6xl mx-auto px-5 py-14 border-t border-slate-100">
-        <h2 className="text-xl font-display font-bold text-center mb-8">Apa Yang Boleh Diuruskan</h2>
+      {/* ── What can be managed ── */}
+      <section className="max-w-6xl mx-auto px-5 py-14 border-t border-[#E8E6DE]">
+        <div className="sr-fade text-center mb-8 space-y-2">
+          <h2 className="text-xl font-display font-bold text-zinc-900">Apa Yang Boleh Diuruskan</h2>
+        </div>
         <div className="flex flex-wrap justify-center gap-2.5">
           {WHAT_CAN_BE_MANAGED.map((b, i) => (
-            <span key={i} className="px-4 py-2 bg-indigo-50 text-indigo-700 rounded-full text-xs font-semibold">{b}</span>
+            <span key={i} className="sr-fade px-4 py-2 bg-[#F0FDF4] border border-[#BEF3CC] text-[#16a34a] rounded-full text-xs font-semibold">
+              {b}
+            </span>
           ))}
         </div>
       </section>
 
-      {/* Benefits */}
-      <section className="max-w-6xl mx-auto px-5 py-14 border-t border-slate-100">
-        <h2 className="text-xl font-display font-bold text-center mb-8">Mengapa Pemilik Perniagaan Pilih MyKerani</h2>
+      {/* ── Benefits ── */}
+      <section className="max-w-6xl mx-auto px-5 py-14 border-t border-[#E8E6DE]">
+        <div className="sr-fade text-center mb-8 space-y-2">
+          <h2 className="text-xl font-display font-bold text-zinc-900">Mengapa Pemilik Perniagaan Pilih MyKerani</h2>
+        </div>
         <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-3">
           {BENEFITS.map((b, i) => (
-            <div key={i} className="flex items-center gap-2 p-3 border border-slate-100 rounded-xl bg-slate-50/50">
-              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-              <span className="text-xs font-semibold text-slate-700">{b}</span>
+            <div
+              key={i}
+              className="sr-fade flex items-center gap-3 p-4 bg-white border border-[#E8E6DE] rounded-xl hover:shadow-sm hover:-translate-y-0.5 transition-all"
+            >
+              <CheckCircle2 className="w-4 h-4 text-[#22c55e] shrink-0" />
+              <span className="text-xs font-semibold text-zinc-700">{b}</span>
             </div>
           ))}
         </div>
+        <div className="mt-8 text-center">
+          <button
+            onClick={onRegister}
+            className="px-6 py-3 bg-[#22c55e] hover:bg-[#16a34a] text-white rounded-2xl text-sm font-bold cursor-pointer transition shadow-sm"
+          >
+            Mula Percubaan Percuma
+          </button>
+        </div>
       </section>
 
-      {/* Live demo */}
-      <section className="max-w-6xl mx-auto px-5 py-14 border-t border-slate-100 text-center space-y-4">
-        <h2 className="text-xl font-display font-bold">Cuba Demo</h2>
-        <p className="text-xs text-slate-400 max-w-md mx-auto">Jelajahi papan pemuka, transaksi, dokumen, laporan dan pembantu AI tanpa perlu mendaftar — tiada e-mel, tiada kata laluan, tiada akaun dicipta.</p>
-        <button onClick={handleTryDemo} disabled={demoLoading} className="px-6 py-3 bg-slate-900 text-white rounded-2xl text-sm font-bold cursor-pointer hover:bg-slate-800 transition disabled:opacity-50">
-          {demoLoading ? "Memuatkan..." : "Cuba Demo Sekarang"}
-        </button>
+      {/* ── Live Demo CTA ── */}
+      <section className="bg-zinc-900 py-16 px-5">
+        <div className="max-w-3xl mx-auto text-center space-y-5">
+          <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-[#22c55e]/20 border border-[#22c55e]/30 rounded-full">
+            <Sparkles className="w-3.5 h-3.5 text-[#22c55e]" />
+            <span className="text-[11px] font-bold text-[#22c55e]">Demo AI Percuma</span>
+          </div>
+          <h2 className="text-2xl md:text-3xl font-display font-bold text-white">
+            Cuba Sendiri — Tanpa Daftar
+          </h2>
+          <p className="text-sm text-zinc-400 max-w-md mx-auto">
+            Jelajahi papan pemuka, transaksi, dokumen, laporan dan pembantu AI. Tiada e-mel, tiada kata laluan, tiada akaun.
+          </p>
+          <div className="flex flex-wrap justify-center gap-3">
+            <button
+              onClick={onLogin}
+              className="flex items-center gap-2 px-6 py-3 bg-[#22c55e] hover:bg-[#16a34a] text-white rounded-2xl text-sm font-bold cursor-pointer transition"
+            >
+              <PlayCircle className="w-4 h-4" /> Cuba Demo AI Sekarang
+            </button>
+            <button
+              onClick={onRegister}
+              className="px-6 py-3 border border-white/20 text-white rounded-2xl text-sm font-bold cursor-pointer hover:bg-white/10 transition"
+            >
+              Atau Daftar Akaun
+            </button>
+          </div>
+        </div>
       </section>
 
-      {/* Pricing — DB-driven, never hardcoded */}
-      <section id="pricing" className="max-w-6xl mx-auto px-5 py-14 border-t border-slate-100">
-        <h2 className="text-xl font-display font-bold text-center mb-8">Harga</h2>
+      {/* ── Pricing ── */}
+      <section id="pricing" className="max-w-6xl mx-auto px-5 py-14 border-t border-[#E8E6DE]">
+        <div className="sr-fade text-center mb-10 space-y-2">
+          <h2 className="text-xl font-display font-bold text-zinc-900">Pelan & Harga</h2>
+          <p className="text-xs text-zinc-400">Mulakan percuma. Naik taraf apabila perniagaan anda berkembang.</p>
+        </div>
         {plans.length === 0 ? (
-          <p className="text-center text-xs text-slate-400">Pelan harga belum disediakan oleh HQ.</p>
+          <p className="text-center text-xs text-zinc-400">Pelan harga belum disediakan oleh HQ.</p>
         ) : (
           <div className="grid sm:grid-cols-2 md:grid-cols-4 gap-4">
             {plans.map(p => (
-              <div key={p.id} className={`border rounded-2xl p-5 space-y-3 ${p.featured ? "border-indigo-300 bg-indigo-50/30" : "border-slate-200"}`}>
-                <p className="font-bold text-slate-900">{p.name}</p>
-                {p.isCustomPricing ? (
-                  <p className="text-lg font-bold text-slate-900">Harga Tersuai</p>
-                ) : (
-                  <p className="text-2xl font-bold text-slate-900">RM {p.price.toLocaleString()}<span className="text-xs text-slate-400 font-normal">/bln</span></p>
+              <div
+                key={p.id}
+                className={`sr-fade rounded-2xl p-5 space-y-4 border hover:-translate-y-1 hover:shadow-lg transition-all ${
+                  p.featured
+                    ? "border-[#22c55e] bg-[#F0FDF4] shadow-md"
+                    : "border-[#E8E6DE] bg-white"
+                }`}
+              >
+                {p.featured && (
+                  <div className="inline-flex items-center gap-1 px-2 py-1 bg-[#22c55e] rounded-lg">
+                    <span className="text-[10px] font-bold text-white">POPULAR</span>
+                  </div>
                 )}
-                <ul className="text-[10px] text-emerald-700 space-y-1">
-                  {p.features.slice(0, 6).map((f, i) => <li key={i}>+ {f}</li>)}
+                <p className="font-display font-bold text-zinc-900">{p.name}</p>
+                {p.isCustomPricing ? (
+                  <p className="text-lg font-bold text-zinc-900">Harga Tersuai</p>
+                ) : (
+                  <p className="text-2xl font-bold text-zinc-900">
+                    RM {p.price.toLocaleString()}
+                    <span className="text-xs text-zinc-400 font-normal">/bln</span>
+                  </p>
+                )}
+                <ul className="text-[10px] text-[#16a34a] space-y-1.5">
+                  {p.features.slice(0, 6).map((f, i) => (
+                    <li key={i} className="flex items-start gap-1.5">
+                      <CheckCircle2 className="w-3 h-3 shrink-0 mt-0.5" /> {f}
+                    </li>
+                  ))}
                 </ul>
                 {p.isTrial ? (
-                  <button onClick={onRegister} className="w-full py-2 bg-indigo-600 text-white rounded-xl text-xs font-bold cursor-pointer hover:bg-indigo-700 transition">Mula Percubaan Percuma</button>
+                  <button
+                    onClick={onRegister}
+                    className="w-full py-2.5 bg-[#22c55e] hover:bg-[#16a34a] text-white rounded-xl text-xs font-bold cursor-pointer transition"
+                  >
+                    Mula Percuma
+                  </button>
                 ) : p.isCustomPricing ? (
-                  <a href={`mailto:${settings?.contactEmail || "sales@mykerani.com"}`} className="w-full block text-center py-2 bg-slate-900 text-white rounded-xl text-xs font-bold cursor-pointer hover:bg-slate-800 transition">Hubungi Jualan</a>
+                  <a
+                    href={`mailto:${settings?.contactEmail || "sales@mykerani.com"}`}
+                    className="w-full block text-center py-2.5 bg-zinc-900 hover:bg-zinc-800 text-white rounded-xl text-xs font-bold transition"
+                  >
+                    Hubungi Jualan
+                  </a>
                 ) : (
-                  <button onClick={onRegister} className="w-full py-2 bg-emerald-50 border border-emerald-100 text-emerald-700 rounded-xl text-xs font-bold cursor-pointer hover:bg-emerald-100 transition">Langgan</button>
+                  <button
+                    onClick={onRegister}
+                    className="w-full py-2.5 bg-white border border-[#22c55e] text-[#16a34a] hover:bg-[#F0FDF4] rounded-xl text-xs font-bold cursor-pointer transition"
+                  >
+                    Pilih Pelan
+                  </button>
                 )}
               </div>
             ))}
@@ -259,63 +534,115 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLogin, onRegister })
         )}
       </section>
 
-      {/* FAQ — DB-driven */}
-      <section id="faq" className="max-w-3xl mx-auto px-5 py-14 border-t border-slate-100">
-        <h2 className="text-xl font-display font-bold text-center mb-8 flex items-center justify-center gap-2"><HelpCircle className="w-5 h-5 text-indigo-500" /> Soalan Lazim</h2>
+      {/* ── FAQ ── */}
+      <section id="faq" className="max-w-3xl mx-auto px-5 py-14 border-t border-[#E8E6DE]">
+        <div className="sr-fade text-center mb-8 space-y-2">
+          <h2 className="text-xl font-display font-bold text-zinc-900 flex items-center justify-center gap-2">
+            <HelpCircle className="w-5 h-5 text-[#22c55e]" /> Soalan Lazim
+          </h2>
+        </div>
         <div className="space-y-2">
           {faqs.map(f => (
-            <div key={f.id} className="border border-slate-100 rounded-xl">
-              <button onClick={() => setOpenFaq(openFaq === f.id ? null : f.id)} className="w-full flex items-center justify-between p-4 text-left cursor-pointer">
-                <span className="text-sm font-semibold text-slate-800">{f.question}</span>
-                <ChevronDown className={`w-4 h-4 text-slate-400 transition shrink-0 ${openFaq === f.id ? "rotate-180" : ""}`} />
+            <div key={f.id} className="sr-fade bg-white border border-[#E8E6DE] rounded-xl overflow-hidden">
+              <button
+                onClick={() => setOpenFaq(openFaq === f.id ? null : f.id)}
+                className="w-full flex items-center justify-between p-4 text-left cursor-pointer hover:bg-[#F8F7F3] transition"
+              >
+                <span className="text-sm font-semibold text-zinc-800">{f.question}</span>
+                <ChevronDown
+                  className={`w-4 h-4 text-zinc-400 transition-transform shrink-0 ${openFaq === f.id ? "rotate-180" : ""}`}
+                />
               </button>
-              {openFaq === f.id && <p className="px-4 pb-4 text-xs text-slate-500 leading-relaxed">{f.answer}</p>}
+              {openFaq === f.id && (
+                <p className="px-4 pb-4 text-xs text-zinc-500 leading-relaxed border-t border-[#E8E6DE] pt-3">
+                  {f.answer}
+                </p>
+              )}
             </div>
           ))}
-          {faqs.length === 0 && <p className="text-center text-xs text-slate-400">Tiada soalan lazim lagi.</p>}
+          {faqs.length === 0 && <p className="text-center text-xs text-zinc-400">Tiada soalan lazim lagi.</p>}
         </div>
       </section>
 
-      {/* Contact — DB-driven */}
-      <section id="contact" className="max-w-6xl mx-auto px-5 py-14 border-t border-slate-100">
-        <h2 className="text-xl font-display font-bold text-center mb-8">Hubungi Kami</h2>
+      {/* ── Contact ── */}
+      <section id="contact" className="max-w-6xl mx-auto px-5 py-14 border-t border-[#E8E6DE]">
+        <div className="sr-fade text-center mb-8 space-y-2">
+          <h2 className="text-xl font-display font-bold text-zinc-900">Hubungi Kami</h2>
+        </div>
         <div className="grid sm:grid-cols-2 md:grid-cols-4 gap-3 text-center">
           {settings?.contactEmail && (
-            <div className="p-4 border border-slate-100 rounded-xl space-y-1.5"><Mail className="w-4 h-4 text-indigo-500 mx-auto" /><p className="text-xs font-semibold text-slate-700">{settings.contactEmail}</p></div>
+            <div className="sr-fade p-4 bg-white border border-[#E8E6DE] rounded-xl space-y-1.5 hover:shadow-sm transition">
+              <Mail className="w-4 h-4 text-[#22c55e] mx-auto" />
+              <p className="text-xs font-semibold text-zinc-700">{settings.contactEmail}</p>
+            </div>
           )}
           {settings?.contactPhone && (
-            <div className="p-4 border border-slate-100 rounded-xl space-y-1.5"><Phone className="w-4 h-4 text-indigo-500 mx-auto" /><p className="text-xs font-semibold text-slate-700">{settings.contactPhone}</p></div>
+            <div className="sr-fade p-4 bg-white border border-[#E8E6DE] rounded-xl space-y-1.5 hover:shadow-sm transition">
+              <Phone className="w-4 h-4 text-[#22c55e] mx-auto" />
+              <p className="text-xs font-semibold text-zinc-700">{settings.contactPhone}</p>
+            </div>
           )}
           {settings?.contactWhatsapp && (
-            <div className="p-4 border border-slate-100 rounded-xl space-y-1.5"><MessageCircle className="w-4 h-4 text-indigo-500 mx-auto" /><p className="text-xs font-semibold text-slate-700">{settings.contactWhatsapp}</p></div>
+            <div className="sr-fade p-4 bg-white border border-[#E8E6DE] rounded-xl space-y-1.5 hover:shadow-sm transition">
+              <MessageCircle className="w-4 h-4 text-[#22c55e] mx-auto" />
+              <p className="text-xs font-semibold text-zinc-700">{settings.contactWhatsapp}</p>
+            </div>
           )}
           {settings?.contactAddress && (
-            <div className="p-4 border border-slate-100 rounded-xl space-y-1.5"><MapPin className="w-4 h-4 text-indigo-500 mx-auto" /><p className="text-xs font-semibold text-slate-700">{settings.contactAddress}</p></div>
+            <div className="sr-fade p-4 bg-white border border-[#E8E6DE] rounded-xl space-y-1.5 hover:shadow-sm transition">
+              <MapPin className="w-4 h-4 text-[#22c55e] mx-auto" />
+              <p className="text-xs font-semibold text-zinc-700">{settings.contactAddress}</p>
+            </div>
           )}
           {settings?.businessHours && (
-            <div className="p-4 border border-slate-100 rounded-xl space-y-1.5"><Clock className="w-4 h-4 text-indigo-500 mx-auto" /><p className="text-xs font-semibold text-slate-700">{settings.businessHours}</p></div>
+            <div className="sr-fade p-4 bg-white border border-[#E8E6DE] rounded-xl space-y-1.5 hover:shadow-sm transition">
+              <Clock className="w-4 h-4 text-[#22c55e] mx-auto" />
+              <p className="text-xs font-semibold text-zinc-700">{settings.businessHours}</p>
+            </div>
           )}
-          {!settings?.contactEmail && !settings?.contactPhone && !settings?.contactWhatsapp && !settings?.contactAddress && (
-            <p className="col-span-full text-xs text-slate-400">Maklumat hubungan belum disediakan oleh HQ.</p>
-          )}
+          {!settings?.contactEmail &&
+            !settings?.contactPhone &&
+            !settings?.contactWhatsapp &&
+            !settings?.contactAddress && (
+              <p className="col-span-full text-xs text-zinc-400">Maklumat hubungan belum disediakan oleh HQ.</p>
+            )}
         </div>
       </section>
 
-      {/* Final CTA */}
-      <section className="bg-slate-900 text-white text-center py-16 px-5">
-        <h2 className="text-2xl font-display font-bold mb-2">Hentikan Cara Susah Urus Kewangan</h2>
-        <p className="text-sm text-slate-300 mb-6">Mula susun rekod kewangan anda hari ini.</p>
+      {/* ── Final CTA ── */}
+      <section className="bg-[#F0FDF4] border-t border-[#BEF3CC] text-center py-16 px-5">
+        <h2 className="text-2xl font-display font-bold text-zinc-900 mb-2">
+          Hentikan Cara Susah Urus Kewangan
+        </h2>
+        <p className="text-sm text-zinc-500 mb-6">Mula susun rekod kewangan anda hari ini — percuma, tanpa kad kredit.</p>
         <div className="flex flex-wrap justify-center gap-3">
-          <button onClick={onRegister} className="px-6 py-3 bg-white text-slate-900 rounded-2xl text-sm font-bold cursor-pointer hover:bg-slate-100 transition">Mula Percubaan Percuma</button>
-          <button onClick={onRegister} className="px-6 py-3 border border-white/30 rounded-2xl text-sm font-bold cursor-pointer hover:bg-white/10 transition">Daftar Sekarang</button>
+          <button
+            onClick={onRegister}
+            className="flex items-center gap-2 px-6 py-3 bg-[#22c55e] hover:bg-[#16a34a] text-white rounded-2xl text-sm font-bold cursor-pointer transition shadow-sm"
+          >
+            Mula Percubaan Percuma <ArrowRight className="w-4 h-4" />
+          </button>
+          <button
+            onClick={onLogin}
+            className="px-6 py-3 bg-white border border-[#E8E6DE] text-zinc-700 rounded-2xl text-sm font-bold cursor-pointer hover:border-[#22c55e] transition"
+          >
+            Log Masuk
+          </button>
         </div>
       </section>
 
-      <footer className="text-center py-6 text-[11px] text-slate-400 space-y-2">
+      {/* ── Footer ── */}
+      <footer className="text-center py-6 text-[11px] text-zinc-400 space-y-2 border-t border-[#E8E6DE] bg-[#F8F7F3]">
         {settings?.socialLinks && Object.keys(settings.socialLinks).length > 0 && (
           <div className="flex items-center justify-center gap-4">
             {Object.entries(settings.socialLinks).map(([platform, url]) => (
-              <a key={platform} href={url} target="_blank" rel="noopener noreferrer" className="font-semibold text-slate-500 hover:text-slate-800 transition">
+              <a
+                key={platform}
+                href={url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-semibold text-zinc-500 hover:text-zinc-800 transition"
+              >
                 {platform}
               </a>
             ))}
