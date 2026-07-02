@@ -2027,6 +2027,7 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
               {pelangganTab === "senarai" && (<>
                 <div className="flex items-center justify-between">
                   <h1 className="text-xl font-bold text-slate-900">Pelanggan</h1>
+                    <p className="text-[11px] text-slate-400 mt-0.5">Senarai, profil dan status kesihatan semua tenant.</p>
                   <div className="flex items-center gap-2">
                     <div className="relative">
                       <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
@@ -2169,6 +2170,7 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
               />
               {kewanganTab === "plan" && (<>
                 <h1 className="text-xl font-bold text-slate-900">Pengebilan</h1>
+                <p className="text-[11px] text-slate-400 mt-0.5">Urus pelan langganan dan kelulusan pembayaran tenant.</p>
 
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                   <MetricCard label="Hasil Bulan Ini"     value={`RM ${totalMRR.toLocaleString()}`} icon={DollarSign} color="emerald" trend="up" />
@@ -2299,6 +2301,7 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
             {(activePage === "usage" || (activePage === "billing" && kewanganTab === "penggunaan")) && !isStaff && (
               <div className="space-y-5" id="hq_usage">
                 <h1 className="text-xl font-bold text-slate-900">Penggunaan Platform</h1>
+                <p className="text-[11px] text-slate-400 mt-0.5">Pantau penggunaan AI, OCR dan storan mengikut tenant.</p>
 
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                   <MetricCard label="Jumlah Kredit AI"  value={totalAI.toLocaleString()}      sub="semua pelanggan bulan ini" icon={Zap}      color="amber" />
@@ -2391,28 +2394,19 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
               <div className="space-y-4" id="hq_support">
                 <div className="flex items-center justify-between">
                   <h1 className="text-xl font-bold text-slate-900">Sokongan Pelanggan</h1>
+                <p className="text-[11px] text-slate-400 mt-0.5">Uruskan tiket sokongan dan pantau SLA respons.</p>
                   <button onClick={() => setShowTicketModal(true)}
                     className="text-[11px] text-slate-400 hover:text-slate-600 underline cursor-pointer">
                     + Tiket HQ (jarang digunakan)
                   </button>
                 </div>
 
-                {/* Operational health row */}
-                <div className="grid grid-cols-3 md:grid-cols-6 gap-2.5">
-                  <MetricCard label="Terbuka" value={allTickets.filter(t=>t.status==="open").length} icon={AlertCircle} color="red" />
-                  <MetricCard label="Dalam Proses" value={allTickets.filter(t=>t.status==="in_progress").length} icon={Clock} color="amber" />
-                  <MetricCard label="Tunggu Pelanggan" value={allTickets.filter(t=>t.status==="awaiting_customer").length} icon={MessageCircle} color="violet" />
-                  <MetricCard label="Tunggu HQ" value={allTickets.filter(t=>t.status==="awaiting_hq").length} icon={Headphones} color="amber" />
-                  <MetricCard label="Selesai" value={allTickets.filter(t=>t.status==="resolved").length} icon={CheckCircle2} color="emerald" />
-                  <MetricCard label="Ditutup" value={allTickets.filter(t=>t.status==="closed").length} icon={X} color="slate" />
-                </div>
-                <div className="grid grid-cols-3 md:grid-cols-6 gap-2.5">
-                  <MetricCard label="Kritikal" value={allTickets.filter(t=>t.priority==="critical").length} icon={AlertCircle} color="red" />
-                  <MetricCard label="Tinggi" value={allTickets.filter(t=>t.priority==="high").length} icon={AlertCircle} color="red" />
-                  <MetricCard label="SLA Lupus" value={slaBreachedCount} icon={AlertCircle} color="red" />
-                  <MetricCard label="SLA Hampir" value={slaNearCount} icon={Clock} color="amber" />
-                  <MetricCard label="Belum Ditugaskan" value={unassignedCount} icon={UserX} color="amber" />
-                  <MetricCard label="Masa Respons (min)" value={avgResponseMins ?? "-"} icon={Clock} color="teal" />
+                {/* Operational health row — 4 key KPIs */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  <MetricCard label="Tiket Terbuka"       value={allTickets.filter(t=>t.status==="open"||t.status==="in_progress"||t.status==="awaiting_hq").length} icon={AlertCircle} color="red" />
+                  <MetricCard label="SLA Hampir Lupus"    value={slaBreachedCount + slaNearCount} icon={Clock} color="amber" />
+                  <MetricCard label="Belum Ditugaskan"    value={unassignedCount} icon={UserX} color="amber" />
+                  <MetricCard label="Selesai Hari Ini"    value={allTickets.filter(t=>t.status==="resolved").length} icon={CheckCircle2} color="emerald" />
                 </div>
 
                 {/* Filter tabs */}
@@ -2677,6 +2671,7 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
               return (
               <div className="space-y-5" id="hq_revenue">
                 <h1 className="text-xl font-bold text-slate-900">Hasil & Pendapatan</h1>
+                <p className="text-[11px] text-slate-400 mt-0.5">MRR, ARR dan analitik pendapatan mengikut plan.</p>
 
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                   <MetricCard label="MRR" value={`RM ${totalMRR.toLocaleString()}`} sub="bulan ini" icon={DollarSign} color="emerald" trend="up" />
@@ -2783,6 +2778,7 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
                 {/* Page title */}
                 <div className="flex items-center justify-between">
                   <h1 className="text-xl font-bold text-slate-900">Tapak Web Awam</h1>
+                <p className="text-[11px] text-slate-400 mt-0.5">Urus kandungan halaman awam MyKerani.</p>
                   {siteSettingsSaved && <span className="text-xs text-emerald-600 font-bold bg-emerald-50 border border-emerald-200 px-3 py-1.5 rounded-xl">Tersimpan</span>}
                 </div>
 
@@ -3820,6 +3816,7 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
               <div className="space-y-4" id="hq_customer360">
                 <div className="flex items-center justify-between">
                   <h1 className="text-xl font-bold text-slate-900">Customer 360</h1>
+                <p className="text-[11px] text-slate-400 mt-0.5">Profil mendalam satu pelanggan — usage, billing, sokongan dan nota.</p>
                   <div className="relative">
                     <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
                     <input type="text" value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
@@ -3973,6 +3970,7 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
               return (
               <div className="space-y-4" id="hq_alert_center">
                 <h1 className="text-xl font-bold text-slate-900">Pusat Amaran</h1>
+                <p className="text-[11px] text-slate-400 mt-0.5">Events yang memerlukan perhatian — webhook, penggunaan tinggi, churn.</p>
                 <div className="grid grid-cols-3 gap-3">
                   <MetricCard label="Jumlah Amaran" value={hqAlerts.length} icon={Bell} color="slate" />
                   <MetricCard label="Belum Selesai" value={hqAlerts.filter(a => !a.resolvedAt).length} icon={AlertCircle} color="red" />
@@ -4051,6 +4049,7 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
               <div className="space-y-4" id="hq_wallet_dashboard">
                 <div className="flex items-center justify-between">
                   <h1 className="text-xl font-bold text-slate-900">Dompet Sumber Tenant</h1>
+                <p className="text-[11px] text-slate-400 mt-0.5">Baki kredit AI/OCR setiap tenant dan kos 30 hari.</p>
                   <div className="flex items-center gap-2">
                     <div className="relative">
                       <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
@@ -4114,6 +4113,7 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
               return (
               <div className="space-y-4" id="hq_health_scores">
                 <h1 className="text-xl font-bold text-slate-900">Skor Kesihatan Pelanggan</h1>
+                <p className="text-[11px] text-slate-400 mt-0.5">Pantau status dan risiko setiap pelanggan berdasarkan aktiviti akaun.</p>
                 <div className="grid grid-cols-3 gap-3">
                   <MetricCard label="Risiko Tinggi" value={highRisk.length} icon={AlertTriangle} color="red" />
                   <MetricCard label="Risiko Sederhana" value={ranked.filter(c => c.healthRiskLevel === "medium").length} icon={AlertCircle} color="amber" />
@@ -4199,6 +4199,7 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
               />
               {keselamatanTab === "gateway" && (<>
                 <h1 className="text-xl font-bold text-slate-900">Tadbir Bayaran</h1>
+                <p className="text-[11px] text-slate-400 mt-0.5">Tetapan webhook Chip Asia dan log pembayaran masuk.</p>
                 <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-4">
                   <div className="flex items-center gap-2">
                     <ShieldAlert className="w-4 h-4 text-rose-500" />
@@ -4292,6 +4293,7 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
               return (
               <div className="space-y-5" id="hq_storage_governance">
                 <h1 className="text-xl font-bold text-slate-900">Tadbir Storan</h1>
+                <p className="text-[11px] text-slate-400 mt-0.5">Pemantauan penggunaan storan per tenant berbanding had quota.</p>
                 <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-4">
                   <div className="flex items-center justify-between">
                     <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
@@ -4413,6 +4415,7 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
             {(activePage === "aiCostGovernance" || (activePage === "costCenter" && kosOperasiTab === "kadar")) && !isStaff && (
               <div className="space-y-4" id="hq_ai_cost_governance">
                 <h1 className="text-xl font-bold text-slate-900">Tadbir Urus Kos AI</h1>
+                <p className="text-[11px] text-slate-400 mt-0.5">Kadar kos per panggilan API dan perbelanjaan AI mengikut tenant.</p>
                 <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-4">
                   <div className="flex items-center gap-2">
                     <DollarSign className="w-4 h-4 text-amber-500" />
@@ -4706,6 +4709,7 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
             {(activePage === "dataMaskingGovernance" || (activePage === "paymentGovernance" && keselamatanTab === "privasi")) && !isStaff && (
               <div className="space-y-4" id="hq_data_masking_governance">
                 <h1 className="text-xl font-bold text-slate-900">Tadbir Topeng Data (PII)</h1>
+                <p className="text-[11px] text-slate-400 mt-0.5">Peraturan perlindungan data peribadi dan kawalan akses oleh staf.</p>
 
                 <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-3">
                   <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2"><Shield className="w-4 h-4 text-emerald-600" />Status Akses Unmask</h3>
