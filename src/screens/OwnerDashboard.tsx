@@ -754,7 +754,9 @@ export function OwnerDashboard() {
     try {
       const res = await redeemPromotion(promoCode.trim().toUpperCase(), activeWorkspace.tenantId, activeWorkspace.id);
       if (res.ok) {
-        setPromoResult(res.kind === "trial_extension_days" ? `Berjaya! Percubaan dilanjutkan ${res.amount} hari.` : `Berjaya! Kredit ditambah ke dompet anda.`);
+        setPromoResult(res.kind === "trial_extension_days"
+          ? `🎁 Berjaya! Tempoh percubaan dilanjutkan ${res.amount} hari.`
+          : `🎁 Berjaya! ${res.amount ? `+${res.amount} ` : ""}kuota tambahan telah dikreditkan ke pelan anda.`);
         setPromoCode("");
         if (activeTenant?.id) getMyPromotionRedemptions(activeTenant.id).then(setPromoHistory);
       } else {
@@ -771,7 +773,8 @@ export function OwnerDashboard() {
     features: string[]; limitations: string[]; isTrial: boolean; isCustomPricing: boolean;
   }
   const [availablePlans, setAvailablePlans] = useState<PlanOption[]>([]);
-  const [currentSub, setCurrentSub] = useState<{ planId: string; planName: string; price: number; status: string; renewal: string } | null>(null);
+  const [currentSub, setCurrentSub] = useState<{ planId: string; planName: string; price: number; status: string; renewal: string; periodEndRaw: string | null } | null>(null);
+  const [paymentSuccessToast, setPaymentSuccessToast] = useState<string | null>(null);
   const [paymentMethods, setPaymentMethods] = useState({ chipAsiaEnabled: false, manualPaymentEnabled: true });
   const [paymentTxs, setPaymentTxs] = useState<TenantPaymentTransaction[]>([]);
   const [paymentTxRefresh, setPaymentTxRefresh] = useState(0);
@@ -806,6 +809,7 @@ export function OwnerDashboard() {
             price: Number(data.subscription_plans?.monthly_price_myr) || 0,
             status: data.status,
             renewal: data.current_period_end ? new Date(data.current_period_end).toLocaleDateString("ms-MY", { day: "numeric", month: "short", year: "numeric" }) : "",
+            periodEndRaw: data.current_period_end || null,
           });
         }
       });
@@ -893,6 +897,9 @@ export function OwnerDashboard() {
       }
       setShowPaymentModal(false);
       setPaymentTxRefresh(t => t + 1);
+      const upgradedPlan = availablePlans.find(p => p.id === paymentModalPlanId);
+      setPaymentSuccessToast(`✅ Pembayaran diterima! ${upgradedPlan ? `Plan ${upgradedPlan.name} ` : ""}akan diaktifkan selepas pengesahan HQ.`);
+      setTimeout(() => setPaymentSuccessToast(null), 6000);
     } finally {
       setPaymentSubmitting(false);
     }
@@ -2035,6 +2042,30 @@ export function OwnerDashboard() {
         #owner_root .to-emerald-800{--tw-gradient-to:#3D7057!important}
       `}</style>
 
+      {/* W1.3 — Trial Countdown Banner */}
+      {currentSub?.status === 'trialing' && currentSub.periodEndRaw && (() => {
+        const daysLeft = Math.ceil((new Date(currentSub.periodEndRaw!).getTime() - Date.now()) / 86400000);
+        if (daysLeft > 7) return null;
+        const isRed = daysLeft <= 1;
+        const isOrange = daysLeft <= 3 && daysLeft > 1;
+        return (
+          <div className={`flex items-center gap-2 px-4 py-2 text-xs font-semibold ${isRed ? "bg-red-600 text-white" : isOrange ? "bg-orange-500 text-white" : "bg-amber-400 text-amber-900"}`}>
+            <Clock className="w-3.5 h-3.5 shrink-0" />
+            <span>Tempoh percubaan anda {daysLeft <= 0 ? "telah tamat" : `tamat dalam ${daysLeft} hari`}. Langgan sekarang untuk meneruskan.</span>
+            <button onClick={() => { setActiveTab("more"); setMorePage("billing"); }} className="ml-auto underline shrink-0 cursor-pointer">Langgan</button>
+          </div>
+        );
+      })()}
+
+      {/* W1.7 — Subscription Expiry Banner */}
+      {currentSub?.status === 'expired' && (
+        <div className="flex items-center gap-2 px-4 py-2 text-xs font-semibold bg-red-600 text-white">
+          <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+          <span>Langganan anda telah tamat. Data anda selamat. Sila langgan semula untuk meneruskan penggunaan.</span>
+          <button onClick={() => { setActiveTab("more"); setMorePage("billing"); }} className="ml-auto underline shrink-0 cursor-pointer">Langgan Semula</button>
+        </div>
+      )}
+
       {/* ═══════════════════════════════════════
           DESKTOP SIDEBAR — hidden on mobile/tablet
           ═══════════════════════════════════════ */}
@@ -2677,6 +2708,21 @@ export function OwnerDashboard() {
                   </button>
                 </div>
               )}
+              {/* W1.1 — AI Financial Assistant Warning Banner */}
+              {aiCredits.total > 0 && (() => {
+                const aiRemaining = Math.max(0, aiCredits.total - aiCredits.used);
+                const aiPct = aiRemaining / aiCredits.total;
+                if (aiPct > 0.20) return null;
+                const isRed = aiPct <= 0.05;
+                const isOrange = aiPct <= 0.10 && aiPct > 0.05;
+                return (
+                  <div className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold mb-2 ${isRed ? "bg-red-50 text-red-700 border border-red-200" : isOrange ? "bg-orange-50 text-orange-700 border border-orange-200" : "bg-amber-50 text-amber-700 border border-amber-200"}`}>
+                    <Zap className="w-3.5 h-3.5 shrink-0" />
+                    <span>{isRed ? "Kuota AI Financial Assistant hampir habis! " : ""}AI Financial Assistant: {aiRemaining} penggunaan berbaki.</span>
+                    <button onClick={() => { setActiveTab("more"); setMorePage("billing"); }} className="ml-auto underline shrink-0 cursor-pointer">Lihat Pakej</button>
+                  </div>
+                );
+              })()}
               <input ref={chatFileInputRef} type="file" accept="image/*,application/pdf" className="hidden" onChange={handleChatFilePicked} />
               <form onSubmit={e => { e.preventDefault(); sendChat(); }}
                 className="flex items-center gap-2 bg-white border border-slate-300 rounded-2xl px-4 py-3 shadow-sm focus-within:border-indigo-400 transition">
@@ -3034,6 +3080,15 @@ export function OwnerDashboard() {
 
         {/* ═══ DOCUMENTS ═══ */}
         {activeTab === "documents" && !showBankStatementImport && (
+          <>
+          {/* W1.2 — Resit / Invois OCR Warning */}
+          {ocrCredits.total > 0 && Math.max(0, ocrCredits.total - ocrCredits.used) < 20 && (
+            <div className="mx-4 mt-3 flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200">
+              <ScanLine className="w-3.5 h-3.5 shrink-0" />
+              <span>Tinggal {Math.max(0, ocrCredits.total - ocrCredits.used)} Muka Surat Penyata Bank berbaki dalam pelan semasa.</span>
+              <button onClick={() => { setActiveTab("more"); setMorePage("billing"); }} className="ml-auto underline shrink-0 cursor-pointer">Tambah Kuota</button>
+            </div>
+          )}
           <DocumentsManager
             workspaceId={wsId}
             workspaceName={activeWorkspace?.name || ""}
@@ -3060,6 +3115,7 @@ export function OwnerDashboard() {
             docs={docs}
             onDocsChange={setDocs}
           />
+          </>
         )}
         {activeTab === "documents" && showBankStatementImport && (
           <BankStatementProcessor
@@ -3224,7 +3280,13 @@ export function OwnerDashboard() {
             {morePage === "team" && (
               <div className="space-y-4 lg:space-y-5">
                 <div className="flex items-center justify-between">
-                  <h2 className="text-lg font-bold text-slate-900">Pasukan Saya</h2>
+                  <div>
+                    <h2 className="text-lg font-bold text-slate-900">Pasukan Saya</h2>
+                    {/* W1.4 — Staff Slot Indicator */}
+                    <p className="text-2xs text-slate-400 mt-0.5">
+                      {userRoles.filter(r => r.role === 'TENANT_STAFF' && !revokedMemberIds[r.id]).length} pengguna aktif
+                    </p>
+                  </div>
                   <button onClick={() => { setShowInvite(v => !v); setInviteResult(null); }}
                     className="flex items-center space-x-1.5 px-3 py-2 bg-indigo-600 text-white rounded-xl text-xs font-bold cursor-pointer">
                     <UserPlus className="w-3.5 h-3.5" /><span>Jemput Staf</span>
@@ -5661,6 +5723,13 @@ export function OwnerDashboard() {
               )}
             </div>
           </div>
+        </div>
+      )}
+
+      {/* W1.6 — Plan Upgrade Celebration / Payment Success Toast */}
+      {paymentSuccessToast && (
+        <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-50 bg-emerald-700 text-white text-xs font-semibold px-4 py-3 rounded-2xl shadow-xl max-w-xs text-center">
+          {paymentSuccessToast}
         </div>
       )}
     </div>

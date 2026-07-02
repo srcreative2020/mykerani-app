@@ -45,7 +45,7 @@ import {
   CheckCircle2, LogOut, ClipboardList, HelpCircle,
   MessageCircle, BookOpen, Ticket, Edit3,
   Paperclip, Mic, Square, File as FileIcon,
-  LayoutDashboard, FileText, MoreHorizontal, AlertCircle, ShieldCheck,
+  LayoutDashboard, FileText, MoreHorizontal, AlertCircle, ShieldCheck, Zap,
 } from "lucide-react";
 
 type StaffTab = "home" | "dashboard" | "documents" | "more";
@@ -1654,6 +1654,20 @@ export function StaffHomeScreen() {
                   </button>
                 </div>
               )}
+              {/* W1.1 — AI Financial Assistant Warning Banner */}
+              {aiCredits.total > 0 && (() => {
+                const aiRemaining = Math.max(0, aiCredits.total - aiCredits.used);
+                const aiPct = aiRemaining / aiCredits.total;
+                if (aiPct > 0.20) return null;
+                const isRed = aiPct <= 0.05;
+                const isOrange = aiPct <= 0.10 && aiPct > 0.05;
+                return (
+                  <div className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold mb-2 ${isRed ? "bg-red-50 text-red-700 border border-red-200" : isOrange ? "bg-orange-50 text-orange-700 border border-orange-200" : "bg-amber-50 text-amber-700 border border-amber-200"}`}>
+                    <Zap className="w-3.5 h-3.5 shrink-0" />
+                    <span>{isRed ? "Kuota AI Financial Assistant hampir habis! " : ""}AI Financial Assistant: {aiRemaining} penggunaan berbaki.</span>
+                  </div>
+                );
+              })()}
               <input ref={chatFileInputRef} type="file" accept="image/*,application/pdf" className="hidden" onChange={handleChatFilePicked} />
               <form onSubmit={e => { e.preventDefault(); sendChat(); }}
                 className="flex items-center gap-2 bg-white border border-slate-300 rounded-2xl px-4 py-3 shadow-sm focus-within:border-slate-500 transition">
