@@ -1943,6 +1943,16 @@ Provide your output precisely formatted as raw JSON matching exactly this shape,
 }
 Only include a "CONFIRM_TRANSACTION" suggestion entry when financialIntent.detected is true. If you output markdown formatting inside the fields, escape quotes correctly.`;
 
+      // W2.1 — AI credit gate BEFORE AI provider call (prevents HQ cost on zero-credit tenants).
+      // Suspension is already checked at line 1838 above (W2.2 — isUserSuspended check in place).
+      const { ok: hasCredit, txnId: creditTxnId } = await consumeResourceCreditV2(tenantId, workspaceId, "AI", `AI assistant query: ${String(query).slice(0, 80)}`);
+      if (!hasCredit) {
+        return res.status(402).json({
+          error: "Kredit AI syarikat anda telah digunakan sepenuhnya untuk tempoh semasa. Sila naik taraf pelan atau tunggu pembaharuan bulanan.",
+          code: "AI_CREDITS_EXHAUSTED",
+        });
+      }
+
       // Try each configured provider in cheapest-first order, falling through to the
       // next one if a call fails (quota/billing/outage), before giving up to the simulator.
       let parsedResponse: any = null;
@@ -1965,14 +1975,6 @@ Only include a "CONFIRM_TRANSACTION" suggestion entry when financialIntent.detec
         console.info("[AI_ROUTER_DEBUG] fallbackTriggerReason=ALL_CANDIDATES_FAILED", lastErr?.message || lastErr);
         (lastErr as any).attemptErrors = attemptErrors;
         throw lastErr || new Error("All configured AI providers failed");
-      }
-
-      const { ok: hasCredit, txnId: creditTxnId } = await consumeResourceCreditV2(tenantId, workspaceId, "AI", `AI assistant query: ${String(query).slice(0, 80)}`);
-      if (!hasCredit) {
-        return res.status(402).json({
-          error: "Kredit AI syarikat anda telah digunakan sepenuhnya untuk tempoh semasa. Sila naik taraf pelan atau tunggu pembaharuan bulanan.",
-          code: "AI_CREDITS_EXHAUSTED",
-        });
       }
 
       console.info("[AI_ROUTER_DEBUG]", JSON.stringify({
