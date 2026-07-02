@@ -1,21 +1,10 @@
 import React, { useEffect, useRef, useState } from "react";
-import { supabase, isSupabaseConfigured } from "../lib/supabase";
-import { getSiteSettings, getFaqItems, type SiteSettings, type FaqItem } from "../lib/hqService";
+import { getSiteSettings, getFaqItems, getPlans, type HqPlan, type SiteSettings, type FaqItem } from "../lib/hqService";
 import {
   ArrowRight, PlayCircle, Receipt, FileWarning, HelpCircle, Mail, Phone,
   MessageCircle, MapPin, Clock, ChevronDown, Sparkles, Upload, Wand2,
   CheckCircle2, FileSpreadsheet, Building2, Banknote, Send, Bot,
 } from "lucide-react";
-
-interface PlanRow {
-  id: string;
-  name: string;
-  price: number;
-  features: string[];
-  isTrial: boolean;
-  isCustomPricing: boolean;
-  featured: boolean;
-}
 
 interface LandingPageProps {
   onLogin: () => void;
@@ -210,7 +199,9 @@ const NAV_SECTIONS = ["features", "who", "pricing", "faq", "contact"];
 export const LandingPage: React.FC<LandingPageProps> = ({ onLogin, onRegister }) => {
   const [settings, setSettings] = useState<SiteSettings | null>(null);
   const [faqs, setFaqs] = useState<FaqItem[]>([]);
-  const [plans, setPlans] = useState<PlanRow[]>([]);
+  const [plans, setPlans] = useState<HqPlan[]>([]);
+  const [plansLoading, setPlansLoading] = useState(true);
+  const [plansError, setPlansError] = useState(false);
   const [openFaq, setOpenFaq] = useState<string | null>(null);
 
   useScrollReveal();
@@ -219,25 +210,9 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLogin, onRegister })
   useEffect(() => {
     getSiteSettings().then(setSettings);
     getFaqItems().then(setFaqs);
-    if (isSupabaseConfigured() && supabase) {
-      supabase
-        .from("subscription_plans")
-        .select("*")
-        .order("monthly_price_myr", { ascending: true })
-        .then(({ data }) =>
-          setPlans(
-            (data || []).map((row: any) => ({
-              id: row.id,
-              name: row.name,
-              price: Number(row.monthly_price_myr) || 0,
-              features: row.features?.featureList ?? [],
-              isTrial: row.features?.isTrial ?? false,
-              isCustomPricing: row.features?.isCustomPricing ?? false,
-              featured: row.features?.featured ?? false,
-            }))
-          )
-        );
-    }
+    getPlans()
+      .then(data => { setPlans(data); setPlansLoading(false); })
+      .catch(() => { setPlansError(true); setPlansLoading(false); });
   }, []);
 
   const companyName = settings?.companyName || "MyKerani";
@@ -472,8 +447,32 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLogin, onRegister })
           <h2 className="text-xl font-display font-bold text-zinc-900">Pelan & Harga</h2>
           <p className="text-xs text-zinc-400">Mulakan percuma. Naik taraf apabila perniagaan anda berkembang.</p>
         </div>
-        {plans.length === 0 ? (
-          <p className="text-center text-xs text-zinc-400">Pelan harga belum disediakan oleh HQ.</p>
+        {plansLoading ? (
+          <div className="flex justify-center py-8">
+            <div className="flex gap-1.5 items-center text-xs text-zinc-400">
+              <span className="w-1.5 h-1.5 rounded-full bg-zinc-300 animate-bounce" style={{ animationDelay: "0s" }} />
+              <span className="w-1.5 h-1.5 rounded-full bg-zinc-300 animate-bounce" style={{ animationDelay: "0.15s" }} />
+              <span className="w-1.5 h-1.5 rounded-full bg-zinc-300 animate-bounce" style={{ animationDelay: "0.3s" }} />
+            </div>
+          </div>
+        ) : plansError ? (
+          <div className="text-center py-6 space-y-2">
+            <p className="text-sm font-semibold text-zinc-500">Pelan sedang dikemaskini.</p>
+            <p className="text-xs text-zinc-400">
+              Sila{" "}
+              <a href="#contact" className="text-[#22c55e] hover:underline">hubungi kami</a>
+              {" "}untuk maklumat lanjut.
+            </p>
+          </div>
+        ) : plans.length === 0 ? (
+          <div className="text-center py-6 space-y-2">
+            <p className="text-sm font-semibold text-zinc-500">Pelan sedang dikemaskini.</p>
+            <p className="text-xs text-zinc-400">
+              Sila{" "}
+              <a href="#contact" className="text-[#22c55e] hover:underline">hubungi kami</a>
+              {" "}untuk maklumat lanjut.
+            </p>
+          </div>
         ) : (
           <div className="grid sm:grid-cols-2 md:grid-cols-4 gap-4">
             {plans.map(p => (
@@ -485,12 +484,20 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLogin, onRegister })
                     : "border-[#E8E6DE] bg-white"
                 }`}
               >
-                {p.featured && (
-                  <div className="inline-flex items-center gap-1 px-2 py-1 bg-[#22c55e] rounded-lg">
-                    <span className="text-[10px] font-bold text-white">POPULAR</span>
-                  </div>
-                )}
-                <p className="font-display font-bold text-zinc-900">{p.name}</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {p.featured && (
+                    <span className="inline-flex items-center px-2 py-0.5 bg-[#22c55e] rounded-lg text-[10px] font-bold text-white">POPULAR</span>
+                  )}
+                  {p.isTrial && (
+                    <span className="inline-flex items-center px-2 py-0.5 bg-amber-100 border border-amber-200 rounded-lg text-[10px] font-bold text-amber-700">PERCUBAAN</span>
+                  )}
+                </div>
+                <div>
+                  <p className="font-display font-bold text-zinc-900">{p.name}</p>
+                  {p.aiCredits > 0 && (
+                    <p className="text-[10px] text-zinc-400 mt-0.5">AI {p.aiCredits.toLocaleString()} kredit · Storan {p.storageGB} GB</p>
+                  )}
+                </div>
                 {p.isCustomPricing ? (
                   <p className="text-lg font-bold text-zinc-900">Harga Tersuai</p>
                 ) : (
@@ -505,13 +512,18 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLogin, onRegister })
                       <CheckCircle2 className="w-3 h-3 shrink-0 mt-0.5" /> {f}
                     </li>
                   ))}
+                  {p.maxUsers > 0 && (
+                    <li className="flex items-start gap-1.5">
+                      <CheckCircle2 className="w-3 h-3 shrink-0 mt-0.5" /> Sehingga {p.maxUsers} pengguna
+                    </li>
+                  )}
                 </ul>
                 {p.isTrial ? (
                   <button
                     onClick={onRegister}
                     className="w-full py-2.5 bg-[#22c55e] hover:bg-[#16a34a] text-white rounded-xl text-xs font-bold cursor-pointer transition"
                   >
-                    Mula Percuma
+                    Mula Percuma {p.trialDays > 0 ? `(${p.trialDays} Hari)` : ""}
                   </button>
                 ) : p.isCustomPricing ? (
                   <a
@@ -525,7 +537,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLogin, onRegister })
                     onClick={onRegister}
                     className="w-full py-2.5 bg-white border border-[#22c55e] text-[#16a34a] hover:bg-[#F0FDF4] rounded-xl text-xs font-bold cursor-pointer transition"
                   >
-                    Pilih Pelan
+                    Langgan Sekarang
                   </button>
                 )}
               </div>
