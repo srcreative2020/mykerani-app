@@ -115,7 +115,7 @@ const StatusBadge = ({ status }: { status: string }) => {
     open: "bg-amber-50 text-amber-700 border-amber-200",
     pending: "bg-blue-50 text-blue-700 border-blue-200",
     in_progress: "bg-blue-50 text-blue-700 border-blue-200",
-    awaiting_customer: "bg-violet-50 text-violet-700 border-violet-200",
+    awaiting_customer: "bg-amber-50 text-amber-700 border-amber-200",
     awaiting_hq: "bg-amber-50 text-amber-700 border-amber-200",
     resolved: "bg-emerald-50 text-emerald-600 border-emerald-200",
     closed: "bg-slate-100 text-slate-500 border-slate-200",
@@ -144,7 +144,7 @@ const StatusBadge = ({ status }: { status: string }) => {
 // â"€â"€ Metric Card â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 const MetricCard = ({ label, value, sub, icon: Icon, color = "teal", trend }: {
   label: string; value: string | number; sub?: string;
-  icon: React.ElementType; color?: "teal" | "emerald" | "red" | "amber" | "violet" | "slate";
+  icon: React.ElementType; color?: "teal" | "emerald" | "red" | "amber" | "slate";
   trend?: "up" | "down" | "neutral";
 }) => {
   const colors = {
@@ -152,7 +152,6 @@ const MetricCard = ({ label, value, sub, icon: Icon, color = "teal", trend }: {
     emerald: { bg: "bg-emerald-50", icon: "text-emerald-600", border: "border-emerald-100" },
     red:     { bg: "bg-red-50",     icon: "text-red-500",     border: "border-red-100" },
     amber:   { bg: "bg-amber-50",   icon: "text-amber-600",   border: "border-amber-100" },
-    violet:  { bg: "bg-violet-50",  icon: "text-violet-600",  border: "border-violet-100" },
     slate:   { bg: "bg-emerald-50/40",   icon: "text-slate-500",   border: "border-slate-200" },
   };
   const c = colors[color];
@@ -1992,7 +1991,7 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
                     <MetricCard label="Pelanggan Aktif"   value={activeCount}  sub="memerlukan sokongan"   icon={Users}      color="teal" />
                     <MetricCard label="Kes Terbuka"       value={openCases}    sub="perlu tindakan segera" icon={Headphones} color="amber" />
                     <MetricCard label="Perlu Aktifkan"    value={customers.filter(c=>c.status==="suspended").length} sub="akaun digantung" icon={UserCheck} color="red" />
-                    <MetricCard label="Perlu Perhatian"   value={customers.filter(c=>c.attention).length}  sub="semak butiran" icon={AlertTriangle} color="violet" />
+                    <MetricCard label="Perlu Perhatian"   value={customers.filter(c=>c.attention).length}  sub="semak butiran" icon={AlertTriangle} color="amber" />
                   </div>
                 )}
 
@@ -2192,7 +2191,7 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
                       return (
                         <div key={p.id} className={`border rounded-2xl p-4 space-y-2 relative ${p.featured ? "border-emerald-300 bg-emerald-50/30" : "border-slate-200 bg-white"}`}>
                           {p.featured && <span className="absolute top-3 right-3 text-[9px] font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full">Popular</span>}
-                          {p.isTrial && <span className="absolute top-3 right-3 text-[9px] font-bold text-indigo-700 bg-indigo-100 px-2 py-0.5 rounded-full">Percubaan</span>}
+                          {p.isTrial && <span className="absolute top-3 right-3 text-[9px] font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full">Percubaan</span>}
                           <div className="flex items-center justify-between pr-14">
                             <span className="font-bold text-slate-900">{p.name}</span>
                           </div>
@@ -2306,7 +2305,7 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                   <MetricCard label="Jumlah Kredit AI"  value={totalAI.toLocaleString()}      sub="semua pelanggan bulan ini" icon={Zap}      color="amber" />
                   <MetricCard label="Jumlah Storan"     value={`${customers.reduce((s,c)=>s+c.storageGB,0).toFixed(1)} GB`} sub="digunakan" icon={HardDrive} color="slate" />
-                  <MetricCard label="OCR Digunakan"     value={(usageByFeature.find(f => f.feature === "ocr")?.usageCount ?? 0).toLocaleString()} sub="imbasan bulan ini" icon={Brain} color="violet" />
+                  <MetricCard label="OCR Digunakan"     value={(usageByFeature.find(f => f.feature === "ocr")?.usageCount ?? 0).toLocaleString()} sub="imbasan bulan ini" icon={Brain} color="teal" />
                 </div>
 
                 {/* Resource Wallet Dashboard (Module 11) — relocated to its own dedicated page: "walletDashboard" */}
@@ -2676,7 +2675,7 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                   <MetricCard label="MRR" value={`RM ${totalMRR.toLocaleString()}`} sub="bulan ini" icon={DollarSign} color="emerald" trend="up" />
                   <MetricCard label="ARR" value={`RM ${arr.toLocaleString()}`} sub="anggaran tahunan" icon={TrendingUp} color="teal" trend="up" />
-                  <MetricCard label="Pelanggan Aktif" value={activeC.length} sub={`${suspendedC.length} digantung`} icon={UserCheck} color="violet" />
+                  <MetricCard label="Pelanggan Aktif" value={activeC.length} sub={`${suspendedC.length} digantung`} icon={UserCheck} color="emerald" />
                   <MetricCard label="Perlu Perhatian" value={customers.filter(c=>c.attention).length} sub="berisiko" icon={AlertCircle} color={customers.filter(c=>c.attention).length > 0 ? "red" : "slate"} />
                 </div>
 
@@ -3071,7 +3070,7 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
                             <div className="border-t border-slate-100 px-3 py-2.5 flex items-center gap-1.5 flex-wrap">
                               <button
                                 onClick={() => { setEditingLandingId(item.id); setLandingItemForm({ label: item.label, description: item.description, iconEmoji: item.iconEmoji, sectionKey: item.sectionKey }); setLandingModalOpen(true); }}
-                                className="flex items-center gap-1 px-2.5 py-1.5 text-[11px] font-semibold bg-slate-100 text-slate-700 hover:bg-indigo-50 hover:text-indigo-700 rounded-lg cursor-pointer transition">
+                                className="flex items-center gap-1 px-2.5 py-1.5 text-[11px] font-semibold bg-slate-100 text-slate-700 hover:bg-emerald-50 hover:text-emerald-700 rounded-lg cursor-pointer transition">
                                 <Edit3 className="w-3 h-3" /> Edit
                               </button>
                               <button
