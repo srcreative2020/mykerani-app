@@ -286,6 +286,34 @@ function formatConfigKey(configKey: string): string {
   return labels[configKey] ?? configKey;
 }
 
+
+// Reusable workspace tab navigation bar
+function WorkspaceTabBar({
+  tabs, active, onChange,
+}: {
+  tabs: { id: string; label: string }[];
+  active: string;
+  onChange: (id: string) => void;
+}) {
+  return (
+    <div className="flex gap-0.5 border-b border-slate-200 mb-1">
+      {tabs.map(t => (
+        <button
+          key={t.id}
+          onClick={() => onChange(t.id)}
+          className={`px-4 py-2 text-xs font-semibold rounded-t-lg border-b-2 -mb-px transition cursor-pointer ${
+            active === t.id
+              ? "border-emerald-600 text-emerald-700 bg-emerald-50/40"
+              : "border-transparent text-slate-500 hover:text-slate-700 hover:bg-slate-50"
+          }`}
+        >
+          {t.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 // â"€â"€â"€ Main Component â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
   const { signOut, isMockUser } = useAuth();
@@ -594,6 +622,13 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
   const [activePage, setActivePage] = useState<HQPage>("dashboard");
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  // Workspace tab states (Phase 2 — multi-tab consolidation)
+  const [pelangganTab, setPelangganTab] = useState<string>("senarai");
+  const [kewanganTab, setKewanganTab] = useState<string>("plan");
+  const [tindakanTab, setTindakanTab] = useState<string>("kelulusan");
+  const [kosOperasiTab, setKosOperasiTab] = useState<string>("ringkasan");
+  const [juaanTab, setJuaanTab] = useState<string>("promosi");
+  const [keselamatanTab, setKeselamatanTab] = useState<string>("gateway");
   const [customersPage, setCustomersPage] = useState(1);
   const [customersPageSize, setCustomersPageSize] = useState(20);
 
@@ -1984,6 +2019,12 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
             {/* â•â•â•â• CUSTOMERS â•â•â•â• */}
             {activePage === "customers" && (
               <div className="space-y-4" id="hq_customers">
+              <WorkspaceTabBar
+                tabs={[{id:"senarai",label:"Senarai"},{id:"profil",label:"Profil Mendalam"},{id:"status",label:"Status Pelanggan"}]}
+                active={pelangganTab}
+                onChange={setPelangganTab}
+              />
+              {pelangganTab === "senarai" && (<>
                 <div className="flex items-center justify-between">
                   <h1 className="text-xl font-bold text-slate-900">Pelanggan</h1>
                   <div className="flex items-center gap-2">
@@ -2109,12 +2150,24 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
                   </>
                   );
                 })()}
+              </>)}
               </div>
             )}
 
             {/* â•â•â•â• BILLING (HQ_OWNER only) â•â•â•â• */}
             {activePage === "billing" && !isStaff && (
               <div className="space-y-5" id="hq_billing">
+              <WorkspaceTabBar
+                tabs={[
+                  {id:"plan",label:"Plan & Pembayaran"},
+                  {id:"pendapatan",label:"Pendapatan"},
+                  {id:"penggunaan",label:"Penggunaan AI & OCR"},
+                  {id:"kredit",label:"Kredit Tenant"},
+                ]}
+                active={kewanganTab}
+                onChange={setKewanganTab}
+              />
+              {kewanganTab === "plan" && (<>
                 <h1 className="text-xl font-bold text-slate-900">Pengebilan</h1>
 
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
@@ -2238,11 +2291,12 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
                     </div>
                   </div>
                 )}
+              </>)}
               </div>
             )}
 
             {/* â•â•â•â• USAGE (HQ_OWNER only) â•â•â•â• */}
-            {activePage === "usage" && !isStaff && (
+            {(activePage === "usage" || (activePage === "billing" && kewanganTab === "penggunaan")) && !isStaff && (
               <div className="space-y-5" id="hq_usage">
                 <h1 className="text-xl font-bold text-slate-900">Penggunaan Platform</h1>
 
@@ -2616,7 +2670,7 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
             )}
 
             {/* â•â•â•â• REVENUE (HQ_OWNER only) â•â•â•â• */}
-            {activePage === "revenue" && !isStaff && (() => {
+            {(activePage === "revenue" || (activePage === "billing" && kewanganTab === "pendapatan")) && !isStaff && (() => {
               const activeC = customers.filter(c => c.status === "active");
               const suspendedC = customers.filter(c => c.status === "suspended");
               const arr = totalMRR * 12;
@@ -3757,7 +3811,7 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
             })()}
 
             {/* â•â•â•â• CUSTOMER 360 FULL PAGE (HQ_OWNER only) â•â•â•â• */}
-            {activePage === "customer360" && !isStaff && (() => {
+            {(activePage === "customer360" || (activePage === "customers" && pelangganTab === "profil")) && !isStaff && (() => {
               const c360Wallet = (id: string) => resourceWallets.find(w => w.tenantId === id);
               const c360Alerts = (id: string) => hqAlerts.filter(a => a.tenantId === id);
               const filtered = customers.filter(c => !searchQuery || c.name.toLowerCase().includes(searchQuery.toLowerCase()) || c.email.toLowerCase().includes(searchQuery.toLowerCase()));
@@ -3909,7 +3963,7 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
             })()}
 
             {/* â•â•â•â• ALERT CENTER FULL PAGE (HQ_OWNER only) â•â•â•â• */}
-            {activePage === "alertCenter" && !isStaff && (() => {
+            {(activePage === "alertCenter" || (activePage === "approvalCenter" && tindakanTab === "amaran")) && !isStaff && (() => {
               const typeOptions = Array.from(new Set(hqAlerts.map(a => a.alertType)));
               const filteredAlerts = hqAlerts.filter(a =>
                 (alertTypeFilter === "all" || a.alertType === alertTypeFilter) &&
@@ -3979,7 +4033,7 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
             })()}
 
             {/* â•â•â•â• RESOURCE WALLET DASHBOARD FULL PAGE (HQ_OWNER only) â•â•â•â• */}
-            {activePage === "walletDashboard" && !isStaff && (() => {
+            {(activePage === "walletDashboard" || (activePage === "billing" && kewanganTab === "kredit")) && !isStaff && (() => {
               const sorted = [...resourceWallets].sort((a, b) => {
                 const dir = walletSortDir === "asc" ? 1 : -1;
                 const av = (a as any)[walletSortKey] ?? 0;
@@ -4045,7 +4099,7 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
             })()}
 
             {/* â•â•â•â• HEALTH SCORE DASHBOARD (HQ_OWNER only) â•â•â•â• */}
-            {activePage === "healthScores" && !isStaff && (() => {
+            {(activePage === "healthScores" || (activePage === "customers" && pelangganTab === "status")) && !isStaff && (() => {
               const ranked = customers
                 .filter(c => typeof c.healthScore === "number")
                 .slice()
@@ -4138,6 +4192,12 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
             {/* â•â•â•â• PAYMENT GOVERNANCE DASHBOARD (HQ_OWNER only) â•â•â•â• */}
             {activePage === "paymentGovernance" && !isStaff && (
               <div className="space-y-5" id="hq_payment_governance">
+              <WorkspaceTabBar
+                tabs={[{id:"gateway",label:"Gateway Bayaran"},{id:"storan",label:"Ruang Storan"},{id:"privasi",label:"Privasi Data (PII)"}]}
+                active={keselamatanTab}
+                onChange={setKeselamatanTab}
+              />
+              {keselamatanTab === "gateway" && (<>
                 <h1 className="text-xl font-bold text-slate-900">Tadbir Bayaran</h1>
                 <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-4">
                   <div className="flex items-center gap-2">
@@ -4177,11 +4237,12 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
                     ))}
                   </div>
                 </div>
+              </>)}
               </div>
             )}
 
             {/* â•â•â•â• STORAGE GOVERNANCE DASHBOARD (HQ_OWNER only) â•â•â•â• */}
-            {activePage === "storageGovernance" && !isStaff && (() => {
+            {(activePage === "storageGovernance" || (activePage === "paymentGovernance" && keselamatanTab === "storan")) && !isStaff && (() => {
               const GB = 1_073_741_824;
               const supabasePlan = 100 * GB; // Supabase Pro 100GB
 
@@ -4349,7 +4410,7 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
             })()}
 
             {/* ═════ AI COST GOVERNANCE (HQ_OWNER only) ═════ */}
-            {activePage === "aiCostGovernance" && !isStaff && (
+            {(activePage === "aiCostGovernance" || (activePage === "costCenter" && kosOperasiTab === "kadar")) && !isStaff && (
               <div className="space-y-4" id="hq_ai_cost_governance">
                 <h1 className="text-xl font-bold text-slate-900">Tadbir Urus Kos AI</h1>
                 <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-4">
@@ -4393,7 +4454,7 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
               </div>
             )}
 
-            {activePage === "addonCatalog" && !isStaff && (
+            {(activePage === "addonCatalog" || (activePage === "phase4Ops" && juaanTab === "pakej")) && !isStaff && (
               <div className="space-y-4" id="hq_addon_catalog">
                 <h1 className="text-xl font-bold text-slate-900">Katalog Pakej Add-On</h1>
                 <p className="text-xs text-slate-400">Pakej storan/kredit AI/kredit OCR yang dipaparkan kepada tenant semasa membeli tambahan. Perubahan dihantar ke Pusat Kelulusan dan memerlukan kelulusan kakitangan HQ kedua sebelum berkuat kuasa.</p>
@@ -4463,6 +4524,12 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
             {/* ═════ PHASE 4 OPS: PROMOTIONS, COMMERCIAL GOVERNANCE & ANALYTICS, PRODUCTION GOVERNANCE, CUSTOMER SUCCESS (HQ_OWNER only) ═════ */}
             {activePage === "phase4Ops" && !isStaff && (
               <div className="space-y-4" id="hq_phase4_ops">
+              <WorkspaceTabBar
+                tabs={[{id:"promosi",label:"Promosi"},{id:"pakej",label:"Pakej Tambahan"}]}
+                active={juaanTab}
+                onChange={setJuaanTab}
+              />
+              {juaanTab === "promosi" && (<>
                 <h1 className="text-xl font-bold text-slate-900">Promosi, Tadbir Urus &amp; Analitik Komersial</h1>
                 <p className="text-xs text-slate-400">Promosi tenant, konfigurasi komersial global, ambang kelulusan, aliran peristiwa komersial, taburan pelan, status tugas berjadual dan tindakan kejayaan pelanggan yang disyorkan.</p>
 
@@ -4631,11 +4698,12 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
                     </div>
                   )}
                 </div>
+              </>)}
               </div>
             )}
 
             {/* ═════ DATA MASKING GOVERNANCE (HQ_OWNER only) ═════ */}
-            {activePage === "dataMaskingGovernance" && !isStaff && (
+            {(activePage === "dataMaskingGovernance" || (activePage === "paymentGovernance" && keselamatanTab === "privasi")) && !isStaff && (
               <div className="space-y-4" id="hq_data_masking_governance">
                 <h1 className="text-xl font-bold text-slate-900">Tadbir Topeng Data (PII)</h1>
 
@@ -4731,6 +4799,12 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
 
             {activePage === "approvalCenter" && (
               <div className="space-y-4" id="hq_approval_center">
+              <WorkspaceTabBar
+                tabs={[{id:"kelulusan",label:"Kelulusan"},{id:"aktiviti",label:"Log Aktiviti"},{id:"amaran",label:"Amaran"}]}
+                active={tindakanTab}
+                onChange={setTindakanTab}
+              />
+              {tindakanTab === "kelulusan" && (<>
                 <h1 className="text-xl font-bold text-slate-900">Pusat Kelulusan HQ</h1>
                 <p className="text-xs text-slate-400">Tindakan sensitif (gantung/aktifkan kakitangan, dsb.) memerlukan kelulusan kakitangan HQ kedua sebelum dilaksanakan. Pemohon tidak boleh meluluskan permintaan sendiri.</p>
 
@@ -4825,11 +4899,12 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
                     </div>
                   )}
                 </div>
+              </>)}
               </div>
             )}
 
             {/* ═════ ACTIVITY CENTER (Phase 2) ═════ */}
-            {activePage === "activityCenter" && (
+            {(activePage === "activityCenter" || (activePage === "approvalCenter" && tindakanTab === "aktiviti")) && (
               <div className="space-y-4" id="hq_activity_center">
                 <div className="flex items-center justify-between">
                   <div>
@@ -4868,6 +4943,12 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
             {/* ═════ COST CENTER (Phase 2, HQ_OWNER only) ═════ */}
             {activePage === "costCenter" && !isStaff && (
               <div className="space-y-4" id="hq_cost_center">
+              <WorkspaceTabBar
+                tabs={[{id:"ringkasan",label:"Ringkasan Kos"},{id:"kadar",label:"Kadar AI"}]}
+                active={kosOperasiTab}
+                onChange={setKosOperasiTab}
+              />
+              {kosOperasiTab === "ringkasan" && (<>
                 <h1 className="text-xl font-bold text-slate-900">Pusat Kos HQ</h1>
                 <p className="text-xs text-slate-400">Ringkasan margin platform — MRR sebenar, kos AI sebenar (30 hari), dan kos operasi yang direkodkan.</p>
 
@@ -5075,6 +5156,7 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
                     {pricingBusy ? "Menghantar..." : "Simpan Perubahan"}
                   </button>
                 </div>
+              </>)}
               </div>
             )}
 
