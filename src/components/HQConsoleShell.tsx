@@ -2002,8 +2002,8 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
                     {[
                       { label: "Tambah Pelanggan", icon: Plus,       action: () => { setActivePage("customers"); openAddCustomer(); }, color: "bg-emerald-700 text-white" },
                       { label: "Urus Sokongan",    icon: Headphones, action: () => setActivePage("support"),    color: "bg-white border border-slate-200 text-slate-700" },
-                      { label: "Lihat Revenue",    icon: TrendingUp, action: () => setActivePage("revenue"),    color: "bg-white border border-slate-200 text-slate-700" },
-                      { label: "AI Router",        icon: Zap,        action: () => setActivePage("system"),     color: "bg-white border border-slate-200 text-slate-700" },
+                      { label: "Lihat Pendapatan",    icon: TrendingUp, action: () => setActivePage("revenue"),    color: "bg-white border border-slate-200 text-slate-700" },
+                      { label: "Konfigurasi AI",        icon: Zap,        action: () => setActivePage("system"),     color: "bg-white border border-slate-200 text-slate-700" },
                     ].map(({ label, icon: Icon, action, color }) => (
                       <button key={label} onClick={action}
                         className={`flex items-center gap-2 px-4 py-3 rounded-xl text-xs font-bold shadow-sm transition cursor-pointer ${color}`}>
@@ -2169,8 +2169,8 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
                 onChange={setKewanganTab}
               />
               {kewanganTab === "plan" && (<>
-                <h1 className="text-xl font-bold text-slate-900">Pengebilan</h1>
-                <p className="text-[11px] text-slate-400 mt-0.5">Urus pelan langganan dan kelulusan pembayaran tenant.</p>
+                <h1 className="text-xl font-bold text-slate-900">Kewangan</h1>
+                <p className="text-[11px] text-slate-400 mt-0.5">Urus plan langganan dan kelulusan pembayaran tenant.</p>
 
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                   <MetricCard label="Hasil Bulan Ini"     value={`RM ${totalMRR.toLocaleString()}`} icon={DollarSign} color="emerald" trend="up" />
@@ -2300,7 +2300,7 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
             {/* â•â•â•â• USAGE (HQ_OWNER only) â•â•â•â• */}
             {(activePage === "usage" || (activePage === "billing" && kewanganTab === "penggunaan")) && !isStaff && (
               <div className="space-y-5" id="hq_usage">
-                <h1 className="text-xl font-bold text-slate-900">Penggunaan Platform</h1>
+                <h1 className="text-xl font-bold text-slate-900">Penggunaan AI & OCR</h1>
                 <p className="text-[11px] text-slate-400 mt-0.5">Pantau penggunaan AI, OCR dan storan mengikut tenant.</p>
 
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
@@ -2314,7 +2314,7 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
                   <button onClick={() => setActivePage("walletDashboard")}
                     className="w-full bg-white rounded-2xl border border-slate-200 shadow-sm p-5 flex items-center justify-between cursor-pointer hover:border-emerald-300 transition">
                     <div className="text-left">
-                      <h3 className="text-sm font-bold text-slate-900">Dompet Sumber Tenant</h3>
+                      <h3 className="text-sm font-bold text-slate-900">Kredit Tenant</h3>
                       <p className="text-[11px] text-slate-400 mt-0.5">Lihat baki kredit & penggunaan penuh mengikut tenant di Dompet Sumber</p>
                     </div>
                     <ChevronRight className="w-4 h-4 text-slate-400 shrink-0" />
@@ -2670,7 +2670,7 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
               const arr = totalMRR * 12;
               return (
               <div className="space-y-5" id="hq_revenue">
-                <h1 className="text-xl font-bold text-slate-900">Hasil & Pendapatan</h1>
+                <h1 className="text-xl font-bold text-slate-900">Pendapatan</h1>
                 <p className="text-[11px] text-slate-400 mt-0.5">MRR, ARR dan analitik pendapatan mengikut plan.</p>
 
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -3361,7 +3361,7 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
                   </div>
                   {showCreateStaff && (
                     <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-4 space-y-3">
-                      <p className="text-xs font-bold text-emerald-800">Cipta Akaun HQ_STAFF</p>
+                      <p className="text-xs font-bold text-emerald-800">Cipta Akaun Kakitangan HQ</p>
                       <input value={staffName} onChange={e => setStaffName(e.target.value)} placeholder="Nama penuh"
                         className="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl focus:outline-none focus:border-emerald-400 bg-white" />
                       <input type="email" value={staffEmail} onChange={e => setStaffEmail(e.target.value)} placeholder="Email kakitangan"
@@ -3456,7 +3456,7 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
               return (
               <div className="space-y-5" id="hq_system">
                 <div className="flex items-center justify-between">
-                  <h1 className="text-xl font-bold text-slate-900">AI Router</h1>
+                  <h1 className="text-xl font-bold text-slate-900">Konfigurasi AI</h1>
                   <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 border border-emerald-100 px-2 py-0.5 rounded-full">
                     {AI_PROVIDERS.filter(p => providerCfgs[p.id]?.enabled).length} Pembekal Aktif
                   </span>
@@ -3815,7 +3815,7 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
               return (
               <div className="space-y-4" id="hq_customer360">
                 <div className="flex items-center justify-between">
-                  <h1 className="text-xl font-bold text-slate-900">Customer 360</h1>
+                  <h1 className="text-xl font-bold text-slate-900">Profil Mendalam Pelanggan</h1>
                 <p className="text-[11px] text-slate-400 mt-0.5">Profil mendalam satu pelanggan — usage, billing, sokongan dan nota.</p>
                   <div className="relative">
                     <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
@@ -3969,7 +3969,7 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
               );
               return (
               <div className="space-y-4" id="hq_alert_center">
-                <h1 className="text-xl font-bold text-slate-900">Pusat Amaran</h1>
+                <h1 className="text-xl font-bold text-slate-900">Amaran</h1>
                 <p className="text-[11px] text-slate-400 mt-0.5">Events yang memerlukan perhatian — webhook, penggunaan tinggi, churn.</p>
                 <div className="grid grid-cols-3 gap-3">
                   <MetricCard label="Jumlah Amaran" value={hqAlerts.length} icon={Bell} color="slate" />
@@ -4048,7 +4048,7 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
               return (
               <div className="space-y-4" id="hq_wallet_dashboard">
                 <div className="flex items-center justify-between">
-                  <h1 className="text-xl font-bold text-slate-900">Dompet Sumber Tenant</h1>
+                  <h1 className="text-xl font-bold text-slate-900">Kredit Tenant</h1>
                 <p className="text-[11px] text-slate-400 mt-0.5">Baki kredit AI/OCR setiap tenant dan kos 30 hari.</p>
                   <div className="flex items-center gap-2">
                     <div className="relative">
@@ -4112,7 +4112,7 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
               const highRisk = ranked.filter(c => c.healthRiskLevel === "high");
               return (
               <div className="space-y-4" id="hq_health_scores">
-                <h1 className="text-xl font-bold text-slate-900">Skor Kesihatan Pelanggan</h1>
+                <h1 className="text-xl font-bold text-slate-900">Status Pelanggan</h1>
                 <p className="text-[11px] text-slate-400 mt-0.5">Pantau status dan risiko setiap pelanggan berdasarkan aktiviti akaun.</p>
                 <div className="grid grid-cols-3 gap-3">
                   <MetricCard label="Risiko Tinggi" value={highRisk.length} icon={AlertTriangle} color="red" />
@@ -4163,7 +4163,7 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
             {/* â•â•â•â• GOVERNANCE DASHBOARD HUB (HQ_OWNER only) â•â•â•â• */}
             {activePage === "governance" && !isStaff && (
               <div className="space-y-4" id="hq_governance">
-                <h1 className="text-xl font-bold text-slate-900">Tadbir Urus HQ</h1>
+                <h1 className="text-xl font-bold text-slate-900">Keselamatan & Kawalan</h1>
                 <div className="grid md:grid-cols-2 gap-4">
                   <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-3">
                     <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2"><Shield className="w-4 h-4 text-emerald-600" />Topeng Data (PII)</h3>
@@ -4198,7 +4198,7 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
                 onChange={setKeselamatanTab}
               />
               {keselamatanTab === "gateway" && (<>
-                <h1 className="text-xl font-bold text-slate-900">Tadbir Bayaran</h1>
+                <h1 className="text-xl font-bold text-slate-900">Gateway Pembayaran</h1>
                 <p className="text-[11px] text-slate-400 mt-0.5">Tetapan webhook Chip Asia dan log pembayaran masuk.</p>
                 <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-4">
                   <div className="flex items-center gap-2">
@@ -4292,7 +4292,7 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
 
               return (
               <div className="space-y-5" id="hq_storage_governance">
-                <h1 className="text-xl font-bold text-slate-900">Tadbir Storan</h1>
+                <h1 className="text-xl font-bold text-slate-900">Ruang Storan</h1>
                 <p className="text-[11px] text-slate-400 mt-0.5">Pemantauan penggunaan storan per tenant berbanding had quota.</p>
                 <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-4">
                   <div className="flex items-center justify-between">
@@ -4414,7 +4414,7 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
             {/* ═════ AI COST GOVERNANCE (HQ_OWNER only) ═════ */}
             {(activePage === "aiCostGovernance" || (activePage === "costCenter" && kosOperasiTab === "kadar")) && !isStaff && (
               <div className="space-y-4" id="hq_ai_cost_governance">
-                <h1 className="text-xl font-bold text-slate-900">Tadbir Urus Kos AI</h1>
+                <h1 className="text-xl font-bold text-slate-900">Kadar Kos AI</h1>
                 <p className="text-[11px] text-slate-400 mt-0.5">Kadar kos per panggilan API dan perbelanjaan AI mengikut tenant.</p>
                 <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-4">
                   <div className="flex items-center gap-2">
@@ -4459,7 +4459,7 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
 
             {(activePage === "addonCatalog" || (activePage === "phase4Ops" && juaanTab === "pakej")) && !isStaff && (
               <div className="space-y-4" id="hq_addon_catalog">
-                <h1 className="text-xl font-bold text-slate-900">Katalog Pakej Add-On</h1>
+                <h1 className="text-xl font-bold text-slate-900">Pakej Tambahan</h1>
                 <p className="text-xs text-slate-400">Pakej storan/kredit AI/kredit OCR yang dipaparkan kepada tenant semasa membeli tambahan. Perubahan dihantar ke Pusat Kelulusan dan memerlukan kelulusan kakitangan HQ kedua sebelum berkuat kuasa.</p>
 
                 <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-3">
@@ -4533,7 +4533,7 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
                 onChange={setJuaanTab}
               />
               {juaanTab === "promosi" && (<>
-                <h1 className="text-xl font-bold text-slate-900">Promosi, Tadbir Urus &amp; Analitik Komersial</h1>
+                <h1 className="text-xl font-bold text-slate-900">Jualan & Promosi</h1>
                 <p className="text-xs text-slate-400">Promosi tenant, konfigurasi komersial global, ambang kelulusan, aliran peristiwa komersial, taburan pelan, status tugas berjadual dan tindakan kejayaan pelanggan yang disyorkan.</p>
 
                 {/* Promotions */}
@@ -4708,7 +4708,7 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
             {/* ═════ DATA MASKING GOVERNANCE (HQ_OWNER only) ═════ */}
             {(activePage === "dataMaskingGovernance" || (activePage === "paymentGovernance" && keselamatanTab === "privasi")) && !isStaff && (
               <div className="space-y-4" id="hq_data_masking_governance">
-                <h1 className="text-xl font-bold text-slate-900">Tadbir Topeng Data (PII)</h1>
+                <h1 className="text-xl font-bold text-slate-900">Privasi Data (PII)</h1>
                 <p className="text-[11px] text-slate-400 mt-0.5">Peraturan perlindungan data peribadi dan kawalan akses oleh staf.</p>
 
                 <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-3">
@@ -4738,7 +4738,7 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
                               title="Tukar peranan HQ — direkodkan dalam role_change_audit_log"
                               className="px-2 py-1.5 rounded-lg text-[11px] font-bold border border-slate-200 bg-white cursor-pointer focus:outline-none focus:border-emerald-400"
                             >
-                              {["HQ_OWNER", "HQ_ADMIN", "HQ_SUPPORT", "HQ_AUDITOR", "HQ_STAFF"].map(r => (
+                              {["Pemilik HQ", "HQ_ADMIN", "HQ_SUPPORT", "HQ_AUDITOR", "HQ_STAFF"].map(r => (
                                 <option key={r} value={r}>{r}</option>
                               ))}
                             </select>
@@ -4809,7 +4809,7 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
                 onChange={setTindakanTab}
               />
               {tindakanTab === "kelulusan" && (<>
-                <h1 className="text-xl font-bold text-slate-900">Pusat Kelulusan HQ</h1>
+                <h1 className="text-xl font-bold text-slate-900">Menunggu Kelulusan</h1>
                 <p className="text-xs text-slate-400">Tindakan sensitif (gantung/aktifkan kakitangan, dsb.) memerlukan kelulusan kakitangan HQ kedua sebelum dilaksanakan. Pemohon tidak boleh meluluskan permintaan sendiri.</p>
 
                 {myHqNotifications.filter(n => n.status === "UNREAD").length > 0 && (
@@ -4912,7 +4912,7 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
               <div className="space-y-4" id="hq_activity_center">
                 <div className="flex items-center justify-between">
                   <div>
-                    <h1 className="text-xl font-bold text-slate-900">Pusat Aktiviti HQ</h1>
+                    <h1 className="text-xl font-bold text-slate-900">Log Aktiviti</h1>
                     <p className="text-xs text-slate-400">Aliran tindakan tadbir urus seluruh ekosistem — log audit pelanggan &amp; keputusan kelulusan HQ dalam satu paparan.</p>
                   </div>
                   <button
@@ -4953,7 +4953,7 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
                 onChange={setKosOperasiTab}
               />
               {kosOperasiTab === "ringkasan" && (<>
-                <h1 className="text-xl font-bold text-slate-900">Pusat Kos HQ</h1>
+                <h1 className="text-xl font-bold text-slate-900">Kos Operasi</h1>
                 <p className="text-xs text-slate-400">Ringkasan margin platform — MRR sebenar, kos AI sebenar (30 hari), dan kos operasi yang direkodkan.</p>
 
                 {hqCostSummary && (
