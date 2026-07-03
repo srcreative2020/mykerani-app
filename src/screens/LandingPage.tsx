@@ -5,6 +5,7 @@ import {
   MessageCircle, MapPin, Clock, ChevronDown, Sparkles,
   CheckCircle2, Send, Bot,
 } from "lucide-react";
+import PlanCard, { type PlanCardProps } from "../components/PlanCard";
 
 interface LandingPageProps {
   onLogin: () => void;
@@ -435,73 +436,35 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLogin, onRegister })
           </div>
         ) : (
           <div className="grid sm:grid-cols-2 md:grid-cols-4 gap-4">
-            {plans.map(p => (
-              <div
-                key={p.id}
-                className={`rounded-2xl p-5 space-y-4 border hover:-translate-y-1 hover:shadow-lg transition-all ${
-                  p.featured
-                    ? "border-[#22c55e] bg-[#F0FDF4] shadow-md"
-                    : "border-[#E8E6DE] bg-white"
-                }`}
-              >
-                <div className="flex flex-wrap gap-1.5">
-                  {p.featured && (
-                    <span className="inline-flex items-center px-2 py-0.5 bg-[#22c55e] rounded-lg text-[10px] font-bold text-white">POPULAR</span>
-                  )}
-                  {p.isTrial && (
-                    <span className="inline-flex items-center px-2 py-0.5 bg-amber-100 border border-amber-200 rounded-lg text-[10px] font-bold text-amber-700">PERCUBAAN</span>
-                  )}
-                </div>
-                <div>
-                  <p className="font-display font-bold text-zinc-900">{p.name}</p>
-                  {p.aiCredits > 0 && (
-                    <p className="text-[10px] text-zinc-400 mt-0.5">AI Financial Assistant {p.aiCredits.toLocaleString()} penggunaan · Storan {p.storageGB} GB</p>
-                  )}
-                </div>
-                {p.isCustomPricing ? (
-                  <p className="text-lg font-bold text-zinc-900">Harga Tersuai</p>
-                ) : (
-                  <p className="text-2xl font-bold text-zinc-900">
-                    RM {p.price.toLocaleString()}
-                    <span className="text-xs text-zinc-400 font-normal">/bln</span>
-                  </p>
-                )}
-                <ul className="text-[10px] text-[#16a34a] space-y-1.5">
-                  {p.features.slice(0, 6).map((f, i) => (
-                    <li key={i} className="flex items-start gap-1.5">
-                      <CheckCircle2 className="w-3 h-3 shrink-0 mt-0.5" /> {f}
-                    </li>
-                  ))}
-                  {p.maxUsers > 0 && (
-                    <li className="flex items-start gap-1.5">
-                      <CheckCircle2 className="w-3 h-3 shrink-0 mt-0.5" /> Sehingga {p.maxUsers} pengguna
-                    </li>
-                  )}
-                </ul>
-                {p.isTrial ? (
-                  <button
-                    onClick={onRegister}
-                    className="w-full py-2.5 bg-[#22c55e] hover:bg-[#16a34a] text-white rounded-xl text-xs font-bold cursor-pointer transition"
-                  >
-                    Mula Percuma {p.trialDays > 0 ? `(${p.trialDays} Hari)` : ""}
-                  </button>
-                ) : p.isCustomPricing ? (
-                  <a
-                    href={`mailto:${settings?.contactEmail || "sales@mykerani.com"}`}
-                    className="w-full block text-center py-2.5 bg-zinc-900 hover:bg-zinc-800 text-white rounded-xl text-xs font-bold transition"
-                  >
-                    Hubungi Jualan
-                  </a>
-                ) : (
-                  <button
-                    onClick={onRegister}
-                    className="w-full py-2.5 bg-white border border-[#22c55e] text-[#16a34a] hover:bg-[#F0FDF4] rounded-xl text-xs font-bold cursor-pointer transition"
-                  >
-                    Langgan Sekarang
-                  </button>
-                )}
-              </div>
-            ))}
+            {plans.map(p => {
+              const badges: PlanCardProps["badges"] = [
+                ...(p.featured ? [{ label: "POPULAR", variant: "green" as const }] : []),
+                ...(p.isTrial  ? [{ label: "PERCUBAAN", variant: "amber" as const }] : []),
+              ];
+              const features = [
+                ...p.features.slice(0, 6),
+                ...(p.maxUsers > 0 ? [`Sehingga ${p.maxUsers} pengguna`] : []),
+              ];
+              const cta: PlanCardProps["cta"] = p.isTrial
+                ? { label: `Mula Percuma${p.trialDays > 0 ? ` (${p.trialDays} Hari)` : ""}`, onClick: onRegister, variant: "primary" }
+                : p.isCustomPricing
+                ? { label: "Hubungi Jualan", href: `mailto:${settings?.contactEmail || "sales@mykerani.com"}`, variant: "secondary" }
+                : { label: "Langgan Sekarang", onClick: onRegister, variant: "outline" };
+              return (
+                <PlanCard
+                  key={p.id}
+                  title={p.name}
+                  price={p.isCustomPricing ? "Harga Tersuai" : `RM ${p.price.toLocaleString()}/bln`}
+                  subtitle={p.aiCredits > 0 ? `AI Financial Assistant ${p.aiCredits.toLocaleString()} penggunaan · Storan ${p.storageGB} GB` : undefined}
+                  badges={badges}
+                  features={features}
+                  featured={p.featured}
+                  hover={true}
+                  featureIcon="check"
+                  cta={cta}
+                />
+              );
+            })}
           </div>
         )}
       </section>

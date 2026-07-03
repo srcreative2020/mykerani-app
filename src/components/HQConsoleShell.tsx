@@ -10,6 +10,7 @@ import {
   User, Send, Star, Repeat, Archive, Globe, HelpCircle, Trash2, ShieldAlert,
   Paperclip, MessageCircle, Copy,
 } from "lucide-react";
+import PlanCard, { type PlanCardProps } from "./PlanCard";
 import { useAuth } from "../context/AuthContext";
 import { useNotifications, buildHQNotifs, fmtNotifTime } from "../lib/notifications";
 import { getAllWorkspacesStorageUsage, fmtBytes as fmtDocBytes } from "../lib/documentStorage";
@@ -2190,49 +2191,32 @@ export const HQConsoleShell: React.FC<HQConsoleShellProps> = ({ user }) => {
                   <div className="grid md:grid-cols-3 gap-3">
                     {plans.map(p => {
                       const activeCount = customers.filter(c => c.plan === p.name && c.status === "active").length;
+                      const badges: PlanCardProps["badges"] = [
+                        ...(p.featured ? [{ label: "Popular", variant: "green" as const }] : []),
+                        ...(p.isTrial  ? [{ label: "Percubaan", variant: "amber" as const }] : []),
+                      ];
+                      const meta: string[] = [
+                        `AI Financial Assistant: ${p.aiCredits.toLocaleString()} penggunaan/bln`,
+                        `Muka Surat Penyata Bank: ${(p.ocrCredits ?? 0).toLocaleString()} muka surat/bln`,
+                        `Storan: ${p.storageGB} GB`,
+                        `Pengguna: sehingga ${p.maxUsers}`,
+                        ...(p.isTrial && p.trialDays > 0 ? [`Tempoh percubaan: ${p.trialDays} hari`] : []),
+                      ];
                       return (
-                        <div key={p.id} className={`border rounded-2xl p-4 space-y-2 relative ${p.featured ? "border-emerald-300 bg-emerald-50/30" : "border-slate-200 bg-white"}`}>
-                          {p.featured && <span className="absolute top-3 right-3 text-[9px] font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full">Popular</span>}
-                          {p.isTrial && <span className="absolute top-3 right-3 text-[9px] font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full">Percubaan</span>}
-                          <div className="flex items-center justify-between pr-14">
-                            <span className="font-bold text-slate-900">{p.name}</span>
-                          </div>
-                          {p.isCustomPricing ? (
-                            <p className="text-lg font-bold text-slate-900">Harga Tersuai</p>
-                          ) : (
-                            <p className="text-2xl font-bold text-slate-900">RM {p.price.toLocaleString()}<span className="text-xs text-slate-400 font-normal">/bln</span></p>
-                          )}
-                          <div className="text-[11px] text-slate-400 space-y-0.5">
-                            <p>AI Financial Assistant: {p.aiCredits.toLocaleString()} penggunaan/bln</p>
-                            <p>Muka Surat Penyata Bank: {(p.ocrCredits ?? 0).toLocaleString()} muka surat/bln</p>
-                            <p>Storan: {p.storageGB} GB</p>
-                            <p>Pengguna: sehingga {p.maxUsers}</p>
-                            {p.isTrial && p.trialDays > 0 && <p>Tempoh percubaan: {p.trialDays} hari</p>}
-                            {isMockUser && <p className="text-emerald-600 font-semibold">{activeCount} pelanggan aktif</p>}
-                          </div>
-                          {(p.features?.length > 0 || p.limitations?.length > 0) && (
-                            <div className="text-[10px] space-y-1 pt-1 border-t border-slate-100">
-                              {p.features?.length > 0 && (
-                                <ul className="space-y-0.5">
-                                  {p.features.map((f, i) => <li key={i} className="text-emerald-700">+ {f}</li>)}
-                                </ul>
-                              )}
-                              {p.limitations?.length > 0 && (
-                                <ul className="space-y-0.5">
-                                  {p.limitations.map((l, i) => <li key={i} className="text-slate-400">- {l}</li>)}
-                                </ul>
-                              )}
-                            </div>
-                          )}
-                          <div className="flex gap-2 pt-1">
-                            <button onClick={() => openEditPlan(p)} className="flex-1 py-1.5 border border-slate-200 rounded-lg text-[10px] font-bold text-slate-600 cursor-pointer hover:bg-slate-50 transition flex items-center justify-center gap-1">
-                              <Edit3 className="w-3 h-3" />Edit
-                            </button>
-                            <button onClick={() => setDeletingPlanId(p.id)} className="py-1.5 px-3 border border-red-100 rounded-lg text-[10px] font-bold text-red-400 cursor-pointer hover:bg-red-50 transition">
-                              Padam
-                            </button>
-                          </div>
-                        </div>
+                        <PlanCard
+                          key={p.id}
+                          title={p.name}
+                          price={p.isCustomPricing ? "Harga Tersuai" : `RM ${p.price.toLocaleString()}/bln`}
+                          badges={badges}
+                          meta={meta}
+                          features={p.features}
+                          limitations={p.limitations}
+                          featured={p.featured}
+                          badge2={isMockUser ? `${activeCount} pelanggan aktif` : undefined}
+                          featureIcon="plus"
+                          cta={{ label: "Edit", onClick: () => openEditPlan(p), variant: "outline" }}
+                          secondaryCta={{ label: "Padam", onClick: () => setDeletingPlanId(p.id), variant: "danger" }}
+                        />
                       );
                     })}
                     {plans.length === 0 && (
